@@ -27,19 +27,19 @@ from ada_backend.services.qa.qa_error import (
     QAPartialPositionError,
 )
 from ada_backend.services.qa.quality_assurance_service import (
-    create_datasets_service,
+    create_datasets_for_organization_service,
     create_inputs_groundtruths_service,
-    delete_datasets_service,
+    delete_datasets_from_organization_service,
     delete_inputs_groundtruths_service,
-    get_datasets_by_project_service,
+    get_datasets_by_organization_service,
     get_inputs_groundtruths_with_version_outputs_service,
     import_qa_data_from_csv_service,
     run_qa_service,
-    update_dataset_service,
+    update_dataset_in_organization_service,
     update_inputs_groundtruths_service,
 )
 from engine.trace.trace_context import set_trace_manager
-from tests.ada_backend.test_utils import create_project_and_graph_runner
+from tests.ada_backend.test_utils import ORGANIZATION_ID, create_project_and_graph_runner
 
 # JSON constants for test workflow configuration
 DEFAULT_PAYLOAD_SCHEMA = {"messages": [{"role": "user", "content": "Hello"}], "additional_info": "info"}
@@ -101,8 +101,8 @@ def test_pagination():
             session, project_name_prefix="pagination_test", description="Test project for pagination"
         )
 
-        dataset_data = create_datasets_service(
-            session, project_id, DatasetCreateList(datasets_name=[f"pagination_dataset_{project_id}"])
+        dataset_data = create_datasets_for_organization_service(
+            session, ORGANIZATION_ID, DatasetCreateList(datasets_name=[f"pagination_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
 
@@ -146,6 +146,10 @@ def test_pagination():
         page2_ids = {entry.id for entry in page2_entries}
         assert page1_ids.isdisjoint(page2_ids)
 
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
+
         delete_project_service(session=session, project_id=project_id)
 
 
@@ -156,30 +160,40 @@ def test_dataset_management():
             session, project_name_prefix="dataset_test", description="Test project for dataset management"
         )
 
+        initial_datasets = get_datasets_by_organization_service(session, ORGANIZATION_ID)
+        initial_count = len(initial_datasets)
+
         # Test dataset creation
         create_payload = DatasetCreateList(datasets_name=["dataset1", "dataset2", "dataset3"])
-        created_response = create_datasets_service(session, project_id, create_payload)
+        created_response = create_datasets_for_organization_service(session, ORGANIZATION_ID, create_payload)
         created_datasets = created_response.datasets
         assert len(created_datasets) == 3
 
-        # Test dataset retrieval
-        retrieved_datasets = get_datasets_by_project_service(session, project_id)
-        assert len(retrieved_datasets) == 3
+        # Test dataset retrieval - should have 3 more than before
+        retrieved_datasets = get_datasets_by_organization_service(session, ORGANIZATION_ID)
+        assert len(retrieved_datasets) == initial_count + 3
 
         # Test dataset update
         dataset_to_update = created_datasets[0].id
-        updated_dataset = update_dataset_service(session, project_id, dataset_to_update, "updated_dataset1")
+        updated_dataset = update_dataset_in_organization_service(
+            session, ORGANIZATION_ID, dataset_to_update, "updated_dataset1"
+        )
         assert updated_dataset.dataset_name == "updated_dataset1"
 
         # Test dataset deletion
         dataset_to_delete = created_datasets[1].id
         delete_payload = DatasetDeleteList(dataset_ids=[dataset_to_delete])
-        deleted_count = delete_datasets_service(session, project_id, delete_payload)
+        deleted_count = delete_datasets_from_organization_service(session, ORGANIZATION_ID, delete_payload)
         assert deleted_count == 1  # Should have deleted 1 dataset
 
-        # Verify the dataset was deleted
-        remaining_datasets = get_datasets_by_project_service(session, project_id)
-        assert len(remaining_datasets) == 2  # Should now have 2 datasets instead of 3
+        # Verify the dataset was deleted - should have 2 more than initial
+        remaining_datasets = get_datasets_by_organization_service(session, ORGANIZATION_ID)
+        assert len(remaining_datasets) == initial_count + 2
+
+        # Clean up the remaining datasets created by this test
+        cleanup_ids = [d.id for d in created_datasets if d.id != dataset_to_delete]
+        cleanup_payload = DatasetDeleteList(dataset_ids=cleanup_ids)
+        delete_datasets_from_organization_service(session, ORGANIZATION_ID, cleanup_payload)
 
         delete_project_service(session=session, project_id=project_id)
 
@@ -195,8 +209,8 @@ def test_input_groundtruth_basic_operations():
 
         # Create a dataset
         dataset_uuid = str(uuid4())
-        dataset_data = create_datasets_service(
-            session, project_id, DatasetCreateList(datasets_name=[f"input_groundtruth_dataset_{dataset_uuid}"])
+        dataset_data = create_datasets_for_organization_service(
+            session, ORGANIZATION_ID, DatasetCreateList(datasets_name=[f"input_groundtruth_dataset_{dataset_uuid}"])
         )
         dataset_id = dataset_data.datasets[0].id
 
@@ -248,6 +262,10 @@ def test_input_groundtruth_basic_operations():
         remaining_data = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id)
         remaining_inputs = remaining_data.inputs_groundtruths
         assert len(remaining_inputs) == 2  # Should now have 2 inputs instead of 3
+
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
 
         delete_project_service(session=session, project_id=project_id)
 
@@ -401,8 +419,8 @@ async def test_run_qa_service():
 
         # Create a dataset
         dataset_uuid = str(uuid4())
-        dataset_data = create_datasets_service(
-            session, project_id, DatasetCreateList(datasets_name=[f"qa_run_dataset_{dataset_uuid}"])
+        dataset_data = create_datasets_for_organization_service(
+            session, ORGANIZATION_ID, DatasetCreateList(datasets_name=[f"qa_run_dataset_{dataset_uuid}"])
         )
         dataset_id = dataset_data.datasets[0].id
 
@@ -489,6 +507,10 @@ async def test_run_qa_service():
         assert summary_all.failed == 0
         assert summary_all.success_rate == 100.0
 
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
+
         delete_project_service(session=session, project_id=project_id)
 
 
@@ -499,8 +521,8 @@ def test_position_field_in_responses():
             session, project_name_prefix="index_test", description="Test project for index field"
         )
 
-        dataset_data = create_datasets_service(
-            session, project_id, DatasetCreateList(datasets_name=[f"index_dataset_{project_id}"])
+        dataset_data = create_datasets_for_organization_service(
+            session, ORGANIZATION_ID, DatasetCreateList(datasets_name=[f"index_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
 
@@ -544,6 +566,10 @@ def test_position_field_in_responses():
         final_positions = [entry.position for entry in final_entries]
         assert sorted(final_positions) == [1, 2, 4, 5, 6]
 
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
+
         delete_project_service(session=session, project_id=project_id)
 
 
@@ -554,8 +580,8 @@ def test_duplicate_positions_validation():
             session, project_name_prefix="duplicate_test", description="Test project for duplicate positions"
         )
 
-        dataset_data = create_datasets_service(
-            session, project_id, DatasetCreateList(datasets_name=[f"duplicate_dataset_{project_id}"])
+        dataset_data = create_datasets_for_organization_service(
+            session, ORGANIZATION_ID, DatasetCreateList(datasets_name=[f"duplicate_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
 
@@ -570,6 +596,10 @@ def test_duplicate_positions_validation():
             create_inputs_groundtruths_service(session, dataset_id, create_payload)
         assert "Duplicate positions" in str(exc_info.value)
 
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
+
         delete_project_service(session=session, project_id=project_id)
 
 
@@ -580,8 +610,8 @@ def test_partial_position_validation():
             session, project_name_prefix="partial_test", description="Test project for partial positions"
         )
 
-        dataset_data = create_datasets_service(
-            session, project_id, DatasetCreateList(datasets_name=[f"partial_dataset_{project_id}"])
+        dataset_data = create_datasets_for_organization_service(
+            session, ORGANIZATION_ID, DatasetCreateList(datasets_name=[f"partial_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
 
@@ -596,6 +626,10 @@ def test_partial_position_validation():
             create_inputs_groundtruths_service(session, dataset_id, create_payload)
         assert "Partial positioning" in str(exc_info.value)
 
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
+
         delete_project_service(session=session, project_id=project_id)
 
 
@@ -606,8 +640,8 @@ def test_position_auto_generation():
             session, project_name_prefix="auto_index_test", description="Test project for auto-generated positions"
         )
 
-        dataset_data = create_datasets_service(
-            session, project_id, DatasetCreateList(datasets_name=[f"auto_index_dataset_{project_id}"])
+        dataset_data = create_datasets_for_organization_service(
+            session, ORGANIZATION_ID, DatasetCreateList(datasets_name=[f"auto_index_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
 
@@ -623,6 +657,10 @@ def test_position_auto_generation():
         assert created[0].position == 1
         assert created[1].position == 2
 
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
+
         delete_project_service(session=session, project_id=project_id)
 
 
@@ -633,8 +671,8 @@ def test_csv_import_duplicate_positions_inside_csv():
             session, project_name_prefix="csv_duplicate_test", description="Test project for CSV duplicate positions"
         )
 
-        dataset_data = create_datasets_service(
-            session, project_id, DatasetCreateList(datasets_name=[f"csv_duplicate_dataset_{project_id}"])
+        dataset_data = create_datasets_for_organization_service(
+            session, ORGANIZATION_ID, DatasetCreateList(datasets_name=[f"csv_duplicate_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
 
@@ -655,6 +693,10 @@ def test_csv_import_duplicate_positions_inside_csv():
         assert "Duplicate positions found in CSV import: [1]" in error_detail
         assert "CSV import" in error_detail
 
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
+
         delete_project_service(session=session, project_id=project_id)
 
 
@@ -667,8 +709,8 @@ def test_csv_import_invalid_positions_values():
             description="Test project for CSV invalid position values",
         )
 
-        dataset_data = create_datasets_service(
-            session, project_id, DatasetCreateList(datasets_name=[f"csv_invalid_index_dataset_{project_id}"])
+        dataset_data = create_datasets_for_organization_service(
+            session, ORGANIZATION_ID, DatasetCreateList(datasets_name=[f"csv_invalid_index_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
 
@@ -687,6 +729,10 @@ def test_csv_import_invalid_positions_values():
         assert "Invalid integer in 'position' column" in error_detail
         assert "row" in error_detail
 
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
+
         delete_project_service(session=session, project_id=project_id)
 
 
@@ -697,8 +743,8 @@ def test_csv_import_position_less_than_one():
             session, project_name_prefix="csv_position_lt_one_test", description="Test project for CSV position < 1"
         )
 
-        dataset_data = create_datasets_service(
-            session, project_id, DatasetCreateList(datasets_name=[f"csv_position_lt_one_dataset_{project_id}"])
+        dataset_data = create_datasets_for_organization_service(
+            session, ORGANIZATION_ID, DatasetCreateList(datasets_name=[f"csv_position_lt_one_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
 
@@ -715,5 +761,9 @@ def test_csv_import_position_less_than_one():
         error_detail = str(exc_info.value)
         assert "Invalid integer in 'position' column" in error_detail
         assert "greater than or equal to 1" in error_detail
+
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
 
         delete_project_service(session=session, project_id=project_id)
