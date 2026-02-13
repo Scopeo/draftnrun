@@ -6,6 +6,7 @@ from uuid import UUID
 
 import httpx
 
+from ada_backend.services.webhooks.webhook_service import prepare_workflow_input
 from settings import settings
 
 logging.basicConfig(
@@ -46,11 +47,10 @@ async def _run_workflow_async(
                 f"project_id={project_id}, webhook_id={webhook_id}"
             )
 
+            workflow_input = prepare_workflow_input(payload, provider)
+
             input_data = {
-                "messages": [
-                    {"role": "user", "content": json.dumps(payload, default=str)},
-                ],
-                "webhook_payload": payload,
+                **workflow_input,
                 "event_id": event_id,
                 "provider": provider,
             }
@@ -117,9 +117,12 @@ async def webhook_main_async(
 
     async with httpx.AsyncClient() as client:
         try:
-            # TODO: Add filter options to the request
             triggers_response = await client.get(
                 f"{api_base_url}/internal/webhooks/{webhook_id}/triggers",
+                params={
+                    "provider": provider,
+                    "webhook_event_data": json.dumps(payload),
+                },
                 headers={
                     "X-Webhook-API-Key": webhook_api_key,
                     "Content-Type": "application/json",
