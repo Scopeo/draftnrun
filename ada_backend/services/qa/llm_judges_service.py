@@ -9,7 +9,7 @@ from ada_backend.repositories.llm_judges_repository import (
     create_llm_judge_for_organization,
     delete_llm_judges_from_organization,
     get_llm_judges_by_organization,
-    update_llm_judge_in_organization,
+    update_llm_judge,
 )
 from ada_backend.schemas.llm_judges_schema import (
     LLMJudgeCreate,
@@ -92,10 +92,9 @@ def update_llm_judge_in_organization_service(
     judge_data: LLMJudgeUpdate,
 ) -> LLMJudgeResponse:
     try:
-        updated_judge = update_llm_judge_in_organization(
+        updated_judge = update_llm_judge(
             session=session,
             judge_id=judge_id,
-            organization_id=organization_id,
             name=judge_data.name,
             description=judge_data.description,
             evaluation_type=judge_data.evaluation_type,
