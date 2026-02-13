@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Any, Dict, List
 from uuid import UUID
@@ -7,7 +8,10 @@ from sqlalchemy.orm.session import Session
 from ada_backend.database.models import Webhook, WebhookProvider
 from ada_backend.repositories.webhook_repository import get_enabled_webhook_triggers
 from ada_backend.schemas.webhook_schema import (
+    FilterExpression,
+    FilterOperator,
     IntegrationTriggerResponse,
+    LogicalOperator,
     WebhookProcessingResponseSchema,
     WebhookProcessingStatus,
 )
@@ -16,6 +20,10 @@ from ada_backend.services.webhooks.errors import (
     WebhookEventIdNotFoundError,
     WebhookProcessingError,
     WebhookQueueError,
+)
+from ada_backend.services.webhooks.resend_service import (
+    get_resend_event_id,
+    prepare_resend_workflow_input,
 )
 from ada_backend.utils.redis_client import (
     check_and_set_webhook_event,
@@ -26,9 +34,44 @@ from settings import settings
 LOGGER = logging.getLogger(__name__)
 
 
+def evaluate_filter(filter_data: Dict[str, Any], webhook_data: Dict[str, Any]) -> bool:
+    if not filter_data:
+        return True
+
+    try:
+        filter_expr = FilterExpression(**filter_data)
+    except Exception as e:
+        LOGGER.error(f"Invalid filter format: {e}, filter_data: {filter_data}")
+        return False
+
+    results = []
+    for condition in filter_expr.conditions:
+        field_value = webhook_data.get(condition.field)
+
+        if condition.operator == FilterOperator.EQUALS:
+            results.append(field_value == condition.value)
+
+        elif condition.operator == FilterOperator.CONTAINS:
+            if isinstance(field_value, list):
+                normalized = [str(v).lower().strip() for v in field_value]
+                target = str(condition.value).lower().strip()
+                results.append(target in normalized)
+            elif isinstance(field_value, str):
+                results.append(str(condition.value).lower() in field_value.lower())
+            else:
+                results.append(False)
+
+    if filter_expr.operator == LogicalOperator.OR:
+        return any(results)
+    elif filter_expr.operator == LogicalOperator.AND:
+        return all(results)
+
+
 def get_webhook_event_id(payload: Dict[str, Any], provider: WebhookProvider) -> str:
     if provider == WebhookProvider.AIRCALL:
         return get_aircall_event_id(payload)
+    elif provider == WebhookProvider.RESEND:
+        return get_resend_event_id(payload)
     else:
         LOGGER.error(f"Webhook event id not found for provider: {provider}")
         raise WebhookEventIdNotFoundError(provider=provider, payload=payload)
@@ -83,10 +126,33 @@ async def process_webhook_event(
         raise WebhookProcessingError(webhook=webhook, error=e)
 
 
-def get_webhook_triggers_service(session: Session, webhook_id: UUID) -> List[IntegrationTriggerResponse]:
-    triggers = get_enabled_webhook_triggers(session=session, webhook_id=webhook_id)
+def prepare_workflow_input(payload: Dict[str, Any], provider: str) -> Dict[str, Any]:
+    provider_enum = WebhookProvider(provider)
+    LOGGER.info(f"Preparing workflow input for provider: {provider_enum}")
+    match provider_enum:
+        case WebhookProvider.RESEND:
+            return prepare_resend_workflow_input(payload)
+        case _:
+            return {
+                "messages": [
+                    {"role": "user", "content": json.dumps(payload, default=str)},
+                ],
+                "webhook_payload": payload,
+            }
 
-    return [
+
+def get_webhook_triggers_service(
+    session: Session,
+    webhook_id: UUID,
+    provider: str = None,
+    event_data: Dict[str, Any] = None
+) -> List[IntegrationTriggerResponse]:
+    triggers = get_enabled_webhook_triggers(
+        session=session,
+        webhook_id=webhook_id
+    )
+
+    trigger_responses = [
         IntegrationTriggerResponse(
             id=str(trigger.id),
             webhook_id=str(trigger.webhook_id),
@@ -96,3 +162,13 @@ def get_webhook_triggers_service(session: Session, webhook_id: UUID) -> List[Int
         )
         for trigger in triggers
     ]
+
+    if provider == WebhookProvider.RESEND:
+        data = event_data.get("data", {})
+        filtered = [
+            t for t in trigger_responses
+            if evaluate_filter(t.filter_options, data)
+        ]
+        return filtered
+
+    return trigger_responses
