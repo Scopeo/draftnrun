@@ -193,7 +193,7 @@ def start_scheduler():
 
         job_defaults = {
             "coalesce": True,  # Combine multiple missed runs into one
-            "misfire_grace_time": 300,  # Skip runs that are more than 5 minutes late
+            "misfire_grace_time": 3600 * 6,  # 6 hours — daily jobs survive deploys
             "max_instances": 1,  # Only one instance of each job at a time
         }
 
