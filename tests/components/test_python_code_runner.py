@@ -625,6 +625,7 @@ def test_execute_python_code_with_shared_sandbox_from_context(e2b_api_key):
     mock_execution.results = []
     mock_execution.logs = Mock(stdout=["Test output"], stderr=[])
     mock_shared_sandbox.run_code.return_value = mock_execution
+    mock_shared_sandbox.is_running.return_value = True
 
     # Mock the tracing context with a shared sandbox
     mock_params = TracingSpanParams(
@@ -635,8 +636,8 @@ def test_execute_python_code_with_shared_sandbox_from_context(e2b_api_key):
         shared_sandbox=mock_shared_sandbox,
     )
 
-    with patch("engine.components.tools.python_code_runner.get_tracing_span", return_value=mock_params):
-        with patch("engine.components.tools.python_code_runner.AsyncSandbox") as mock_sandbox_class:
+    with patch("engine.components.tools.sandbox_utils.get_tracing_span", return_value=mock_params):
+        with patch("engine.components.tools.sandbox_utils.AsyncSandbox") as mock_sandbox_class:
             result_data, _ = asyncio.run(tool.execute_python_code("print('test')"))
 
             # Should use the shared sandbox, not create a new one
