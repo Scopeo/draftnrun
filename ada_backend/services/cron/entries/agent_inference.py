@@ -2,6 +2,7 @@
 Agent inference cron entry: models, validators, executor, and spec.
 """
 
+import logging
 from typing import Any
 from uuid import UUID
 
@@ -10,7 +11,9 @@ from pydantic import Field
 from ada_backend.database.models import CallType, EnvType
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.services.agent_runner_service import run_env_agent
-from ada_backend.services.cron.core import BaseExecutionPayload, BaseUserPayload, CronEntrySpec
+from ada_backend.services.cron.core import BaseExecutionPayload, BaseUserPayload, CronEntrySpec, get_cron_context
+
+LOGGER = logging.getLogger(__name__)
 
 
 class AgentInferenceUserPayload(BaseUserPayload):
@@ -109,6 +112,13 @@ async def execute(execution_payload: AgentInferenceExecutionPayload, **kwargs) -
     if not db:
         raise ValueError("db missing from context")
 
+    cron_id, log_extra = get_cron_context(**kwargs)
+
+    LOGGER.info(
+        f"Starting agent inference for project {execution_payload.project_id} in {execution_payload.env} environment",
+        extra=log_extra
+    )
+
     result = await run_env_agent(
         session=db,
         project_id=execution_payload.project_id,
@@ -116,6 +126,12 @@ async def execute(execution_payload: AgentInferenceExecutionPayload, **kwargs) -
         input_data=execution_payload.input_data,
         # TODO: Create a new call type for cron jobs
         call_type=CallType.API,
+        cron_id=cron_id,
+    )
+
+    LOGGER.info(
+        f"Agent inference completed successfully with trace_id {result.trace_id}",
+        extra=log_extra
     )
 
     return {
