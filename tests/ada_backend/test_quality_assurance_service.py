@@ -160,6 +160,10 @@ def test_pagination():
         page2_ids = {entry.id for entry in page2_entries}
         assert page1_ids.isdisjoint(page2_ids)
 
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
+
         delete_project_service(session=session, project_id=project_id)
 
 
@@ -170,15 +174,18 @@ def test_dataset_management():
             session, project_name_prefix="dataset_test", description="Test project for dataset management"
         )
 
+        initial_datasets = get_datasets_by_organization_service(session, ORGANIZATION_ID)
+        initial_count = len(initial_datasets)
+
         # Test dataset creation
         create_payload = DatasetCreateList(datasets_name=["dataset1", "dataset2", "dataset3"])
         created_response = create_datasets_for_organization_service(session, ORGANIZATION_ID, create_payload)
         created_datasets = created_response.datasets
         assert len(created_datasets) == 3
 
-        # Test dataset retrieval
+        # Test dataset retrieval - should have 3 more than before
         retrieved_datasets = get_datasets_by_organization_service(session, ORGANIZATION_ID)
-        assert len(retrieved_datasets) == 3
+        assert len(retrieved_datasets) == initial_count + 3
 
         # Test dataset update
         dataset_to_update = created_datasets[0].id
@@ -193,9 +200,14 @@ def test_dataset_management():
         deleted_count = delete_datasets_from_organization_service(session, ORGANIZATION_ID, delete_payload)
         assert deleted_count == 1  # Should have deleted 1 dataset
 
-        # Verify the dataset was deleted
+        # Verify the dataset was deleted - should have 2 more than initial
         remaining_datasets = get_datasets_by_organization_service(session, ORGANIZATION_ID)
-        assert len(remaining_datasets) == 2  # Should now have 2 datasets instead of 3
+        assert len(remaining_datasets) == initial_count + 2
+
+        # Clean up the remaining datasets created by this test
+        cleanup_ids = [d.id for d in created_datasets if d.id != dataset_to_delete]
+        cleanup_payload = DatasetDeleteList(dataset_ids=cleanup_ids)
+        delete_datasets_from_organization_service(session, ORGANIZATION_ID, cleanup_payload)
 
         # Test that deleting a dataset cascades to QA metadata (custom columns)
         dataset_with_columns = created_datasets[0].id
@@ -283,6 +295,10 @@ def test_input_groundtruth_basic_operations():
         remaining_data = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id)
         remaining_inputs = remaining_data.inputs_groundtruths
         assert len(remaining_inputs) == 2  # Should now have 2 inputs instead of 3
+
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
 
         delete_project_service(session=session, project_id=project_id)
 
@@ -524,6 +540,10 @@ async def test_run_qa_service():
         assert summary_all.failed == 0
         assert summary_all.success_rate == 100.0
 
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
+
         delete_project_service(session=session, project_id=project_id)
 
 
@@ -579,6 +599,10 @@ def test_position_field_in_responses():
         final_positions = [entry.position for entry in final_entries]
         assert sorted(final_positions) == [1, 2, 4, 5, 6]
 
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
+
         delete_project_service(session=session, project_id=project_id)
 
 
@@ -604,6 +628,10 @@ def test_duplicate_positions_validation():
         with pytest.raises(QADuplicatePositionError) as exc_info:
             create_inputs_groundtruths_service(session, dataset_id, create_payload)
         assert "Duplicate positions" in str(exc_info.value)
+
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
 
         delete_project_service(session=session, project_id=project_id)
 
@@ -631,6 +659,10 @@ def test_partial_position_validation():
             create_inputs_groundtruths_service(session, dataset_id, create_payload)
         assert "Partial positioning" in str(exc_info.value)
 
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
+
         delete_project_service(session=session, project_id=project_id)
 
 
@@ -657,6 +689,10 @@ def test_position_auto_generation():
         created = created_response.inputs_groundtruths
         assert created[0].position == 1
         assert created[1].position == 2
+
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
 
         delete_project_service(session=session, project_id=project_id)
 
@@ -690,6 +726,10 @@ def test_csv_import_duplicate_positions_inside_csv():
         assert "Duplicate positions found in CSV import: [1]" in error_detail
         assert "CSV import" in error_detail
 
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
+
         delete_project_service(session=session, project_id=project_id)
 
 
@@ -722,6 +762,10 @@ def test_csv_import_invalid_positions_values():
         assert "Invalid integer in 'position' column" in error_detail
         assert "row" in error_detail
 
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
+
         delete_project_service(session=session, project_id=project_id)
 
 
@@ -750,6 +794,10 @@ def test_csv_import_position_less_than_one():
         error_detail = str(exc_info.value)
         assert "Invalid integer in 'position' column" in error_detail
         assert "greater than or equal to 1" in error_detail
+
+        delete_datasets_from_organization_service(
+            session, ORGANIZATION_ID, DatasetDeleteList(dataset_ids=[dataset_id])
+        )
 
         delete_project_service(session=session, project_id=project_id)
 
