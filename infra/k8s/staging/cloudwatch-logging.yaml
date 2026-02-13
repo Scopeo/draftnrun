@@ -18,7 +18,7 @@ metadata:
   name: fluent-bit-role
 rules:
   - apiGroups: [""]
-    resources: [namespaces, pods, pods/logs, events]
+    resources: [namespaces, pods, pods/logs]
     verbs: [get, list, watch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -57,10 +57,6 @@ data:
         Skip_Long_Lines   On
         Refresh_Interval  10
 
-    [INPUT]
-        Name              kubernetes_events
-        Tag               kube_events.*
-
     [FILTER]
         Name                kubernetes
         Match               kube.*
@@ -77,14 +73,6 @@ data:
         log_group_name      /ada/staging
         log_stream_prefix   fallback-
         log_stream_template $kubernetes['labels']['app']
-        auto_create_group   true
-
-    [OUTPUT]
-        Name                cloudwatch_logs
-        Match               kube_events.*
-        region              eu-west-3
-        log_group_name      /ada/staging/k8s-events
-        log_stream_prefix   events-
         auto_create_group   true
 
   parsers.conf: |
