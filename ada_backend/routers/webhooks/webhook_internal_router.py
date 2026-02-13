@@ -1,5 +1,6 @@
+import json
 import logging
-from typing import Annotated, Any, Dict, List
+from typing import Annotated, Any, Dict, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -21,15 +22,25 @@ LOGGER = logging.getLogger(__name__)
 @router.get("/{webhook_id}/triggers", response_model=List[IntegrationTriggerResponse])
 async def get_webhook_triggers_endpoint(
     webhook_id: UUID,
+    provider: Optional[str] = None,
+    webhook_event_data: Optional[str] = None,
     session: Session = Depends(get_db),
     verified_webhook_api_key: Annotated[None, Depends(verify_webhook_api_key_dependency)] = None,
 ) -> List[IntegrationTriggerResponse]:
     """
     Get all enabled integration triggers for a webhook.
+    Optionally filters triggers based on provider and payload data.
     Internal endpoint for webhook workers, requires webhook API key.
     """
     try:
-        return get_webhook_triggers_service(session=session, webhook_id=webhook_id)
+        event_data = json.loads(webhook_event_data)
+
+        return get_webhook_triggers_service(
+            session=session,
+            webhook_id=webhook_id,
+            provider=provider,
+            event_data=event_data
+        )
     except Exception as e:
         LOGGER.error(f"Failed to get triggers for webhook {webhook_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
