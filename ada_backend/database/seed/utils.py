@@ -217,6 +217,7 @@ def build_completion_service_config_definitions(
                     ui_component_properties=UIComponentProperties(
                         label="Reasoning",
                         options=[
+                            SelectOption(value="none", label="None"),
                             SelectOption(value="low", label="Low"),
                             SelectOption(value="medium", label="Medium"),
                             SelectOption(value="high", label="High"),
@@ -328,6 +329,7 @@ def build_function_calling_service_config_definitions(
                     ui_component_properties=UIComponentProperties(
                         label="Reasoning",
                         options=[
+                            SelectOption(value="none", label="None"),
                             SelectOption(value="low", label="Low"),
                             SelectOption(value="medium", label="Medium"),
                             SelectOption(value="high", label="High"),
