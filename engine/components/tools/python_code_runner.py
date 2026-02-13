@@ -16,10 +16,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ada_backend.database.models import UIComponent
 from engine.components.component import Component
+from engine.components.tools.sandbox_utils import get_or_create_sandbox
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.serializer import serialize_to_json
-from engine.trace.span_context import get_tracing_span
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
@@ -275,23 +275,8 @@ class PythonCodeRunner(Component):
         if not self.e2b_api_key:
             raise ValueError("E2B API key not configured")
 
-        params = get_tracing_span()
-        should_cleanup_locally = False
-        sandbox: AsyncSandbox | None = None
+        sandbox, should_cleanup_locally = await get_or_create_sandbox(self.e2b_api_key)
 
-        if params and params.shared_sandbox:
-            if await params.shared_sandbox.is_running():
-                sandbox = params.shared_sandbox
-            else:
-                LOGGER.info("Shared sandbox is not running, killing it")
-                await params.shared_sandbox.kill()
-                params.shared_sandbox = None
-        if sandbox is None:
-            sandbox = await AsyncSandbox.create(api_key=self.e2b_api_key)
-            if params:
-                params.shared_sandbox = sandbox
-            else:
-                should_cleanup_locally = True
         try:
             uploaded_filenames = []
             if input_filepaths:
