@@ -177,6 +177,7 @@ async def run_env_agent(
     input_data: dict,
     call_type: CallType,
     response_format: Optional[ResponseFormat] = None,
+    cron_id: Optional[UUID] = None,
 ) -> ChatResponse:
     graph_runner = get_graph_runner_for_env(session=session, project_id=project_id, env=env)
     if not graph_runner:
@@ -190,6 +191,7 @@ async def run_env_agent(
         call_type=call_type,
         tag_name=compose_tag_name(graph_runner.tag_version, graph_runner.version_name),
         response_format=response_format,
+        cron_id=cron_id,
     )
 
 
@@ -202,6 +204,7 @@ async def run_agent(
     call_type: CallType,
     tag_name: Optional[str] = None,
     response_format: Optional[ResponseFormat] = None,
+    cron_id: Optional[UUID] = None,
 ) -> ChatResponse:
     project_details = get_project_with_details(session, project_id=project_id)
     if not project_details:
@@ -241,6 +244,10 @@ async def run_agent(
 
     save_input_files_to_temp_folder(input_data, uuid_for_temp_folder)
 
+    tracing_params = {}
+    if cron_id:
+        tracing_params["cron_id"] = str(cron_id)
+
     setup_tracing_context(
         session=session,
         project_id=project_id,
@@ -250,6 +257,7 @@ async def run_agent(
         call_type=call_type,
         graph_runner_id=graph_runner_id,
         tag_name=tag_name,
+        **tracing_params,
     )
 
     agent = await get_agent_for_project(
