@@ -1,21 +1,25 @@
 version: 1
 disable_existing_loggers: False
 directory: logs
+filters:
+    tracing_context:
+        (): logger.TracingContextFilter
 formatters:
-    simple:
-        format: "%(asctime)s - %(levelname)s - %(name)s: %(message)s"
-        datefmt: "%Y-%m-%d %H:%M:%S"
+    conditional_context:
+        (): logger.ConditionalContextFormatter
 handlers:
     console:
         class: logging.StreamHandler
         stream: ext://sys.stdout
-        formatter: simple
+        formatter: conditional_context
         level: INFO
+        filters: [tracing_context]
     file:
         class: logging.FileHandler
-        formatter: simple
+        formatter: conditional_context
         filename: logs/server.log
         level: INFO
+        filters: [tracing_context]
 root:
     level: DEBUG
     handlers: [console, file]
