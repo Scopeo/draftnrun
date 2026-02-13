@@ -114,17 +114,14 @@ def get_trace_cost_kpis(project_ids: List[UUID], duration_days: int, call_type: 
     start_date_query = now - timedelta(days=duration_days)
     end_date_query = now
 
-    # Build the call_type filter clause
     call_type_filter = ""
     if call_type is not None:
         call_type_filter = "AND call_type = %(call_type)s"
 
-    # Build parameterized IN clause for project_ids
     project_id_placeholders = ", ".join([f"%(project_id_{i})s" for i in range(len(project_ids))])
 
     query = f"""
         WITH trace_costs AS (
-            -- Compute cost per workflow run (trace_rowid)
             SELECT
                 s.attributes->>'conversation_id' as conversation_id,
                 s.trace_rowid,
@@ -186,7 +183,7 @@ def get_trace_cost_kpis(project_ids: List[UUID], duration_days: int, call_type: 
             "start_time": start_date_query,
             "end_time": end_date_query,
         }
-        # Add project_ids to params
+
         for i, project_id in enumerate(project_ids):
             params[f"project_id_{i}"] = str(project_id)
         if call_type is not None:
