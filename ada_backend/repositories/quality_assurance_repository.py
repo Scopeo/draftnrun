@@ -2,11 +2,12 @@ import logging
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select, update
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import DatasetProject, InputGroundtruth, VersionOutput
-from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate
+from ada_backend.database.models import DatasetProject, InputGroundtruth, QADatasetMetadata, VersionOutput
+from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate, InputGroundtruthUpdateList
 
 LOGGER = logging.getLogger(__name__)
 
@@ -91,6 +92,7 @@ def create_inputs_groundtruths(
             input=data.input,
             groundtruth=data.groundtruth,
             position=position,
+            custom_columns=data.custom_columns,
         )
         for data, position in zip(inputs_groundtruths_data, positions, strict=False)
     ]
@@ -107,13 +109,17 @@ def create_inputs_groundtruths(
 
 def update_inputs_groundtruths(
     session: Session,
-    updates_data: List[Tuple[UUID, Optional[str], Optional[str]]],
+    inputs_groundtruths_data: InputGroundtruthUpdateList,
     dataset_id: UUID,
 ) -> List[InputGroundtruth]:
     """Update multiple input-groundtruth entries."""
     updated_inputs_groundtruths = []
 
-    for input_id, input_text, groundtruth in updates_data:
+    for update_item in inputs_groundtruths_data.inputs_groundtruths:
+        input_id = update_item.id
+        input_data = update_item.input
+        groundtruth = update_item.groundtruth
+        custom_columns = update_item.custom_columns
         input_groundtruth = (
             session.query(InputGroundtruth)
             .filter(InputGroundtruth.id == input_id, InputGroundtruth.dataset_id == dataset_id)
@@ -121,10 +127,18 @@ def update_inputs_groundtruths(
         )
 
         if input_groundtruth:
-            if input_text is not None:
-                input_groundtruth.input = input_text
+            if input_data is not None:
+                input_groundtruth.input = input_data
             if groundtruth is not None:
                 input_groundtruth.groundtruth = groundtruth
+            if custom_columns is not None:
+                current_custom_columns = (input_groundtruth.custom_columns or {}).copy()
+                for key, value in custom_columns.items():
+                    if value is None:
+                        current_custom_columns.pop(key, None)
+                    else:
+                        current_custom_columns[key] = value
+                input_groundtruth.custom_columns = current_custom_columns if current_custom_columns else None
 
             updated_inputs_groundtruths.append(input_groundtruth)
 
@@ -332,9 +346,6 @@ def update_dataset(
         .first()
     )
 
-    if not dataset:
-        raise ValueError(f"Dataset {dataset_id} not found in project {project_id}")
-
     if dataset_name is not None:
         dataset.dataset_name = dataset_name
 
@@ -360,3 +371,121 @@ def delete_datasets(
 
     LOGGER.info(f"Deleted {deleted_count} datasets for project {project_id}")
     return deleted_count
+
+
+def check_dataset_belongs_to_project(session: Session, project_id: UUID, dataset_id: UUID) -> bool:
+    exists = session.query(
+        session.query(DatasetProject)
+        .filter(DatasetProject.id == dataset_id, DatasetProject.project_id == project_id)
+        .exists()
+    ).scalar()
+    return exists
+
+
+def get_qa_columns_by_dataset(session: Session, dataset_id: UUID) -> List[QADatasetMetadata]:
+    return (
+        session.query(QADatasetMetadata)
+        .filter(QADatasetMetadata.dataset_id == dataset_id)
+        .order_by(QADatasetMetadata.column_display_position.asc())
+        .all()
+    )
+
+
+def get_dataset_custom_columns_display_max_position(
+    session: Session,
+    dataset_id: UUID,
+) -> Optional[int]:
+    max_position = (
+        session.query(func.max(QADatasetMetadata.column_display_position))
+        .filter(QADatasetMetadata.dataset_id == dataset_id)
+        .scalar()
+    )
+    return max_position
+
+
+def create_custom_column(
+    session: Session,
+    dataset_id: UUID,
+    column_id: UUID,
+    column_name: str,
+    column_display_position: int,
+) -> QADatasetMetadata:
+    qa_metadata = QADatasetMetadata(
+        dataset_id=dataset_id,
+        column_id=column_id,
+        column_name=column_name,
+        column_display_position=column_display_position,
+    )
+
+    session.add(qa_metadata)
+    session.commit()
+    session.refresh(qa_metadata)
+
+    LOGGER.info(
+        f"Created QA column '{column_name}' (column_id: {column_id}) "
+        f"at position {column_display_position} for dataset {dataset_id}"
+    )
+    return qa_metadata
+
+
+def check_column_exist(session: Session, dataset_id: UUID, column_id: UUID) -> bool:
+    exists = session.query(
+        session.query(QADatasetMetadata)
+        .filter(QADatasetMetadata.dataset_id == dataset_id, QADatasetMetadata.column_id == column_id)
+        .exists()
+    ).scalar()
+    return exists
+
+
+def rename_custom_column(
+    session: Session,
+    dataset_id: UUID,
+    column_id: UUID,
+    column_name: str,
+) -> QADatasetMetadata:
+    qa_metadata = (
+        session.query(QADatasetMetadata)
+        .filter(QADatasetMetadata.dataset_id == dataset_id, QADatasetMetadata.column_id == column_id)
+        .first()
+    )
+
+    qa_metadata.column_name = column_name
+    session.commit()
+    session.refresh(qa_metadata)
+
+    return qa_metadata
+
+
+def remove_column_value_from_custom_column(session: Session, dataset_id: UUID, column_id: UUID) -> None:
+    column_id_str = str(column_id)
+
+    remove_key_from_jsonb = InputGroundtruth.custom_columns.op("-")(column_id_str)
+    jsonb_empty_dict = func.cast("{}", JSONB)
+
+    stmt = (
+        update(InputGroundtruth)
+        .where(
+            InputGroundtruth.dataset_id == dataset_id,
+            InputGroundtruth.custom_columns.isnot(None),
+            InputGroundtruth.custom_columns.has_key(column_id_str),
+        )
+        .values(
+            custom_columns=case(
+                (func.cast(remove_key_from_jsonb, JSONB) == jsonb_empty_dict, None),
+                else_=remove_key_from_jsonb,
+            )
+        )
+    )
+
+    session.execute(stmt)
+    session.commit()
+
+
+def delete_custom_column(session: Session, dataset_id: UUID, column_id: UUID) -> None:
+    (
+        session.query(QADatasetMetadata)
+        .filter(QADatasetMetadata.dataset_id == dataset_id, QADatasetMetadata.column_id == column_id)
+        .delete(synchronize_session=False)
+    )
+
+    session.commit()

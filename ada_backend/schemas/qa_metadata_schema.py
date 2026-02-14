@@ -1,0 +1,14 @@
+from uuid import UUID
+
+from pydantic import BaseModel
+
+
+class QAColumnResponse(BaseModel):
+    id: UUID
+    dataset_id: UUID
+    column_id: UUID
+    column_name: str
+    column_display_position: int
+
+    class Config:
+        from_attributes = True
