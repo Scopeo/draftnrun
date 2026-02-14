@@ -46,12 +46,14 @@ class GraphRunner:
         port_mappings: list[dict[str, Any]] | None = None,
         expressions: list[ExpressionSpec] | None = None,
         coercion_matrix: CoercionMatrix | None = None,
+        variables: dict[str, Any] | None = None,
     ):
         self.trace_manager = trace_manager
         self.graph = graph
         self.runnables = runnables
         self.start_nodes = start_nodes
         self.run_context: dict[str, Any] = {}
+        self.variables: dict[str, Any] = variables or {}
         # Initialize coercion matrix - use provided one or create default
         self.coercion_matrix = coercion_matrix or create_default_coercion_matrix()
 
@@ -311,6 +313,9 @@ class GraphRunner:
         # Handle field expressions for inputs (non-ref expressions like concat/literal)
         # Apply regardless of whether explicit port mappings exist; non-ref expressions override mapped values.
         # Pure-ref expressions are ignored at runtime (port mappings authoritative).
+        # NOTE: ConcatNodes that contain RefNodes pass the `not isinstance(expr_ast, RefNode)` filter
+        # below. Their graph dependencies are correctly handled by `_augment_graph_with_dependencies`,
+        # which uses `select_nodes` to find all RefNodes inside any expression type.
         if self._expressions_by_target_ast:
             non_ref_expressions: list[tuple[str, ExpressionNode]] = [
                 (field_name, expr_ast)
@@ -329,6 +334,7 @@ class GraphRunner:
                     field_name,
                     self.tasks,
                     to_string=_to_string,
+                    variables=self.variables,
                 )
                 LOGGER.debug(f"Evaluating non-ref expression for {node_id}.{field_name}")
                 target_type = get_target_field_type(target_component, field_name)
