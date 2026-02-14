@@ -29,6 +29,8 @@ class TraceSpan(BaseModel):
     conversation_id: str | None = None
     trace_id: str | None = None
     total_credits: float | None = None
+    original_retrieval_rank: list | None = None
+    original_reranker_rank: list | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> "TraceSpan":
@@ -56,6 +58,8 @@ class TraceSpan(BaseModel):
             conversation_id=attributes.get("conversation_id"),
             trace_id=data.get("trace_id"),
             total_credits=data.get("total_credits"),
+            original_retrieval_rank=data.get("original_retrieval_rank"),
+            original_reranker_rank=data.get("original_reranker_rank"),
         )
 
 
