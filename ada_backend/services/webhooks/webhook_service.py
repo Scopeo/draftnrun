@@ -146,15 +146,12 @@ def prepare_workflow_input(payload: Dict[str, Any], provider: str) -> Dict[str, 
 
 
 def get_webhook_triggers_service(
-    session: Session,
-    webhook_id: UUID,
-    provider: str = None,
-    event_data: Dict[str, Any] = None
+    session: Session, webhook_id: UUID, provider: str = None, event_data: Dict[str, Any] = None
 ) -> List[IntegrationTriggerResponse]:
-    triggers = get_enabled_webhook_triggers(
-        session=session,
-        webhook_id=webhook_id
-    )
+    triggers = get_enabled_webhook_triggers(session=session, webhook_id=webhook_id)
+    if not triggers:
+        LOGGER.info(f"No enabled triggers for webhook {webhook_id}, skipping execute")
+        return []
 
     trigger_responses = [
         IntegrationTriggerResponse(
@@ -169,10 +166,8 @@ def get_webhook_triggers_service(
 
     if provider == WebhookProvider.RESEND and event_data:
         data = event_data.get("data", {})
-        filtered = [
-            t for t in trigger_responses
-            if evaluate_filter(t.filter_options, data)
-        ]
+        filtered = [t for t in trigger_responses if evaluate_filter(t.filter_options, data)]
+        LOGGER.info(f"Filtered triggers: {len(filtered)}/{len(trigger_responses)}")
         return filtered
 
     return trigger_responses
@@ -196,8 +191,7 @@ async def execute_webhook(
         event_data=payload,
     )
 
-    if not triggers:
-        LOGGER.info(f"No enabled triggers for webhook {webhook_id}, skipping execute")
+    if len(triggers) == 0:
         return WebhookExecuteResponse(processed=0, total=0, results=[])
 
     workflow_input = prepare_workflow_input(payload, provider)
