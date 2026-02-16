@@ -387,7 +387,7 @@ data:
         Name              tail
         Tag               kube.*
         Path              /var/log/containers/*${NAMESPACE}*.log
-        Parser            docker
+        Parser            cri
         DB                /var/log/flb_kube.db
         Mem_Buf_Limit     50MB
         Skip_Long_Lines   On
@@ -409,14 +409,14 @@ data:
         log_group_name      $LOG_GROUP
         log_stream_prefix   k8s-
         auto_create_group   true
-        log_key             log
 
   parsers.conf: |
     [PARSER]
-        Name        docker
-        Format      json
+        Name        cri
+        Format      regex
+        Regex       ^(?<time>[^ ]+) (?<stream>stdout|stderr) (?<logtag>[^ ]*) (?<log>.*)$
         Time_Key    time
-        Time_Format %Y-%m-%dT%H:%M:%S.%L
+        Time_Format %Y-%m-%dT%H:%M:%S.%LZ
         Time_Keep   On
 ---
 apiVersion: apps/v1
