@@ -19,7 +19,10 @@ def get_webhook_by_external_client_id(
     )
 
 
-def get_enabled_webhook_triggers(session: Session, webhook_id: UUID) -> List[db.IntegrationTrigger]:
+def get_enabled_webhook_triggers(
+    session: Session,
+    webhook_id: UUID,
+) -> List[db.IntegrationTrigger]:
     return (
         session.query(db.IntegrationTrigger)
         .filter(
