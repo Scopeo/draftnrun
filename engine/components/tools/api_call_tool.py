@@ -1,15 +1,14 @@
 import json
 import logging
 import string
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Type, Union
 
 import httpx
 from openinference.semconv.trace import OpenInferenceSpanKindValues
+from pydantic import BaseModel, ConfigDict, Field
 
 from engine.components.component import Component
 from engine.components.types import (
-    AgentPayload,
-    ChatMessage,
     ComponentAttributes,
     ToolDescription,
 )
@@ -35,8 +34,37 @@ API_CALL_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
+class APICallToolInputs(BaseModel):
+    request_body: Optional[Any] = Field(
+        default=None,
+        description="Data to send in the API request body or as query parameters",
+    )
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
+
+class APICallToolOutputs(BaseModel):
+    output: str = Field(description="The formatted API response or error message.")
+    artifacts: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Raw API response including status_code, data, headers, success flag.",
+    )
+
+
 class APICallTool(Component):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
+    migrated = True
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return APICallToolInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return APICallToolOutputs
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "request_body", "output": "output"}
 
     def __init__(
         self,
@@ -128,12 +156,27 @@ class APICallTool(Component):
 
     async def _run_without_io_trace(
         self,
-        *inputs: AgentPayload,
+        inputs: APICallToolInputs,
         ctx: Optional[dict] = None,
-        **kwargs: Any,
-    ) -> AgentPayload:
-        # Make the API call
-        api_response = await self.make_api_call(**kwargs)
+    ) -> APICallToolOutputs:
+        dynamic_params = {}
+        request_data = inputs.request_body
+
+        if isinstance(request_data, str):
+            try:
+                request_data = json.loads(request_data)
+            except json.JSONDecodeError:
+                pass
+
+        if isinstance(request_data, dict):
+            dynamic_params.update(request_data)
+        elif request_data is not None:
+            dynamic_params["body"] = request_data
+
+        if inputs.model_extra:
+            dynamic_params.update(inputs.model_extra)
+
+        api_response = await self.make_api_call(**dynamic_params)
 
         # Format the API response as a readable message
         if api_response.get("success", False):
@@ -141,8 +184,7 @@ class APICallTool(Component):
         else:
             content = f"API call failed: {api_response.get('error', 'Unknown error')}"
 
-        return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=content)],
+        return APICallToolOutputs(
+            output=content,
             artifacts={"api_response": api_response},
-            is_final=False,
         )
