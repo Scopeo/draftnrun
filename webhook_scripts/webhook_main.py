@@ -1,12 +1,10 @@
 import asyncio
-import json
 import logging
 from typing import Any, Dict
 from uuid import UUID
 
 import httpx
 
-from ada_backend.services.webhooks.webhook_service import prepare_workflow_input
 from settings import settings
 
 logging.basicConfig(
@@ -17,81 +15,7 @@ logging.basicConfig(
 
 LOGGER = logging.getLogger(__name__)
 
-WEBHOOK_WORKFLOW_TIMEOUT = 1800  # 30 minutes in seconds (for long-running workflows)
-WEBHOOK_MAX_CONCURRENT_WORKFLOWS = 5  # Maximum number of concurrent workflows to run
-
-
-async def _run_workflow_async(
-    client: httpx.AsyncClient,
-    api_base_url: str,
-    webhook_api_key: str,
-    trigger: Dict[str, Any],
-    payload: Dict[str, Any],
-    event_id: str,
-    provider: str,
-    webhook_id: UUID,
-    semaphore: asyncio.Semaphore,
-) -> tuple[str, bool]:
-    """
-    Run a single workflow asynchronously.
-
-    Returns:
-        Tuple of (trigger_id, success: bool)
-    """
-    trigger_id = trigger["id"]
-    project_id = trigger["project_id"]
-    async with semaphore:  # Limit concurrent executions
-        try:
-            LOGGER.info(
-                f"[WEBHOOK_MAIN] Triggering workflow/agent for trigger {trigger_id}, "
-                f"project_id={project_id}, webhook_id={webhook_id}"
-            )
-
-            workflow_input = prepare_workflow_input(payload, provider)
-
-            input_data = {
-                **workflow_input,
-                "event_id": event_id,
-                "provider": provider,
-            }
-
-            response = await client.post(
-                f"{api_base_url}/internal/webhooks/projects/{project_id}/run",
-                json=input_data,
-                headers={
-                    "X-Webhook-API-Key": webhook_api_key,
-                    "Content-Type": "application/json",
-                },
-                timeout=WEBHOOK_WORKFLOW_TIMEOUT,
-            )
-            response.raise_for_status()
-            result = response.json()
-
-            LOGGER.info(
-                f"[WEBHOOK_MAIN] Successfully triggered workflow/agent for trigger {trigger_id}: "
-                f"trace_id={result.get('trace_id')}"
-            )
-            return trigger_id, True
-
-        except httpx.HTTPStatusError as e:
-            LOGGER.error(
-                f"[WEBHOOK_MAIN] HTTP error triggering workflow/agent for trigger {trigger_id}: "
-                f"status={e.response.status_code}, error={str(e)}",
-                exc_info=True,
-            )
-            return trigger_id, False
-        except httpx.RequestError as e:
-            LOGGER.error(
-                f"[WEBHOOK_MAIN] Request error triggering workflow/agent for trigger {trigger_id}: {str(e)}",
-                exc_info=True,
-            )
-            return trigger_id, False
-        except Exception as e:
-            LOGGER.error(
-                f"[WEBHOOK_MAIN] Unexpected error triggering workflow/agent for trigger {trigger_id}: {str(e)}",
-                exc_info=True,
-            )
-            return trigger_id, False
+WEBHOOK_EXECUTE_TIMEOUT = 1860  # Slightly above 30 min to allow for long-running workflows
 
 
 async def webhook_main_async(
@@ -115,63 +39,45 @@ async def webhook_main_async(
         LOGGER.error("[WEBHOOK_MAIN] WEBHOOK_API_KEY not set in environment")
         raise ValueError("WEBHOOK_API_KEY environment variable is required")
 
-    async with httpx.AsyncClient() as client:
-        try:
-            triggers_response = await client.get(
-                f"{api_base_url}/internal/webhooks/{webhook_id}/triggers",
-                params={
-                    "provider": provider,
-                    "webhook_event_data": json.dumps(payload),
-                },
+    body = {
+        "provider": provider,
+        "event_id": event_id,
+        "organization_id": str(organization_id),
+        "payload": payload,
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{api_base_url}/internal/webhooks/{webhook_id}/execute",
+                json=body,
                 headers={
                     "X-Webhook-API-Key": webhook_api_key,
                     "Content-Type": "application/json",
                 },
-                timeout=10,
+                timeout=WEBHOOK_EXECUTE_TIMEOUT,
             )
-            triggers_response.raise_for_status()
-            triggers = triggers_response.json()
+            response.raise_for_status()
+            result = response.json()
 
-            if not triggers:
-                LOGGER.info(f"[WEBHOOK_MAIN] No enabled triggers found for webhook {webhook_id}, skipping processing")
-                return
-
-            LOGGER.info(f"[WEBHOOK_MAIN] Found {len(triggers)} enabled trigger(s) for webhook {webhook_id}")
-
-            max_concurrent = WEBHOOK_MAX_CONCURRENT_WORKFLOWS
-            semaphore = asyncio.Semaphore(max_concurrent)
-            LOGGER.info(f"[WEBHOOK_MAIN] Limiting concurrent workflows to {max_concurrent}")
-
-            tasks = [
-                _run_workflow_async(
-                    client=client,
-                    api_base_url=api_base_url,
-                    webhook_api_key=webhook_api_key,
-                    trigger=trigger,
-                    payload=payload,
-                    event_id=event_id,
-                    provider=provider,
-                    webhook_id=webhook_id,
-                    semaphore=semaphore,
-                )
-                for trigger in triggers
-            ]
-
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            processed_triggers = sum(1 for result in results if isinstance(result, tuple) and result[1])
-
-            LOGGER.info(
-                f"[WEBHOOK_MAIN] Webhook processing completed: webhook_id={webhook_id}, "
-                f"event_id={event_id}, processed_triggers={processed_triggers}/{len(triggers)}"
-            )
-
-        except httpx.RequestError as e:
-            LOGGER.error(f"[WEBHOOK_MAIN] Error calling API: {str(e)}", exc_info=True)
-            raise
-        except Exception as e:
-            LOGGER.error(f"[WEBHOOK_MAIN] Error processing webhook: {str(e)}", exc_info=True)
-            raise
+        processed = result.get("processed", 0)
+        total = result.get("total", 0)
+        LOGGER.info(
+            f"[WEBHOOK_MAIN] Webhook processing completed: webhook_id={webhook_id}, "
+            f"event_id={event_id}, processed_triggers={processed}/{total}"
+        )
+    except httpx.HTTPStatusError as e:
+        LOGGER.error(
+            f"[WEBHOOK_MAIN] HTTP error calling execute: status={e.response.status_code}, error={str(e)}",
+            exc_info=True,
+        )
+        raise
+    except httpx.RequestError as e:
+        LOGGER.error(f"[WEBHOOK_MAIN] Request error calling execute: {str(e)}", exc_info=True)
+        raise
+    except Exception as e:
+        LOGGER.error(f"[WEBHOOK_MAIN] Error processing webhook: {str(e)}", exc_info=True)
+        raise
 
 
 def webhook_main(
