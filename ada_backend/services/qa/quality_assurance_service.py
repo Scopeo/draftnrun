@@ -12,7 +12,7 @@ from ada_backend.database.models import CallType
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.qa_evaluation_repository import delete_evaluations_for_input_ids
 from ada_backend.repositories.quality_assurance_repository import (
-    check_dataset_belongs_to_project,
+    check_dataset_belongs_to_organization,
     clear_version_outputs_for_input_ids,
     create_datasets_for_organization,
     create_inputs_groundtruths,
@@ -61,7 +61,7 @@ from ada_backend.services.qa.qa_error import (
     CSVInvalidPositionError,
     CSVMissingDatasetColumnError,
     CSVNonUniquePositionError,
-    QADatasetNotInProjectError,
+    QADatasetNotInOrgError,
     QADuplicatePositionError,
     QAPartialPositionError,
 )
@@ -452,9 +452,11 @@ def update_dataset_in_organization_service(
     Returns:
         DatasetResponse: The updated dataset
     """
-    if not check_dataset_belongs_to_project(session, project_id, dataset_id):
-        LOGGER.error(f"Failed to update dataset {dataset_id}: Dataset {dataset_id} not found in project {project_id}")
-        raise QADatasetNotInProjectError(project_id, dataset_id)
+    if not check_dataset_belongs_to_organization(session, organization_id, dataset_id):
+        LOGGER.error(
+            f"Failed to update dataset {dataset_id}: Dataset {dataset_id} not found in organization {organization_id}"
+        )
+        raise QADatasetNotInOrgError(organization_id, dataset_id)
 
     try:
         updated_dataset = update_dataset_in_organization(
@@ -488,12 +490,11 @@ def delete_datasets_from_organization_service(
         int: Number of deleted datasets
     """
     for dataset_id in delete_data.dataset_ids:
-        if not check_dataset_belongs_to_project(session, project_id, dataset_id):
+        if not check_dataset_belongs_to_organization(session, organization_id, dataset_id):
             LOGGER.error(
-                f"Failed to delete datasets for project {project_id}: "
-                f"Dataset {dataset_id} not found in project {project_id}"
+                f"Failed to delete datasets: Dataset {dataset_id} not found in organization {organization_id}"
             )
-            raise QADatasetNotInProjectError(project_id, dataset_id)
+            raise QADatasetNotInOrgError(organization_id, dataset_id)
 
     try:
         deleted_count = delete_datasets_from_organization(
