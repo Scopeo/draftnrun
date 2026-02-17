@@ -1613,6 +1613,7 @@ class InputGroundtruth(Base):
         return f"InputGroundtruth(id={self.id}, input={self.input})"
 
 
+# TODO: rename to DatasetOrganization
 class DatasetProject(Base):
     __tablename__ = "dataset_project"
     __table_args__ = {"schema": "quality_assurance"}
@@ -1621,7 +1622,7 @@ class DatasetProject(Base):
     organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     project_id = mapped_column(
         UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
-    )
+    )  # TODO: remove project_id
     dataset_name = mapped_column(String, nullable=False)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

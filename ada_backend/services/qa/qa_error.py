@@ -98,7 +98,7 @@ class InvalidFormatError(Exception):
         super().__init__(f"Invalid {expected_format} format in {field_name}")
 
 
-class QADatasetNotInProjectError(Exception):
+class QADatasetNotInOrgError(Exception):
     """Raised when a dataset is not linked to the given project"""
 
     def __init__(self, project_id: UUID, dataset_id: UUID):

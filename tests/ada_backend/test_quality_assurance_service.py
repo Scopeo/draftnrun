@@ -29,7 +29,7 @@ from ada_backend.services.qa.qa_error import (
     CSVMissingDatasetColumnError,
     CSVNonUniquePositionError,
     QAColumnNotFoundError,
-    QADatasetNotInProjectError,
+    QADatasetNotInOrgError,
     QADuplicatePositionError,
     QAPartialPositionError,
 )
@@ -221,7 +221,7 @@ def test_dataset_management():
 
         # Delete the dataset
         delete_payload2 = DatasetDeleteList(dataset_ids=[dataset_with_columns])
-        deleted_count2 = delete_datasets_service(session, project_id, delete_payload2)
+        deleted_count2 = delete_datasets_from_organization_service(session, project_id, delete_payload2)
         assert deleted_count2 == 1
 
         # Verify QA metadata was cascaded (deleted)
@@ -811,7 +811,7 @@ def test_csv_import_creates_new_custom_columns_and_values():
             description="Test project for CSV import with custom columns",
         )
 
-        dataset_data = create_datasets_service(
+        dataset_data = create_datasets_for_organization_service(
             session, project_id, DatasetCreateList(datasets_name=[f"csv_custom_cols_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
@@ -874,7 +874,7 @@ def test_csv_import_requires_all_existing_custom_columns_in_header():
             description="Test project for CSV import missing required columns",
         )
 
-        dataset_data = create_datasets_service(
+        dataset_data = create_datasets_for_organization_service(
             session, project_id, DatasetCreateList(datasets_name=[f"csv_missing_cols_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
@@ -916,7 +916,7 @@ def test_csv_import_adds_new_columns_while_preserving_existing():
             description="Test project for CSV import with mixed existing/new columns",
         )
 
-        dataset_data = create_datasets_service(
+        dataset_data = create_datasets_for_organization_service(
             session, project_id, DatasetCreateList(datasets_name=[f"csv_mixed_cols_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
@@ -971,7 +971,7 @@ def test_csv_import_handles_missing_cell_values_for_custom_columns():
             description="Test project for CSV import with empty custom column cells",
         )
 
-        dataset_data = create_datasets_service(
+        dataset_data = create_datasets_for_organization_service(
             session, project_id, DatasetCreateList(datasets_name=[f"csv_empty_cells_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
@@ -1021,7 +1021,7 @@ def test_csv_import_uses_get_headers_from_csv_and_processes_all_rows():
             description="Test project for CSV import processing all rows",
         )
 
-        dataset_data = create_datasets_service(
+        dataset_data = create_datasets_for_organization_service(
             session, project_id, DatasetCreateList(datasets_name=[f"csv_all_rows_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
@@ -1076,7 +1076,7 @@ def test_get_qa_columns_by_dataset_service():
             description="Test project for getting custom columns",
         )
 
-        dataset_data = create_datasets_service(
+        dataset_data = create_datasets_for_organization_service(
             session, project_id, DatasetCreateList(datasets_name=[f"get_columns_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
@@ -1105,7 +1105,7 @@ def test_get_qa_columns_by_dataset_service():
             description="Test project 2",
         )
 
-        with pytest.raises(QADatasetNotInProjectError) as exc_info:
+        with pytest.raises(QADatasetNotInOrgError) as exc_info:
             get_qa_columns_by_dataset_service(session, project_id2, dataset_id)
         assert str(project_id2) in str(exc_info.value)
         assert str(dataset_id) in str(exc_info.value)
@@ -1123,7 +1123,7 @@ def test_create_qa_column_service():
             description="Test project for creating custom columns",
         )
 
-        dataset_data = create_datasets_service(
+        dataset_data = create_datasets_for_organization_service(
             session, project_id, DatasetCreateList(datasets_name=[f"create_column_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
@@ -1158,7 +1158,7 @@ def test_create_qa_column_service():
             description="Test project 2",
         )
 
-        with pytest.raises(QADatasetNotInProjectError) as exc_info:
+        with pytest.raises(QADatasetNotInOrgError) as exc_info:
             create_qa_column_service(session, project_id2, dataset_id, "Priority")
         assert str(project_id2) in str(exc_info.value)
         assert str(dataset_id) in str(exc_info.value)
@@ -1176,7 +1176,7 @@ def test_rename_qa_column_service():
             description="Test project for renaming custom columns",
         )
 
-        dataset_data = create_datasets_service(
+        dataset_data = create_datasets_for_organization_service(
             session, project_id, DatasetCreateList(datasets_name=[f"rename_column_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
@@ -1214,7 +1214,7 @@ def test_rename_qa_column_service():
             description="Test project 2",
         )
 
-        with pytest.raises(QADatasetNotInProjectError) as exc_info:
+        with pytest.raises(QADatasetNotInOrgError) as exc_info:
             rename_qa_column_service(session, project_id2, dataset_id, original_column_id, "NewName")
         assert str(project_id2) in str(exc_info.value)
 
@@ -1231,7 +1231,7 @@ def test_delete_qa_column_service():
             description="Test project for deleting custom columns",
         )
 
-        dataset_data = create_datasets_service(
+        dataset_data = create_datasets_for_organization_service(
             session, project_id, DatasetCreateList(datasets_name=[f"delete_column_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
@@ -1313,7 +1313,7 @@ def test_delete_qa_column_service():
         # Recreate a column for this test
         col3 = create_qa_column_service(session, project_id, dataset_id, "TestCol")
 
-        with pytest.raises(QADatasetNotInProjectError) as exc_info:
+        with pytest.raises(QADatasetNotInOrgError) as exc_info:
             delete_qa_column_service(session, project_id2, dataset_id, col3.column_id)
         assert str(project_id2) in str(exc_info.value)
 
@@ -1330,7 +1330,7 @@ def test_export_qa_data_to_csv_service_with_custom_columns():
             description="Test project for CSV export",
         )
 
-        dataset_data = create_datasets_service(
+        dataset_data = create_datasets_for_organization_service(
             session, project_id, DatasetCreateList(datasets_name=[f"export_csv_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
@@ -1391,7 +1391,7 @@ def test_update_inputs_groundtruths_service_with_custom_columns():
             description="Test project for updating custom columns",
         )
 
-        dataset_data = create_datasets_service(
+        dataset_data = create_datasets_for_organization_service(
             session, project_id, DatasetCreateList(datasets_name=[f"update_custom_cols_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
@@ -1451,7 +1451,7 @@ def test_csv_import_export_without_custom_columns():
             description="Test project for CSV import/export without custom columns",
         )
 
-        dataset_data = create_datasets_service(
+        dataset_data = create_datasets_for_organization_service(
             session, project_id, DatasetCreateList(datasets_name=[f"csv_basic_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
@@ -1500,7 +1500,7 @@ def test_csv_import_invalid_json_error():
             description="Test project for CSV invalid JSON",
         )
 
-        dataset_data = create_datasets_service(
+        dataset_data = create_datasets_for_organization_service(
             session, project_id, DatasetCreateList(datasets_name=[f"csv_invalid_json_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
@@ -1530,7 +1530,7 @@ def test_csv_import_empty_file_error():
             description="Test project for CSV empty file",
         )
 
-        dataset_data = create_datasets_service(
+        dataset_data = create_datasets_for_organization_service(
             session, project_id, DatasetCreateList(datasets_name=[f"csv_empty_file_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id
@@ -1558,7 +1558,7 @@ def test_csv_export_error_cases():
         )
 
         # Test empty dataset
-        dataset_data = create_datasets_service(
+        dataset_data = create_datasets_for_organization_service(
             session, project_id, DatasetCreateList(datasets_name=[f"csv_export_empty_dataset_{project_id}"])
         )
         dataset_id = dataset_data.datasets[0].id

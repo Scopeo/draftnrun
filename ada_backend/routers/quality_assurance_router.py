@@ -37,7 +37,7 @@ from ada_backend.services.qa.qa_error import (
     CSVMissingDatasetColumnError,
     CSVNonUniquePositionError,
     QAColumnNotFoundError,
-    QADatasetNotInProjectError,
+    QADatasetNotInOrgError,
     QADuplicatePositionError,
     QAPartialPositionError,
 )
@@ -184,7 +184,7 @@ def update_dataset_endpoint(
 
     try:
         return update_dataset_in_organization_service(session, project.organization_id, dataset_id, dataset_name)
-    except QADatasetNotInProjectError as e:
+    except QADatasetNotInOrgError as e:
         LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except HTTPException:
@@ -230,7 +230,7 @@ def delete_dataset_endpoint(
     try:
         deleted_count = delete_datasets_from_organization_service(session, project.organization_id, delete_data)
         return {"message": f"Deleted {deleted_count} datasets successfully"}
-    except QADatasetNotInProjectError as e:
+    except QADatasetNotInOrgError as e:
         LOGGER.error(f"Failed to delete datasets for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
@@ -262,7 +262,7 @@ def get_columns_by_dataset_endpoint(
 
     try:
         return get_qa_columns_by_dataset_service(session, project_id, dataset_id)
-    except QADatasetNotInProjectError as e:
+    except QADatasetNotInOrgError as e:
         LOGGER.error(
             f"Failed to get columns for dataset {dataset_id} in project {project_id}: {str(e)}", exc_info=True
         )
@@ -295,7 +295,7 @@ def add_column_to_dataset_endpoint(
 
     try:
         return create_qa_column_service(session, project_id, dataset_id, column_name)
-    except QADatasetNotInProjectError as e:
+    except QADatasetNotInOrgError as e:
         LOGGER.error(f"Failed to add column to dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -325,7 +325,7 @@ def rename_column_endpoint(
 
     try:
         return rename_qa_column_service(session, project_id, dataset_id, column_id, column_name)
-    except QADatasetNotInProjectError as e:
+    except QADatasetNotInOrgError as e:
         LOGGER.error(
             f"Failed to rename column {column_id} in dataset {dataset_id} for project {project_id}: {str(e)}",
             exc_info=True,
@@ -365,7 +365,7 @@ def delete_column_endpoint(
 
     try:
         return delete_qa_column_service(session, project_id, dataset_id, column_id)
-    except QADatasetNotInProjectError as e:
+    except QADatasetNotInOrgError as e:
         LOGGER.error(
             f"Failed to delete column {column_id} from dataset {dataset_id} for project {project_id}: {str(e)}",
             exc_info=True,
@@ -782,7 +782,7 @@ async def import_qa_data_from_csv_endpoint(
         CSVInvalidPositionError,
     ) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except QADatasetNotInProjectError as e:
+    except QADatasetNotInOrgError as e:
         LOGGER.error(
             f"Failed to import QA data for dataset {dataset_id} in project {project_id}: {str(e)}", exc_info=True
         )
