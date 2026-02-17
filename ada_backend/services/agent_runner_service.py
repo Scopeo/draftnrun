@@ -195,6 +195,7 @@ async def run_env_agent(
     )
 
 
+# TODO: agent_runner should not be aware of cron_id
 async def run_agent(
     session: Session,
     project_id: UUID,
