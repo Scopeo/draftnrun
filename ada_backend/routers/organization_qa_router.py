@@ -2,7 +2,7 @@ import logging
 from typing import Annotated, List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
@@ -445,7 +445,7 @@ def delete_llm_judges_from_organization_endpoint(
         Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
-    judge_ids: List[UUID] = Query(...),
+    judge_ids: List[UUID] = Body(...),
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
