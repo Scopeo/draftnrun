@@ -14,7 +14,7 @@ from engine.components.history_message_handling import HistoryMessageHandler
 from engine.components.rag.formatter import Formatter
 from engine.components.rag.retriever import RETRIEVER_CITATION_INSTRUCTION, RETRIEVER_TOOL_DESCRIPTION
 from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, SourcedResponse, ToolDescription
-from engine.components.utils import load_str_to_json, merge_constrained_output_to_root
+from engine.components.utils import extract_source_ranks, load_str_to_json, merge_constrained_output_to_root
 from engine.components.utils_prompt import fill_prompt_template
 from engine.graph_runner.runnable import Runnable
 from engine.llm_services.llm_service import CompletionService
@@ -448,6 +448,15 @@ class AIAgent(Component):
                     filtered_response = self._formatter._renumber_sources(sourced_response)
                     artifacts["sources"] = filtered_response.sources
                     response_content = filtered_response.response
+
+                    if filtered_response.sources:
+                        original_retrieval_ranks, original_reranker_ranks = extract_source_ranks(
+                            filtered_response.sources
+                        )
+                        span.set_attributes({
+                            "original_retrieval_rank": json.dumps(original_retrieval_ranks),
+                            "original_reranker_rank": json.dumps(original_reranker_ranks),
+                        })
 
                 if imgs:
                     artifacts["images"] = imgs

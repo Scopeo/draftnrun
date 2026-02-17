@@ -180,3 +180,18 @@ def merge_constrained_output_to_root(
                     LOGGER.warning(f"Skipped setting private attribute '{key}' from constrained output")
     except (json.JSONDecodeError, TypeError) as e:
         LOGGER.debug(f"Could not parse constrained output as JSON: {e}")
+
+
+def extract_source_ranks(sources: list) -> tuple[list, list]:
+    original_retrieval_ranks = []
+    original_reranker_ranks = []
+
+    for source in sources:
+        metadata = source.metadata or {}
+        original_retrieval_ranks.append(metadata.get("_retrieval_rank"))
+        original_reranker_ranks.append(metadata.get("_reranker_rank"))
+
+    if all(rank is None for rank in original_reranker_ranks):
+        original_reranker_ranks = []
+
+    return original_retrieval_ranks, original_reranker_ranks
