@@ -1248,3 +1248,55 @@ def insert_component_global_parameter(
     session.commit()
     session.refresh(global_param)
     return global_param
+
+
+def update_component_fields(
+    session: Session,
+    component_id: UUID,
+    is_agent: Optional[bool] = None,
+    function_callable: Optional[bool] = None,
+) -> db.Component:
+    component = get_component_by_id(session, component_id)
+    if component is None:
+        raise ValueError(f"Component {component_id} not found")
+
+    if is_agent is not None:
+        LOGGER.info(f"Updating component {component_id} is_agent to {is_agent}")
+        component.is_agent = is_agent
+
+    if function_callable is not None:
+        LOGGER.info(f"Updating component {component_id} function_callable to {function_callable}")
+        component.function_callable = function_callable
+
+    session.add(component)
+    session.commit()
+    session.refresh(component)
+    return component
+
+
+def update_component_categories(
+    session: Session,
+    component_id: UUID,
+    category_ids: List[UUID],
+) -> None:
+    LOGGER.info(f"Updating component {component_id} categories to {category_ids}")
+
+    session.query(db.ComponentCategory).filter(db.ComponentCategory.component_id == component_id).delete()
+    categories = session.query(db.Category).filter(db.Category.id.in_(category_ids)).all()
+
+    category_map = {cat.id: cat for cat in categories}
+
+    new_component_categories = []
+    for category_id in category_ids:
+        category = category_map.get(category_id)
+        if category:
+            new_component_category = db.ComponentCategory(component_id=component_id, category_id=category.id)
+            new_component_categories.append(new_component_category)
+            LOGGER.info(f"Component {component_id} added to category {category.name}")
+        else:
+            LOGGER.warning(f"Category {category_id} not found, skipping")
+
+    if new_component_categories:
+        session.bulk_save_objects(new_component_categories)
+
+    session.commit()

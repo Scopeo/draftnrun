@@ -1,4 +1,5 @@
 import logging
+from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -9,7 +10,10 @@ from ada_backend.repositories.component_repository import (
     count_component_versions_by_component_id,
     delete_component_by_id,
     delete_component_version_by_id,
+    get_component_by_id,
     get_component_version_by_id,
+    update_component_categories,
+    update_component_fields,
 )
 from ada_backend.repositories.release_stage_repository import (
     _STAGE_ORDER,
@@ -25,42 +29,6 @@ from ada_backend.services.errors import (
 )
 
 LOGGER = logging.getLogger(__name__)
-
-
-def update_component_version_release_stage_service(
-    session: Session,
-    component_id: UUID,
-    component_version_id: UUID,
-    release_stage: ReleaseStage,
-) -> None:
-    component_version = get_component_version_by_id(session, component_version_id)
-    if component_version is None:
-        raise ComponentNotFound(component_version_id)
-    if component_version.component_id != component_id:
-        LOGGER.warning(
-            f"Component version {component_version_id} does not belong to "
-            f"component {component_id}. Actual parent: {component_version.component_id}"
-        )
-        raise ComponentVersionMismatchError(
-            component_version_id,
-            expected_component_id=component_id,
-            actual_component_id=component_version.component_id,
-        )
-
-    old_release_stage = component_version.release_stage
-
-    component_version.release_stage = release_stage
-    session.add(component_version)
-
-    _update_release_stage_mapping_with_replacement(
-        session,
-        component_id,
-        old_release_stage,
-        release_stage,
-        component_version_id,
-    )
-
-    session.commit()
 
 
 def _update_release_stage_mapping_with_replacement(
@@ -148,3 +116,63 @@ def delete_component_version_service(
     else:
         LOGGER.info(f"Deleting component version {component_version_id} from component {component_id}")
         delete_component_version_by_id(session, component_version_id)
+
+
+def update_component_fields_service(
+    session: Session,
+    component_id: UUID,
+    component_version_id: UUID,
+    is_agent: Optional[bool] = None,
+    function_callable: Optional[bool] = None,
+    category_ids: Optional[List[UUID]] = None,
+    release_stage: Optional[ReleaseStage] = None,
+) -> None:
+    component_version = get_component_version_by_id(session, component_version_id)
+    if component_version is None:
+        raise ComponentNotFound(component_version_id)
+
+    if component_version.component_id != component_id:
+        LOGGER.warning(
+            f"Component version {component_version_id} does not belong to "
+            f"component {component_id}. Actual parent: {component_version.component_id}"
+        )
+        raise ComponentVersionMismatchError(
+            component_version_id,
+            expected_component_id=component_id,
+            actual_component_id=component_version.component_id,
+        )
+
+    component = get_component_by_id(session, component_id)
+    if component is None:
+        raise ComponentNotFound(component_id)
+
+    if is_agent is not None or function_callable is not None:
+        update_component_fields(
+            session=session,
+            component_id=component_id,
+            is_agent=is_agent,
+            function_callable=function_callable,
+        )
+
+    if category_ids is not None:
+        update_component_categories(
+            session=session,
+            component_id=component_id,
+            category_ids=category_ids,
+        )
+
+    old_release_stage = component_version.release_stage
+
+    component_version.release_stage = release_stage
+    session.add(component_version)
+    _update_release_stage_mapping_with_replacement(
+        session,
+        component_id,
+        old_release_stage,
+        release_stage,
+        component_version_id,
+    )
+
+    session.commit()
+
+    LOGGER.info(f"Successfully updated metadata for component {component_id}, version {component_version_id}")

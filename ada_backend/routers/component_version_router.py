@@ -8,10 +8,10 @@ from sqlalchemy.orm import Session
 from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import ensure_super_admin_dependency
 from ada_backend.schemas.auth_schema import SupabaseUser
-from ada_backend.schemas.components_schema import UpdateComponentReleaseStageRequest
+from ada_backend.schemas.components_schema import UpdateComponentFieldsRequest
 from ada_backend.services.component_version_service import (
     delete_component_version_service,
-    update_component_version_release_stage_service,
+    update_component_fields_service,
 )
 from ada_backend.services.errors import (
     ComponentNotFound,
@@ -23,28 +23,38 @@ router = APIRouter(prefix="/components", tags=["Components"])
 LOGGER = logging.getLogger(__name__)
 
 
-@router.put("/{component_id}/versions/{component_version_id}/release-stage")
-async def update_component_release_stage(
+@router.put("/{component_id}/versions/{component_version_id}/fields")
+async def update_component_fields(
     component_id: UUID,
     component_version_id: UUID,
-    payload: UpdateComponentReleaseStageRequest,
+    payload: UpdateComponentFieldsRequest,
     user: Annotated[SupabaseUser, Depends(ensure_super_admin_dependency())],
     session: Session = Depends(get_db),
 ):
-    """Update a component's release stage. Super admin only."""
+    """Update component fields (categories, is_agent, function_callable, release_stage). Super admin only."""
     try:
-        update_component_version_release_stage_service(
+        update_component_fields_service(
             session,
             component_id,
             component_version_id,
-            payload.release_stage,
+            is_agent=payload.is_agent,
+            function_callable=payload.function_callable,
+            category_ids=payload.category_ids,
+            release_stage=payload.release_stage,
         )
         return {"status": "ok"}
     except ComponentNotFound as e:
         raise HTTPException(status_code=404, detail="Resource not found") from e
+    except ComponentVersionMismatchError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Component version {e.component_version_id} does not belong to component {e.expected_component_id}"
+            ),
+        ) from e
     except Exception as e:
         LOGGER.error(
-            f"Failed to update component {component_id} release stage to {payload.release_stage}: {str(e)}",
+            f"Failed to update component {component_id} fields: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
