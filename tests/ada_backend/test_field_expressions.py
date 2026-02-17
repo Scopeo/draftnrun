@@ -71,7 +71,7 @@ def _create_component_instance(
 ) -> dict:
     params = [
         {"value": prompt_template_value, "name": "prompt_template", "order": None},
-        {"value": "openai:gpt-4o-mini", "name": "completion_model", "order": None},
+        {"value": "openai:gpt-5-mini", "name": "completion_model", "order": None},
         {"value": 0.2, "name": "default_temperature", "order": None},
     ]
 
@@ -206,12 +206,12 @@ def test_field_expressions_e2e():
                             "is_advanced": False,
                         },
                         {
-                            "value": "openai:gpt-4o-mini",
+                            "value": "openai:gpt-5-mini",
                             "name": "completion_model",
                             "order": None,
                             "type": "string",
                             "nullable": False,
-                            "default": "openai:gpt-4o-mini",
+                            "default": "openai:gpt-5-mini",
                             "ui_component": "Select",
                             "ui_component_properties": {},
                             "is_advanced": False,
@@ -260,12 +260,12 @@ def test_field_expressions_e2e():
                             "is_advanced": False,
                         },
                         {
-                            "value": "openai:gpt-4o-mini",
+                            "value": "openai:gpt-5-mini",
                             "name": "completion_model",
                             "order": None,
                             "type": "string",
                             "nullable": False,
-                            "default": "openai:gpt-4o-mini",
+                            "default": "openai:gpt-5-mini",
                             "ui_component": "Select",
                             "ui_component_properties": {},
                             "is_advanced": False,

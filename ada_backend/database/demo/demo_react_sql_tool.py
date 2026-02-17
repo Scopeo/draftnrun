@@ -62,7 +62,7 @@ def build_react_sql_agent_chatbot(components: dict[str, UUID], graph_runner_id: 
             component_version_id=components["react_sql_agent_v2"],
             is_start_node=True,
             parameters=[
-                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-4o-mini"),
+                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-5-mini"),
                 PipelineParameterSchema(
                     name="additional_db_description",
                     value=ADDITIONAL_DB_DESCRIPTION,

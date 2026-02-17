@@ -97,7 +97,7 @@ def test_update_graph_runner():
                             order=None,
                         ),
                         PipelineParameterSchema(
-                            value="openai:gpt-4o-mini",
+                            value="openai:gpt-5-mini",
                             name="completion_model",
                             order=None,
                         ),
@@ -123,7 +123,7 @@ def test_update_graph_runner():
                             order=None,
                         ),
                         PipelineParameterSchema(
-                            value="openai:gpt-4o-mini",
+                            value="openai:gpt-5-mini",
                             name="completion_model",
                             order=None,
                         ),

@@ -28,7 +28,7 @@ def test_file_url_from_api_input(get_span_mock, agent_calls_mock):
     trace_manager = MagicMock(spec=TraceManager)
     llm_service = MagicMock()
     llm_service._provider = "openai"
-    llm_service._model_name = "gpt-4o"
+    llm_service._model_name = "gpt-5-mini"
     llm_service.complete_async = AsyncMock(return_value="Test response")
 
     agent = LLMCallAgent(
@@ -40,7 +40,7 @@ def test_file_url_from_api_input(get_span_mock, agent_calls_mock):
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
         prompt_template="Process this file: {{input}}",
         file_url_key="document_url",
-        capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-4o"}),
+        capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-5-mini"}),
     )
 
     # file_url passed directly in NodeData.data (API input), not in ctx
@@ -78,7 +78,7 @@ def test_file_content_from_api_input(get_span_mock, agent_calls_mock):
     trace_manager = MagicMock(spec=TraceManager)
     llm_service = MagicMock()
     llm_service._provider = "openai"
-    llm_service._model_name = "gpt-4o"
+    llm_service._model_name = "gpt-5-mini"
     llm_service.complete_async = AsyncMock(return_value="Test response")
 
     agent = LLMCallAgent(
@@ -90,7 +90,7 @@ def test_file_content_from_api_input(get_span_mock, agent_calls_mock):
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
         prompt_template="Process this file: {{input}}",
         file_content_key="document_file",
-        capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-4o"}),
+        capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-5-mini"}),
     )
 
     # Read and encode the sample PDF file
@@ -138,7 +138,7 @@ def test_template_vars_from_api_input(get_span_mock, agent_calls_mock):
     trace_manager = MagicMock(spec=TraceManager)
     llm_service = MagicMock()
     llm_service._provider = "openai"
-    llm_service._model_name = "gpt-4o"
+    llm_service._model_name = "gpt-5-mini"
     llm_service.complete_async = AsyncMock(return_value="Test response")
 
     agent = LLMCallAgent(
@@ -149,7 +149,7 @@ def test_template_vars_from_api_input(get_span_mock, agent_calls_mock):
         ),
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
         prompt_template="Hello {{username}}, answer this: {{input}}. Use style: {{style}}",
-        capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-4o"}),
+        capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-5-mini"}),
     )
 
     # template_vars passed directly in NodeData.data (API input), not in ctx
@@ -195,7 +195,7 @@ def test_file_url_as_tool_property(get_span_mock, agent_calls_mock):
     trace_manager = MagicMock(spec=TraceManager)
     llm_service = MagicMock()
     llm_service._provider = "openai"
-    llm_service._model_name = "gpt-4o"
+    llm_service._model_name = "gpt-5-mini"
     llm_service.complete_async = AsyncMock(return_value="Test response")
 
     # Create LLM Call agent with file_url_key and tool_properties that include file_url
@@ -216,7 +216,7 @@ def test_file_url_as_tool_property(get_span_mock, agent_calls_mock):
         component_attributes=ComponentAttributes(component_instance_name="Analyze Document"),
         prompt_template="Analyze this document.",
         file_url_key="document_url",
-        capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-4o"}),
+        capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-5-mini"}),
     )
 
     # Create ReAct agent with the LLM tool
@@ -265,7 +265,7 @@ def test_template_vars_as_tool_property(get_span_mock, agent_calls_mock):
     trace_manager = MagicMock(spec=TraceManager)
     llm_service = MagicMock()
     llm_service._provider = "openai"
-    llm_service._model_name = "gpt-4o"
+    llm_service._model_name = "gpt-5-mini"
     llm_service.complete_async = AsyncMock(return_value="Test response")
 
     # Create LLM Call agent with template vars in tool_properties
@@ -293,7 +293,7 @@ def test_template_vars_as_tool_property(get_span_mock, agent_calls_mock):
         ),
         component_attributes=ComponentAttributes(component_instance_name="Generate Response"),
         prompt_template="Hello {{username}}. Answer this question: {{question}}. Use a {{tone}} tone.",
-        capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-4o"}),
+        capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-5-mini"}),
     )
 
     # Create ReAct agent with the LLM tool
