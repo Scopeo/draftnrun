@@ -81,8 +81,8 @@ def test_llm_judge_management():
             session, project_name_prefix="llm_judge_management_test", description="Test project"
         )
 
-        judges = get_llm_judges_by_organization_service(session=session, organization_id=ORGANIZATION_ID)
-        assert judges == []
+        initial_judges = get_llm_judges_by_organization_service(session=session, organization_id=ORGANIZATION_ID)
+        initial_count = len(initial_judges)
 
         create_data = LLMJudgeCreate(
             name="Test Judge",
@@ -99,10 +99,10 @@ def test_llm_judge_management():
         judge_id = judge.id
 
         judges = get_llm_judges_by_organization_service(session=session, organization_id=ORGANIZATION_ID)
-        assert len(judges) == 1
-        assert judges[0].id == judge_id
-        assert judges[0].name == "Test Judge"
-        assert judges[0].organization_id == ORGANIZATION_ID
+        assert len(judges) == initial_count + 1
+        our_judge = next(j for j in judges if j.id == judge_id)
+        assert our_judge.name == "Test Judge"
+        assert our_judge.organization_id == ORGANIZATION_ID
 
         update_data = LLMJudgeUpdate(name="Updated Judge Name", description="Updated description", temperature=0.9)
         updated_judge = update_llm_judge_in_organization_service(
