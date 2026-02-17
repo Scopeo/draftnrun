@@ -51,7 +51,7 @@ def create_mock_tool_call(tool_id="1", tool_name="test_tool", arguments=None):
 def mock_llm_service():
     """Basic mock LLM service fixture."""
     mock_llm_service = MagicMock(spec=CompletionService)
-    mock_llm_service._model_name = "gpt-4o"
+    mock_llm_service._model_name = "gpt-5-mini"
     mock_llm_service._provider = "openai"
     mock_llm_service._model_id = None
 
@@ -69,7 +69,7 @@ def mock_llm_service():
 def mock_llm_service_with_tool_calls():
     """Mock LLM service that returns tool calls."""
     mock_llm_service = MagicMock(spec=CompletionService)
-    mock_llm_service._model_name = "gpt-4o"
+    mock_llm_service._model_name = "gpt-5-mini"
     mock_llm_service._provider = "openai"
     mock_llm_service._model_id = None
 
@@ -88,7 +88,7 @@ def mock_llm_service_with_tool_calls():
 def mock_llm_service_sequential():
     """Mock LLM service that returns different responses on subsequent calls."""
     mock_llm_service = MagicMock(spec=CompletionService)
-    mock_llm_service._model_name = "gpt-4o"
+    mock_llm_service._model_name = "gpt-5-mini"
     mock_llm_service._provider = "openai"
     mock_llm_service._model_id = None
 

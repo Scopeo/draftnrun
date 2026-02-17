@@ -11,34 +11,34 @@ Each capability maps to a list of model names to test:
 - Empty list []: Provider doesn't support this capability (test will be skipped)
 
 This allows testing:
-- Multiple models per capability (e.g., test both gpt-4o and gpt-4o-mini)
+- Multiple models per capability (e.g., test both gpt-5-mini)
 - Different models for different capabilities (e.g., pixtral-12b for vision, pixtral-large for OCR)
 """
 
 CAPABILITY_MATRIX = {
     "openai": {
         "text": {
-            "complete": ["gpt-4o-mini"],
-            "complete_structured_pydantic": ["gpt-4o-mini"],
-            "complete_structured_json_schema": ["gpt-4o-mini"],
-            "function_call": ["gpt-4o-mini"],
-            "function_call_structured": ["gpt-4o-mini"],
-            "function_call_multi_turn": ["gpt-4o-mini"],
-            "function_call_tool_choice_none": ["gpt-4o-mini"],
-            "function_call_empty_tools": ["gpt-4o-mini"],
-            "function_call_with_system": ["gpt-4o-mini"],
-            "function_call_both_tools_and_structured": ["gpt-4o-mini"],
+            "complete": ["gpt-5-mini"],
+            "complete_structured_pydantic": ["gpt-5-mini"],
+            "complete_structured_json_schema": ["gpt-5-mini"],
+            "function_call": ["gpt-5-mini"],
+            "function_call_structured": ["gpt-5-mini"],
+            "function_call_multi_turn": ["gpt-5-mini"],
+            "function_call_tool_choice_none": ["gpt-5-mini"],
+            "function_call_empty_tools": ["gpt-5-mini"],
+            "function_call_with_system": ["gpt-5-mini"],
+            "function_call_both_tools_and_structured": ["gpt-5-mini"],
         },
         "vision": {
-            "complete": ["gpt-4o-mini"],
-            "complete_structured": ["gpt-4o-mini"],
-            "function_call_structured": ["gpt-4o-mini"],
+            "complete": ["gpt-5-mini"],
+            "complete_structured": ["gpt-5-mini"],
+            "function_call_structured": ["gpt-5-mini"],
         },
         "specialized": {
             "embedding": ["text-embedding-3-small"],
             "embedding_async": ["text-embedding-3-small"],
             "ocr": [],
-            "web_search": ["gpt-4o-mini"],
+            "web_search": ["gpt-5-mini"],
         },
     },
     "google": {
@@ -158,7 +158,7 @@ def get_provider_model_pairs(modality: str, capability: str) -> list[tuple[str, 
 
     Example:
         >>> get_provider_model_pairs("text", "complete")
-        [("openai", "gpt-4o-mini"), ("google", "gemini-2.0-flash-lite"), ...]
+        [("openai", "gpt-5-mini"), ("google", "gemini-2.0-flash-lite"), ...]
     """
     pairs = []
     for provider, capabilities in CAPABILITY_MATRIX.items():

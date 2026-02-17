@@ -49,10 +49,10 @@ def test_completion_service():
 @pytest.mark.asyncio
 async def test_completion_service_async():
     completion_service = CompletionService(
-        trace_manager=MagicMock(), provider="openai", model_name="gpt-4o-mini", api_key="fake-key"
+        trace_manager=MagicMock(), provider="openai", model_name="gpt-5-mini", api_key="fake-key"
     )
     assert completion_service._provider == "openai"
-    assert completion_service._model_name == "gpt-4o-mini"
+    assert completion_service._model_name == "gpt-5-mini"
     assert completion_service._api_key is not None
     assert completion_service._invocation_parameters.get("temperature") == DEFAULT_TEMPERATURE
     assert completion_service._trace_manager is not None

@@ -313,7 +313,7 @@ def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, mock_llm_s
         prompt_template="Process this file: {{input}}",
         file_content_key="my_file_content",
         file_url_key="my_file_url",
-        capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-4o"}),
+        capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-5-mini"}),
     )
 
     input_node_data = NodeData(
@@ -380,7 +380,7 @@ def test_llm_call_with_flat_template_vars(get_span_mock, agent_calls_mock, mock_
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
         prompt_template="The user's name it's {{username}}. Greet it.\nAnswer this question: {{input}}",
         file_url_key="cs_book",
-        capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-4o"}),
+        capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-5-mini"}),
     )
 
     input_node_data = NodeData(
@@ -405,7 +405,7 @@ def test_llm_call_template_vars_from_tool_args(get_span_mock, agent_calls_mock, 
 
     # Configure provider/model
     mock_llm_service._provider = "openai"
-    mock_llm_service._model_name = "gpt-4o"
+    mock_llm_service._model_name = "gpt-5-mini"
 
     tm = MagicMock(spec=TraceManager)
     llm_tool = LLMCallAgent(
@@ -417,7 +417,7 @@ def test_llm_call_template_vars_from_tool_args(get_span_mock, agent_calls_mock, 
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
         prompt_template="Respond to {{query}}. Speak like a {{speak}}",
         file_url_key="doc_url",
-        capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-4o"}),
+        capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-5-mini"}),
     )
 
     react = AIAgent(
@@ -471,7 +471,7 @@ def test_react_agent_two_tool_calls_different_urls(
     agent_calls_mock.labels.return_value = counter_mock
     # Configure provider/model
     mock_llm_service._provider = "openai"
-    mock_llm_service._model_name = "gpt-4o"
+    mock_llm_service._model_name = "gpt-5-mini"
 
     # Tool under test
     llm_tool = LLMCallAgent(
@@ -483,7 +483,7 @@ def test_react_agent_two_tool_calls_different_urls(
         component_attributes=ComponentAttributes(component_instance_name="Get content"),
         prompt_template="Describe: {{input}}",
         file_url_key="file_url",
-        capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-4o"}),
+        capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-5-mini"}),
     )
 
     # React agent with this single tool

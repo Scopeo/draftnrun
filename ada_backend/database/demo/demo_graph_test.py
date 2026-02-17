@@ -69,7 +69,7 @@ def build_graph_test_chatbot(
                     name="prompt_template",
                     value="Reformulate the question as a customer service query :\n{input}",
                 ),
-                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-4o-mini"),
+                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-5-mini"),
             ],
             tool_description=GRAPH_TEST_TOOL_DESCRIPTION,
         ),
@@ -94,7 +94,7 @@ def build_graph_test_chatbot(
             name="Synthesizer",
             ref=f"{agent_name}_synthesizer_instance",
             parameters=[
-                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-4o-mini"),
+                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-5-mini"),
             ],
         ),
         # Retriever
@@ -122,7 +122,7 @@ def build_graph_test_chatbot(
                     name="prompt_template",
                     value="Evaluate the pertinence of the following answer:\n{input}",
                 ),
-                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-4o-mini"),
+                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-5-mini"),
             ],
             tool_description=GRAPH_TEST_TOOL_DESCRIPTION,
         ),
