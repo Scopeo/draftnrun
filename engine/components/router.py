@@ -13,7 +13,7 @@ from ada_backend.database.models import ParameterType, UIComponent
 from ada_backend.database.utils import DEFAULT_TOOL_DESCRIPTION
 from engine.components.component import Component
 from engine.components.errors import NoMatchingRouteError
-from engine.components.types import ComponentAttributes, ToolDescription
+from engine.components.types import ComponentAttributes, ExecutionDirective, ExecutionStrategy, ToolDescription
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -152,7 +152,8 @@ class Router(Component):
                 ),
             )
 
-        schema = create_model("RouterOutputs", **fields)
+        # Allow _directive as extra field (not in schema to keep it clean)
+        schema = create_model("RouterOutputs", __config__={"extra": "allow"}, **fields)
         cls._outputs_schema_cache = schema
 
         return schema
@@ -211,4 +212,11 @@ class Router(Component):
             LOGGER.error(f"Router: No routes matched out of {num_routes} configured route(s)")
             raise NoMatchingRouteError(num_routes=num_routes)
 
-        return OutputModel(**output_data)
+        # Set _directive as extra field (not in schema)
+        return OutputModel(
+            **output_data,
+            _directive=ExecutionDirective(
+                strategy=ExecutionStrategy.SELECTIVE_PORTS,
+                selected_ports=execute_routes
+            )
+        )
