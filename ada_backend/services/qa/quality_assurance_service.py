@@ -12,6 +12,7 @@ from ada_backend.database.models import CallType
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.qa_evaluation_repository import delete_evaluations_for_input_ids
 from ada_backend.repositories.quality_assurance_repository import (
+    check_dataset_belongs_to_project,
     clear_version_outputs_for_input_ids,
     create_datasets,
     create_inputs_groundtruths,
@@ -23,6 +24,7 @@ from ada_backend.repositories.quality_assurance_repository import (
     get_inputs_groundtruths_count_by_dataset,
     get_outputs_by_graph_runner,
     get_positions_of_dataset,
+    get_qa_columns_by_dataset,
     get_version_output_ids_by_input_ids_and_graph_runner,
     update_dataset,
     update_inputs_groundtruths,
@@ -51,22 +53,25 @@ from ada_backend.schemas.input_groundtruth_schema import (
 from ada_backend.services.agent_runner_service import run_agent
 from ada_backend.services.errors import GraphNotBoundToProjectError
 from ada_backend.services.metrics.utils import query_conversation_messages
-from ada_backend.services.qa.csv_processing import process_csv
+from ada_backend.services.qa.csv_processing import get_headers_from_csv, process_csv
 from ada_backend.services.qa.qa_error import (
     CSVEmptyFileError,
     CSVExportError,
     CSVInvalidJSONError,
     CSVInvalidPositionError,
-    CSVMissingColumnError,
+    CSVMissingDatasetColumnError,
     CSVNonUniquePositionError,
+    QADatasetNotInProjectError,
     QADuplicatePositionError,
     QAPartialPositionError,
 )
+from ada_backend.services.qa.qa_metadata_service import create_qa_column_service
 
 LOGGER = logging.getLogger(__name__)
 
 MAX_CSV_EXPORT_SIZE_MB = 10
 MAX_CSV_EXPORT_SIZE_BYTES = MAX_CSV_EXPORT_SIZE_MB * 1024 * 1024
+DEFAULT_HEADERS = ["position", "input", "expected_output", "actual_output"]
 
 
 def get_inputs_groundtruths_with_version_outputs_service(
@@ -339,16 +344,12 @@ def update_inputs_groundtruths_service(
         InputGroundtruthResponseList: The updated input-groundtruth entries
     """
     try:
-        # Prepare updates data
-        updates_data = [(ig.id, ig.input, ig.groundtruth) for ig in inputs_groundtruths_data.inputs_groundtruths]
-
         updated_inputs_groundtruths = update_inputs_groundtruths(
             session,
-            updates_data,
+            inputs_groundtruths_data,
             dataset_id,
         )
 
-        # If any input texts were updated, clear corresponding version outputs across all versions
         input_ids_changed = [ig.id for ig in inputs_groundtruths_data.inputs_groundtruths if ig.input is not None]
         if input_ids_changed:
             cleared_count = clear_version_outputs_for_input_ids(session, input_ids_changed)
@@ -472,6 +473,10 @@ def update_dataset_service(
     Returns:
         DatasetResponse: The updated dataset
     """
+    if not check_dataset_belongs_to_project(session, project_id, dataset_id):
+        LOGGER.error(f"Failed to update dataset {dataset_id}: Dataset {dataset_id} not found in project {project_id}")
+        raise QADatasetNotInProjectError(project_id, dataset_id)
+
     try:
         updated_dataset = update_dataset(
             session,
@@ -503,6 +508,14 @@ def delete_datasets_service(
     Returns:
         int: Number of deleted datasets
     """
+    for dataset_id in delete_data.dataset_ids:
+        if not check_dataset_belongs_to_project(session, project_id, dataset_id):
+            LOGGER.error(
+                f"Failed to delete datasets for project {project_id}: "
+                f"Dataset {dataset_id} not found in project {project_id}"
+            )
+            raise QADatasetNotInProjectError(project_id, dataset_id)
+
     try:
         deleted_count = delete_datasets(
             session,
@@ -550,9 +563,17 @@ def export_qa_data_to_csv_service(
         input_entries = get_inputs_groundtruths_by_dataset(session, dataset_id, skip=0, limit=total_count)
         outputs_dict = dict(get_outputs_by_graph_runner(session, dataset_id, graph_runner_id))
 
+        custom_columns = get_qa_columns_by_dataset(session, dataset_id)
+
+        header_row = DEFAULT_HEADERS.copy()
+        custom_column_names = [col.column_name for col in custom_columns]
+        header_row.extend(custom_column_names)
+
+        column_name_to_id = {col.column_name: str(col.column_id) for col in custom_columns}
+
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["position", "input", "expected_output", "actual_output"])
+        writer.writerow(header_row)
 
         for entry in input_entries:
             input_str = json.dumps(entry.input) if entry.input else ""
@@ -560,7 +581,15 @@ def export_qa_data_to_csv_service(
             output_str = outputs_dict.get(entry.id, "") if entry.id in outputs_dict else ""
             position_str = str(entry.position) if entry.position is not None else ""
 
-            writer.writerow([position_str, input_str, groundtruth_str, output_str])
+            row = [position_str, input_str, groundtruth_str, output_str]
+
+            custom_columns_dict = entry.custom_columns if entry.custom_columns else {}
+            for column_name in custom_column_names:
+                column_id = column_name_to_id[column_name]
+                value = custom_columns_dict.get(column_id, "")
+                row.append(value)
+
+            writer.writerow(row)
 
         csv_content = output.getvalue()
         output.close()
@@ -573,7 +602,7 @@ def export_qa_data_to_csv_service(
 
         LOGGER.info(
             f"Exported {len(input_entries)} QA data entries to CSV for dataset {dataset_id} "
-            f"(graph_runner_id={graph_runner_id})"
+            f"(graph_runner_id={graph_runner_id}) with {len(custom_columns)} custom columns"
         )
         return csv_content
     except Exception as e:
@@ -583,17 +612,49 @@ def export_qa_data_to_csv_service(
 
 def import_qa_data_from_csv_service(
     session: Session,
+    project_id: UUID,
     dataset_id: UUID,
     csv_file: BinaryIO,
 ) -> InputGroundtruthResponseList:
     try:
+        headers_from_csv = get_headers_from_csv(csv_file)
+        expected_columns = set(DEFAULT_HEADERS.copy())
+        custom_columns_from_csv = set(headers_from_csv) - expected_columns
+        dataset_custom_columns = get_qa_columns_by_dataset(session, dataset_id)
+        dataset_column_names = {col.column_name for col in dataset_custom_columns}
+
+        missing_custom_columns_from_csv = dataset_column_names - custom_columns_from_csv
+
+        if missing_custom_columns_from_csv:
+            raise CSVMissingDatasetColumnError(
+                column=",".join(missing_custom_columns_from_csv),
+                found_columns=list(custom_columns_from_csv),
+                required_columns=list(dataset_column_names),
+            )
+
+        custom_columns_to_add = custom_columns_from_csv - dataset_column_names
+        # TODO: Create columns in batch instead of one by one
+        for column_name in custom_columns_to_add:
+            create_qa_column_service(
+                session=session,
+                project_id=project_id,
+                dataset_id=dataset_id,
+                column_name=column_name,
+            )
+
+        updated_dataset_custom_columns_list = get_qa_columns_by_dataset(session, dataset_id)
+        updated_dataset_custom_columns = {
+            str(col.column_id): col.column_name for col in updated_dataset_custom_columns_list
+        }
+
         inputs_groundtruths_data_to_create = []
-        for row_data in process_csv(csv_file):
+        for row_data in process_csv(csv_file, custom_columns_mapping=updated_dataset_custom_columns):
             inputs_groundtruths_data_to_create.append(
                 InputGroundtruthCreate(
                     input=row_data["input"],
                     groundtruth=row_data["expected_output"] if row_data["expected_output"] else None,
                     position=row_data["position"],
+                    custom_columns=row_data["custom_columns"],
                 )
             )
 
@@ -619,7 +680,7 @@ def import_qa_data_from_csv_service(
         raise CSVNonUniquePositionError(duplicate_positions=e.duplicate_positions) from e
     except (
         CSVEmptyFileError,
-        CSVMissingColumnError,
+        CSVMissingDatasetColumnError,
         CSVInvalidJSONError,
         CSVInvalidPositionError,
     ) as e:

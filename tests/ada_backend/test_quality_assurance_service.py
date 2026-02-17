@@ -8,6 +8,7 @@ import pytest
 
 from ada_backend.database.models import EnvType
 from ada_backend.database.setup_db import get_db_session
+from ada_backend.repositories.quality_assurance_repository import get_qa_columns_by_dataset
 from ada_backend.schemas.dataset_schema import DatasetCreateList, DatasetDeleteList
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthCreateList,
@@ -21,16 +22,29 @@ from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.services.project_service import delete_project_service, get_project_service
 from ada_backend.services.qa.qa_error import (
+    CSVEmptyFileError,
+    CSVExportError,
+    CSVInvalidJSONError,
     CSVInvalidPositionError,
+    CSVMissingDatasetColumnError,
     CSVNonUniquePositionError,
+    QAColumnNotFoundError,
+    QADatasetNotInProjectError,
     QADuplicatePositionError,
     QAPartialPositionError,
+)
+from ada_backend.services.qa.qa_metadata_service import (
+    create_qa_column_service,
+    delete_qa_column_service,
+    get_qa_columns_by_dataset_service,
+    rename_qa_column_service,
 )
 from ada_backend.services.qa.quality_assurance_service import (
     create_datasets_service,
     create_inputs_groundtruths_service,
     delete_datasets_service,
     delete_inputs_groundtruths_service,
+    export_qa_data_to_csv_service,
     get_datasets_by_project_service,
     get_inputs_groundtruths_with_version_outputs_service,
     import_qa_data_from_csv_service,
@@ -180,6 +194,25 @@ def test_dataset_management():
         # Verify the dataset was deleted
         remaining_datasets = get_datasets_by_project_service(session, project_id)
         assert len(remaining_datasets) == 2  # Should now have 2 datasets instead of 3
+
+        # Test that deleting a dataset cascades to QA metadata (custom columns)
+        dataset_with_columns = created_datasets[0].id
+        # Create custom columns for this dataset
+        create_qa_column_service(session, project_id, dataset_with_columns, "Priority")
+        create_qa_column_service(session, project_id, dataset_with_columns, "Category")
+
+        # Verify columns exist
+        columns_before = get_qa_columns_by_dataset(session, dataset_with_columns)
+        assert len(columns_before) == 2
+
+        # Delete the dataset
+        delete_payload2 = DatasetDeleteList(dataset_ids=[dataset_with_columns])
+        deleted_count2 = delete_datasets_service(session, project_id, delete_payload2)
+        assert deleted_count2 == 1
+
+        # Verify QA metadata was cascaded (deleted)
+        columns_after = get_qa_columns_by_dataset(session, dataset_with_columns)
+        assert len(columns_after) == 0  # All columns should be deleted with the dataset
 
         delete_project_service(session=session, project_id=project_id)
 
@@ -650,7 +683,7 @@ def test_csv_import_duplicate_positions_inside_csv():
         csv_file = io.BytesIO(csv_content.encode("utf-8"))
 
         with pytest.raises(CSVNonUniquePositionError) as exc_info:
-            import_qa_data_from_csv_service(session, dataset_id, csv_file)
+            import_qa_data_from_csv_service(session, project_id, dataset_id, csv_file)
         error_detail = str(exc_info.value)
         assert "Duplicate positions found in CSV import: [1]" in error_detail
         assert "CSV import" in error_detail
@@ -682,7 +715,7 @@ def test_csv_import_invalid_positions_values():
         csv_file = io.BytesIO(csv_content.encode("utf-8"))
 
         with pytest.raises(CSVInvalidPositionError) as exc_info:
-            import_qa_data_from_csv_service(session, dataset_id, csv_file)
+            import_qa_data_from_csv_service(session, project_id, dataset_id, csv_file)
         error_detail = str(exc_info.value)
         assert "Invalid integer in 'position' column" in error_detail
         assert "row" in error_detail
@@ -711,9 +744,777 @@ def test_csv_import_position_less_than_one():
         csv_file = io.BytesIO(csv_content.encode("utf-8"))
 
         with pytest.raises(CSVInvalidPositionError) as exc_info:
-            import_qa_data_from_csv_service(session, dataset_id, csv_file)
+            import_qa_data_from_csv_service(session, project_id, dataset_id, csv_file)
         error_detail = str(exc_info.value)
         assert "Invalid integer in 'position' column" in error_detail
         assert "greater than or equal to 1" in error_detail
+
+        delete_project_service(session=session, project_id=project_id)
+
+
+def test_csv_import_creates_new_custom_columns_and_values():
+    """Test CSV import creates new custom columns and stores their values correctly."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="csv_custom_cols_test",
+            description="Test project for CSV import with custom columns",
+        )
+
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"csv_custom_cols_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        # Verify no custom columns exist initially
+        initial_columns = get_qa_columns_by_dataset(session, dataset_id)
+        assert len(initial_columns) == 0
+
+        # CSV with custom columns that don't exist yet
+        input1 = json.dumps({"messages": [{"role": "user", "content": "Test 1"}]})
+        input2 = json.dumps({"messages": [{"role": "user", "content": "Test 2"}]})
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(["position", "input", "expected_output", "my_flag", "score"])
+        writer.writerow([1, input1, "GT 1", "high", "95"])
+        writer.writerow([2, input2, "GT 2", "low", "60"])
+        csv_content = csv_buffer.getvalue()
+        csv_file = io.BytesIO(csv_content.encode("utf-8"))
+
+        # Import CSV
+        import_response = import_qa_data_from_csv_service(session, project_id, dataset_id, csv_file)
+        imported_entries = import_response.inputs_groundtruths
+        assert len(imported_entries) == 2
+
+        # Verify custom columns were created
+        columns_after_import = get_qa_columns_by_dataset(session, dataset_id)
+        assert len(columns_after_import) == 2
+        column_names = {col.column_name for col in columns_after_import}
+        assert column_names == {"my_flag", "score"}
+
+        # Verify custom column values were stored correctly
+        # Get the entries back from DB to check custom_columns
+        retrieved_data = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id)
+        retrieved_entries = retrieved_data.inputs_groundtruths
+
+        # Build mapping of column_name -> column_id
+        name_to_id = {col.column_name: str(col.column_id) for col in columns_after_import}
+
+        # Check first entry
+        entry1 = next(e for e in retrieved_entries if e.position == 1)
+        assert entry1.custom_columns is not None
+        assert entry1.custom_columns[name_to_id["my_flag"]] == "high"
+        assert entry1.custom_columns[name_to_id["score"]] == "95"
+
+        # Check second entry
+        entry2 = next(e for e in retrieved_entries if e.position == 2)
+        assert entry2.custom_columns is not None
+        assert entry2.custom_columns[name_to_id["my_flag"]] == "low"
+        assert entry2.custom_columns[name_to_id["score"]] == "60"
+
+        delete_project_service(session=session, project_id=project_id)
+
+
+def test_csv_import_requires_all_existing_custom_columns_in_header():
+    """Test CSV import fails if existing custom columns are missing from CSV header."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="csv_missing_cols_test",
+            description="Test project for CSV import missing required columns",
+        )
+
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"csv_missing_cols_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        # Create two existing custom columns
+        create_qa_column_service(session, project_id, dataset_id, "col_a")
+        create_qa_column_service(session, project_id, dataset_id, "col_b")
+
+        # Verify columns exist
+        existing_columns = get_qa_columns_by_dataset(session, dataset_id)
+        assert len(existing_columns) == 2
+        column_names = {col.column_name for col in existing_columns}
+        assert column_names == {"col_a", "col_b"}
+
+        # CSV with only one of the required columns
+        input_json = json.dumps({"messages": [{"role": "user", "content": "Test"}]})
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(["position", "input", "expected_output", "col_a"])  # Missing col_b
+        writer.writerow([1, input_json, "GT", "value_a"])
+        csv_content = csv_buffer.getvalue()
+        csv_file = io.BytesIO(csv_content.encode("utf-8"))
+
+        # Should raise CSVMissingDatasetColumnError
+        with pytest.raises(CSVMissingDatasetColumnError) as exc_info:
+            import_qa_data_from_csv_service(session, project_id, dataset_id, csv_file)
+        error_detail = str(exc_info.value)
+        assert "col_b" in error_detail or "col_b" in error_detail.lower()
+
+        delete_project_service(session=session, project_id=project_id)
+
+
+def test_csv_import_adds_new_columns_while_preserving_existing():
+    """Test CSV import adds new custom columns while preserving existing ones."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="csv_mixed_cols_test",
+            description="Test project for CSV import with mixed existing/new columns",
+        )
+
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"csv_mixed_cols_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        # Create one existing custom column
+        existing_col_response = create_qa_column_service(session, project_id, dataset_id, "existing_col")
+        existing_column_id = existing_col_response.column_id
+
+        # CSV with both existing and new column
+        input_json = json.dumps({"messages": [{"role": "user", "content": "Test"}]})
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(["position", "input", "expected_output", "existing_col", "new_col"])
+        writer.writerow([1, input_json, "GT", "existing_value", "new_value"])
+        csv_content = csv_buffer.getvalue()
+        csv_file = io.BytesIO(csv_content.encode("utf-8"))
+
+        # Import CSV
+        import_response = import_qa_data_from_csv_service(session, project_id, dataset_id, csv_file)
+        assert len(import_response.inputs_groundtruths) == 1
+
+        # Verify both columns exist
+        columns_after_import = get_qa_columns_by_dataset(session, dataset_id)
+        assert len(columns_after_import) == 2
+        column_names = {col.column_name for col in columns_after_import}
+        assert column_names == {"existing_col", "new_col"}
+
+        # Verify existing column's column_id is preserved
+        existing_col_after = next(col for col in columns_after_import if col.column_name == "existing_col")
+        assert existing_col_after.column_id == existing_column_id
+
+        # Verify new column has a different column_id
+        new_col_after = next(col for col in columns_after_import if col.column_name == "new_col")
+        assert new_col_after.column_id != existing_column_id
+
+        # Verify values were stored correctly
+        retrieved_data = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id)
+        entry = retrieved_data.inputs_groundtruths[0]
+        assert entry.custom_columns is not None
+        assert entry.custom_columns[str(existing_col_after.column_id)] == "existing_value"
+        assert entry.custom_columns[str(new_col_after.column_id)] == "new_value"
+
+        delete_project_service(session=session, project_id=project_id)
+
+
+def test_csv_import_handles_missing_cell_values_for_custom_columns():
+    """Test CSV import handles empty cells for custom columns correctly."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="csv_empty_cells_test",
+            description="Test project for CSV import with empty custom column cells",
+        )
+
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"csv_empty_cells_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        # CSV with custom column, some rows have empty values
+        input1 = json.dumps({"messages": [{"role": "user", "content": "Test 1"}]})
+        input2 = json.dumps({"messages": [{"role": "user", "content": "Test 2"}]})
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(["position", "input", "expected_output", "optional_col"])
+        writer.writerow([1, input1, "GT 1", "has_value"])  # Has value
+        writer.writerow([2, input2, "GT 2", ""])  # Empty cell
+        csv_content = csv_buffer.getvalue()
+        csv_file = io.BytesIO(csv_content.encode("utf-8"))
+
+        # Import CSV
+        import_response = import_qa_data_from_csv_service(session, project_id, dataset_id, csv_file)
+        assert len(import_response.inputs_groundtruths) == 2
+
+        # Verify column was created
+        columns = get_qa_columns_by_dataset(session, dataset_id)
+        assert len(columns) == 1
+        assert columns[0].column_name == "optional_col"
+        column_id_str = str(columns[0].column_id)
+
+        # Verify values were stored (empty string for empty cell)
+        retrieved_data = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id)
+        entry1 = next(e for e in retrieved_data.inputs_groundtruths if e.position == 1)
+        entry2 = next(e for e in retrieved_data.inputs_groundtruths if e.position == 2)
+
+        assert entry1.custom_columns is not None
+        assert entry1.custom_columns[column_id_str] == "has_value"
+
+        # Empty cell should result in empty string
+        assert entry2.custom_columns is not None
+        assert entry2.custom_columns[column_id_str] == ""
+
+        delete_project_service(session=session, project_id=project_id)
+
+
+def test_csv_import_uses_get_headers_from_csv_and_processes_all_rows():
+    """Test CSV import correctly processes all rows after reading headers."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="csv_all_rows_test",
+            description="Test project for CSV import processing all rows",
+        )
+
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"csv_all_rows_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        # CSV with 3 rows and a custom column
+        input1 = json.dumps({"messages": [{"role": "user", "content": "Test 1"}]})
+        input2 = json.dumps({"messages": [{"role": "user", "content": "Test 2"}]})
+        input3 = json.dumps({"messages": [{"role": "user", "content": "Test 3"}]})
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(["position", "input", "expected_output", "flag"])
+        writer.writerow([1, input1, "GT 1", "flag1"])
+        writer.writerow([2, input2, "GT 2", "flag2"])
+        writer.writerow([3, input3, "GT 3", "flag3"])
+        csv_content = csv_buffer.getvalue()
+        csv_file = io.BytesIO(csv_content.encode("utf-8"))
+
+        # Import CSV
+        import_response = import_qa_data_from_csv_service(session, project_id, dataset_id, csv_file)
+        imported_entries = import_response.inputs_groundtruths
+        assert len(imported_entries) == 3
+
+        # Verify all 3 rows were processed with correct positions
+        retrieved_data = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id)
+        retrieved_entries = retrieved_data.inputs_groundtruths
+        assert len(retrieved_entries) == 3
+
+        positions = sorted([e.position for e in retrieved_entries])
+        assert positions == [1, 2, 3]
+
+        # Verify all entries have custom column values
+        columns = get_qa_columns_by_dataset(session, dataset_id)
+        assert len(columns) == 1
+        column_id_str = str(columns[0].column_id)
+
+        for entry in retrieved_entries:
+            assert entry.custom_columns is not None
+            assert column_id_str in entry.custom_columns
+            # Verify the flag value matches position
+            expected_flag = f"flag{entry.position}"
+            assert entry.custom_columns[column_id_str] == expected_flag
+
+        delete_project_service(session=session, project_id=project_id)
+
+
+def test_get_qa_columns_by_dataset_service():
+    """Test getting custom columns for a dataset, including error cases."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="get_columns_test",
+            description="Test project for getting custom columns",
+        )
+
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"get_columns_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        # Initially no columns
+        columns_response = get_qa_columns_by_dataset_service(session, project_id, dataset_id)
+        assert len(columns_response) == 0
+
+        # Create two columns
+        create_qa_column_service(session, project_id, dataset_id, "Priority")
+        create_qa_column_service(session, project_id, dataset_id, "Category")
+
+        # Get columns again
+        columns_response = get_qa_columns_by_dataset_service(session, project_id, dataset_id)
+        assert len(columns_response) == 2
+
+        # Verify columns are sorted by column_display_position
+        assert columns_response[0].column_display_position < columns_response[1].column_display_position
+        column_names = {col.column_name for col in columns_response}
+        assert column_names == {"Priority", "Category"}
+
+        # Test error case: dataset not in project
+        project_id2, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="get_columns_project2",
+            description="Test project 2",
+        )
+
+        with pytest.raises(QADatasetNotInProjectError) as exc_info:
+            get_qa_columns_by_dataset_service(session, project_id2, dataset_id)
+        assert str(project_id2) in str(exc_info.value)
+        assert str(dataset_id) in str(exc_info.value)
+
+        delete_project_service(session=session, project_id=project_id)
+        delete_project_service(session=session, project_id=project_id2)
+
+
+def test_create_qa_column_service():
+    """Test creating custom columns, including column position assignment and error cases."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="create_column_test",
+            description="Test project for creating custom columns",
+        )
+
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"create_column_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        # Create first column
+        col_response = create_qa_column_service(session, project_id, dataset_id, "Priority")
+        assert col_response.column_name == "Priority"
+        assert col_response.column_display_position == 0
+        assert col_response.column_id is not None
+        assert col_response.dataset_id == dataset_id
+
+        # Create second column
+        col2_response = create_qa_column_service(session, project_id, dataset_id, "Category")
+        assert col2_response.column_name == "Category"
+        assert col2_response.column_display_position == 1
+        assert col2_response.column_id != col_response.column_id
+
+        # Create third column to verify sequential column positions
+        col3_response = create_qa_column_service(session, project_id, dataset_id, "Third")
+        assert col3_response.column_display_position == 2
+
+        # Verify all columns exist and positions are sequential
+        columns = get_qa_columns_by_dataset(session, dataset_id)
+        assert len(columns) == 3
+        positions = [col.column_display_position for col in columns]
+        assert positions == [0, 1, 2]
+
+        # Test error case: dataset not in project
+        project_id2, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="create_col_project2",
+            description="Test project 2",
+        )
+
+        with pytest.raises(QADatasetNotInProjectError) as exc_info:
+            create_qa_column_service(session, project_id2, dataset_id, "Priority")
+        assert str(project_id2) in str(exc_info.value)
+        assert str(dataset_id) in str(exc_info.value)
+
+        delete_project_service(session=session, project_id=project_id)
+        delete_project_service(session=session, project_id=project_id2)
+
+
+def test_rename_qa_column_service():
+    """Test renaming custom columns, including error cases."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="rename_column_test",
+            description="Test project for renaming custom columns",
+        )
+
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"rename_column_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        # Create a column
+        original_col = create_qa_column_service(session, project_id, dataset_id, "OldName")
+        original_column_id = original_col.column_id
+        original_column_display_position = original_col.column_display_position
+
+        # Rename the column
+        renamed_col = rename_qa_column_service(session, project_id, dataset_id, original_column_id, "NewName")
+        assert renamed_col.column_name == "NewName"
+        assert renamed_col.column_id == original_column_id  # column_id should not change
+        assert (
+            renamed_col.column_display_position == original_column_display_position
+        )  # column_display_position should not change
+
+        # Verify the rename persisted
+        columns = get_qa_columns_by_dataset(session, dataset_id)
+        assert len(columns) == 1
+        assert columns[0].column_name == "NewName"
+        assert columns[0].column_id == original_column_id
+
+        # Test error case: column not found
+        fake_column_id = uuid4()
+        with pytest.raises(QAColumnNotFoundError) as exc_info:
+            rename_qa_column_service(session, project_id, dataset_id, fake_column_id, "NewName")
+        assert str(dataset_id) in str(exc_info.value)
+        assert str(fake_column_id) in str(exc_info.value)
+
+        # Test error case: dataset not in project
+        project_id2, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="rename_project2",
+            description="Test project 2",
+        )
+
+        with pytest.raises(QADatasetNotInProjectError) as exc_info:
+            rename_qa_column_service(session, project_id2, dataset_id, original_column_id, "NewName")
+        assert str(project_id2) in str(exc_info.value)
+
+        delete_project_service(session=session, project_id=project_id)
+        delete_project_service(session=session, project_id=project_id2)
+
+
+def test_delete_qa_column_service():
+    """Test deleting custom columns, including value cleanup and error cases."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="delete_column_test",
+            description="Test project for deleting custom columns",
+        )
+
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"delete_column_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        # Create two columns
+        col1 = create_qa_column_service(session, project_id, dataset_id, "Priority")
+        col2 = create_qa_column_service(session, project_id, dataset_id, "Category")
+
+        # Verify both exist
+        columns = get_qa_columns_by_dataset(session, dataset_id)
+        assert len(columns) == 2
+
+        # Delete one column
+        delete_response = delete_qa_column_service(session, project_id, dataset_id, col1.column_id)
+        assert "message" in delete_response
+        assert "successfully" in delete_response["message"].lower()
+
+        # Verify only one column remains
+        columns_after = get_qa_columns_by_dataset(session, dataset_id)
+        assert len(columns_after) == 1
+        assert columns_after[0].column_id == col2.column_id
+        assert columns_after[0].column_name == "Category"
+
+        # Test that deleting a column removes its values from input entries
+        column_id_str = str(col2.column_id)
+
+        # Create input entries with custom column values
+        create_payload = InputGroundtruthCreateList(
+            inputs_groundtruths=[
+                {
+                    "input": {"messages": [{"role": "user", "content": "Test 1"}]},
+                    "groundtruth": "GT 1",
+                    "custom_columns": {column_id_str: "high"},
+                },
+                {
+                    "input": {"messages": [{"role": "user", "content": "Test 2"}]},
+                    "groundtruth": "GT 2",
+                    "custom_columns": {column_id_str: "low"},
+                },
+            ]
+        )
+        created_response = create_inputs_groundtruths_service(session, dataset_id, create_payload)
+        assert len(created_response.inputs_groundtruths) == 2
+
+        # Verify values exist
+        retrieved_data = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id)
+        for entry in retrieved_data.inputs_groundtruths:
+            assert entry.custom_columns is not None
+            assert column_id_str in entry.custom_columns
+
+        # Delete the column
+        delete_qa_column_service(session, project_id, dataset_id, col2.column_id)
+
+        # Verify column is gone
+        columns = get_qa_columns_by_dataset(session, dataset_id)
+        assert len(columns) == 0
+
+        # Verify values were removed from entries
+        retrieved_data_after = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id)
+        for entry in retrieved_data_after.inputs_groundtruths:
+            # custom_columns should be None or empty, or not contain the deleted column_id
+            if entry.custom_columns:
+                assert column_id_str not in entry.custom_columns
+
+        # Test error case: column not found
+        fake_column_id = uuid4()
+        with pytest.raises(QAColumnNotFoundError) as exc_info:
+            delete_qa_column_service(session, project_id, dataset_id, fake_column_id)
+        assert str(dataset_id) in str(exc_info.value)
+        assert str(fake_column_id) in str(exc_info.value)
+
+        # Test error case: dataset not in project
+        project_id2, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="delete_project2",
+            description="Test project 2",
+        )
+
+        # Recreate a column for this test
+        col3 = create_qa_column_service(session, project_id, dataset_id, "TestCol")
+
+        with pytest.raises(QADatasetNotInProjectError) as exc_info:
+            delete_qa_column_service(session, project_id2, dataset_id, col3.column_id)
+        assert str(project_id2) in str(exc_info.value)
+
+        delete_project_service(session=session, project_id=project_id)
+        delete_project_service(session=session, project_id=project_id2)
+
+
+def test_export_qa_data_to_csv_service_with_custom_columns():
+    """Test CSV export includes custom columns in header and rows."""
+    with get_db_session() as session:
+        project_id, graph_runner_id = create_project_and_graph_runner(
+            session,
+            project_name_prefix="export_csv_test",
+            description="Test project for CSV export",
+        )
+
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"export_csv_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        # Create custom columns
+        col1 = create_qa_column_service(session, project_id, dataset_id, "Priority")
+        col2 = create_qa_column_service(session, project_id, dataset_id, "Score")
+        column_id1_str = str(col1.column_id)
+        column_id2_str = str(col2.column_id)
+
+        # Create input entries with custom column values
+        create_payload = InputGroundtruthCreateList(
+            inputs_groundtruths=[
+                {
+                    "input": {"messages": [{"role": "user", "content": "Test 1"}]},
+                    "groundtruth": "GT 1",
+                    "position": 1,
+                    "custom_columns": {column_id1_str: "high", column_id2_str: "95"},
+                },
+                {
+                    "input": {"messages": [{"role": "user", "content": "Test 2"}]},
+                    "groundtruth": "GT 2",
+                    "position": 2,
+                    "custom_columns": {column_id1_str: "low", column_id2_str: ""},
+                },
+            ]
+        )
+        create_inputs_groundtruths_service(session, dataset_id, create_payload)
+
+        # Export CSV
+        csv_content = export_qa_data_to_csv_service(session, dataset_id, graph_runner_id)
+
+        # Parse CSV
+        csv_file = io.StringIO(csv_content)
+        reader = csv.DictReader(csv_file)
+        rows = list(reader)
+
+        # Verify header includes custom columns
+        assert "Priority" in reader.fieldnames
+        assert "Score" in reader.fieldnames
+        assert reader.fieldnames == ["position", "input", "expected_output", "actual_output", "Priority", "Score"]
+
+        # Verify custom column values
+        assert rows[0]["Priority"] == "high"
+        assert rows[0]["Score"] == "95"
+        assert rows[1]["Priority"] == "low"
+        assert rows[1]["Score"] == ""  # Empty value
+
+        delete_project_service(session=session, project_id=project_id)
+
+
+def test_update_inputs_groundtruths_service_with_custom_columns():
+    """Test updating custom_columns values via update_inputs_groundtruths_service."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="update_custom_cols_test",
+            description="Test project for updating custom columns",
+        )
+
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"update_custom_cols_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        # Create custom column
+        col = create_qa_column_service(session, project_id, dataset_id, "Priority")
+        column_id_str = str(col.column_id)
+
+        # Create entry with custom column
+        create_payload = InputGroundtruthCreateList(
+            inputs_groundtruths=[
+                {
+                    "input": {"messages": [{"role": "user", "content": "Test"}]},
+                    "groundtruth": "GT",
+                    "custom_columns": {column_id_str: "high"},
+                }
+            ]
+        )
+        created = create_inputs_groundtruths_service(session, dataset_id, create_payload)
+        entry_id = created.inputs_groundtruths[0].id
+
+        # Update custom_columns value
+        update_payload = InputGroundtruthUpdateList(
+            inputs_groundtruths=[
+                InputGroundtruthUpdateWithId(
+                    id=entry_id,
+                    custom_columns={column_id_str: "low"},
+                )
+            ]
+        )
+        updated = update_inputs_groundtruths_service(session, dataset_id, update_payload)
+        assert updated.inputs_groundtruths[0].custom_columns[column_id_str] == "low"
+
+        # Remove custom_columns key (set to None)
+        update_payload2 = InputGroundtruthUpdateList(
+            inputs_groundtruths=[
+                InputGroundtruthUpdateWithId(
+                    id=entry_id,
+                    custom_columns={column_id_str: None},
+                )
+            ]
+        )
+        update_inputs_groundtruths_service(session, dataset_id, update_payload2)
+        retrieved = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id)
+        entry = next(e for e in retrieved.inputs_groundtruths if e.id == entry_id)
+        assert entry.custom_columns is None or column_id_str not in entry.custom_columns
+
+        delete_project_service(session=session, project_id=project_id)
+
+
+def test_csv_import_export_without_custom_columns():
+    """Test CSV import and export work without custom columns (basic columns only)."""
+    with get_db_session() as session:
+        project_id, graph_runner_id = create_project_and_graph_runner(
+            session,
+            project_name_prefix="csv_basic_test",
+            description="Test project for CSV import/export without custom columns",
+        )
+
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"csv_basic_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        # Test CSV import with only basic columns
+        input1 = json.dumps({"messages": [{"role": "user", "content": "Test 1"}]})
+        input2 = json.dumps({"messages": [{"role": "user", "content": "Test 2"}]})
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(["position", "input", "expected_output"])
+        writer.writerow([1, input1, "GT 1"])
+        writer.writerow([2, input2, "GT 2"])
+        csv_content = csv_buffer.getvalue()
+        csv_file = io.BytesIO(csv_content.encode("utf-8"))
+
+        import_response = import_qa_data_from_csv_service(session, project_id, dataset_id, csv_file)
+        assert len(import_response.inputs_groundtruths) == 2
+
+        # Verify entries were created correctly
+        retrieved = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id)
+        assert len(retrieved.inputs_groundtruths) == 2
+        assert retrieved.inputs_groundtruths[0].position == 1
+        assert retrieved.inputs_groundtruths[1].position == 2
+
+        # Test CSV export with only basic columns
+        csv_content_export = export_qa_data_to_csv_service(session, dataset_id, graph_runner_id)
+        csv_file_export = io.StringIO(csv_content_export)
+        reader = csv.DictReader(csv_file_export)
+        rows = list(reader)
+
+        # Verify header has only basic columns
+        assert reader.fieldnames == ["position", "input", "expected_output", "actual_output"]
+        assert len(rows) == 2
+        assert rows[0]["position"] == "1"
+        assert rows[1]["position"] == "2"
+
+        delete_project_service(session=session, project_id=project_id)
+
+
+def test_csv_import_invalid_json_error():
+    """Test CSV import raises CSVInvalidJSONError for invalid JSON in input column."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="csv_invalid_json_test",
+            description="Test project for CSV invalid JSON",
+        )
+
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"csv_invalid_json_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        # CSV with invalid JSON in input column
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(["position", "input", "expected_output"])
+        writer.writerow([1, "invalid json {", "GT 1"])  # Invalid JSON
+        csv_content = csv_buffer.getvalue()
+        csv_file = io.BytesIO(csv_content.encode("utf-8"))
+
+        with pytest.raises(CSVInvalidJSONError) as exc_info:
+            import_qa_data_from_csv_service(session, project_id, dataset_id, csv_file)
+        assert "Invalid JSON" in str(exc_info.value)
+        assert "row" in str(exc_info.value)
+
+        delete_project_service(session=session, project_id=project_id)
+
+
+def test_csv_import_empty_file_error():
+    """Test CSV import raises CSVEmptyFileError for empty CSV."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session,
+            project_name_prefix="csv_empty_file_test",
+            description="Test project for CSV empty file",
+        )
+
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"csv_empty_file_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        # Empty CSV (no rows, just header)
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(["position", "input", "expected_output"])
+        csv_content = csv_buffer.getvalue()
+        csv_file = io.BytesIO(csv_content.encode("utf-8"))
+
+        with pytest.raises(CSVEmptyFileError):
+            import_qa_data_from_csv_service(session, project_id, dataset_id, csv_file)
+
+        delete_project_service(session=session, project_id=project_id)
+
+
+def test_csv_export_error_cases():
+    """Test CSV export error cases: empty dataset and size limit."""
+    with get_db_session() as session:
+        project_id, graph_runner_id = create_project_and_graph_runner(
+            session,
+            project_name_prefix="csv_export_errors_test",
+            description="Test project for CSV export errors",
+        )
+
+        # Test empty dataset
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"csv_export_empty_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        with pytest.raises(CSVExportError) as exc_info:
+            export_qa_data_to_csv_service(session, dataset_id, graph_runner_id)
+        assert "No data to export" in str(exc_info.value)
 
         delete_project_service(session=session, project_id=project_id)
