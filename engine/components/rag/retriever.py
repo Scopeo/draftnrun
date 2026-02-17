@@ -152,6 +152,9 @@ class Retriever(Component):
             f"'{self.collection_name}' with source_id={self.source_id}"
         )
 
+        for i, chunk in enumerate(chunks):
+            chunk.metadata["_retrieval_rank"] = i + 1
+
         return chunks
 
     async def get_chunks(
@@ -186,6 +189,7 @@ class Retriever(Component):
                             "content": chunk.content,
                             "id": chunk.name,
                             "metadata": metadata_str,
+                            "retrieval_rank": i + 1,
                         },
                     )
             else:
@@ -196,6 +200,7 @@ class Retriever(Component):
                         f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": chunk.content,
                         f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": chunk.name,
                         f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": metadata_str,
+                        f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata.retrieval_rank": i + 1,
                     })
             span.set_status(trace_api.StatusCode.OK)
 
@@ -237,6 +242,7 @@ class Retriever(Component):
                 f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": chunk.content,
                 f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": chunk.name,
                 f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": metadata_str,
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata.retrieval_rank": i + 1,
                 f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.tool_name": tool_name,
             })
 

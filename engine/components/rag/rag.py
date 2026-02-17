@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Any, Optional, Type
 
@@ -13,7 +14,7 @@ from engine.components.rag.retriever import Retriever
 from engine.components.rag.vocabulary_search import VocabularySearch
 from engine.components.synthesizer import Synthesizer
 from engine.components.types import ComponentAttributes, ToolDescription
-from engine.components.utils import merge_qdrant_filters_with_and_conditions
+from engine.components.utils import extract_source_ranks, merge_qdrant_filters_with_and_conditions
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
@@ -112,6 +113,13 @@ class RAG(Component):
         )
 
         sourced_response = self._formatter.format(sourced_response)
+
+        if sourced_response.sources:
+            original_retrieval_ranks, original_reranker_ranks = extract_source_ranks(sourced_response.sources)
+            self.log_trace({
+                "original_retrieval_rank": json.dumps(original_retrieval_ranks),
+                "original_reranker_rank": json.dumps(original_reranker_ranks),
+            })
 
         for i, source in enumerate(chunks):
             self.log_trace({

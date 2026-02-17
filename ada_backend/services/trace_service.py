@@ -84,6 +84,16 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
         )
         attributes = row.get("attributes", {})
 
+        original_retrieval_rank = None
+        original_reranker_rank = None
+        try:
+            if "original_retrieval_rank" in attributes:
+                original_retrieval_rank = json.loads(attributes["original_retrieval_rank"])
+            if "original_reranker_rank" in attributes:
+                original_reranker_rank = json.loads(attributes["original_reranker_rank"])
+        except Exception as e:
+            LOGGER.error(f"Error parsing original ranks: {e}")
+
         traces[trace_id][span_id] = TraceSpan(
             span_id=span_id,
             name=row["name"],
@@ -108,6 +118,8 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
             conversation_id=attributes.get("conversation_id"),
             trace_id=row.get("trace_rowid"),
             total_credits=row.get("total_credits", None),
+            original_retrieval_rank=original_retrieval_rank,
+            original_reranker_rank=original_reranker_rank,
         )
 
     trace_trees = []

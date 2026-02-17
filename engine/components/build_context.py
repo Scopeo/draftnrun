@@ -43,9 +43,12 @@ def format_source_chunk_metadata(
         'Metadata:\\nauthor: Jane Doe\\nyear: 2021\\n'
     """
     metadata = source.metadata or {}
+    # TODO: add _ prefix for metadata keys that we want to exclude from the context
     if llm_metadata_keys:
         metadata = {
-            key: metadata[key] for key in llm_metadata_keys if key in metadata and key not in ["reranked_score"]
+            key: metadata[key]
+            for key in llm_metadata_keys
+            if key in metadata and key not in ["reranked_score", "_retrieval_rank", "_reranker_rank"]
         }
 
     if not metadata:
