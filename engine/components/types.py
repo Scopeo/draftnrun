@@ -1,9 +1,29 @@
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Dict, Optional
 from uuid import UUID
 
 from openai.types.chat import ChatCompletionMessageToolCall
 from pydantic import BaseModel, Field
+
+
+class ExecutionStrategy(StrEnum):
+    """Control flow strategies for GraphRunner execution."""
+    CONTINUE = "continue"  # Default: execute all successors
+    HALT = "halt"  # Stop all downstream execution
+    SELECTIVE_PORTS = "selective_ports"  # Execute only specific output ports
+
+
+@dataclass(frozen=True)
+class ExecutionDirective:
+    """
+    Directive from control-flow component to GraphRunner.
+    
+    Only emitted by components that override default execution flow
+    (e.g., IfElse, Router). Regular components don't emit this.
+    """
+    strategy: ExecutionStrategy = ExecutionStrategy.CONTINUE
+    active_ports: list[str] = field(default_factory=list)
 
 
 class NodeData(BaseModel):
@@ -16,6 +36,10 @@ class NodeData(BaseModel):
     ctx: Dict[str, Any] = Field(
         default_factory=dict,
         description="Execution context and variables for the current node execution",
+    )
+    directive: Optional[ExecutionDirective] = Field(
+        default=None,
+        description="Execution control directive (separate from component output data)",
     )
 
 

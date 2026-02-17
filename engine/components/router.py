@@ -13,7 +13,7 @@ from ada_backend.database.models import ParameterType, UIComponent
 from ada_backend.database.utils import DEFAULT_TOOL_DESCRIPTION
 from engine.components.component import Component
 from engine.components.errors import NoMatchingRouteError
-from engine.components.types import ComponentAttributes, ToolDescription
+from engine.components.types import ComponentAttributes, ExecutionDirective, ExecutionStrategy, ToolDescription
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -137,6 +137,16 @@ class Router(Component):
                 },
             ),
         )
+        fields["_directive"] = (
+            Optional[ExecutionDirective],
+            Field(
+                default=None,
+                description="Execution control directive (internal)",
+                json_schema_extra={
+                    "disabled_as_input": True,
+                },
+            ),
+        )
 
         for i in range(num_routes):
             route_name = get_route_port_name(i)
@@ -206,6 +216,10 @@ class Router(Component):
                 output_data[route_name] = None
 
         output_data["execute_routes"] = execute_routes
+        output_data["_directive"] = ExecutionDirective(
+            strategy=ExecutionStrategy.SELECTIVE_PORTS,
+            active_ports=execute_routes
+        )
 
         if matched_index is None:
             LOGGER.error(f"Router: No routes matched out of {num_routes} configured route(s)")
