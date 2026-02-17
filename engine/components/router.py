@@ -137,16 +137,6 @@ class Router(Component):
                 },
             ),
         )
-        fields["_directive"] = (
-            Optional[ExecutionDirective],
-            Field(
-                default=None,
-                description="Execution control directive (internal)",
-                json_schema_extra={
-                    "disabled_as_input": True,
-                },
-            ),
-        )
 
         for i in range(num_routes):
             route_name = get_route_port_name(i)
@@ -162,7 +152,8 @@ class Router(Component):
                 ),
             )
 
-        schema = create_model("RouterOutputs", **fields)
+        # Allow _directive as extra field (not in schema to keep it clean)
+        schema = create_model("RouterOutputs", __config__={"extra": "allow"}, **fields)
         cls._outputs_schema_cache = schema
 
         return schema
@@ -216,13 +207,16 @@ class Router(Component):
                 output_data[route_name] = None
 
         output_data["execute_routes"] = execute_routes
-        output_data["_directive"] = ExecutionDirective(
-            strategy=ExecutionStrategy.SELECTIVE_PORTS,
-            active_ports=execute_routes
-        )
 
         if matched_index is None:
             LOGGER.error(f"Router: No routes matched out of {num_routes} configured route(s)")
             raise NoMatchingRouteError(num_routes=num_routes)
 
-        return OutputModel(**output_data)
+        # Set _directive as extra field (not in schema)
+        return OutputModel(
+            **output_data,
+            _directive=ExecutionDirective(
+                strategy=ExecutionStrategy.SELECTIVE_PORTS,
+                selected_ports=execute_routes
+            )
+        )

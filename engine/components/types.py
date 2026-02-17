@@ -23,7 +23,7 @@ class ExecutionDirective:
     (e.g., IfElse, Router). Regular components don't emit this.
     """
     strategy: ExecutionStrategy = ExecutionStrategy.CONTINUE
-    active_ports: list[str] = field(default_factory=list)
+    selected_ports: list[str] = field(default_factory=list)
 
 
 class NodeData(BaseModel):
