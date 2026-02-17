@@ -204,29 +204,28 @@ def test_dataset_management():
         remaining_datasets = get_datasets_by_organization_service(session, ORGANIZATION_ID)
         assert len(remaining_datasets) == initial_count + 2
 
-        # Clean up the remaining datasets created by this test
-        cleanup_ids = [d.id for d in created_datasets if d.id != dataset_to_delete]
-        cleanup_payload = DatasetDeleteList(dataset_ids=cleanup_ids)
-        delete_datasets_from_organization_service(session, ORGANIZATION_ID, cleanup_payload)
-
         # Test that deleting a dataset cascades to QA metadata (custom columns)
+        # Do this before cleanup so the dataset still exists
         dataset_with_columns = created_datasets[0].id
-        # Create custom columns for this dataset
-        create_qa_column_service(session, project_id, dataset_with_columns, "Priority")
-        create_qa_column_service(session, project_id, dataset_with_columns, "Category")
+        create_qa_column_service(session, ORGANIZATION_ID, dataset_with_columns, "Priority")
+        create_qa_column_service(session, ORGANIZATION_ID, dataset_with_columns, "Category")
 
         # Verify columns exist
         columns_before = get_qa_columns_by_dataset(session, dataset_with_columns)
         assert len(columns_before) == 2
 
-        # Delete the dataset
+        # Delete the dataset and verify QA metadata is cascaded (deleted)
         delete_payload2 = DatasetDeleteList(dataset_ids=[dataset_with_columns])
-        deleted_count2 = delete_datasets_from_organization_service(session, project_id, delete_payload2)
+        deleted_count2 = delete_datasets_from_organization_service(session, ORGANIZATION_ID, delete_payload2)
         assert deleted_count2 == 1
 
-        # Verify QA metadata was cascaded (deleted)
         columns_after = get_qa_columns_by_dataset(session, dataset_with_columns)
         assert len(columns_after) == 0  # All columns should be deleted with the dataset
+
+        # Clean up the remaining dataset created by this test (created_datasets[2]; 0 and 1 already deleted)
+        cleanup_ids = [d.id for d in created_datasets if d.id not in (dataset_to_delete, dataset_with_columns)]
+        cleanup_payload = DatasetDeleteList(dataset_ids=cleanup_ids)
+        delete_datasets_from_organization_service(session, ORGANIZATION_ID, cleanup_payload)
 
         delete_project_service(session=session, project_id=project_id)
 
