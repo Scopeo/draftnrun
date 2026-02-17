@@ -20,6 +20,7 @@ class TracingSpanParams:
     trace_id: Optional[str] = None
     graph_runner_id: Optional[UUID] = None
     tag_name: Optional[str] = None
+    cron_id: Optional[str] = None
     shared_sandbox: Optional["AsyncSandbox"] = None
 
 
@@ -36,6 +37,7 @@ def set_tracing_span(
     call_type: Optional[CallType] = None,
     graph_runner_id: Optional[UUID] = None,
     tag_name: Optional[str] = None,
+    cron_id: Optional[str] = None,
 ) -> None:
     """Set current tracing context with project/org/llm info."""
     params = TracingSpanParams(
@@ -48,6 +50,7 @@ def set_tracing_span(
         call_type=call_type,
         graph_runner_id=graph_runner_id,
         tag_name=tag_name,
+        cron_id=cron_id,
     )
     _tracing_context.set(params)
 

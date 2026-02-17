@@ -22,7 +22,7 @@ from ada_backend.repositories.tracker_history_repository import (
     seed_initial_endpoint_history,
 )
 from ada_backend.services.agent_runner_service import run_env_agent
-from ada_backend.services.cron.core import BaseExecutionPayload, BaseUserPayload, CronEntrySpec
+from ada_backend.services.cron.core import BaseExecutionPayload, BaseUserPayload, CronEntrySpec, get_cron_context
 from ada_backend.services.cron.entries.agent_inference import AgentInferenceExecutionPayload, AgentInferenceUserPayload
 from ada_backend.services.cron.entries.agent_inference import (
     validate_execution as validate_execution_agent_inference,
@@ -305,8 +305,10 @@ def post_registration(execution_payload: EndpointPollingExecutionPayload, **kwar
     This ensures the first execution only processes truly new values,
     not all values that existed when the cron was created.
     """
+    cron_id, log_extra = get_cron_context(**kwargs)
+
     if not execution_payload.track_history:
-        LOGGER.info("Skipping history seeding because track_history is False")
+        LOGGER.info("Skipping history seeding because track_history is False", extra=log_extra)
         return
 
     seed_values = execution_payload.initial_history_seed
@@ -317,13 +319,12 @@ def post_registration(execution_payload: EndpointPollingExecutionPayload, **kwar
     if not db:
         raise ValueError("db missing from context")
 
-    cron_id = kwargs.get("cron_id")
-    if not cron_id:
-        raise ValueError("cron_id missing from context")
-
     inserted = seed_initial_endpoint_history(db, cron_id, seed_values)
     if inserted:
-        LOGGER.info(f"Seeded {inserted} existing endpoint values into history for cron {cron_id}")
+        LOGGER.info(
+            f"Seeded {inserted} existing endpoint values into history for cron {cron_id}",
+            extra=log_extra
+        )
 
 
 def _extract_nested_path(data: Any, path: str) -> Any:
@@ -651,13 +652,11 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
     if not db:
         raise ValueError("db missing from context")
 
-    cron_id = kwargs.get("cron_id")
-    if not cron_id:
-        raise ValueError("cron_id is required")
+    cron_id, log_extra = get_cron_context(**kwargs)
 
-    LOGGER.info(f"Starting endpoint polling for endpoint {execution_payload.endpoint_url}")
+    LOGGER.info(f"Starting endpoint polling for endpoint {execution_payload.endpoint_url}", extra=log_extra)
 
-    LOGGER.info(f"Querying endpoint: {execution_payload.endpoint_url}")
+    LOGGER.info(f"Querying endpoint: {execution_payload.endpoint_url}", extra=log_extra)
     async with httpx.AsyncClient(timeout=execution_payload.timeout) as client:
         response = await client.get(
             execution_payload.endpoint_url,
@@ -682,23 +681,24 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
 
         LOGGER.info(
             f"Found {len(polled_values)} values matching filter "
-            f"conditions out of {len(items_with_filter_values)} total values"
+            f"conditions out of {len(items_with_filter_values)} total values",
+            extra=log_extra
         )
     else:
         polled_values = _extract_ids_from_response(endpoint_data, execution_payload.tracking_field_path)
-        LOGGER.info(f"Found {len(polled_values)} values from endpoint")
+        LOGGER.info(f"Found {len(polled_values)} values from endpoint", extra=log_extra)
 
     if execution_payload.track_history:
         stored_history = get_tracked_values_history(db, cron_id)
         stored_ids = {str(record.tracked_value) for record in stored_history}
-        LOGGER.info(f"Found {len(stored_ids)} already processed values")
+        LOGGER.info(f"Found {len(stored_ids)} already processed values", extra=log_extra)
 
         new_values = polled_values - stored_ids
-        LOGGER.info(f"Identified {len(new_values)} new values")
+        LOGGER.info(f"Identified {len(new_values)} new values", extra=log_extra)
     else:
         stored_ids = set()
         new_values = polled_values
-        LOGGER.info(f"History tracking disabled - processing all {len(new_values)} polled values")
+        LOGGER.info(f"History tracking disabled - processing all {len(new_values)} polled values", extra=log_extra)
 
     workflow_results = []
     successful_values = []
@@ -706,7 +706,8 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
     if agent_inference_execution_payload.project_id and new_values:
         LOGGER.info(
             f"Triggering workflows for {len(new_values)} new values"
-            f" in project {agent_inference_execution_payload.project_id}"
+            f" in project {agent_inference_execution_payload.project_id}",
+            extra=log_extra
         )
         for new_value in new_values:
             try:
@@ -731,6 +732,7 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
                     env=agent_inference_execution_payload.env,
                     input_data=input_data,
                     call_type=CallType.API,
+                    cron_id=cron_id,
                 )
                 workflow_results.append({
                     "id": new_value,
@@ -738,9 +740,9 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
                     "trace_id": str(workflow_result.trace_id),
                 })
                 successful_values.append(new_value)
-                LOGGER.info(f"Successfully triggered workflow for value {new_value}")
+                LOGGER.info(f"Successfully triggered workflow for value {new_value}", extra=log_extra)
             except Exception as e:
-                LOGGER.error(f"Failed to trigger workflow for value {new_value}: {e}")
+                LOGGER.error(f"Failed to trigger workflow for value {new_value}: {e}", extra=log_extra)
                 workflow_results.append({
                     "id": new_value,
                     "status": "error",
@@ -753,9 +755,12 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
             cron_id=cron_id,
             tracked_values=successful_values,
         )
-        LOGGER.info(f"Added {len(successful_values)} successfully processed values to history")
+        LOGGER.info(f"Added {len(successful_values)} successfully processed values to history", extra=log_extra)
     elif successful_values and not execution_payload.track_history:
-        LOGGER.info(f"Processed {len(successful_values)} values (not saved to history - track_history is False)")
+        LOGGER.info(
+            f"Processed {len(successful_values)} values (not saved to history - track_history is False)",
+            extra=log_extra
+        )
 
     return {
         "endpoint_url": execution_payload.endpoint_url,

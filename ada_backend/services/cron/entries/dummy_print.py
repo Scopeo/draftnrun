@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import Field
 
-from ada_backend.services.cron.core import BaseExecutionPayload, BaseUserPayload, CronEntrySpec
+from ada_backend.services.cron.core import BaseExecutionPayload, BaseUserPayload, CronEntrySpec, get_cron_context
 
 LOGGER = logging.getLogger(__name__)
 
@@ -64,16 +64,19 @@ def validate_execution(execution_payload: DummyPrintExecutionPayload, **kwargs) 
 
 
 async def execute(execution_payload: DummyPrintExecutionPayload, **kwargs) -> dict[str, object]:
+    cron_id, log_extra = get_cron_context(**kwargs)
+
+    LOGGER.info("Starting dummy cron job execution", extra=log_extra)
+
     # Simulate a failure based on the error rate
     if random.random() < execution_payload.error_rate:
         error_msg = f"Simulated random failure! (Error rate: {execution_payload.error_rate})"
-        LOGGER.warning(f"Dummy cron job simulated failure: {error_msg}")
+        LOGGER.warning(f"Dummy cron job simulated failure: {error_msg}", extra=log_extra)
         raise ValueError(error_msg)
 
     # Execute the dummy task
     current_time = datetime.now(timezone.utc).isoformat()
-    print(f"[{current_time}] DUMMY CRON JOB EXECUTED: '{execution_payload.message}'")
-    LOGGER.info(f"Dummy cron job executed with message: '{execution_payload.message}'")
+    LOGGER.info(f"Dummy cron job executed with message: '{execution_payload.message}'", extra=log_extra)
 
     return {
         "message_printed": execution_payload.message,

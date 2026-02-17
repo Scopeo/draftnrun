@@ -3,6 +3,7 @@ Core protocols and spec for cron handlers and executors.
 """
 
 from typing import Callable, Optional, Protocol, runtime_checkable
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -66,6 +67,23 @@ class post_registration_hook(Protocol):
         Optional hook called after the cron job is inserted into the database.
         """
         ...
+
+
+def get_cron_context(**kwargs) -> tuple[UUID, dict[str, str]]:
+    """
+    Helper function to extract and validate cron_id from kwargs.
+    Returns a tuple of (cron_id, log_extra) to be used in cron executors.
+
+    Example:
+        >>> cron_id, log_extra = get_cron_context(**kwargs)
+        >>> LOGGER.info("Starting execution", extra=log_extra)
+    """
+    cron_id = kwargs.get("cron_id")
+    if not cron_id:
+        raise ValueError("cron_id is required")
+
+    log_extra = {"cron_id": str(cron_id)}
+    return cron_id, log_extra
 
 
 class CronEntrySpec(BaseModel):
