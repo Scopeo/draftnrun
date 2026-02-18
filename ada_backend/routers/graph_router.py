@@ -13,6 +13,13 @@ from ada_backend.routers.auth_router import (
     user_has_access_to_project_dependency,
 )
 from ada_backend.schemas.auth_schema import SupabaseUser
+from ada_backend.schemas.pipeline.component_instance_schema import (
+    ComponentInstanceDeleteBlockedResponse,
+    ComponentInstanceDeleteResponse,
+    ComponentInstanceUpdateResponse,
+    ComponentInstanceUpdateSchema,
+    DependentExpressionSchema,
+)
 from ada_backend.schemas.pipeline.field_expression_schema import (
     FieldExpressionAutocompleteRequest,
     FieldExpressionAutocompleteResponse,
@@ -27,13 +34,21 @@ from ada_backend.schemas.pipeline.graph_schema import (
     GraphUpdateSchema,
 )
 from ada_backend.services.errors import (
+    ComponentInstanceHasDependentExpressionsError,
+    ComponentInstanceNotFound,
+    ComponentInstanceNotInGraphError,
     GraphNotBoundToProjectError,
     GraphNotFound,
+    GraphNotInDraftError,
     GraphRunnerAlreadyInEnvironmentError,
     GraphVersionSavingFromNonDraftError,
     MissingDataSourceError,
     MissingIntegrationError,
     ProjectNotFound,
+)
+from ada_backend.services.graph.component_instance_service import (
+    delete_component_instance_service,
+    upsert_component_instance_service,
 )
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 from ada_backend.services.graph.deploy_graph_service import (
@@ -221,15 +236,167 @@ async def update_project_pipeline(
     except MissingIntegrationError as e:
         LOGGER.error(f"Missing integration for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except GraphNotInDraftError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
         error_msg = str(e)
         LOGGER.error(
             f"Failed to update graph for project {project_id} runner {graph_runner_id}: {error_msg}", exc_info=True
         )
-        # Check if this is a draft mode validation error
-        if "only draft versions" in error_msg.lower():
-            raise HTTPException(status_code=403, detail="Only the draft version can be modified") from e
         raise HTTPException(status_code=400, detail=f"Error: {error_msg}") from e
+
+
+@router.put(
+    "/{graph_runner_id}/components/{component_instance_id}",
+    summary="Upsert Component Instance",
+    response_model=ComponentInstanceUpdateResponse,
+    tags=["Graph", "Components"],
+)
+async def upsert_component_instance_endpoint(
+    project_id: UUID,
+    graph_runner_id: UUID,
+    component_instance_id: UUID,
+    component_data: ComponentInstanceUpdateSchema,
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value))
+    ],
+    session: Session = Depends(get_db),
+) -> ComponentInstanceUpdateResponse:
+    """
+    Create or update a single component instance within a graph.
+    This endpoint handles component parameters, field expressions, and port mappings.
+
+    The component will be created if it doesn't exist, or updated if it does.
+    Only works on draft graphs.
+    """
+    if component_data.id is None:
+        component_data.id = component_instance_id
+    elif component_data.id != component_instance_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Component instance ID in URL ({component_instance_id}) "
+                f"does not match ID in body ({component_data.id})"
+            ),
+        )
+
+    project = get_project(session, project_id=project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        return await upsert_component_instance_service(
+            session=session,
+            graph_runner_id=graph_runner_id,
+            project_id=project_id,
+            component_data=component_data,
+            user_id=user.id,
+        )
+    except GraphNotBoundToProjectError as e:
+        LOGGER.error(
+            f"Graph runner {graph_runner_id} is not bound to project {project_id} when upserting component",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except GraphNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except FieldExpressionError as e:
+        error_msg = str(e)
+        LOGGER.error(
+            f"Failed to upsert component {component_instance_id} in graph {graph_runner_id}: {error_msg}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=error_msg) from e
+    except GraphNotInDraftError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    except ValueError as e:
+        error_msg = str(e)
+        LOGGER.error(
+            f"Failed to upsert component {component_instance_id} in graph {graph_runner_id}: {error_msg}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=f"Error: {error_msg}") from e
+    except Exception as e:
+        LOGGER.error(
+            f"Unexpected error upserting component {component_instance_id} in graph {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.delete(
+    "/{graph_runner_id}/components/{component_instance_id}",
+    summary="Delete Component Instance",
+    response_model=ComponentInstanceDeleteResponse,
+    tags=["Graph", "Components"],
+)
+def delete_component_instance_endpoint(
+    project_id: UUID,
+    graph_runner_id: UUID,
+    component_instance_id: UUID,
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value))
+    ],
+    session: Session = Depends(get_db),
+    force: bool = False,
+) -> ComponentInstanceDeleteResponse:
+    """
+    Delete a component instance from a graph.
+    This will cascade delete all edges connected to this component.
+    Only works on draft graphs.
+    If other components reference this instance in field expressions, returns 409 with
+    dependents list; use force=true to delete anyway and clear those expressions.
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    project = get_project(session, project_id=project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        return delete_component_instance_service(
+            session=session,
+            graph_runner_id=graph_runner_id,
+            component_instance_id=component_instance_id,
+            force=force,
+        )
+    except ComponentInstanceHasDependentExpressionsError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=ComponentInstanceDeleteBlockedResponse(
+                detail=str(e),
+                component_instance_id=e.component_instance_id,
+                dependents=[DependentExpressionSchema(target_instance_id=t, field_name=f) for t, f in e.dependents],
+            ).model_dump(),
+        ) from e
+    except GraphNotBoundToProjectError as e:
+        LOGGER.error(
+            f"Graph runner {graph_runner_id} is not bound to project {project_id} when deleting component",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except ComponentInstanceNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ComponentInstanceNotInGraphError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphNotInDraftError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    except GraphNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        error_msg = str(e)
+        LOGGER.error(
+            f"Failed to delete component {component_instance_id} from graph {graph_runner_id}: {error_msg}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=error_msg) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Unexpected error deleting component {component_instance_id} from graph {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get(

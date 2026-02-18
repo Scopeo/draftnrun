@@ -52,9 +52,19 @@ class GraphLoadResponse(BaseModel):
 
 
 class GraphUpdateSchema(BaseModel):
-    """Complete pipeline definition"""
+    """
+    Graph structure definition for edges and relationships.
+    
+    NOTE: component_instances is deprecated. Use the component-level endpoints instead:
+    - PUT /projects/{project_id}/graph/{graph_runner_id}/components/{component_instance_id}
+    - DELETE /projects/{project_id}/graph/{graph_runner_id}/components/{component_instance_id}
+    """
 
-    component_instances: list[ComponentInstanceSchema]
+    component_instances: list[ComponentInstanceSchema] = Field(
+        default_factory=list,
+        deprecated=True,
+        description="DEPRECATED: Use component-level endpoints instead. Maintained for backward compatibility.",
+    )
     relationships: list[ComponentRelationshipSchema]
     edges: list[EdgeSchema]
 

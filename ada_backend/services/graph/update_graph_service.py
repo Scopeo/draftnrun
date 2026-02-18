@@ -51,7 +51,7 @@ from ada_backend.schemas.parameter_schema import ParameterKind
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
 from ada_backend.segment_analytics import track_project_saved
 from ada_backend.services.agent_runner_service import get_agent_for_project
-from ada_backend.services.errors import GraphNotBoundToProjectError
+from ada_backend.services.errors import GraphNotBoundToProjectError, GraphNotInDraftError
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
 from ada_backend.services.graph.playground_utils import (
     extract_playground_configuration,
@@ -83,6 +83,14 @@ def _sort_dict_keys_recursively(obj):
 
 
 def _calculate_graph_hash(graph_project: GraphUpdateSchema) -> str:
+    """
+    Calculate a hash of the complete graph configuration.
+    This includes component instances, edges, and relationships.
+    Changes to any of these will trigger a new modification history entry.
+    #TODO: Refactor to use the component-level endpoints instead.
+
+    Note: port_mappings are excluded as they are auto-generated from edges.
+    """
     graph_dict = graph_project.model_dump(mode="json", exclude={"port_mappings"})
     sorted_dict = _sort_dict_keys_recursively(graph_dict)
     json_str = json.dumps(sorted_dict, sort_keys=True, separators=(",", ":"))
@@ -121,7 +129,8 @@ def validate_graph_is_draft(session: Session, graph_runner_id: UUID) -> None:
 
     Raises:
         GraphNotBoundToProjectError: If the graph runner is not bound to any project
-        ValueError: If the graph runner is not in draft mode
+        GraphNotInDraftError: If the graph runner is not in draft mode
+        ValueError: If the graph runner is not found
     """
     env_relationship = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
     if not env_relationship:
@@ -138,11 +147,12 @@ def validate_graph_is_draft(session: Session, graph_runner_id: UUID) -> None:
     if not is_draft:
         env_name = env_relationship.environment.value if env_relationship.environment else None
         tag = graph_runner.tag_version or None
-        raise ValueError(
-            f"Cannot modify graph runner {graph_runner_id}: only draft versions"
+        raise GraphNotInDraftError(
+            graph_runner_id,
+            f"Cannot modify graph runner {graph_runner_id}: only draft versions "
             "(env='draft' AND tag_version=null) can be modified. "
             f"Current state: env='{env_name}', tag_version='{tag}'. "
-            f"Please switch to the draft version to make changes."
+            "Please switch to the draft version to make changes.",
         )
 
 
@@ -233,8 +243,11 @@ async def update_graph_service(
     skip_validation: bool = False,
 ) -> GraphUpdateResponse:
     """
-    Creates or updates a complete graph runner including all component instances,
-    their parameters, and relationships.
+    Updates graph structure including edges and relationships.
+
+    NOTE: Component instances should now be managed via the component-level endpoints.
+    This function maintains backward compatibility by accepting component_instances in the schema,
+    but it's recommended to use the dedicated component endpoints instead.
 
     Args:
         bypass_validation: If True, skip draft mode validation (use for seeding/migrations only)
@@ -243,35 +256,41 @@ async def update_graph_service(
     if not skip_validation:
         _ensure_graph_exists_and_validate(session, graph_runner_id, project_id, env, bypass_validation)
 
-    # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
-    previous_graph_nodes = set(node.id for node in get_component_nodes(session, graph_runner_id))
     previous_edge_ids = set(edge.id for edge in get_edges(session, graph_runner_id))
 
-    # Create/update all component instances
+    # Backward compatibility: Handle component instances if provided
     instance_ids = set()
     input_params_by_instance: dict[UUID, list] = defaultdict(list)
-    for instance in graph_project.component_instances:
-        parameter_params = []
-        for param in instance.parameters:
-            kind = getattr(param, "kind", ParameterKind.PARAMETER)
-            if kind == ParameterKind.INPUT:
-                if not instance.id:
-                    raise ValueError(
-                        f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
-                    )
-                input_params_by_instance[instance.id].append(param)
-            else:
-                parameter_params.append(param)
-        instance.parameters = parameter_params
 
-        instance_id = create_or_update_component_instance(session, instance, project_id)
-        upsert_component_node(
-            session,
-            graph_runner_id=graph_runner_id,
-            component_instance_id=instance.id,
-            is_start_node=instance.is_start_node,
+    if graph_project.component_instances:
+        LOGGER.warning(
+            "component_instances in GraphUpdateSchema is deprecated. "
+            "Use the component-level endpoints (PUT /graph/{graph_runner_id}/components/{component_instance_id}) instead."
         )
-        instance_ids.add(instance_id)
+
+        # Process component instances for backward compatibility
+        for instance in graph_project.component_instances:
+            parameter_params = []
+            for param in instance.parameters:
+                kind = getattr(param, "kind", ParameterKind.PARAMETER)
+                if kind == ParameterKind.INPUT:
+                    if not instance.id:
+                        raise ValueError(
+                            f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
+                        )
+                    input_params_by_instance[instance.id].append(param)
+                else:
+                    parameter_params.append(param)
+            instance.parameters = parameter_params
+
+            instance_id = create_or_update_component_instance(session, instance, project_id)
+            upsert_component_node(
+                session,
+                graph_runner_id=graph_runner_id,
+                component_instance_id=instance.id,
+                is_start_node=instance.is_start_node,
+            )
+            instance_ids.add(instance_id)
 
     # Create relationships
     for relation in graph_project.relationships:
@@ -333,45 +352,45 @@ async def update_graph_service(
             if port.field_expression_id:
                 db_port_instances_by_instance[instance_id][port.name] = port.id
 
-    incoming_field_expressions_by_instance: dict[UUID, set[str]] = defaultdict(set)
-    for instance in graph_project.component_instances:
-        incoming_field_expressions_by_instance[instance.id] = set()
+        incoming_field_expressions_by_instance: dict[UUID, set[str]] = defaultdict(set)
+        for instance in graph_project.component_instances:
+            incoming_field_expressions_by_instance[instance.id] = set()
 
-        # Convert Inputs from parameters[kind="input"] to field expressions.
-        # TODO: this mixes API-level `kind="input"` with service-level types; needs decoupling.
-        for param in input_params_by_instance.get(instance.id, []):
-            if not instance.id:
-                raise ValueError(
-                    f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
-                )
-            if instance.id not in instance_ids:
-                raise ValueError(f"Invalid field expression target: component instance {instance.id} not in update")
+            # Convert Inputs from parameters[kind="input"] to field expressions.
+            for param in input_params_by_instance.get(instance.id, []):
+                if not instance.id:
+                    raise ValueError(
+                        f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
+                    )
+                if instance.id not in instance_ids:
+                    raise ValueError(
+                        f"Invalid field expression target: component instance {instance.id} not in update"
+                    )
 
-            field_name = param.name
+                field_name = param.name
 
-            if param.value is None or param.value == "":
-                LOGGER.warning(
-                    f"No expression value for input parameter {field_name} on instance {instance.id}, skipping"
-                )
-                continue
+                if param.value is None or param.value == "":
+                    LOGGER.warning(
+                        f"No expression value for input parameter {field_name} on instance {instance.id}, skipping"
+                    )
+                    continue
 
-            if field_name in incoming_field_expressions_by_instance[instance.id]:
-                LOGGER.warning(
-                    f"Field expression {field_name} already exists for instance {instance.id}, skipping update"
-                )
-                continue
+                if field_name in incoming_field_expressions_by_instance[instance.id]:
+                    LOGGER.warning(
+                        f"Field expression {field_name} already exists for instance {instance.id}, skipping update"
+                    )
+                    continue
 
-            incoming_field_expressions_by_instance[instance.id].add(field_name)
+                incoming_field_expressions_by_instance[instance.id].add(field_name)
 
-            # Parse expression (handles both text and JSON formats)
-            try:
-                ast = parse_expression_flexible(param.value)
-                LOGGER.debug(f"Parsed expression for {field_name}: {param.value}")
-            except FieldExpressionParseError:
-                LOGGER.error(f"Failed to parse field expression from parameter input: {param.value}")
-                raise
+                try:
+                    ast = parse_expression_flexible(param.value)
+                    LOGGER.debug(f"Parsed expression for {field_name}: {param.value}")
+                except FieldExpressionParseError:
+                    LOGGER.error(f"Failed to parse field expression from parameter input: {param.value}")
+                    raise
 
-            _validate_expression_references(session, graph_runner_id, ast)
+                _validate_expression_references(session, graph_runner_id, ast)
 
             expression_json = expr_to_json(ast)
 
@@ -393,15 +412,15 @@ async def update_graph_service(
                     field_expression_id=expr.id,
                 )
 
-            ref_node = get_pure_ref(ast)
-            if ref_node is not None:
-                _create_port_mappings_for_pure_ref_expressions(
-                    session=session,
-                    graph_runner_id=graph_runner_id,
-                    component_instance_id=instance.id,
-                    field_name=field_name,
-                    ref_node=ref_node,
-                )
+                ref_node = get_pure_ref(ast)
+                if ref_node is not None:
+                    _create_port_mappings_for_pure_ref_expressions(
+                        session=session,
+                        graph_runner_id=graph_runner_id,
+                        component_instance_id=instance.id,
+                        field_name=field_name,
+                        ref_node=ref_node,
+                    )
 
     for instance_id, incoming_fields in incoming_field_expressions_by_instance.items():
         if instance_id in db_port_instances_by_instance:

@@ -19,6 +19,25 @@ def delete_port_mappings_for_graph(session: Session, graph_runner_id: UUID) -> i
     return deleted
 
 
+def delete_port_mappings_involving_instance(
+    session: Session,
+    graph_runner_id: UUID,
+    instance_id: UUID,
+) -> int:
+    """Delete all port mappings where the given instance is source or target."""
+    deleted = (
+        session.query(db.PortMapping)
+        .filter(db.PortMapping.graph_runner_id == graph_runner_id)
+        .filter(
+            (db.PortMapping.source_instance_id == instance_id)
+            | (db.PortMapping.target_instance_id == instance_id)
+        )
+        .delete(synchronize_session=False)
+    )
+    session.commit()
+    return deleted
+
+
 def delete_port_mappings_for_target_except(
     session: Session,
     graph_runner_id: UUID,

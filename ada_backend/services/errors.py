@@ -173,6 +173,15 @@ class GraphNotBoundToProjectError(Exception):
         super().__init__(message)
 
 
+class GraphNotInDraftError(Exception):
+    """Raised when attempting to modify a graph runner that is not in draft mode (only draft can be modified)."""
+
+    def __init__(self, graph_runner_id: UUID, message: str | None = None):
+        self.graph_runner_id = graph_runner_id
+        msg = message or "Only the draft version can be modified"
+        super().__init__(msg)
+
+
 class GraphVersionSavingFromNonDraftError(Exception):
     """Raised when attempting to save a version from a graph runner that is not in DRAFT environment."""
 
@@ -269,4 +278,31 @@ class NangoTokenMissingError(Exception):
         self.connection_id = connection_id
         super().__init__(
             f"Access token not found in Nango credentials for connection {connection_id}",
+        )
+
+
+class ComponentInstanceNotFound(Exception):
+    def __init__(self, component_instance_id: UUID):
+        self.component_instance_id = component_instance_id
+        super().__init__(f"Component instance not found: {component_instance_id}")
+
+
+class ComponentInstanceNotInGraphError(Exception):
+    def __init__(self, component_instance_id: UUID, graph_runner_id: UUID):
+        self.component_instance_id = component_instance_id
+        self.graph_runner_id = graph_runner_id
+        super().__init__(
+            f"Component instance {component_instance_id} is not in graph {graph_runner_id}"
+        )
+
+
+class ComponentInstanceHasDependentExpressionsError(Exception):
+    """Raised when deleting a component instance that is referenced in other instances' field expressions."""
+
+    def __init__(self, component_instance_id: UUID, dependents: list[tuple[UUID, str]]):
+        self.component_instance_id = component_instance_id
+        self.dependents = dependents
+        super().__init__(
+            f"Component instance {component_instance_id} is referenced in {len(dependents)} field expression(s). "
+            "Use force=true to delete anyway and clear those expressions."
         )
