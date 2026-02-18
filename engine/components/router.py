@@ -1,24 +1,19 @@
-"""
-Router component for conditional branching.
-Generates route outputs dynamically based on configured routes.
-"""
-
 import logging
 from typing import Any, Dict, Optional, Type
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from ada_backend.database.models import ParameterType, UIComponent
 from ada_backend.database.utils import DEFAULT_TOOL_DESCRIPTION
 from engine.components.component import Component
 from engine.components.errors import NoMatchingRouteError
-from engine.components.types import ComponentAttributes, ToolDescription
+from engine.components.types import ComponentAttributes, ExecutionDirective, ExecutionStrategy, ToolDescription
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
 
-MAX_ROUTER_ROUTES = 20
+MAX_ROUTER_ROUTES = 10
 
 ROUTER_OPERATOR_METADATA = [
     {
@@ -59,8 +54,7 @@ class RouterInputs(BaseModel):
     input: Any = Field(
         default=None,
         description=(
-            "Input data to pass through the matched route. "
-            "Auto-populated from previous component if not provided."
+            "Input data to pass through the matched route. Auto-populated from previous component if not provided."
         ),
         json_schema_extra={
             "parameter_type": ParameterType.JSON,
@@ -115,29 +109,6 @@ class Router(Component):
         num_routes = MAX_ROUTER_ROUTES
         fields: Dict[str, tuple] = {}
 
-        fields["output"] = (
-            Any,
-            Field(
-                default=None,
-                description="Full input data passed through",
-                json_schema_extra={
-                    "parameter_type": ParameterType.JSON,
-                    "disabled_as_input": True,
-                },
-            ),
-        )
-        fields["execute_routes"] = (
-            list[str],
-            Field(
-                default_factory=list,
-                description="List of route names that should execute (matched routes)",
-                json_schema_extra={
-                    "parameter_type": ParameterType.JSON,
-                    "disabled_as_input": True,
-                },
-            ),
-        )
-
         for i in range(num_routes):
             route_name = get_route_port_name(i)
             fields[route_name] = (
@@ -152,20 +123,14 @@ class Router(Component):
                 ),
             )
 
-        schema = create_model("RouterOutputs", **fields)
+        schema = create_model("RouterOutputs", __config__=ConfigDict(extra="allow"), **fields)
         cls._outputs_schema_cache = schema
 
         return schema
 
     @classmethod
-    def get_canonical_input_port(cls) -> str | None:
-        """Router's canonical input is 'input' - auto-populated from previous component."""
-        return "input"
-
-    @classmethod
-    def get_canonical_output_port(cls) -> str | None:
-        """Router's canonical output is 'output'."""
-        return "output"
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "input", "output": None}
 
     def _compare_equal(self, value_a: Any, value_b: Any) -> bool:
         """Compare two values for equality."""
@@ -176,39 +141,26 @@ class Router(Component):
         inputs: RouterInputs,
         ctx: dict,
     ) -> BaseModel:
-        pass_through_data = inputs.input
-        routes = inputs.routes
-        num_routes = len(routes)
-
         OutputModel = self.get_outputs_schema()
 
-        matched_index = None
-        execute_routes = []
-        output_data = {
-            "output": None,
-            "execute_routes": [],
-        }
+        output_data: dict = {}
 
-        for i, route in enumerate(routes):
+        for i, route in enumerate(inputs.routes):
             route_name = get_route_port_name(i)
-            value_a = route.value_a
             value_b = route.value_b if route.value_b is not None else route.value_a
-
-            if self._compare_equal(value_a, value_b):
+            if self._compare_equal(route.value_a, value_b):
                 LOGGER.info(f"Route {i} matched")
-                matched_index = i
-                execute_routes.append(route_name)
-                output_data[route_name] = pass_through_data
 
-                if output_data["output"] is None:
-                    output_data["output"] = pass_through_data
-            else:
-                output_data[route_name] = None
+                output_data[route_name] = inputs.input
 
-        output_data["execute_routes"] = execute_routes
+        if not output_data:
+            LOGGER.error(f"Router: No routes matched out of {len(inputs.routes)} configured route(s)")
+            raise NoMatchingRouteError(num_routes=len(inputs.routes))
 
-        if matched_index is None:
-            LOGGER.error(f"Router: No routes matched out of {num_routes} configured route(s)")
-            raise NoMatchingRouteError(num_routes=num_routes)
-
-        return OutputModel(**output_data)
+        return OutputModel(
+            **output_data,
+            _directive=ExecutionDirective(
+                strategy=ExecutionStrategy.SELECTIVE_PORTS,
+                selected_ports=list(output_data.keys()),
+            ),
+        )
