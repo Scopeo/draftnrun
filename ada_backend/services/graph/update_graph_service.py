@@ -438,133 +438,69 @@ async def update_graph_service(
     )
 
 
-def _resolve_port_definitions(
-    session: Session,
-    source_instance_id: UUID,
-    source_port_name: str,
-    target_instance_id: UUID,
-    target_port_name: str,
-) -> tuple[UUID, UUID, UUID, UUID]:
-    """
-    Resolve component version IDs and port definition IDs for a mapping.
-
-    Returns:
-        (source_component_version_id, target_component_version_id,
-         source_port_def_id, target_port_def_id)
-
-    Raises:
-        ValueError: If any port is not found for the component
-    """
-    # Resolve component version IDs
-    source_component_version_id = resolve_component_version_id_from_instance_id(session, source_instance_id)
-    target_component_version_id = resolve_component_version_id_from_instance_id(session, target_instance_id)
-
-    # Resolve port definition IDs
-    source_port_def_id = get_output_port_definition_id(session, source_component_version_id, source_port_name)
-    if not source_port_def_id:
-        raise ValueError(f"Output port '{source_port_name}' not found for component {source_component_version_id}")
-
-    target_port_def_id = get_input_port_definition_id(session, target_component_version_id, target_port_name)
-    if not target_port_def_id:
-        raise ValueError(f"Input port '{target_port_name}' not found for component {target_component_version_id}")
-
-    return source_component_version_id, target_component_version_id, source_port_def_id, target_port_def_id
-
-
-def _create_port_mapping_object(
-    graph_runner_id: UUID,
-    source_instance_id: UUID,
-    source_port_def_id: UUID,
-    target_instance_id: UUID,
-    target_port_def_id: UUID,
-    dispatch_strategy: str = "direct",
-) -> db.PortMapping:
-    """Create a PortMapping database object with validated ports."""
-    return db.PortMapping(
-        graph_runner_id=graph_runner_id,
-        source_instance_id=source_instance_id,
-        source_port_definition_id=source_port_def_id,
-        target_instance_id=target_instance_id,
-        target_port_definition_id=target_port_def_id,
-        dispatch_strategy=dispatch_strategy,
-    )
-
-
-def _create_explicit_port_mappings(
+def _ensure_port_mappings_for_edges(
     session: Session,
     graph_runner_id: UUID,
     graph_project: GraphUpdateSchema,
-) -> tuple[set[tuple[UUID, UUID]], set[tuple[UUID, str]]]:
-    """
-    Handle frontend-provided port mappings.
-
-    Returns:
-        Tuple of (explicitly_mapped_pairs, explicit_port_mapping_targets)
-    """
+) -> set[tuple[UUID, str]]:
+    # Full replacement (PUT) semantics for port mappings
+    delete_port_mappings_for_graph(session, graph_runner_id)
     explicitly_mapped_pairs: set[tuple[UUID, UUID]] = set()
     explicit_port_mapping_targets: set[tuple[UUID, str]] = set()
 
-    if not hasattr(graph_project, "port_mappings") or not graph_project.port_mappings:
-        return explicitly_mapped_pairs, explicit_port_mapping_targets
-
-    LOGGER.info(f"Frontend sent {len(graph_project.port_mappings)} port mappings")
-
-    new_mappings: list[db.PortMapping] = []
-
-    for pm_schema in graph_project.port_mappings:
-        # Resolve and validate port definitions
-        _, _, source_port_def_id, target_port_def_id = _resolve_port_definitions(
-            session,
-            pm_schema.source_instance_id,
-            pm_schema.source_port_name,
-            pm_schema.target_instance_id,
-            pm_schema.target_port_name,
-        )
-
-        validate_port_definition_types(session, source_port_def_id, target_port_def_id)
-
-        LOGGER.info(
-            f"Creating port mapping: {pm_schema.source_port_name} -> {pm_schema.target_port_name} "
-            f"(source={pm_schema.source_instance_id}, target={pm_schema.target_instance_id})"
-        )
-
-        new_mappings.append(
-            _create_port_mapping_object(
-                graph_runner_id=graph_runner_id,
-                source_instance_id=pm_schema.source_instance_id,
-                source_port_def_id=source_port_def_id,
-                target_instance_id=pm_schema.target_instance_id,
-                target_port_def_id=target_port_def_id,
-                dispatch_strategy=pm_schema.dispatch_strategy or "direct",
+    if hasattr(graph_project, "port_mappings") and graph_project.port_mappings:
+        new_mappings: list[db.PortMapping] = []
+        for pm_schema in graph_project.port_mappings:
+            # Get component IDs for the instances
+            source_component_version_id = resolve_component_version_id_from_instance_id(
+                session, pm_schema.source_instance_id
             )
-        )
-        explicitly_mapped_pairs.add((pm_schema.source_instance_id, pm_schema.target_instance_id))
-        explicit_port_mapping_targets.add((pm_schema.target_instance_id, pm_schema.target_port_name))
+            target_component_version_id = resolve_component_version_id_from_instance_id(
+                session, pm_schema.target_instance_id
+            )
 
-    if new_mappings:
-        session.bulk_save_objects(new_mappings)
-        session.commit()
+            # Resolve port names to port definition IDs
+            source_port_def_id = get_output_port_definition_id(
+                session, source_component_version_id, pm_schema.source_port_name
+            )
+            if not source_port_def_id:
+                raise ValueError(
+                    f"Output port '{pm_schema.source_port_name}' not found for component {source_component_version_id}"
+                )
 
-    return explicitly_mapped_pairs, explicit_port_mapping_targets
+            target_port_def_id = get_input_port_definition_id(
+                session, target_component_version_id, pm_schema.target_port_name
+            )
+            if not target_port_def_id:
+                raise ValueError(
+                    f"Input port '{pm_schema.target_port_name}' not found for component {target_component_version_id}"
+                )
 
+            validate_port_definition_types(session, source_port_def_id, target_port_def_id)
 
-def _create_auto_generated_port_mappings(
-    session: Session,
-    graph_runner_id: UUID,
-    graph_project: GraphUpdateSchema,
-    explicitly_mapped_pairs: set[tuple[UUID, UUID]],
-) -> None:
-    """
-    Auto-generate mappings for unmapped edges using canonical ports.
-    """
+            new_mappings.append(
+                db.PortMapping(
+                    graph_runner_id=graph_runner_id,
+                    source_instance_id=pm_schema.source_instance_id,
+                    source_port_definition_id=source_port_def_id,
+                    target_instance_id=pm_schema.target_instance_id,
+                    target_port_definition_id=target_port_def_id,
+                    dispatch_strategy=pm_schema.dispatch_strategy or "direct",
+                )
+            )
+            explicitly_mapped_pairs.add((pm_schema.source_instance_id, pm_schema.target_instance_id))
+            explicit_port_mapping_targets.add((pm_schema.target_instance_id, pm_schema.target_port_name))
+
+        if new_mappings:
+            session.bulk_save_objects(new_mappings)
+            session.commit()
+
     # Auto-generate defaults for unmapped edges using canonical ports
     actual_edges: set[tuple[UUID, UUID]] = {(edge.origin, edge.destination) for edge in graph_project.edges}
     unmapped_edges = actual_edges - explicitly_mapped_pairs
 
-    LOGGER.info(f"Auto-generating port mappings for {len(unmapped_edges)} unmapped edges")
-
     if not unmapped_edges:
-        return
+        return explicit_port_mapping_targets
 
     instance_to_component_version: dict[UUID, UUID] = {}
     for inst in graph_project.component_instances:
@@ -602,29 +538,25 @@ def _create_auto_generated_port_mappings(
         source_port_name = source_ports.get("output") or "output"
         target_port_name = target_ports.get("input") or "input"
 
-        LOGGER.info(
-            f"Auto-generating mapping: {source_port_name} -> {target_port_name} "
-            f"(source={source_instance_id}, target={target_instance_id})"
-        )
+        # Resolve port names to port definition IDs
+        source_port_def_id = get_output_port_definition_id(session, source_component_version_id, source_port_name)
+        if not source_port_def_id:
+            raise ValueError(f"Output port '{source_port_name}' not found for component {source_component_version_id}")
 
-        # Resolve and validate port definitions
-        _, _, source_port_def_id, target_port_def_id = _resolve_port_definitions(
-            session,
-            source_instance_id,
-            source_port_name,
-            target_instance_id,
-            target_port_name,
-        )
+        target_port_def_id = get_input_port_definition_id(session, target_component_version_id, target_port_name)
+        if not target_port_def_id:
+            raise ValueError(f"Input port '{target_port_name}' not found for component {target_component_version_id}")
 
+        # Validate port definition types
         validate_port_definition_types(session, source_port_def_id, target_port_def_id)
 
         auto_generated_mappings.append(
-            _create_port_mapping_object(
+            db.PortMapping(
                 graph_runner_id=graph_runner_id,
                 source_instance_id=source_instance_id,
-                source_port_def_id=source_port_def_id,
+                source_port_definition_id=source_port_def_id,
                 target_instance_id=target_instance_id,
-                target_port_def_id=target_port_def_id,
+                target_port_definition_id=target_port_def_id,
                 dispatch_strategy="direct",
             )
         )
@@ -632,29 +564,6 @@ def _create_auto_generated_port_mappings(
     if auto_generated_mappings:
         session.bulk_save_objects(auto_generated_mappings)
         session.commit()
-
-
-def _ensure_port_mappings_for_edges(
-    session: Session,
-    graph_runner_id: UUID,
-    graph_project: GraphUpdateSchema,
-) -> set[tuple[UUID, str]]:
-    """
-    Ensure port mappings for all edges, returning explicit port mapping targets.
-
-    Returns:
-        Set of (target_instance_id, target_port_name) tuples for explicit port mappings
-    """
-    # Full replacement (PUT) semantics for port mappings
-    delete_port_mappings_for_graph(session, graph_runner_id)
-
-    # Create explicit port mappings from frontend
-    explicitly_mapped_pairs, explicit_port_mapping_targets = _create_explicit_port_mappings(
-        session, graph_runner_id, graph_project
-    )
-
-    # Auto-generate mappings for unmapped edges
-    _create_auto_generated_port_mappings(session, graph_runner_id, graph_project, explicitly_mapped_pairs)
 
     return explicit_port_mapping_targets
 
@@ -680,17 +589,23 @@ def _create_port_mappings_for_pure_ref_expressions(
         )
         return
 
-    # Resolve and validate port definitions (with warnings instead of errors)
-    try:
-        _, _, source_port_def_id, target_port_def_id = _resolve_port_definitions(
-            session,
-            UUID(ref_node.instance),
-            ref_node.port,
-            component_instance_id,
-            field_name,
+    source_component_version_id = resolve_component_version_id_from_instance_id(session, UUID(ref_node.instance))
+    target_component_version_id = resolve_component_version_id_from_instance_id(session, component_instance_id)
+
+    source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)
+    if not source_port_def_id:
+        LOGGER.warning(
+            msg=f"Output port '{ref_node.port}' not found for component "
+            f"{source_component_version_id}, skipping port mapping"
         )
-    except ValueError as e:
-        LOGGER.warning(f"Skipping field expression port mapping: {e}")
+        return
+
+    target_port_def_id = get_input_port_definition_id(session, target_component_version_id, field_name)
+    if not target_port_def_id:
+        LOGGER.warning(
+            msg=f"Input port '{field_name}' not found for component "
+            f"{target_component_version_id}, skipping port mapping"
+        )
         return
 
     validate_port_definition_types(session, source_port_def_id, target_port_def_id)

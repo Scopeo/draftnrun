@@ -8,7 +8,7 @@ from opentelemetry import trace as trace_api
 
 from engine import legacy_compatibility
 from engine.coercion_matrix import CoercionMatrix, create_default_coercion_matrix
-from engine.components.types import AgentPayload, NodeData
+from engine.components.types import AgentPayload, ExecutionDirective, ExecutionStrategy, NodeData
 from engine.field_expressions.ast import ExpressionNode, LiteralNode, RefNode
 from engine.field_expressions.traversal import select_nodes
 from engine.graph_runner.field_expression_management import evaluate_expression
@@ -172,22 +172,30 @@ class GraphRunner:
             self.run_context.update(result_packet.ctx or {})
             LOGGER.debug(f"Node '{node_id}' completed execution with result: {result_packet}")
 
-            should_halt = result_packet.data.get("should_halt", False)
-            if should_halt:
+            # Extract execution directive (normalized to CONTINUE if None)
+            # NOTE: If we add many more execution strategies in the future,
+            # consider using Strategy Pattern with dedicated handler classes.
+            directive = result_packet.directive
+
+            # TODO: Remove after IfElse migration - Backward compatibility
+            # IfElse currently uses should_halt in data dict (legacy pattern)
+            if directive is None and result_packet.data.get("should_halt", False):
+                directive = ExecutionDirective(strategy=ExecutionStrategy.HALT)
+
+            directive = directive or ExecutionDirective()
+
+            if directive.strategy == ExecutionStrategy.CONTINUE:
+                # Default: execute all successors
+                for successor in self.graph.successors(node_id):
+                    self.tasks[successor].decrement_pending_deps()
+
+            elif directive.strategy == ExecutionStrategy.HALT:
                 LOGGER.info(f"Node '{node_id}' signaled to halt downstream execution")
                 self._halt_downstream_execution(node_id)
-            else:
-                # Check for Router's execute_routes list (which routes should execute)
-                execute_routes = result_packet.data.get("execute_routes", None)
 
-                if execute_routes is not None:
-                    # Router component - selective execution based on execute_routes list
-                    LOGGER.debug(f"Node '{node_id}' has execute_routes: {execute_routes}")
-                    self._selective_execute_routes(node_id, execute_routes)
-                else:
-                    # Normal execution - decrement all successors
-                    for successor in self.graph.successors(node_id):
-                        self.tasks[successor].decrement_pending_deps()
+            elif directive.strategy == ExecutionStrategy.SELECTIVE_PORTS:
+                LOGGER.debug(f"Node '{node_id}' selective execution on ports: {directive.selected_ports}")
+                self._execute_selective_ports(node_id, directive.selected_ports)
 
         return legacy_compatibility.collect_legacy_outputs(self.graph, self.tasks, self._input_node_id, self.runnables)
 
@@ -460,16 +468,16 @@ class GraphRunner:
                         task.result = NodeData(data={}, ctx=self.run_context)
                     queue.append(successor)
 
-    def _selective_execute_routes(self, source_node_id: str, execute_routes: list[str]) -> None:
+    def _execute_selective_ports(self, source_node_id: str, selected_ports: list[str]) -> None:
         """
-        Selectively execute downstream nodes based on Router's execute_routes list.
-        Only successors connected to routes in execute_routes will execute.
+        Selectively execute downstream nodes based on selected output ports.
+        Only successors connected to ports in selected_ports will execute.
 
         Args:
-            source_node_id: The Router node ID
-            execute_routes: List of route names that should execute (e.g., ["route_0", "route_2"])
+            source_node_id: The source node ID
+            selected_ports: List of port names that should execute (e.g., ["route_0", "route_2"])
         """
-        LOGGER.debug(f"Selective execution for {source_node_id} with routes: {execute_routes}")
+        LOGGER.debug(f"Selective execution for {source_node_id} with selected ports: {selected_ports}")
 
         for successor in self.graph.successors(source_node_id):
             mappings = [
@@ -480,10 +488,7 @@ class GraphRunner:
             for mapping in mappings:
                 source_port = mapping.source_port_name
 
-                if source_port in execute_routes:
-                    should_execute = True
-                    break
-                elif source_port == "output" and len(execute_routes) > 0:
+                if source_port in selected_ports:
                     should_execute = True
                     break
 
@@ -491,5 +496,5 @@ class GraphRunner:
                 LOGGER.debug(f"Executing successor '{successor}'")
                 self.tasks[successor].decrement_pending_deps()
             else:
-                LOGGER.debug(f"Halting successor '{successor}' (not in execute_routes)")
+                LOGGER.debug(f"Halting successor '{successor}' (not in selected ports)")
                 self._halt_downstream_execution(successor)

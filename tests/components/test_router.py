@@ -3,8 +3,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from engine.components.errors import NoMatchingRouteError
-from engine.components.router import RouteCondition, Router, RouterInputs
-from engine.components.types import ComponentAttributes
+from engine.components.router import MAX_ROUTER_ROUTES, RouteCondition, Router, RouterInputs
+from engine.components.types import ComponentAttributes, ExecutionStrategy
 from engine.trace.trace_manager import TraceManager
 
 
@@ -27,9 +27,9 @@ async def test_router_single_route_match(router_component):
     inputs = RouterInputs(input="bottle", routes=[RouteCondition(value_a="bottle")])
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result.output == "bottle"
     assert result.route_0 == "bottle"
-    assert result.execute_routes == ["route_0"]
+    assert result._directive.strategy == ExecutionStrategy.SELECTIVE_PORTS
+    assert result._directive.selected_ports == ["route_0"]
 
 
 @pytest.mark.asyncio
@@ -54,11 +54,8 @@ async def test_router_multiple_routes_first_matches(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result.output == "bottle"
-    assert result.execute_routes == ["route_0"]
-    # Route 0 should have data
+    assert result._directive.selected_ports == ["route_0"]
     assert result.route_0 == "bottle"
-    # Routes 1 and 2 should be None
     assert result.route_1 is None
     assert result.route_2 is None
 
@@ -76,13 +73,9 @@ async def test_router_multiple_routes_middle_matches(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result.output == "cup"
-    assert result.execute_routes == ["route_1"]
-    # Route 0 should be None
+    assert result._directive.selected_ports == ["route_1"]
     assert result.route_0 is None
-    # Route 1 should have data
     assert result.route_1 == "cup"
-    # Route 2 should be None
     assert result.route_2 is None
 
 
@@ -99,12 +92,9 @@ async def test_router_multiple_routes_last_matches(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result.output == "water"
-    assert result.execute_routes == ["route_2"]
-    # Routes 0 and 1 should be None
+    assert result._directive.selected_ports == ["route_2"]
     assert result.route_0 is None
     assert result.route_1 is None
-    # Route 2 should have data
     assert result.route_2 == "water"
 
 
@@ -140,10 +130,8 @@ async def test_router_numeric_equality_exact(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result.output == 5
-    assert result.execute_routes == ["route_2"]
+    assert result._directive.selected_ports == ["route_2"]
     assert result.route_2 == 5
-    # Other routes should be None
     assert result.route_0 is None
     assert result.route_1 is None
     assert result.route_3 is None
@@ -162,8 +150,7 @@ async def test_router_string_equality(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result.output == "hello"
-    assert result.execute_routes == ["route_1"]
+    assert result._directive.selected_ports == ["route_1"]
     assert result.route_1 == "hello"
 
 
@@ -181,8 +168,7 @@ async def test_router_complex_data_passthrough(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result.output == complex_data
-    assert result.execute_routes == ["route_1"]
+    assert result._directive.selected_ports == ["route_1"]
     assert result.route_1 == complex_data
 
 
@@ -209,8 +195,7 @@ async def test_router_float_comparison(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result.output == 3.14
-    assert result.execute_routes == ["route_2"]
+    assert result._directive.selected_ports == ["route_2"]
     assert result.route_2 == 3.14
 
 
@@ -228,9 +213,7 @@ async def test_router_mixed_type_routes(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    # Should match the string "5"
-    assert result.output == "5"
-    assert result.execute_routes == ["route_2"]
+    assert result._directive.selected_ports == ["route_2"]
     assert result.route_2 == "5"
 
 
@@ -247,8 +230,7 @@ async def test_router_boolean_values(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result.output is True
-    assert result.execute_routes == ["route_1"]
+    assert result._directive.selected_ports == ["route_1"]
     assert result.route_1 is True
 
 
@@ -265,9 +247,7 @@ async def test_router_none_value(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result.output is None
-    assert result.execute_routes == ["route_1"]
-    assert result.route_1 is None
+    assert result._directive.selected_ports == ["route_1"]
 
 
 @pytest.mark.asyncio
@@ -284,8 +264,7 @@ async def test_router_list_value_comparison(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result.output == list_value
-    assert result.execute_routes == ["route_1"]
+    assert result._directive.selected_ports == ["route_1"]
     assert result.route_1 == list_value
 
 
@@ -303,8 +282,7 @@ async def test_router_dict_value_comparison(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result.output == dict_value
-    assert result.execute_routes == ["route_1"]
+    assert result._directive.selected_ports == ["route_1"]
     assert result.route_1 == dict_value
 
 
@@ -321,8 +299,7 @@ async def test_router_case_sensitive_strings(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result.output == "Hello"
-    assert result.execute_routes == ["route_2"]
+    assert result._directive.selected_ports == ["route_2"]
     assert result.route_2 == "Hello"
 
 
@@ -331,11 +308,6 @@ async def test_router_output_schema_structure(router_component):
     """Test that output schema has correct structure"""
     OutputModel = router_component.get_outputs_schema()
     fields = OutputModel.model_fields
-
-    assert "output" in fields
-    assert "execute_routes" in fields
-    # Should have MAX_ROUTER_ROUTES route fields
-    from engine.components.router import MAX_ROUTER_ROUTES
 
     for i in range(MAX_ROUTER_ROUTES):
         assert f"route_{i}" in fields
@@ -353,11 +325,10 @@ async def test_router_input_schema_structure(router_component):
 
 def test_router_canonical_ports(router_component):
     """Test router canonical ports configuration"""
-    canonical_input = router_component.get_canonical_input_port()
-    canonical_output = router_component.get_canonical_output_port()
+    canonical_ports = router_component.get_canonical_ports()
 
-    assert canonical_input == "input"
-    assert canonical_output == "output"
+    assert canonical_ports["input"] == "input"
+    assert canonical_ports["output"] is None
 
 
 @pytest.mark.asyncio
@@ -373,9 +344,7 @@ async def test_router_value_b_comparison(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    # Route 1 should match (banana == banana)
-    assert result.output == "test_data"
-    assert result.execute_routes == ["route_1"]
+    assert result._directive.selected_ports == ["route_1"]
     assert result.route_1 == "test_data"
 
 
@@ -391,7 +360,5 @@ async def test_router_value_b_defaults_to_value_a(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    # Route 0 should match (apple == apple)
-    assert result.output == "test_data"
-    assert result.execute_routes == ["route_0"]
+    assert result._directive.selected_ports == ["route_0"]
     assert result.route_0 == "test_data"
