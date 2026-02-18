@@ -15,6 +15,8 @@ from ada_backend.services.entity_factory import (
     NonToolCallableBlockFactory,
     OAuthComponentFactory,
     RemoteMCPToolFactory,
+    build_categorizer_output_format_processor,
+    build_categorizer_prompt_processor,
     build_completion_service_processor,
     build_db_service_processor,
     build_formatter_processor,
@@ -307,6 +309,18 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=LLMCallAgent,
             parameter_processors=[
+                completion_service_processor,
+                llm_capability_resolver_processor,
+            ],
+        ),
+    )
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["categorizer"],
+        factory=AgentFactory(
+            entity_class=LLMCallAgent,
+            parameter_processors=[
+                build_categorizer_prompt_processor(),
+                build_categorizer_output_format_processor(),
                 completion_service_processor,
                 llm_capability_resolver_processor,
             ],

@@ -1091,6 +1091,127 @@ def build_vocabulary_search_processor(target_name: str = "vocabulary_search") ->
     return processor
 
 
+def build_categorizer_prompt_processor() -> ParameterProcessor:
+    """
+    Returns a processor function to build the prompt_template for categorizer
+    by combining a default prompt with additional_context.
+
+    Returns:
+        ParameterProcessor: A function to process entity constructor parameters.
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        # Get parameters
+        categories_json = params.get("categories", "[]")
+        additional_context = params.get("additional_context", "")
+
+        # Parse categories JSON
+        try:
+            if isinstance(categories_json, str):
+                categories = json.loads(categories_json)
+            else:
+                categories = categories_json
+        except (json.JSONDecodeError, TypeError):
+            categories = []
+
+        # Build the default prompt
+        default_prompt = (
+            "You are a categorization assistant. Your task is to categorize the following content "
+            "into one of the predefined categories.\n\n"
+            "Content: {{input}}\n\n"
+            "Categories:\n"
+        )
+
+        # Add each category with its description
+        for category in categories:
+            if isinstance(category, dict):
+                name = category.get("name", "")
+                description = category.get("description", "")
+                if name:
+                    default_prompt += f"- {name}: {description}\n"
+
+        default_prompt += "\n"
+
+        # Append additional context if provided
+        if additional_context:
+            default_prompt += f"{additional_context}\n\n"
+
+        default_prompt += "Return the most appropriate category for this content."
+
+        # Set the prompt_template
+        params["prompt_template"] = default_prompt
+
+        return params
+
+    return processor
+
+
+def build_categorizer_output_format_processor() -> ParameterProcessor:
+    """
+    Returns a processor function to dynamically build the output_format for categorizer
+    based on the categories parameter.
+
+    If output_format is already provided by the user, it will not be overridden.
+    If categories is provided, generates a JSON schema with enum containing category names.
+
+    Returns:
+        ParameterProcessor: A function to process entity constructor parameters.
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        # Only generate output_format if not already provided
+        if params.get("output_format"):
+            return params
+
+        # Get categories JSON
+        categories_json = params.get("categories", "[]")
+
+        # Parse categories JSON
+        try:
+            if isinstance(categories_json, str):
+                categories_list = json.loads(categories_json)
+            else:
+                categories_list = categories_json
+        except (json.JSONDecodeError, TypeError):
+            return params
+
+        # Extract category names
+        category_names = []
+        for category in categories_list:
+            if isinstance(category, dict) and "name" in category:
+                category_names.append(category["name"])
+
+        # Generate output_format with enum of categories
+        if category_names:
+            output_format = {
+                "name": "categorization_result",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "category": {
+                            "type": "string",
+                            "description": "The selected category",
+                            "enum": category_names,
+                        },
+                        "confidence": {
+                            "type": "number",
+                            "description": "Confidence score between 0 and 1",
+                            "minimum": 0,
+                            "maximum": 1,
+                        },
+                    },
+                    "additionalProperties": False,
+                    "required": ["category"],
+                },
+            }
+            params["output_format"] = output_format
+
+        return params
+
+    return processor
+
+
 def build_formatter_processor(target_name: str = "formatter") -> ParameterProcessor:
     """
     Creates a processor that builds a Formatter from formatter parameters.

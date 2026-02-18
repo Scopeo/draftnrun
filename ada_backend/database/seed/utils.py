@@ -64,6 +64,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "slack_sender": UUID("a6e6b6b2-78ac-4b9d-a8aa-4fc0a8c13d5d"),
     "hubspot_mcp_tool": UUID("9fe17ea3-b823-4aca-bc10-71b3ff0d1047"),
     "router": UUID("8c9d0e1f-2a3b-4c5d-6e7f-8a9b0c1d2e3f"),
+    "categorizer": UUID("1962862d-bbd5-4bc5-bb4a-d267feadc6f8"),
 }
 COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "synthesizer": UUID("6f790dd1-06f6-4489-a655-1a618763a114"),
@@ -112,6 +113,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "slack_sender": UUID("667acbfa-263a-4610-ae2e-354ce8d2e8e9"),
     "hubspot_mcp_tool": UUID("71cc6f88-74a8-4270-8428-f538c152584c"),
     "router": UUID("9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a"),
+    "categorizer": UUID("c4a1e2f3-5d6b-4c7a-8e9f-1a2b3c4d5e6f"),
 }
 
 DEFAULT_MODEL_WEB_SEARCH = "openai:gpt-5-mini"
