@@ -9,6 +9,7 @@ from apscheduler.job import Job
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from ada_backend.context import CronExecutionContext, set_cron_execution_context
 from ada_backend.database.models import CronEntrypoint, CronStatus
 from ada_backend.database.setup_db import get_db_session, get_db_url
 from ada_backend.repositories.cron_repository import (
@@ -130,6 +131,8 @@ async def _execute_cron_job(cron_id: UUID, entrypoint: CronEntrypoint, payload: 
             status=CronStatus.RUNNING,
         )
         run_id = cron_run.id
+
+    set_cron_execution_context(CronExecutionContext(run_id=run_id, cron_id=cron_id))
 
     try:
         LOGGER.info(f"Executing cron job {cron_id} with entrypoint {entrypoint}")

@@ -1,8 +1,14 @@
 """
-Request context management for user authentication and permissions.
+Execution context management for request lifecycle and scheduled jobs.
 
-This module provides a thread-safe way to access user information throughout
-the request lifecycle using Python's contextvars.
+This module provides thread-safe access to contextual information via
+Python's contextvars. Two context types are supported:
+
+- RequestContext: set by HTTP middleware for every API request
+- CronExecutionContext: set by the scheduler for every cron job run
+
+Use get_execution_id() as a unified facade to get the current execution's
+unique ID regardless of context type (useful for per-execution caching).
 """
 
 from contextvars import ContextVar
@@ -11,6 +17,10 @@ from typing import Optional
 from uuid import UUID
 
 from ada_backend.schemas.auth_schema import SupabaseUser
+
+# ---------------------------------------------------------------------------
+# Request context
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -81,3 +91,68 @@ def get_request_context() -> RequestContext:
         raise ValueError(
             "No request context available. This operation requires authentication.",
         ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Cron execution context
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class CronExecutionContext:
+    """
+    Context for a single cron job execution.
+
+    Set by the scheduler before invoking any job logic. Add fields here as
+    needed (org_id, project_id, etc.) without changing callers.
+    """
+
+    run_id: UUID
+    cron_id: UUID
+
+
+_cron_execution_context: ContextVar[CronExecutionContext] = ContextVar("cron_execution_context")
+
+
+def set_cron_execution_context(context: CronExecutionContext) -> None:
+    """Set the cron execution context for the current async task."""
+    _cron_execution_context.set(context)
+
+
+def get_cron_execution_context() -> CronExecutionContext:
+    """
+    Get the current cron execution context.
+
+    Raises:
+        ValueError: If called outside a cron job execution.
+    """
+    try:
+        return _cron_execution_context.get()
+    except LookupError as exc:
+        raise ValueError("No cron execution context available.") from exc
+
+
+# ---------------------------------------------------------------------------
+# Unified execution ID facade
+# ---------------------------------------------------------------------------
+
+
+def get_execution_id() -> UUID:
+    """
+    Return a unique ID for the current unit of work, regardless of entry point.
+
+    Resolution order:
+      1. HTTP request  -> RequestContext.request_id
+      2. Cron job      -> CronExecutionContext.run_id
+
+    Raises:
+        ValueError: If no execution context has been set.
+    """
+    try:
+        return request_context.get().request_id
+    except LookupError:
+        pass
+    try:
+        return _cron_execution_context.get().run_id
+    except LookupError:
+        raise ValueError("No execution context available.")
