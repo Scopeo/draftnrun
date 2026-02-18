@@ -13,6 +13,7 @@ GRAPH_TEST_PROJECT_ID = UUID(
 
 def create_project_and_graph_runner(
     session,
+    organization_id: UUID = ORGANIZATION_ID,
     project_name_prefix: str = "test",
     description: str = "Test project",
 ) -> tuple[UUID, UUID]:

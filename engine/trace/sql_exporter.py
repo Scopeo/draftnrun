@@ -120,6 +120,7 @@ class SQLSpanExporter(SpanExporter):
             credits_output_token = credits_dict.get("output_token") if credits_dict else None
             credits_per_call = credits_dict.get("per_call") if credits_dict else None
             credits_per = credits_dict.get("per") if credits_dict else None
+            count_as_usage = formatted_attributes.pop("count_as_usage", False)
 
             environment = formatted_attributes.pop("environment", None)
             call_type = formatted_attributes.pop("call_type", None)
@@ -193,7 +194,8 @@ class SQLSpanExporter(SpanExporter):
                 self.session.add(span_usage)
 
                 # Update Usage table with total credits
-                if project_id:
+
+                if project_id and count_as_usage:
                     total_span_credits = (
                         (credits_input_token or 0) + (credits_output_token or 0) + (credits_per_call or 0)
                     )

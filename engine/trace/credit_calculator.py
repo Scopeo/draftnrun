@@ -97,12 +97,10 @@ def calculate_llm_credits(func: Callable) -> Callable:
             return
 
         try:
+            count_as_usage = True
             org_llm_providers = convert_to_list(span.attributes.get("organization_llm_providers"))
             if self._provider and org_llm_providers and self._provider in org_llm_providers:
-                LOGGER.debug(
-                    f"Provider {self._provider} is in organization_llm_providers, skipping credit calculation"
-                )
-                return
+                count_as_usage = False
 
             completion_tokens_value = completion_tokens if completion_tokens is not None else 0
 
@@ -118,6 +116,7 @@ def calculate_llm_credits(func: Callable) -> Callable:
                 attributes["credits.output_token"] = credits_output_token
 
             if attributes:
+                attributes["count_as_usage"] = count_as_usage
                 span.set_attributes(attributes)
                 LOGGER.info(f"LLM credits calculated: {attributes}")
             else:
@@ -137,10 +136,11 @@ def calculate_and_set_component_credits(span: Span) -> None:
             return
 
         credits_per_call = get_cached_component_cost(component_instance_id)
-
         if credits_per_call:
-            span.set_attributes({"credits.per_call": credits_per_call})
+            span.set_attributes({
+                "credits.per_call": credits_per_call,
+                "count_as_usage": True,
+            })
             LOGGER.info(f"Component credits calculated: per_call={credits_per_call}")
-
     except Exception as e:
         LOGGER.error(f"Error calculating component credits: {e}", exc_info=True)
