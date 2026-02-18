@@ -1,19 +1,18 @@
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
 from uuid import UUID
 
 import pandas as pd
 
 from ada_backend.database.models import CallType
 from ada_backend.schemas.monitor_schema import KPI, KPISResponse, TraceKPIS
-from ada_backend.segment_analytics import track_projects_monitoring_loaded
+from ada_backend.segment_analytics import track_project_monitoring_loaded
 from engine.trace.sql_exporter import get_session_trace
 
 LOGGER = logging.getLogger(__name__)
 
 
-def get_trace_metrics(project_ids: List[UUID], duration_days: int, call_type: CallType | None = None) -> TraceKPIS:
+def get_trace_metrics(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> TraceKPIS:
     """Get trace metrics with comparison between current and previous periods using SQL aggregation."""
     now = datetime.now()
     current_start = now - timedelta(days=duration_days)
@@ -23,8 +22,6 @@ def get_trace_metrics(project_ids: List[UUID], duration_days: int, call_type: Ca
     call_type_filter = ""
     if call_type is not None:
         call_type_filter = "AND call_type = %(call_type)s"
-
-    project_id_list = "', '".join(str(project_id) for project_id in project_ids)
 
     query = f"""
     SELECT
@@ -38,7 +35,7 @@ def get_trace_metrics(project_ids: List[UUID], duration_days: int, call_type: Ca
     FROM traces.spans
     WHERE start_time >= %(previous_start)s
     AND parent_id IS NULL
-    AND project_id IN ('{project_id_list}')
+    AND project_id = %(project_id)s
     {call_type_filter}
     GROUP BY period
     """
@@ -48,6 +45,7 @@ def get_trace_metrics(project_ids: List[UUID], duration_days: int, call_type: Ca
         params = {
             "current_start": current_start,
             "previous_start": previous_start,
+            "project_id": str(project_id),
         }
         if call_type is not None:
             params["call_type"] = call_type.value
@@ -108,22 +106,15 @@ def get_trace_metrics(project_ids: List[UUID], duration_days: int, call_type: Ca
     )
 
 
-def get_monitoring_kpis_by_projects(
+def get_monitoring_kpis_by_project(
     user_id: UUID,
-    project_ids: List[UUID],
-    organization_id: Optional[UUID],
+    project_id: UUID,
     duration_days: int,
     call_type: CallType | None = None,
 ) -> KPISResponse:
-    trace_kpis = get_trace_metrics(project_ids, duration_days, call_type)
-    project_ids_for_tracking = ", ".join([str(project_id) for project_id in project_ids])
-    track_projects_monitoring_loaded(user_id, project_ids_for_tracking, organization_id)
-    project_ids_for_log = project_ids_for_tracking
-    if len(project_ids) > 2:
-        project_ids_for_log = f"{project_ids[0]}, {project_ids[1]} and {len(project_ids) - 2} projects"
-    LOGGER.info(
-        f"Trace metrics for projects {project_ids_for_log} and duration {duration_days} days retrieved successfully."
-    )
+    trace_kpis = get_trace_metrics(project_id, duration_days, call_type)
+    LOGGER.info(f"Trace metrics for project {project_id} and duration {duration_days} days retrieved successfully.")
+    track_project_monitoring_loaded(user_id, project_id)
     return KPISResponse(
         kpis=[
             KPI(

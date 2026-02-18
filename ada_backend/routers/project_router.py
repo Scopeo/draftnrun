@@ -27,7 +27,7 @@ from ada_backend.schemas.project_schema import (
     ProjectWithGraphRunnersSchema,
 )
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent
-from ada_backend.services.charts_service import get_charts_by_projects
+from ada_backend.services.charts_service import get_charts_by_project
 from ada_backend.services.errors import (
     EnvironmentNotFound,
     MissingDataSourceError,
@@ -35,7 +35,7 @@ from ada_backend.services.errors import (
     OrganizationLimitExceededError,
     ProjectNotFound,
 )
-from ada_backend.services.metrics.monitor_kpis_service import get_monitoring_kpis_by_projects
+from ada_backend.services.metrics.monitor_kpis_service import get_monitoring_kpis_by_project
 from ada_backend.services.project_service import (
     create_workflow,
     delete_project_service,
@@ -44,7 +44,10 @@ from ada_backend.services.project_service import (
     update_project_service,
 )
 from ada_backend.services.tag_service import compose_tag_name
-from engine.components.errors import KeyTypePromptTemplateError, MissingKeyPromptTemplateError
+from engine.components.errors import (
+    KeyTypePromptTemplateError,
+    MissingKeyPromptTemplateError,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -248,7 +251,7 @@ async def run_env_agent_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/{project_id}/charts", response_model=ChartsResponse, tags=["Metrics"], deprecated=True)
+@router.get("/{project_id}/charts", response_model=ChartsResponse, tags=["Metrics"])
 async def get_project_charts(
     project_id: UUID,
     duration: int,
@@ -261,8 +264,8 @@ async def get_project_charts(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        response = await get_charts_by_projects(
-            project_ids=[project_id],
+        response = await get_charts_by_project(
+            project_id=project_id,
             duration_days=duration,
             call_type=call_type,
         )
@@ -279,7 +282,7 @@ async def get_project_charts(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/{project_id}/kpis", response_model=KPISResponse, tags=["Metrics"], deprecated=True)
+@router.get("/{project_id}/kpis", response_model=KPISResponse, tags=["Metrics"])
 async def get_project_monitoring_kpi(
     project_id: UUID,
     duration: int,
@@ -292,7 +295,7 @@ async def get_project_monitoring_kpi(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        response = get_monitoring_kpis_by_projects(user.id, [project_id], duration, call_type)
+        response = get_monitoring_kpis_by_project(user.id, project_id, duration, call_type)
         return response
     except ValueError as e:
         LOGGER.error(f"Failed to get KPIs for project {project_id} with duration {duration}: {str(e)}", exc_info=True)

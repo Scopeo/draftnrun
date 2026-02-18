@@ -1,8 +1,7 @@
 from calendar import monthrange
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
-from typing import List
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import numpy as np
 import pandas as pd
@@ -93,16 +92,14 @@ def get_prometheus_agent_calls_chart(project_id: UUID, duration_days: int) -> Ch
     )
 
 
-def get_agent_usage_chart(
-    project_ids: List[UUID], duration_days: int, call_type: CallType | None = None
-) -> list[Chart]:
+def get_agent_usage_chart(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> list[Chart]:
     current_date = datetime.now(tz=timezone.utc)
     start_date = current_date - timedelta(days=duration_days)
     all_dates_df = pd.DataFrame(
         pd.date_range(start=start_date.date(), end=current_date.date(), freq="D", tz=timezone.utc), columns=["date"]
     )
 
-    df = query_trace_duration(project_ids, duration_days, call_type)
+    df = query_trace_duration(project_id, duration_days, call_type)
     df["date"] = pd.to_datetime(df["start_time"]).dt.normalize()
     datasets = []
 
@@ -132,11 +129,9 @@ def get_agent_usage_chart(
     token_usage = token_usage.sort_values(by="date", ascending=True)
     token_usage["date"] = token_usage["date"].astype(str)
 
-    chart_id = str(uuid4())
-
     return [
         Chart(
-            id=f"agent_usage_{chart_id}",
+            id=f"agent_usage_{project_id}",
             type=ChartType.LINE,
             title="Agent Usage",
             data=ChartData(
@@ -146,7 +141,7 @@ def get_agent_usage_chart(
             x_axis_type="datetime",
         ),
         Chart(
-            id=f"token_usage_{chart_id}",
+            id=f"token_usage_{project_id}",
             type=ChartType.LINE,
             title="Token Usage",
             data=ChartData(
@@ -169,8 +164,8 @@ def get_agent_usage_chart(
     ]
 
 
-def get_latence_chart(project_ids: List[UUID], duration_days: int, call_type: CallType | None = None) -> Chart:
-    df = query_trace_duration(project_ids, duration_days, call_type)
+def get_latence_chart(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> Chart:
+    df = query_trace_duration(project_id, duration_days, call_type)
     df = df[df["parent_id"].isna()]
     df["start_time"] = pd.to_datetime(df["start_time"])
     df["end_time"] = pd.to_datetime(df["end_time"])
@@ -178,11 +173,8 @@ def get_latence_chart(project_ids: List[UUID], duration_days: int, call_type: Ca
 
     latency_hist, bins_edges = np.histogram(df["duration"], bins="fd")
     bin_centers = [np.round((bins_edges[i] + bins_edges[i + 1]) / 2, 1) for i in range(len(bins_edges) - 1)]
-
-    chart_id_suffix = str(uuid4())
-
     return Chart(
-        id=f"latency_distribution_{chart_id_suffix}",
+        id=f"latency_distribution_{project_id}",
         type=ChartType.BAR,
         title="Latency Distribution (seconds)",
         data=ChartData(
@@ -194,10 +186,8 @@ def get_latence_chart(project_ids: List[UUID], duration_days: int, call_type: Ca
     )
 
 
-def get_tokens_distribution_chart(
-    project_ids: List[UUID], duration_days: int, call_type: CallType | None = None
-) -> Chart:
-    df = query_trace_duration(project_ids, duration_days, call_type)
+def get_tokens_distribution_chart(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> Chart:
+    df = query_trace_duration(project_id, duration_days, call_type)
     input_data = df[df["llm_token_count_prompt"].notna()]["llm_token_count_prompt"]
     output_data = df[df["llm_token_count_completion"].notna()]["llm_token_count_completion"]
 
@@ -208,10 +198,8 @@ def get_tokens_distribution_chart(
         for i in range(len(TOKENS_DISTRIBUTION_BINS) - 1)
     ]
 
-    chart_id = str(uuid4())
-
     return Chart(
-        id=f"tokens_distribution_{chart_id}",
+        id=f"tokens_distribution_{project_id}",
         type=ChartType.BAR,
         title="Tokens Distribution",
         data=ChartData(
@@ -268,18 +256,18 @@ async def get_credit_usage_table_chart(session: Session, organization_id: UUID) 
     return ChartsResponse(charts=[chart])
 
 
-async def get_charts_by_projects(
-    project_ids: List[UUID],
+async def get_charts_by_project(
+    project_id: UUID,
     duration_days: int,
     call_type: CallType | None = None,
 ) -> ChartsResponse:
     response = ChartsResponse(
         charts=(
-            get_agent_usage_chart(project_ids, duration_days, call_type)
+            get_agent_usage_chart(project_id, duration_days, call_type)
             + [
-                get_latence_chart(project_ids, duration_days, call_type),
+                get_latence_chart(project_id, duration_days, call_type),
                 # get_prometheus_agent_calls_chart(project_id, duration_days),
-                get_tokens_distribution_chart(project_ids, duration_days, call_type),
+                get_tokens_distribution_chart(project_id, duration_days, call_type),
             ]
         )
     )

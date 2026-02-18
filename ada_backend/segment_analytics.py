@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 from uuid import UUID
 
 import segment.analytics as analytics
@@ -100,14 +99,13 @@ def track_project_saved(user_id: UUID, project_id: UUID):
 
 
 @non_breaking_track
-def track_projects_monitoring_loaded(user_id: UUID, project_ids: str, organization_id: Optional[UUID]):
+def track_project_monitoring_loaded(user_id: UUID, project_id: UUID):
     analytics.track(
         user_id=str(user_id),
         event="Monitoring Loaded",
         properties={
             "env": settings.ENV,
-            "project_ids": str(project_ids),
-            "organization_id": str(organization_id) if organization_id else "",
+            "project_id": str(project_id),
         },
     )
 

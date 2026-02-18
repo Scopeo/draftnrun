@@ -1,7 +1,6 @@
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import List
 from uuid import UUID
 
 import numpy as np
@@ -14,9 +13,7 @@ from engine.trace.sql_exporter import get_session_trace
 LOGGER = logging.getLogger(__name__)
 
 
-def query_trace_duration(
-    project_ids: List[UUID], duration_days: int, call_type: CallType | None = None
-) -> pd.DataFrame:
+def query_trace_duration(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> pd.DataFrame:
     start_time_offset_days = (datetime.now() - timedelta(days=duration_days)).isoformat()
 
     # Build the call_type filter clause
@@ -24,14 +21,12 @@ def query_trace_duration(
     if call_type is not None:
         call_type_filter = f"AND call_type = '{call_type.value}'"
 
-    project_id_list = "', '".join(str(project_id) for project_id in project_ids)
-
     query = f"""
     WITH root_spans AS (
         SELECT trace_rowid
         FROM traces.spans
         WHERE parent_id IS NULL
-        AND project_id IN ('{project_id_list}')
+        AND project_id = '{project_id}'
         AND start_time > '{start_time_offset_days}'
         {call_type_filter}
     )
