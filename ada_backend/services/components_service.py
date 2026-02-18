@@ -40,6 +40,7 @@ def _process_components_with_ports(
                 is_canonical=port.is_canonical,
                 description=port.description,
                 nullable=port.nullable,
+                default=port.get_default() if port.default is not None else None,
             )
         )
         # Track input ports per component_version for input-parameter synthesis
@@ -61,7 +62,7 @@ def _process_components_with_ports(
                     name=input_port.name,
                     type=input_port.parameter_type or ParameterType.STRING,
                     nullable=input_port.nullable,
-                    default=None,
+                    default=input_port.get_default() if input_port.default is not None else None,
                     ui_component=input_port.ui_component,
                     ui_component_properties=input_port.ui_component_properties,
                     is_advanced=False,

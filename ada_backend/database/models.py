@@ -1058,7 +1058,11 @@ class PortDefinition(Base):
     ui_component = mapped_column(make_pg_enum(UIComponent), nullable=True)
     ui_component_properties = mapped_column(JSONB, nullable=True)
     nullable = mapped_column(Boolean, nullable=False, default=False)
+    default = mapped_column(String, nullable=True)
     component_version = relationship("ComponentVersion", back_populates="port_definitions")
+
+    def get_default(self):
+        return cast_value(self.parameter_type, self.default)
 
     __table_args__ = (
         sa.UniqueConstraint("component_version_id", "name", "port_type", name="unique_component_version_port"),

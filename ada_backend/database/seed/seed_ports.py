@@ -1,9 +1,11 @@
 import logging
 import sys
 import types
+from enum import Enum
 from typing import Union, get_args, get_origin
 
 from pydantic.fields import FieldInfo
+from pydantic_core import PydanticUndefined
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
@@ -26,6 +28,17 @@ def get_parameter_type(field_info: FieldInfo) -> db.ParameterType:
             )
 
     return db.ParameterType.STRING
+
+
+def get_field_default(field_info: FieldInfo) -> str | None:
+    if field_info.default is PydanticUndefined:
+        return None
+    value = field_info.default
+    if value is None:
+        return None
+    if isinstance(value, Enum):
+        return str(value.value)
+    return str(value)
 
 
 def is_field_nullable(field_info: FieldInfo) -> bool:
@@ -131,6 +144,7 @@ def seed_port_definitions(session: Session):
             port_description = field_info.description
             parameter_type = get_parameter_type(field_info)
             is_nullable = is_field_nullable(field_info)
+            field_default = get_field_default(field_info)
 
             # Every input should have a UI component and at least a basic label,
             # so synthesized input-parameters are always renderable in the UI.
@@ -160,6 +174,7 @@ def seed_port_definitions(session: Session):
                 port.ui_component = ui_component
                 port.ui_component_properties = ui_component_properties
                 port.nullable = is_nullable
+                port.default = field_default
                 LOGGER.info(f"  - Updating INPUT port: {field_name}")
             else:
                 port = db.PortDefinition(
@@ -172,6 +187,7 @@ def seed_port_definitions(session: Session):
                     ui_component=ui_component,
                     ui_component_properties=ui_component_properties,
                     nullable=is_nullable,
+                    default=field_default,
                 )
                 session.add(port)
                 LOGGER.info(f"  - Creating INPUT port: {field_name}")
