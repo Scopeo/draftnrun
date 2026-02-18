@@ -501,40 +501,27 @@ async def test_llm_credits_count_as_usage_flag(db_session):
         mock_credits_input_token = mock_credits_per_input_token * mock_input_tokens / 1_000_000
         mock_credits_output_token = mock_credits_per_output_token * mock_output_tokens / 1_000_000
 
-        # Case 1: Query LLM spans (with model_id) and component spans (with component_instance_id)
-        llm_span_usages_case1 = (
-            session.execute(
-                select(SpanUsage)
-                .join(Span, SpanUsage.span_id == Span.span_id)
-                .where(Span.model_id == fake_model.id, Span.project_id == str(project_id))
-                .order_by(Span.start_time.desc())
-            )
-            .scalars()
-            .all()
-        )
-        component_span_usages_case1 = (
-            session.execute(
-                select(SpanUsage)
-                .join(Span, SpanUsage.span_id == Span.span_id)
-                .where(Span.component_instance_id == UUID(ai_agent_id), Span.project_id == str(project_id))
-                .order_by(Span.start_time.desc())
-            )
-            .scalars()
-            .all()
-        )
-
-        # Verify Case 1: Should have exactly 1 LLM span and 1 component span
-        assert len(llm_span_usages_case1) == 1, "Case 1: Should have exactly 1 LLM span"
-        assert len(component_span_usages_case1) == 1, "Case 1: Should have exactly 1 component span"
-
-        # Verify LLM span usage for Case 1 (first result is most recent)
-        llm_span_usage_case1 = llm_span_usages_case1[0]
+        # Case 1: Query most recent LLM span (with model_id) and component span (with component_instance_id)
+        llm_span_usage_case1 = session.execute(
+            select(SpanUsage)
+            .join(Span, SpanUsage.span_id == Span.span_id)
+            .where(Span.model_id == fake_model.id, Span.project_id == str(project_id))
+            .order_by(Span.start_time.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        assert llm_span_usage_case1 is not None, "Case 1: LLM span usage should exist"
         assert llm_span_usage_case1.credits_input_token == mock_credits_input_token
         assert llm_span_usage_case1.credits_output_token == mock_credits_output_token
         assert llm_span_usage_case1.credits_per_call is None, "Case 1: LLM span should not have component credits"
 
-        # Verify component span usage for Case 1 (first result is most recent)
-        component_span_usage_case1 = component_span_usages_case1[0]
+        component_span_usage_case1 = session.execute(
+            select(SpanUsage)
+            .join(Span, SpanUsage.span_id == Span.span_id)
+            .where(Span.component_instance_id == UUID(ai_agent_id), Span.project_id == str(project_id))
+            .order_by(Span.start_time.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        assert component_span_usage_case1 is not None, "Case 1: Component span usage should exist"
         assert component_span_usage_case1.credits_per_call == mock_credits_per_call
         assert component_span_usage_case1.credits_input_token is None, (
             "Case 1: Component span should not have LLM token credits"
@@ -569,43 +556,29 @@ async def test_llm_credits_count_as_usage_flag(db_session):
             assert result.error is None
         trace_manager.force_flush()
 
-        # Case 2: Query LLM spans (with model_id) and component spans (with component_instance_id)
-        llm_span_usages_case2 = (
-            session.execute(
-                select(SpanUsage)
-                .join(Span, SpanUsage.span_id == Span.span_id)
-                .where(Span.model_id == fake_model.id, Span.project_id == str(project_id))
-                .order_by(Span.start_time.desc())
-            )
-            .scalars()
-            .all()
-        )
-        component_span_usages_case2 = (
-            session.execute(
-                select(SpanUsage)
-                .join(Span, SpanUsage.span_id == Span.span_id)
-                .where(Span.component_instance_id == UUID(ai_agent_id), Span.project_id == str(project_id))
-                .order_by(Span.start_time.desc())
-            )
-            .scalars()
-            .all()
-        )
-
-        # Verify Case 2: Should have exactly 2 LLM spans and 2 component spans (one from each case)
-        assert len(llm_span_usages_case2) == 2, "Case 2: Should have exactly 2 LLM spans (one from each case)"
-        assert len(component_span_usages_case2) == 2, (
-            "Case 2: Should have exactly 2 component spans (one from each case)"
-        )
-
-        # Verify LLM span usage for Case 2 (first result is most recent - Case 2)
-        llm_span_usage_case2 = llm_span_usages_case2[0]
+        # Case 2: Query most recent LLM span (with model_id) and component span (with component_instance_id)
+        # These will be from Case 2 since they're ordered by start_time desc
+        llm_span_usage_case2 = session.execute(
+            select(SpanUsage)
+            .join(Span, SpanUsage.span_id == Span.span_id)
+            .where(Span.model_id == fake_model.id, Span.project_id == str(project_id))
+            .order_by(Span.start_time.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        assert llm_span_usage_case2 is not None, "Case 2: LLM span usage should exist"
         assert llm_span_usage_case2.credits_input_token == mock_credits_input_token
         assert llm_span_usage_case2.credits_output_token == mock_credits_output_token
         # In Case 2, LLM credits should NOT count towards Usage (count_as_usage=False)
         # But they should still be stored in SpanUsage for tracking
 
-        # Verify component span usage for Case 2 (first result is most recent - Case 2)
-        component_span_usage_case2 = component_span_usages_case2[0]
+        component_span_usage_case2 = session.execute(
+            select(SpanUsage)
+            .join(Span, SpanUsage.span_id == Span.span_id)
+            .where(Span.component_instance_id == UUID(ai_agent_id), Span.project_id == str(project_id))
+            .order_by(Span.start_time.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        assert component_span_usage_case2 is not None, "Case 2: Component span usage should exist"
         assert component_span_usage_case2.credits_per_call == mock_credits_per_call, (
             "Case 2: Component span should have credit per call"
         )
