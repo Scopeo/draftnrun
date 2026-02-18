@@ -61,15 +61,27 @@ class ComponentsResponse(BaseModel):
     categories: list[CategoryResponse]
 
 
-class UpdateComponentReleaseStageRequest(BaseModel):
-    release_stage: db.ReleaseStage
+class UpdateComponentFieldsRequest(BaseModel):
+    is_agent: Optional[bool] = None
+    function_callable: Optional[bool] = None
+    category_ids: Optional[List[UUID]] = None
+    release_stage: Optional[ReleaseStage] = None
 
     @field_validator("release_stage", mode="before")
     @classmethod
     def normalize_release_stage(cls, v):
+        if v is None:
+            return v
         if isinstance(v, str):
             try:
                 return db.ReleaseStage(v.lower())
             except Exception:
                 return v
         return v
+
+
+class ComponentFieldsOptionsResponse(BaseModel):
+    """Available options for component metadata fields."""
+
+    release_stages: List[str]
+    categories: List[CategoryResponse]

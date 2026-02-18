@@ -10,10 +10,12 @@ from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import (
     UserRights,
     ensure_super_admin_dependency,
+    get_user_from_supabase_token,
     user_has_access_to_organization_dependency,
 )
 from ada_backend.schemas.auth_schema import SupabaseUser
-from ada_backend.schemas.components_schema import ComponentsResponse
+from ada_backend.schemas.components_schema import ComponentFieldsOptionsResponse, ComponentsResponse
+from ada_backend.services.category_service import get_all_categories_service
 from ada_backend.services.components_service import (
     delete_component_service,
     get_all_components_endpoint,
@@ -35,6 +37,22 @@ def _get_all_components_with_error_handling(
             return get_all_components_endpoint(session, release_stage)
     except Exception as e:
         LOGGER.error(f"Failed to get components {log_context}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.get("/fields/options", response_model=ComponentFieldsOptionsResponse)
+async def get_component_fields_options(
+    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    session: Session = Depends(get_db),
+):
+    """Get available options for component fields (release stages, categories). All authenticated users."""
+    try:
+        return ComponentFieldsOptionsResponse(
+            release_stages=[stage.value for stage in ReleaseStage],
+            categories=get_all_categories_service(session),
+        )
+    except Exception as e:
+        LOGGER.error(f"Failed to get component metadata options: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 

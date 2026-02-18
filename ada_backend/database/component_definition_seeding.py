@@ -30,6 +30,9 @@ def upsert_components(
         )
 
         if existing_component:
+            component.is_agent = existing_component.is_agent
+            component.function_callable = existing_component.function_callable
+
             if models_are_equal(existing_component, component):
                 LOGGER.info(f"Component {component.name} did not change, skipping.")
             else:
@@ -252,7 +255,6 @@ def upsert_release_stage_to_current_version_mapping(
     for a specific release stage. This is required for get_current_component_versions to work properly.
 
     This function is used for seeding and does NOT handle finding replacements for old stages.
-    For service updates that need replacement logic, use update_component_version_release_stage_service.
 
     Args:
         session: SQLAlchemy session
@@ -265,12 +267,6 @@ def upsert_release_stage_to_current_version_mapping(
 
 
 def upsert_component_categories(session: Session, component_id: str, category_ids: list[UUID]) -> None:
-    """
-    Upserts component categories in the database.
-    If a component category already exists and has same attributes, it will be skipped.
-    If it exists but has different attributes, it will be updated.
-    If it does not exist, it will be inserted.
-    """
     existing_component_categories = (
         session.query(db.ComponentCategory)
         .filter(
@@ -278,29 +274,12 @@ def upsert_component_categories(session: Session, component_id: str, category_id
         )
         .all()
     )
-    existing_categories_set = set(
-        existing_component_category.category_id for existing_component_category in existing_component_categories
-    )
-    category_ids_to_remove = existing_categories_set - set(category_ids)
-    for category_id in category_ids_to_remove:
-        component_category = (
-            session.query(db.ComponentCategory)
-            .filter(
-                db.ComponentCategory.component_id == component_id,
-                db.ComponentCategory.category_id == category_id,
-            )
-            .first()
-        )
-        session.delete(component_category)
-        category_name = session.query(db.Category).filter(db.Category.id == category_id).first().name
-        LOGGER.info(f"Component {component_id} removed from category {category_name}.")
 
-    new_category_ids = set(category_ids) - existing_categories_set
-    if not new_category_ids:
-        LOGGER.info(f"Component {component_id} already has all categories, skipping.")
+    if existing_component_categories:
+        LOGGER.info(f"Component {component_id} already has categories, preserving existing categories.")
         return
 
-    for category_id in new_category_ids:
+    for category_id in category_ids:
         category = session.query(db.Category).filter(db.Category.id == category_id).first()
         if category:
             new_component_category = db.ComponentCategory(component_id=component_id, category=category)
