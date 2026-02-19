@@ -178,11 +178,13 @@ async def test_execute_python_code_with_shared_sandbox(
 @pytest.mark.asyncio
 @patch("engine.components.tools.sandbox_utils.AsyncSandbox")
 @patch("engine.components.tools.sandbox_utils.get_tracing_span")
+@patch("engine.components.tools.python_code_runner.get_output_dir")
 async def test_run_without_io_trace_success(
-    mock_get_tracing_span, mock_sandbox_class, python_code_runner_tool, mock_sandbox
+    mock_get_output_dir, mock_get_tracing_span, mock_sandbox_class, python_code_runner_tool, mock_sandbox
 ):
     """Test _run_without_io_trace returns correct output structure."""
     mock_get_tracing_span.return_value = None
+    mock_get_output_dir.return_value = MagicMock()
     mock_sandbox_class.create = AsyncMock(return_value=mock_sandbox)
 
     inputs = PythonCodeRunnerToolInputs(python_code="print('Hello, World!')")
@@ -199,11 +201,13 @@ async def test_run_without_io_trace_success(
 @pytest.mark.asyncio
 @patch("engine.components.tools.sandbox_utils.AsyncSandbox")
 @patch("engine.components.tools.sandbox_utils.get_tracing_span")
+@patch("engine.components.tools.python_code_runner.get_output_dir")
 async def test_run_without_io_trace_no_images_in_artifacts(
-    mock_get_tracing_span, mock_sandbox_class, python_code_runner_tool, mock_sandbox
+    mock_get_output_dir, mock_get_tracing_span, mock_sandbox_class, python_code_runner_tool, mock_sandbox
 ):
     """Test that images key is absent from artifacts when no images are generated."""
     mock_get_tracing_span.return_value = None
+    mock_get_output_dir.return_value = MagicMock()
     mock_sandbox_class.create = AsyncMock(return_value=mock_sandbox)
 
     inputs = PythonCodeRunnerToolInputs(python_code="x = 1 + 1")
