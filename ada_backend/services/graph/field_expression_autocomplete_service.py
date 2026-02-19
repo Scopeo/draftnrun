@@ -12,6 +12,8 @@ from ada_backend.repositories.graph_runner_repository import (
     get_component_instances_for_graph_runner,
     is_start_node,
 )
+from ada_backend.repositories.project_repository import get_project
+from ada_backend.repositories.variable_definitions_repository import list_org_definitions
 from ada_backend.schemas.pipeline.field_expression_schema import (
     FieldExpressionAutocompleteRequest,
     FieldExpressionAutocompleteResponse,
@@ -36,25 +38,17 @@ def autocomplete_field_expression(
     query = request.query or ""
     phase = _get_phase_from_query(query)
 
+    # Variables are org-scoped — look up org from project
+    project = get_project(session, project_id=project_id)
+    definitions = list_org_definitions(session, project.organization_id) if project else []
+
     instances = get_component_instances_for_graph_runner(session, graph_runner_id)
-    if not instances:
-        LOGGER.debug("No instances found for graph_runner_id=%s", graph_runner_id)
-        return FieldExpressionAutocompleteResponse(suggestions=[])
-
     upstream_instance_ids = _get_upstream_instance_ids(session, graph_runner_id, request.target_instance_id)
-    if not upstream_instance_ids:
-        LOGGER.debug("No upstream instances for target_instance_id=%s", request.target_instance_id)
-        return FieldExpressionAutocompleteResponse(suggestions=[])
-
-    eligible_instances = [instance for instance in instances if instance.id in upstream_instance_ids]
-    if not eligible_instances:
-        LOGGER.debug("No eligible instances after filtering")
-        return FieldExpressionAutocompleteResponse(suggestions=[])
-
-    suggestions: list[FieldExpressionSuggestion]
+    eligible_instances = [i for i in (instances or []) if i.id in upstream_instance_ids]
 
     if phase == SuggestionKind.MODULE:
         suggestions = _build_instance_suggestions(eligible_instances, query)
+        suggestions += _build_variable_suggestions(definitions, query)
     elif phase == SuggestionKind.PROPERTY:
         instance_prefix, port_prefix = _parse_query_parts(query)
         suggestions = _build_port_suggestions_with_start_fields(
@@ -118,6 +112,35 @@ def _build_instance_suggestions(
     def sort_key(s: FieldExpressionSuggestion) -> tuple[int, str, str]:
         priority = 0 if s.label.lower().startswith(search_term) else 1
         return (priority, s.label, s.id)
+
+    suggestions.sort(key=sort_key)
+    return suggestions
+
+
+def _build_variable_suggestions(
+    definitions: list[db.OrgVariableDefinition],
+    query: str,
+) -> list[FieldExpressionSuggestion]:
+    search_term = query.lower() if query else ""
+    suggestions: list[FieldExpressionSuggestion] = []
+    for defn in definitions:
+        if search_term and search_term not in defn.name.lower():
+            continue
+        suggestions.append(
+            FieldExpressionSuggestion(
+                id=defn.name,
+                label=f"{defn.name} ({defn.type})",
+                insert_text=f"{defn.name}}}}}",
+                kind=SuggestionKind.VARIABLE,
+                description=defn.description,
+                variable_type=str(defn.type),
+                has_default=defn.default_value is not None,
+            )
+        )
+
+    def sort_key(s: FieldExpressionSuggestion) -> tuple[int, str]:
+        priority = 0 if s.id.lower().startswith(search_term) else 1
+        return (priority, s.id)
 
     suggestions.sort(key=sort_key)
     return suggestions

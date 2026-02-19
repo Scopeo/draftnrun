@@ -270,3 +270,17 @@ class NangoTokenMissingError(Exception):
         super().__init__(
             f"Access token not found in Nango credentials for connection {connection_id}",
         )
+
+
+class VariableDefinitionNotFound(Exception):
+    def __init__(self, name: str, organization_id: UUID):
+        self.name = name
+        self.organization_id = organization_id
+        super().__init__(f"Variable definition '{name}' not found for organization {organization_id}")
+
+
+class VariableSetNotFound(Exception):
+    def __init__(self, set_id: str, organization_id: UUID):
+        self.set_id = set_id
+        self.organization_id = organization_id
+        super().__init__(f"Variable set '{set_id}' not found for organization {organization_id}")

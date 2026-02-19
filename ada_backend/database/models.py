@@ -222,6 +222,15 @@ class EntityType(StrEnum):
     PARAMETER_VALUE = "parameter_value"
 
 
+class VariableType(StrEnum):
+    STRING = "string"
+    OAUTH = "oauth"
+    NUMBER = "number"
+    BOOLEAN = "boolean"
+    SECRET = "secret"
+    SOURCE = "source"
+
+
 class SelectOption(BaseModel):
     """Option for Select and similar UI components"""
 
@@ -2002,3 +2011,56 @@ class IntegrationTrigger(Base):
 
     def __str__(self):
         return f"IntegrationTrigger(id={self.id}, events={self.events}, project_id={self.project_id})"
+
+
+class OrgVariableDefinition(Base):
+    __tablename__ = "org_variable_definitions"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    name = mapped_column(String, nullable=False)
+    type = mapped_column(make_pg_enum(VariableType), nullable=False)
+    description = mapped_column(Text, nullable=True)
+    required = mapped_column(Boolean, nullable=False, default=False)
+    default_value = mapped_column(String, nullable=True)
+    variable_metadata = mapped_column("metadata", JSONB, nullable=True)
+    editable = mapped_column(Boolean, nullable=False, default=True)
+    display_order = mapped_column(Integer, nullable=False, default=0)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    project = relationship("Project", backref="variable_definitions")
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name", name="uq_org_variable_definition"),
+    )
+
+
+class OrgVariableSet(Base):
+    __tablename__ = "org_variable_sets"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    set_id = mapped_column(String, nullable=False)
+    values = mapped_column(JSONB, nullable=False, default=dict)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    project = relationship("Project", backref="variable_sets")
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "set_id", name="uq_org_variable_set"),
+        Index(
+            "uq_org_variable_set_project",
+            "project_id",
+            "set_id",
+            unique=True,
+            postgresql_where=sa.text("project_id IS NOT NULL"),
+        ),
+    )
