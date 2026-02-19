@@ -1062,7 +1062,7 @@ class PortDefinition(Base):
     component_version = relationship("ComponentVersion", back_populates="port_definitions")
 
     def get_default(self):
-        return cast_value(self.parameter_type, self.default)
+        return cast_value(parameter_type=self.parameter_type, unresolved_value=self.default)
 
     __table_args__ = (
         sa.UniqueConstraint("component_version_id", "name", "port_type", name="unique_component_version_port"),
@@ -1197,9 +1197,7 @@ class InputPortInstance(Base):
     port_definition = relationship("PortDefinition")
     field_expression = relationship("FieldExpression")
 
-    __table_args__ = (
-        UniqueConstraint("component_instance_id", "name", name="uq_input_port_instance_name"),
-    )
+    __table_args__ = (UniqueConstraint("component_instance_id", "name", name="uq_input_port_instance_name"),)
 
 
 class Project(Base):
