@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from ada_backend.context import RequestContext, set_request_context
 from ada_backend.database import models as db
 from ada_backend.database.models import SpanUsage, Usage
-from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 from ada_backend.database.setup_db import SessionLocal, get_db_session
 from ada_backend.database.trace_models import Span
 from ada_backend.repositories.credits_repository import (
@@ -22,9 +22,6 @@ from ada_backend.repositories.credits_repository import (
 )
 from ada_backend.repositories.llm_models_repository import create_llm_model
 from ada_backend.repositories.organization_repository import delete_organization_secret, upsert_organization_secret
-from ada_backend.schemas.parameter_schema import PipelineParameterSchema
-from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
-from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema
 from ada_backend.services.agent_runner_service import run_env_agent, setup_tracing_context
 from ada_backend.services.credits_service import (
     create_organization_limit_service,
@@ -35,12 +32,11 @@ from ada_backend.services.credits_service import (
     upsert_component_version_cost_service,
 )
 from ada_backend.services.errors import OrganizationLimitNotFound
-from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.services.llm_models_service import delete_llm_model_service
 from ada_backend.services.project_service import delete_project_service
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
-from tests.ada_backend.test_utils import create_project_and_graph_runner
+from tests.ada_backend.test_utils import create_graph_with_start_node_and_ai_agent, create_project_and_graph_runner
 
 ORGANIZATION_ID = UUID("37b7d67f-8f29-4fce-8085-19dea582f605")  # umbrella organization
 COMPONENT_VERSION_ID = str(COMPONENT_VERSION_UUIDS["llm_call"])
@@ -405,51 +401,6 @@ def test_upsert_component_version_cost_empty_payload(db_session, ensure_componen
     delete_component_version_cost(db_session, component_version_id)
 
 
-async def create_graph(session, project_id: UUID, graph_runner_id: UUID, fake_model_name: str):
-    start_id = str(uuid4())
-    ai_agent_id = str(uuid4())
-    edge_id = uuid4()
-    graph_payload = GraphUpdateSchema(
-        component_instances=[
-            ComponentInstanceSchema(
-                id=start_id,
-                component_id=COMPONENT_UUIDS["start"],
-                component_version_id=COMPONENT_VERSION_UUIDS["start_v2"],
-                name="Start",
-                parameters=[
-                    PipelineParameterSchema(
-                        name="payload_schema",
-                        value='{"messages": [{"role": "user", "content": "{{input}}"}]}',
-                    )
-                ],
-                is_start_node=True,
-            ),
-            ComponentInstanceSchema(
-                id=ai_agent_id,
-                component_id=COMPONENT_UUIDS["base_ai_agent"],
-                component_version_id=COMPONENT_VERSION_UUIDS["base_ai_agent"],
-                name="AI Agent",
-                parameters=[
-                    PipelineParameterSchema(name="completion_model", value=f"google:{fake_model_name}"),
-                ],
-                is_start_node=False,
-            ),
-        ],
-        relationships=[],
-        edges=[
-            EdgeSchema(
-                id=edge_id,
-                origin=UUID(start_id),
-                destination=UUID(ai_agent_id),
-                order=0,
-            )
-        ],
-        port_mappings=[],
-    )
-    await update_graph_service(session, graph_runner_id, project_id, graph_payload)
-    return ai_agent_id
-
-
 def assert_llm_span_usage(
     session, project_id: UUID, model_id: UUID, mock_credits_input_token: float, mock_credits_output_token: float
 ):
@@ -515,7 +466,9 @@ async def test_llm_credits_count_as_usage_flag(db_session):
         ai_agent_version_id = COMPONENT_VERSION_UUIDS["base_ai_agent"]
         upsert_component_version_cost(session, ai_agent_version_id, credits_per_call=mock_credits_per_call)
 
-        ai_agent_id = await create_graph(session, project_id, graph_runner_id, fake_model_name)
+        ai_agent_id = await create_graph_with_start_node_and_ai_agent(
+            session, project_id, graph_runner_id, provider="google", model_name=fake_model_name
+        )
         mock_input_tokens = 10
         mock_output_tokens = 20
 
