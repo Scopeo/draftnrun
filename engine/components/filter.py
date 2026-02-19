@@ -37,7 +37,7 @@ class FilterInputs(BaseModel):
     filtering_json_schema: Optional[str] = Field(
         default=None,
         description="JSON schema for filtering data.",
-        json_schema_extra={"disabled_as_input": True},
+        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
     )
     # Allow any other fields to be passed through
     model_config = {"extra": "allow"}
