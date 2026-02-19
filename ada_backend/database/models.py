@@ -1068,6 +1068,7 @@ class PortDefinition(Base):
     ui_component_properties = mapped_column(JSONB, nullable=True)
     nullable = mapped_column(Boolean, nullable=False, default=False)
     default = mapped_column(String, nullable=True)
+    is_tool_input = mapped_column(Boolean, nullable=False, default=True)
     component_version = relationship("ComponentVersion", back_populates="port_definitions")
 
     def get_default(self):

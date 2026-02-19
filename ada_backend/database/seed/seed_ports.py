@@ -137,9 +137,11 @@ def seed_port_definitions(session: Session):
             is_canonical = canonical_ports.get("input") == field_name
             ui_component = None
             ui_component_properties = None
+            is_tool_input = True
             if isinstance(extra, dict):
                 ui_component = extra.get("ui_component")
                 ui_component_properties = extra.get("ui_component_properties")
+                is_tool_input = extra.get("is_tool_input", True)
 
             port_description = field_info.description
             parameter_type = get_parameter_type(field_info)
@@ -175,6 +177,7 @@ def seed_port_definitions(session: Session):
                 port.ui_component_properties = ui_component_properties
                 port.nullable = is_nullable
                 port.default = field_default
+                port.is_tool_input = is_tool_input
                 LOGGER.info(f"  - Updating INPUT port: {field_name}")
             else:
                 port = db.PortDefinition(
@@ -188,6 +191,7 @@ def seed_port_definitions(session: Session):
                     ui_component_properties=ui_component_properties,
                     nullable=is_nullable,
                     default=field_default,
+                    is_tool_input=is_tool_input,
                 )
                 session.add(port)
                 LOGGER.info(f"  - Creating INPUT port: {field_name}")
