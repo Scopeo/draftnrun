@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, field_validator
@@ -43,6 +43,7 @@ class PortDefinitionSchema(BaseModel):
     is_canonical: bool
     description: Optional[str] = None
     nullable: bool
+    default: Optional[Any] = None
 
 
 class ComponentWithParametersDTO(ComponentVersionUseInfoSchema, ComponentSchema):
