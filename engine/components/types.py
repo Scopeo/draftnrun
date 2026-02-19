@@ -1,9 +1,12 @@
 from enum import StrEnum
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 from uuid import UUID
 
 from openai.types.chat import ChatCompletionMessageToolCall
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from ada_backend.database.models import PortSetupMode
 
 
 class NodeData(BaseModel):
@@ -138,3 +141,19 @@ class ToolDescription(BaseModel):
 class ComponentAttributes(BaseModel):
     component_instance_name: str
     component_instance_id: Optional[UUID] = None
+
+
+class ToolPortConfigurationSchema(BaseModel):
+    id: Optional[UUID] = None
+    parameter_id: Optional[UUID] = None  # References parameter ID (port_definition.id for INPUT parameters)
+    setup_mode: "PortSetupMode"  # Imported from ada_backend.database.models
+    field_expression_id: Optional[UUID] = None
+    expression_json: Optional[dict] = None  # For creating new field expressions
+    ai_name_override: Optional[str] = None
+    ai_description_override: Optional[str] = None
+    is_required_override: Optional[bool] = None
+    # Custom port fields
+    custom_port_name: Optional[str] = None
+    custom_port_description: Optional[str] = None
+    custom_parameter_type: Optional[str] = None
+    custom_ui_component_properties: Optional[dict] = None

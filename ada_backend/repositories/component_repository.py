@@ -637,6 +637,21 @@ def get_port_definitions_for_component_version_ids(
     )
 
 
+def get_input_ports_for_component_version(
+    session: Session,
+    component_version_id: UUID,
+) -> list[db.PortDefinition]:
+    """Get all input port definitions for a component version."""
+    return (
+        session.query(db.PortDefinition)
+        .filter(
+            db.PortDefinition.component_version_id == component_version_id,
+            db.PortDefinition.port_type == db.PortType.INPUT,
+        )
+        .all()
+    )
+
+
 def get_output_ports_for_component_version(
     session: Session,
     component_version_id: UUID,
@@ -751,8 +766,6 @@ def process_components_with_versions(
                     id=default_tool_description_db.id,
                     name=default_tool_description_db.name,
                     description=default_tool_description_db.description,
-                    tool_properties=default_tool_description_db.tool_properties,
-                    required_tool_properties=default_tool_description_db.required_tool_properties,
                 ).model_dump()
                 if default_tool_description_db
                 else None
@@ -999,11 +1012,15 @@ def get_or_create_tool_description(
     session: Session,
     name: str,
     description: str,
-    tool_properties: dict,
-    required_tool_properties: list[str],
+    tool_properties: Optional[dict] = None,
+    required_tool_properties: Optional[list[str]] = None,
     id: Optional[UUID] = None,
 ) -> db.ToolDescription:
-    # TODO: use id
+    # TODO: use id parameter when frontend consistently sends it
+    # TODO: tool_properties and required_tool_properties are deprecated - they should be derived
+    # from port_configurations instead. These fields are kept for backward compatibility with
+    # existing tool descriptions in the database.
+
     # First try to find by name and description only
     tool_description = (
         session.query(db.ToolDescription)
@@ -1014,29 +1031,21 @@ def get_or_create_tool_description(
         .first()
     )
 
-    # TODO: remove when front sends id
-    # If found, check if the JSON fields match
     if tool_description:
-        # Compare the actual JSON values
-        if (
-            tool_description.tool_properties == tool_properties
-            and tool_description.required_tool_properties == required_tool_properties
-        ):
-            return tool_description
-        else:
-            # JSON fields don't match, create a new one
-            tool_description = None
+        # Tool description found - only update name and description if they changed
+        # Preserve existing tool_properties and required_tool_properties from DB
+        # (don't overwrite with None or empty values from frontend)
+        return tool_description
 
-    if not tool_description:
-        # Create new tool description
-        tool_description = db.ToolDescription(
-            name=name,
-            description=description,
-            tool_properties=tool_properties,
-            required_tool_properties=required_tool_properties,
-        )
-        session.add(tool_description)
-
+    # Create new tool description only if it doesn't exist
+    # Pass None to let the database handle defaults (tool_properties and required_tool_properties)
+    tool_description = db.ToolDescription(
+        name=name,
+        description=description,
+        tool_properties=tool_properties,
+        required_tool_properties=required_tool_properties,
+    )
+    session.add(tool_description)
     session.commit()
     session.refresh(tool_description)
     return tool_description

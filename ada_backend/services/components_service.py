@@ -19,7 +19,6 @@ from ada_backend.schemas.category_schema import CategoryResponse
 from ada_backend.schemas.components_schema import ComponentsResponse, PortDefinitionSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO, ParameterKind
 from ada_backend.services.errors import EntityInUseDeletionError
-from ada_backend.services.parameter_synthesis_utils import filter_conflicting_parameters
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,10 +29,11 @@ def _process_components_with_ports(
 ) -> ComponentsResponse:
     component_version_ids = [component.component_version_id for component in components]
     ports = get_port_definitions_for_component_version_ids(session, component_version_ids)
-    comp_id_to_ports: dict[str, list[PortDefinitionSchema]] = {}
+
+    comp_id_to_output_ports: dict[str, list[PortDefinitionSchema]] = {}
     input_ports_by_component_version: dict = {}
     for port in ports:
-        comp_id_to_ports.setdefault(str(port.component_version_id), []).append(
+        comp_id_to_output_ports.setdefault(str(port.component_version_id), []).append(
             PortDefinitionSchema(
                 name=port.name,
                 port_type=port.port_type.value,
@@ -46,13 +46,24 @@ def _process_components_with_ports(
         # Track input ports per component_version for input-parameter synthesis
         if port.port_type == PortType.INPUT:
             input_ports_by_component_version.setdefault(port.component_version_id, []).append(port)
+        else:
+            # Only add OUTPUT ports to port_definitions (INPUT ports are in parameters)
+            comp_id_to_output_ports.setdefault(str(port.component_version_id), []).append(
+                PortDefinitionSchema(
+                    id=port.id,
+                    name=port.name,
+                    port_type=port.port_type.value,
+                    is_canonical=port.is_canonical,
+                    description=port.description,
+                    parameter_type=port.parameter_type.value if port.parameter_type else None,
+                    nullable=port.nullable,
+                )
+            )
     for component in components:
-        component.port_definitions = comp_id_to_ports.get(str(component.component_version_id), [])
+        # Send only OUTPUT ports in port_definitions (INPUT ports are in parameters with kind=INPUT)
+        component.port_definitions = comp_id_to_output_ports.get(str(component.component_version_id), [])
 
         input_ports = input_ports_by_component_version.get(component.component_version_id, [])
-
-        # Hide config parameters whose names collide with enabled input ports
-        component.parameters = filter_conflicting_parameters(component.parameters or [], input_ports)
 
         for input_port in input_ports:
             component.parameters.append(

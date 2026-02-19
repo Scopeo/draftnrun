@@ -91,6 +91,15 @@ class ParameterType(StrEnum):
     LLM_MODEL = "llm_model"
 
 
+class JsonSchemaType(StrEnum):
+    STRING = "string"
+    INTEGER = "integer"
+    NUMBER = "number"
+    BOOLEAN = "boolean"
+    OBJECT = "object"
+    ARRAY = "array"
+
+
 class OrgSecretType(StrEnum):
     LLM_API_KEY = "llm_api_key"
     PASSWORD = "password"
@@ -214,6 +223,12 @@ class EvaluationType(StrEnum):
 class PortType(StrEnum):
     INPUT = "INPUT"
     OUTPUT = "OUTPUT"
+
+
+class PortSetupMode(StrEnum):
+    USER_SET = "user_set"
+    DEACTIVATED = "deactivated"
+    AI_FILLED = "ai_filled"
 
 
 class EntityType(StrEnum):
@@ -1055,6 +1070,9 @@ class PortDefinition(Base):
     is_canonical = mapped_column(Boolean, nullable=False, default=False)
     description = mapped_column(Text, nullable=True)
     parameter_type = mapped_column(make_pg_enum(ParameterType), nullable=False, default=ParameterType.STRING)
+    nullable = mapped_column(
+        Boolean, nullable=False, default=True, comment="True if port is optional, False if required"
+    )
     ui_component = mapped_column(make_pg_enum(UIComponent), nullable=True)
     ui_component_properties = mapped_column(JSONB, nullable=True)
     nullable = mapped_column(Boolean, nullable=False, default=False)
@@ -1067,6 +1085,95 @@ class PortDefinition(Base):
     __table_args__ = (
         sa.UniqueConstraint("component_version_id", "name", "port_type", name="unique_component_version_port"),
     )
+
+
+class PortConfiguration(Base):
+    __tablename__ = "port_configurations"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    component_instance_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("component_instances.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    port_definition_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("port_definitions.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    field_expression_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("field_expressions.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    config_type = mapped_column(String, nullable=False)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    component_instance = relationship("ComponentInstance", back_populates="port_configurations")
+    port_definition = relationship("PortDefinition")
+    field_expression = relationship("FieldExpression")
+
+    __mapper_args__ = {
+        "polymorphic_on": config_type,
+        "polymorphic_identity": "base",
+    }
+
+    def __str__(self):
+        if self.port_definition_id:
+            return f"PortConfiguration(instance={self.component_instance_id}, port={self.port_definition_id})"
+        else:
+            return f"PortConfiguration(instance={self.component_instance_id})"
+
+
+class ToolInputConfiguration(PortConfiguration):
+    """Configuration for tool input ports (LLM tool schema generation).
+
+    Contains tool-specific fields for generating LLM function calling schemas.
+    """
+
+    __tablename__ = "tool_input_configurations"
+
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("port_configurations.id", ondelete="CASCADE"), primary_key=True)
+    setup_mode = mapped_column(make_pg_enum(PortSetupMode), nullable=False)
+
+    # Tool-specific fields for LLM schema generation
+    ai_name_override = mapped_column(String, nullable=True)
+    ai_description_override = mapped_column(Text, nullable=True)
+    is_required_override = mapped_column(
+        Boolean,
+        nullable=True,
+        comment="Override required status: True=mandatory, False=optional, None=use port definition default",
+    )
+
+    custom_port_name = mapped_column(String, nullable=True)
+    custom_port_description = mapped_column(Text, nullable=True)
+    custom_parameter_type = mapped_column(make_pg_enum(JsonSchemaType), nullable=True)
+    custom_ui_component_properties = mapped_column(JSONB, nullable=True)
+
+    # Full JSON Schema override for complex parameter types (arrays, nested objects, etc.)
+    json_schema_override = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Full JSON Schema for complex parameter types. Overrides simple type mapping.",
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "tool_input",
+    }
+
+    def __str__(self):
+        if self.port_definition_id:
+            return (
+                f"ToolInputConfiguration(instance={self.component_instance_id}, "
+                f"port={self.port_definition_id}, mode={self.setup_mode})"
+            )
+        else:
+            return (
+                f"ToolInputConfiguration(instance={self.component_instance_id}, "
+                f"custom={self.custom_port_name}, mode={self.setup_mode})"
+            )
 
 
 class PortMapping(Base):
