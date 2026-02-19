@@ -1,0 +1,46 @@
+name: pdf-integration-ci
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "engine/components/pdf_generation_tool.py"
+      - "tests/components/test_pdf_generation_tool.py"
+
+concurrency:
+  group: pdf-integration-ci
+  cancel-in-progress: false
+
+jobs:
+  pdf-integration-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      matrix:
+        python-version: [3.11]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run PDF integration tests
+        run: |
+          uv run pytest -m pdf_integration tests/components/test_pdf_generation_tool.py -v

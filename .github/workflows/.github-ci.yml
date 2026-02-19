@@ -361,7 +361,7 @@ jobs:
             echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
             echo "===> Running tests for RUN_ID: ${{ env.RUN_ID }}"
-            uv run coverage run -m pytest --ignore=tests/external_api_calls --ignore=tests/qdrant --durations=10
+            uv run coverage run -m pytest --ignore=tests/external_api_calls --ignore=tests/qdrant -m "not pdf_integration" --durations=10
             uv run coverage report -i
             uv run coverage html -i
             uv run coverage xml -i

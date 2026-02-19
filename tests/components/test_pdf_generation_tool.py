@@ -78,6 +78,7 @@ def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
         assert not pdf_path.parent.exists()
 
 
+@pytest.mark.pdf_integration
 def test_pdf_generation_with_actual_pdf(pdf_tool, tmp_path):
     """Test that PDF is generated with actual PDF creation (for integration testing)."""
     # Use pytest's tmp_path as a writable temp directory for CI safety
