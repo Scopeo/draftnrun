@@ -72,12 +72,12 @@ class LLMCallInputs(BaseModel):
     prompt_template: Optional[str] = Field(
         default=None,
         description="Prompt template to use for the LLM call.",
-        json_schema_extra={"disabled_as_input": True},
+        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
     )
     output_format: Optional[dict[str, Any]] = Field(
         default=None,
         description="Structured output format.",
-        json_schema_extra={"disabled_as_input": True},
+        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
     )
     # Allow extra fields for backward compatibility
     model_config = {"extra": "allow"}

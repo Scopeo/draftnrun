@@ -42,12 +42,12 @@ class AIAgentInputs(BaseModel):
     initial_prompt: Optional[str] = Field(
         default=None,
         description="Initial prompt to use for the agent.",
-        json_schema_extra={"disabled_as_input": True},
+        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
     )
     output_format: Optional[str | dict] = Field(
         default=None,
         description="Structured output format.",
-        json_schema_extra={"disabled_as_input": True},
+        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
     )
     # Allow any other fields to be passed through
     model_config = {"extra": "allow"}

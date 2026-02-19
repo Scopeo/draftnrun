@@ -20,11 +20,14 @@ DEFAULT_MCP_TOOL_DESCRIPTION = ToolDescription(
 class MCPToolInputs(BaseModel):
     """Shared input schema for both Local and Remote MCP tools."""
 
-    tool_name: str = Field(description="Name of the MCP tool to call.", json_schema_extra={"disabled_as_input": True})
+    tool_name: str = Field(
+        description="Name of the MCP tool to call.",
+        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
+    )
     tool_arguments: dict[str, Any] = Field(
         default_factory=dict,
         description="Arguments to pass to the MCP tool.",
-        json_schema_extra={"disabled_as_input": True},
+        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
     )
     # TODO: Remove this after function-calling refactor
     model_config = {"extra": "allow"}
