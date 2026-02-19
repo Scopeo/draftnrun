@@ -1,11 +1,14 @@
 import re
 from typing import Union
 
-from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode
+from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode, VarNode
 from engine.field_expressions.errors import FieldExpressionParseError
 
-# Matches @{{instance.port}} where instance and port allow [a-zA-Z0-9_-]. An optional key can be provided after ::.
-_REF_PATTERN = re.compile(r"@\{\{\s*([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_-]+)(?:::([a-zA-Z0-9_-]+))?\s*\}\}")
+# Matches @{{instance.port}} (RefNode) or @{{var_name}} (VarNode).
+# group(1) = first identifier, group(2) = port (if dot present), group(3) = key (if :: present)
+_TOKEN_PATTERN = re.compile(
+    r"@\{\{\s*([a-zA-Z0-9_-]+)(?:\.([a-zA-Z0-9_-]+)(?:::([a-zA-Z0-9_-]+))?)?\s*\}\}"
+)
 
 
 # TODO: Use a more robust parser instead of a regex
@@ -32,25 +35,31 @@ def parse_expression(expression_text: str) -> ExpressionNode:
     if open_count != close_count:
         raise FieldExpressionParseError("Unbalanced reference delimiters '@{{' and '}}'")
 
-    parts: list[LiteralNode | RefNode] = []
+    parts: list[LiteralNode | RefNode | VarNode] = []
     idx = 0
-    for match in _REF_PATTERN.finditer(expression_text):
+    for match in _TOKEN_PATTERN.finditer(expression_text):
         start, end = match.span()
         if start > idx:
             # preceding literal
             parts.append(LiteralNode(value=expression_text[idx:start]))
-        instance, port = match.group(1), match.group(2)
-        key: str | None = match.group(3)
-        parts.append(RefNode(instance=instance, port=port, key=key))
+        first, port, key = match.group(1), match.group(2), match.group(3)
+        if port is not None:
+            parts.append(RefNode(instance=first, port=port, key=key))
+        else:
+            parts.append(VarNode(name=first))
         idx = end
 
     # trailing literal
     if idx < len(expression_text):
         parts.append(LiteralNode(value=expression_text[idx:]))
 
-    # If no refs found, return a simple literal node
+    # If no refs/vars found, return a simple literal node
     if all(isinstance(p, LiteralNode) for p in parts):
         return parts[0] if parts else LiteralNode(value="")
+
+    # Single ref or var — unwrap from concat
+    if len(parts) == 1:
+        return parts[0]
 
     return ConcatNode(parts=parts)
 
@@ -97,6 +106,8 @@ def unparse_expression(expression: ExpressionNode) -> str:
             return "@{{" + i + "." + p + "}}"
         case RefNode(instance=i, port=p, key=k) if k is not None:
             return "@{{" + i + "." + p + "::" + k + "}}"
+        case VarNode(name=n):
+            return "@{{" + n + "}}"
         case ConcatNode(parts=parts):
             return "".join(unparse_expression(p) for p in parts)
         case JsonBuildNode():
