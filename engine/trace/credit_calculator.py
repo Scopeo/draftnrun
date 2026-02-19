@@ -1,4 +1,3 @@
-import ast
 import logging
 from functools import wraps
 from typing import Any, Callable, Optional
@@ -12,7 +11,6 @@ from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.credits_repository import get_component_cost_per_call, get_llm_cost
 
 LOGGER = logging.getLogger(__name__)
-
 
 _llm_cost_cache: TTLCache[tuple[UUID, UUID], tuple[Optional[float], Optional[float]]] = TTLCache(maxsize=1000, ttl=300)
 
@@ -66,24 +64,6 @@ def get_cached_component_cost(component_instance_id: UUID) -> Optional[float]:
         component_instance_id,
         resource_name=f"component cost for component_instance_id {component_instance_id}",
     )
-
-
-def convert_to_list(obj: Any) -> list[str] | None:
-    """Convert object to list of strings if possible."""
-    if isinstance(obj, list):
-        return obj
-    if isinstance(obj, tuple):
-        return list(obj)
-    if obj is None:
-        return None
-    if isinstance(obj, str):
-        try:
-            result = ast.literal_eval(obj)
-            if isinstance(result, (list, tuple)):
-                return list(result)
-        except (ValueError, SyntaxError):
-            pass
-    return None
 
 
 def calculate_llm_credits(func: Callable) -> Callable:

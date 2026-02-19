@@ -1,7 +1,8 @@
+import ast
 import json
 import logging
 from datetime import datetime, timezone
-from typing import cast
+from typing import Any, cast
 
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.sdk.trace import BoundedAttributes, Event, ReadableSpan
@@ -13,7 +14,6 @@ from sqlalchemy.orm import sessionmaker
 from ada_backend.database.models import SpanUsage, Usage
 from ada_backend.database.setup_db import get_db_url
 from ada_backend.database.trace_models import Span, SpanMessage
-from engine.trace.credit_calculator import convert_to_list
 from engine.trace.nested_utils import split_nested_keys
 
 LOGGER = logging.getLogger(__name__)
@@ -84,12 +84,30 @@ def extract_messages_from_attributes(attributes: dict) -> tuple[list[dict], list
         return [], [], attributes
 
 
+def convert_to_list(obj: Any) -> list[str] | None:
+    """Convert object to list of strings if possible."""
+    if isinstance(obj, list):
+        return obj
+    if isinstance(obj, tuple):
+        return list(obj)
+    if obj is None:
+        return None
+    if isinstance(obj, str):
+        try:
+            result = ast.literal_eval(obj)
+            if isinstance(result, (list, tuple)):
+                return list(result)
+        except (ValueError, SyntaxError):
+            pass
+    return None
+
+
 class SQLSpanExporter(SpanExporter):
     def __init__(self):
         self.session = get_session_trace()
 
-    def _count_as_usage(
-        self,
+    @staticmethod
+    def _should_count_as_usage(
         component_instance_id: str | None,
         organization_llm_providers: list[str] | None,
         provider: str | None,
@@ -207,7 +225,9 @@ class SQLSpanExporter(SpanExporter):
                 self.session.add(span_usage)
 
                 # Update Usage table with total credits
-                count_as_usage = self._count_as_usage(component_instance_id, organization_llm_providers, provider)
+                count_as_usage = self._should_count_as_usage(
+                    component_instance_id, organization_llm_providers, provider
+                )
                 if project_id and count_as_usage:
                     total_span_credits = (
                         (credits_input_token or 0) + (credits_output_token or 0) + (credits_per_call or 0)
