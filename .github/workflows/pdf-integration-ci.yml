@@ -42,5 +42,8 @@ jobs:
         run: uv sync
 
       - name: Run PDF integration tests
+        env:
+          ADA_DB_URL: sqlite:///test.db
+          FERNET_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
         run: |
           uv run pytest -m pdf_integration tests/components/test_pdf_generation_tool.py -v
