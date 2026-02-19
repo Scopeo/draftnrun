@@ -6,7 +6,7 @@ embedding engine/backend policy.
 
 from collections.abc import Callable, Iterator
 
-from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode
+from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode, VarNode
 
 
 def walk(expr: ExpressionNode) -> Iterator[ExpressionNode]:
@@ -58,7 +58,7 @@ def map_expression(
             mapped_refs = {}
             for key, ref in refs.items():
                 mapped_ref = map_expression(ref, fn)
-                if isinstance(mapped_ref, RefNode):
+                if isinstance(mapped_ref, (RefNode, VarNode)):
                     mapped_refs[key] = mapped_ref
             return JsonBuildNode(template=template, refs=mapped_refs)
         case _:

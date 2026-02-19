@@ -2,7 +2,7 @@ import logging
 import traceback
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 import networkx as nx
@@ -36,6 +36,7 @@ from ada_backend.services.file_response_service import (
     temp_folder_exists,
 )
 from ada_backend.services.tag_service import compose_tag_name
+from ada_backend.services.variable_resolution_service import resolve_variables
 from engine.components.errors import KeyTypePromptTemplateError, MissingKeyPromptTemplateError
 from engine.field_expressions.serializer import from_json as expression_from_json
 from engine.graph_runner.graph_runner import GraphRunner
@@ -44,6 +45,17 @@ from engine.trace.span_context import get_tracing_span, set_tracing_span
 from engine.trace.trace_context import get_trace_manager
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _extract_set_ids(input_data: dict) -> list[str]:
+    """Extract set_id/set_ids from input_data.
+
+    Pops set_id/set_ids from input_data so they are not passed downstream.
+    Returns a list of set IDs (may be empty).
+    """
+    set_id = input_data.pop("set_id", None)
+    set_ids = input_data.pop("set_ids", None)
+    return set_ids if set_ids else ([set_id] if set_id else [])
 
 
 def get_organization_llm_providers(session: Session, organization_id: UUID) -> list[str]:
@@ -91,6 +103,7 @@ async def build_graph_runner(
     session: Session,
     graph_runner_id: UUID,
     project_id: UUID,
+    variables: dict[str, Any] | None = None,
 ) -> GraphRunner:
     trace_manager = get_trace_manager()
     # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
@@ -148,6 +161,7 @@ async def build_graph_runner(
         trace_manager=trace_manager,
         port_mappings=port_mappings,
         expressions=expressions,
+        variables=variables,
     )
 
 
@@ -155,6 +169,7 @@ async def get_agent_for_project(
     session: Session,
     graph_runner_id: UUID,
     project_id: UUID,
+    variables: dict[str, Any] | None = None,
 ) -> GraphRunner:
     project = get_project(session, project_id=project_id)
     if not project:
@@ -165,6 +180,7 @@ async def get_agent_for_project(
             session,
             graph_runner_id,
             project_id,
+            variables=variables,
         )
     else:
         raise GraphNotFound(graph_runner_id)
@@ -179,6 +195,7 @@ async def run_env_agent(
     response_format: Optional[ResponseFormat] = None,
     cron_id: Optional[UUID] = None,
 ) -> ChatResponse:
+    set_ids = _extract_set_ids(input_data)
     graph_runner = get_graph_runner_for_env(session=session, project_id=project_id, env=env)
     if not graph_runner:
         raise EnvironmentNotFound(project_id, env.value)
@@ -192,6 +209,7 @@ async def run_env_agent(
         tag_name=compose_tag_name(graph_runner.tag_version, graph_runner.version_name),
         response_format=response_format,
         cron_id=cron_id,
+        set_ids=set_ids,
     )
 
 
@@ -206,10 +224,16 @@ async def run_agent(
     tag_name: Optional[str] = None,
     response_format: Optional[ResponseFormat] = None,
     cron_id: Optional[UUID] = None,
+    set_ids: list[str] | None = None,
 ) -> ChatResponse:
+    if set_ids is None:
+        set_ids = _extract_set_ids(input_data)
+
     project_details = get_project_with_details(session, project_id=project_id)
     if not project_details:
         raise ProjectNotFound(project_id)
+
+    variables = resolve_variables(session, project_details.organization_id, set_ids)
 
     today = datetime.now()
     organization_limit = get_organization_limit(
@@ -227,12 +251,6 @@ async def run_agent(
             raise OrganizationLimitExceededError(
                 project_details.organization_id, organization_limit.limit, current_usage
             )
-    agent = await get_agent_for_project(
-        session,
-        project_id=project_id,
-        graph_runner_id=graph_runner_id,
-    )
-
     # TODO : Add again the monitoring for frequently asked questions after parallelization of agent run
     # db_service = SQLLocalService(engine_url="sqlite:///ada_backend/database/monitor.db", dialect="sqlite")
     # asyncio.create_task(monitor_questions(db_service, project_id, input_data))
@@ -265,6 +283,7 @@ async def run_agent(
         session,
         project_id=project_id,
         graph_runner_id=graph_runner_id,
+        variables=variables,
     )
 
     try:

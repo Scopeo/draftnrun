@@ -33,6 +33,7 @@ from ada_backend.routers.s3_files_router import router as s3_files_router
 from ada_backend.routers.source_router import router as source_router
 from ada_backend.routers.template_router import router as template_router
 from ada_backend.routers.trace_router import router as trace_router
+from ada_backend.routers.variables_router import org_router as variables_router
 from ada_backend.routers.webhooks.provider_webhooks_router import router as provider_webhooks_router
 from ada_backend.routers.webhooks.webhook_internal_router import router as webhook_internal_router
 from ada_backend.routers.widget_router import router as widget_router
@@ -160,6 +161,7 @@ setup_admin(app)
 app.include_router(auth_router)
 app.include_router(org_router)
 app.include_router(project_router)
+app.include_router(variables_router)
 app.include_router(agent_router)
 app.include_router(integration_router)
 app.include_router(oauth_router)

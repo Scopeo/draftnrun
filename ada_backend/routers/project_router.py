@@ -12,6 +12,7 @@ from ada_backend.routers.auth_router import (
     UserRights,
     VerifiedApiKey,
     user_has_access_to_organization_dependency,
+    user_has_access_to_organization_xor_verify_api_key,
     user_has_access_to_project_dependency,
     verify_api_key_dependency,
 )
@@ -57,10 +58,10 @@ router = APIRouter(prefix="/projects")
 @router.get("/org/{organization_id}", response_model=List[ProjectWithGraphRunnersSchema], tags=["Projects"])
 def get_projects_by_organization_endpoint(
     organization_id: UUID,
-    user: Annotated[
-        SupabaseUser,
+    auth: Annotated[
+        tuple[UUID | None, UUID | None],
         Depends(
-            user_has_access_to_organization_dependency(
+            user_has_access_to_organization_xor_verify_api_key(
                 allowed_roles=UserRights.MEMBER.value,
             )
         ),
@@ -69,20 +70,21 @@ def get_projects_by_organization_endpoint(
     type: Optional[ProjectType] = ProjectType.WORKFLOW,
     include_templates: Optional[bool] = False,
 ):
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
+    user_id, _ = auth
     try:
         return get_projects_by_organization_with_details_service(
-            session, organization_id, user.id, type, include_templates
+            session, organization_id, user_id, type, include_templates
         )
     except ValueError as e:
         LOGGER.error(
-            f"Failed to list workflows for organization {organization_id} and user {user.id}: {str(e)}", exc_info=True
+            f"Failed to list workflows for organization {organization_id} user_id={user_id}: {str(e)}",
+            exc_info=True,
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
         LOGGER.error(
-            f"Failed to list workflows for organization {organization_id} and user {user.id}: {str(e)}", exc_info=True
+            f"Failed to list workflows for organization {organization_id} user_id={user_id}: {str(e)}",
+            exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
