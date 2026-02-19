@@ -1,7 +1,7 @@
 """add is_tool_input to port definitions
 
 Revision ID: a1c2e3f4b5d6
-Revises: 300e0970e3b6
+Revises: f3a1b2c4d5e6
 Create Date: 2026-02-19 00:00:00.000000
 
 """
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a1c2e3f4b5d6"
-down_revision: Union[str, None] = "300e0970e3b6"
+down_revision: Union[str, None] = "f3a1b2c4d5e6"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
