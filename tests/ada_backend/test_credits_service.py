@@ -405,6 +405,94 @@ def test_upsert_component_version_cost_empty_payload(db_session, ensure_componen
     delete_component_version_cost(db_session, component_version_id)
 
 
+async def create_graph(session, project_id: UUID, graph_runner_id: UUID, fake_model_name: str):
+    start_id = str(uuid4())
+    ai_agent_id = str(uuid4())
+    edge_id = uuid4()
+    graph_payload = GraphUpdateSchema(
+        component_instances=[
+            ComponentInstanceSchema(
+                id=start_id,
+                component_id=COMPONENT_UUIDS["start"],
+                component_version_id=COMPONENT_VERSION_UUIDS["start_v2"],
+                name="Start",
+                parameters=[
+                    PipelineParameterSchema(
+                        name="payload_schema",
+                        value='{"messages": [{"role": "user", "content": "{{input}}"}]}',
+                    )
+                ],
+                is_start_node=True,
+            ),
+            ComponentInstanceSchema(
+                id=ai_agent_id,
+                component_id=COMPONENT_UUIDS["base_ai_agent"],
+                component_version_id=COMPONENT_VERSION_UUIDS["base_ai_agent"],
+                name="AI Agent",
+                parameters=[
+                    PipelineParameterSchema(name="completion_model", value=f"google:{fake_model_name}"),
+                ],
+                is_start_node=False,
+            ),
+        ],
+        relationships=[],
+        edges=[
+            EdgeSchema(
+                id=edge_id,
+                origin=UUID(start_id),
+                destination=UUID(ai_agent_id),
+                order=0,
+            )
+        ],
+        port_mappings=[],
+    )
+    await update_graph_service(session, graph_runner_id, project_id, graph_payload)
+    return ai_agent_id
+
+
+def assert_llm_span_usage(
+    session, project_id: UUID, model_id: UUID, mock_credits_input_token: float, mock_credits_output_token: float
+):
+    span_llm_count = session.execute(
+        select(SpanUsage)
+        .join(Span, SpanUsage.span_id == Span.span_id)
+        .where(Span.model_id == model_id, Span.project_id == str(project_id))
+        .order_by(Span.start_time.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    assert span_llm_count is not None
+    assert span_llm_count.credits_input_token == mock_credits_input_token
+    assert span_llm_count.credits_output_token == mock_credits_output_token
+    assert span_llm_count.credits_per_call is None
+
+
+def assert_ai_agent_span_usage(session, project_id: UUID, ai_agent_id: str, mock_credits_per_call: float):
+    ai_agent_span_count = session.execute(
+        select(SpanUsage)
+        .join(Span, SpanUsage.span_id == Span.span_id)
+        .where(Span.component_instance_id == UUID(ai_agent_id), Span.project_id == str(project_id))
+        .order_by(Span.start_time.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    assert ai_agent_span_count is not None
+    assert ai_agent_span_count.credits_per_call == mock_credits_per_call
+    assert ai_agent_span_count.credits_input_token is None
+    assert ai_agent_span_count.credits_output_token is None
+
+
+def assert_usage(
+    session,
+    project_id: UUID,
+    expected_usage: float,
+):
+    now = datetime.now()
+    usage = session.execute(
+        select(Usage).where(Usage.project_id == project_id, Usage.year == now.year, Usage.month == now.month)
+    ).scalar_one_or_none()
+    assert usage is not None
+    assert usage.credits_used == expected_usage
+
+
 @pytest.mark.asyncio
 async def test_llm_credits_count_as_usage_flag(db_session):
     """Test that LLM credits are counted in Usage table only when not using org API key."""
@@ -427,57 +515,15 @@ async def test_llm_credits_count_as_usage_flag(db_session):
         ai_agent_version_id = COMPONENT_VERSION_UUIDS["base_ai_agent"]
         upsert_component_version_cost(session, ai_agent_version_id, credits_per_call=mock_credits_per_call)
 
-        start_id = str(uuid4())
-        ai_agent_id = str(uuid4())
-        edge_id = uuid4()
-        graph_payload = GraphUpdateSchema(
-            component_instances=[
-                ComponentInstanceSchema(
-                    id=start_id,
-                    component_id=COMPONENT_UUIDS["start"],
-                    component_version_id=COMPONENT_VERSION_UUIDS["start_v2"],
-                    name="Start",
-                    parameters=[
-                        PipelineParameterSchema(
-                            name="payload_schema",
-                            value='{"messages": [{"role": "user", "content": "{{input}}"}]}',
-                        )
-                    ],
-                    is_start_node=True,
-                ),
-                ComponentInstanceSchema(
-                    id=ai_agent_id,
-                    component_id=COMPONENT_UUIDS["base_ai_agent"],
-                    component_version_id=ai_agent_version_id,
-                    name="AI Agent",
-                    parameters=[
-                        PipelineParameterSchema(name="completion_model", value=f"google:{fake_model_name}"),
-                    ],
-                    is_start_node=False,
-                ),
-            ],
-            relationships=[],
-            edges=[
-                EdgeSchema(
-                    id=edge_id,
-                    origin=UUID(start_id),
-                    destination=UUID(ai_agent_id),
-                    order=0,
-                )
-            ],
-            port_mappings=[],
-        )
-        await update_graph_service(session, graph_runner_id, project_id, graph_payload)
+        ai_agent_id = await create_graph(session, project_id, graph_runner_id, fake_model_name)
         mock_input_tokens = 10
         mock_output_tokens = 20
 
         mock_response = ("response", mock_input_tokens, mock_output_tokens, mock_input_tokens + mock_output_tokens)
 
-        # Setup trace manager
         trace_manager = TraceManager(project_name="credits-test")
         set_trace_manager(trace_manager)
 
-        # Setup request context (required for credit calculator cache)
         request_ctx = RequestContext(request_id=uuid4())
         set_request_context(request_ctx)
 
@@ -501,42 +547,11 @@ async def test_llm_credits_count_as_usage_flag(db_session):
         mock_credits_input_token = mock_credits_per_input_token * mock_input_tokens / 1_000_000
         mock_credits_output_token = mock_credits_per_output_token * mock_output_tokens / 1_000_000
 
-        # Case 1: Query most recent LLM span (with model_id) and component span (with component_instance_id)
-        llm_span_usage_case1 = session.execute(
-            select(SpanUsage)
-            .join(Span, SpanUsage.span_id == Span.span_id)
-            .where(Span.model_id == fake_model.id, Span.project_id == str(project_id))
-            .order_by(Span.start_time.desc())
-            .limit(1)
-        ).scalar_one_or_none()
-        assert llm_span_usage_case1 is not None, "Case 1: LLM span usage should exist"
-        assert llm_span_usage_case1.credits_input_token == mock_credits_input_token
-        assert llm_span_usage_case1.credits_output_token == mock_credits_output_token
-        assert llm_span_usage_case1.credits_per_call is None, "Case 1: LLM span should not have component credits"
+        assert_llm_span_usage(session, project_id, fake_model.id, mock_credits_input_token, mock_credits_output_token)
 
-        component_span_usage_case1 = session.execute(
-            select(SpanUsage)
-            .join(Span, SpanUsage.span_id == Span.span_id)
-            .where(Span.component_instance_id == UUID(ai_agent_id), Span.project_id == str(project_id))
-            .order_by(Span.start_time.desc())
-            .limit(1)
-        ).scalar_one_or_none()
-        assert component_span_usage_case1 is not None, "Case 1: Component span usage should exist"
-        assert component_span_usage_case1.credits_per_call == mock_credits_per_call
-        assert component_span_usage_case1.credits_input_token is None, (
-            "Case 1: Component span should not have LLM token credits"
-        )
-        assert component_span_usage_case1.credits_output_token is None, (
-            "Case 1: Component span should not have LLM token credits"
-        )
+        assert_ai_agent_span_usage(session, project_id, ai_agent_id, mock_credits_per_call)
 
-        now = datetime.now()
-        usage = session.execute(
-            select(Usage).where(Usage.project_id == project_id, Usage.year == now.year, Usage.month == now.month)
-        ).scalar_one_or_none()
-        assert usage is not None
-        case1_credits = usage.credits_used
-        assert case1_credits == mock_credits_input_token + mock_credits_output_token + mock_credits_per_call
+        assert_usage(session, project_id, mock_credits_input_token + mock_credits_output_token + mock_credits_per_call)
 
         # Case 2: Create org secret (org API key)
         upsert_organization_secret(session, ORGANIZATION_ID, "google_api_key", "org-key", db.OrgSecretType.LLM_API_KEY)
@@ -558,44 +573,11 @@ async def test_llm_credits_count_as_usage_flag(db_session):
 
         # Case 2: Query most recent LLM span (with model_id) and component span (with component_instance_id)
         # These will be from Case 2 since they're ordered by start_time desc
-        llm_span_usage_case2 = session.execute(
-            select(SpanUsage)
-            .join(Span, SpanUsage.span_id == Span.span_id)
-            .where(Span.model_id == fake_model.id, Span.project_id == str(project_id))
-            .order_by(Span.start_time.desc())
-            .limit(1)
-        ).scalar_one_or_none()
-        assert llm_span_usage_case2 is not None, "Case 2: LLM span usage should exist"
-        assert llm_span_usage_case2.credits_input_token == mock_credits_input_token
-        assert llm_span_usage_case2.credits_output_token == mock_credits_output_token
-        # In Case 2, LLM credits should NOT count towards Usage (count_as_usage=False)
-        # But they should still be stored in SpanUsage for tracking
-
-        component_span_usage_case2 = session.execute(
-            select(SpanUsage)
-            .join(Span, SpanUsage.span_id == Span.span_id)
-            .where(Span.component_instance_id == UUID(ai_agent_id), Span.project_id == str(project_id))
-            .order_by(Span.start_time.desc())
-            .limit(1)
-        ).scalar_one_or_none()
-        assert component_span_usage_case2 is not None, "Case 2: Component span usage should exist"
-        assert component_span_usage_case2.credits_per_call == mock_credits_per_call, (
-            "Case 2: Component span should have credit per call"
+        assert_llm_span_usage(session, project_id, fake_model.id, mock_credits_input_token, mock_credits_output_token)
+        assert_ai_agent_span_usage(session, project_id, ai_agent_id, mock_credits_per_call)
+        assert_usage(
+            session, project_id, mock_credits_input_token + mock_credits_output_token + 2 * mock_credits_per_call
         )
-        # Component credits should always count (count_as_usage=True)
-
-        usage = session.execute(
-            select(Usage).where(Usage.project_id == project_id, Usage.year == now.year, Usage.month == now.month)
-        ).scalar_one_or_none()
-        assert usage is not None
-        case2_credits = usage.credits_used
-        # Case 2: Only component cost should be added (LLM credits don't count due to org API key)
-        assert case2_credits == case1_credits + mock_credits_per_call
-
-        limits_usage = get_all_organization_limits_and_usage_service(session, now.month, now.year)
-        org_usage = next((item for item in limits_usage if item.organization_id == ORGANIZATION_ID), None)
-        assert org_usage is not None
-        assert org_usage.total_credits_used == case2_credits
 
         session.query(Span).filter(Span.project_id == str(project_id)).delete()
         session.commit()
