@@ -13,6 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from ada_backend.database.models import SpanUsage, Usage
 from ada_backend.database.setup_db import get_db_url
 from ada_backend.database.trace_models import Span, SpanMessage
+from engine.trace.credit_calculator import convert_to_list
 from engine.trace.nested_utils import split_nested_keys
 
 LOGGER = logging.getLogger(__name__)
@@ -87,6 +88,17 @@ class SQLSpanExporter(SpanExporter):
     def __init__(self):
         self.session = get_session_trace()
 
+    def _count_as_usage(
+        self,
+        component_instance_id: str | None,
+        organization_llm_providers: list[str] | None,
+        provider: str | None,
+    ) -> bool:
+        org_llm_providers = convert_to_list(organization_llm_providers)
+        if component_instance_id is not None:
+            return True
+        return not (provider is not None and org_llm_providers is not None and provider in org_llm_providers)
+
     def export(self, spans: list[ReadableSpan]) -> SpanExportResult:
         LOGGER.info(f"Exporting {len(spans)} spans to SQL database")
         for span in spans:
@@ -120,7 +132,6 @@ class SQLSpanExporter(SpanExporter):
             credits_output_token = credits_dict.get("output_token") if credits_dict else None
             credits_per_call = credits_dict.get("per_call") if credits_dict else None
             credits_per = credits_dict.get("per") if credits_dict else None
-            count_as_usage = formatted_attributes.pop("count_as_usage", False)
 
             environment = formatted_attributes.pop("environment", None)
             call_type = formatted_attributes.pop("call_type", None)
@@ -129,6 +140,8 @@ class SQLSpanExporter(SpanExporter):
             tag_name = formatted_attributes.pop("tag_name", None)
             component_instance_id = formatted_attributes.pop("component_instance_id", None)
             model_id = formatted_attributes.pop("model_id", None)
+            provider = formatted_attributes.get("provider", None)
+            organization_llm_providers = formatted_attributes.get("organization_llm_providers", None)
             input, output, formatted_attributes = extract_messages_from_attributes(formatted_attributes)
 
             openinference_span_kind = json_span["attributes"].get(SpanAttributes.OPENINFERENCE_SPAN_KIND, "UNKNOWN")
@@ -194,7 +207,7 @@ class SQLSpanExporter(SpanExporter):
                 self.session.add(span_usage)
 
                 # Update Usage table with total credits
-
+                count_as_usage = self._count_as_usage(component_instance_id, organization_llm_providers, provider)
                 if project_id and count_as_usage:
                     total_span_credits = (
                         (credits_input_token or 0) + (credits_output_token or 0) + (credits_per_call or 0)
