@@ -7,7 +7,7 @@ from uuid import UUID
 from cachetools import TTLCache, cached
 from opentelemetry.trace import Span
 
-from ada_backend.context import get_request_context
+from ada_backend.context import get_execution_id
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.credits_repository import get_component_cost_per_call, get_llm_cost
 
@@ -21,17 +21,33 @@ _component_cost_cache: TTLCache[tuple[UUID, UUID], Optional[float]] = TTLCache(m
 
 def _fetch_from_db_with_managed_session(repository_func: Callable, *args, resource_name: str, **kwargs) -> Any:
     try:
-        context = get_request_context()
-        LOGGER.info(f"Fetching {resource_name} in request_id {context.request_id}")
+        execution_id = get_execution_id()
+        LOGGER.info(f"Fetching {resource_name} in execution_id {execution_id}")
     except (ValueError, LookupError):
-        LOGGER.info(f"No request context available, fetching {resource_name} without caching")
+        LOGGER.info(f"No execution context available, fetching {resource_name} without caching")
 
     with get_db_session() as session:
         return repository_func(session, *args, **kwargs)
 
 
+def _llm_cost_cache_key(model_id: UUID) -> tuple[UUID, UUID]:
+    try:
+        return (get_execution_id(), model_id)
+    except (ValueError, LookupError):
+        LOGGER.warning("No execution context for LLM cost cache, skipping cache")
+        return (object(), model_id)
+
+
+def _component_cost_cache_key(component_instance_id: UUID) -> tuple[UUID, UUID]:
+    try:
+        return (get_execution_id(), component_instance_id)
+    except (ValueError, LookupError):
+        LOGGER.warning("No execution context for component cost cache, skipping cache")
+        return (object(), component_instance_id)
+
+
 # TODO: Optimize LLM cost fetching to reduce DB calls
-@cached(cache=_llm_cost_cache, key=lambda model_id: (get_request_context().request_id, model_id))
+@cached(cache=_llm_cost_cache, key=_llm_cost_cache_key)
 def get_cached_llm_cost(model_id: UUID) -> tuple[Optional[float], Optional[float]]:
     return _fetch_from_db_with_managed_session(
         get_llm_cost, model_id, resource_name=f"LLM cost for model_id {model_id}"
@@ -43,10 +59,7 @@ def get_cached_llm_cost(model_id: UUID) -> tuple[Optional[float], Optional[float
 # Potential optimizations:
 #   1. Fetch all component costs for the current workflow
 #   2. Fetch all component definitions with grouping
-@cached(
-    cache=_component_cost_cache,
-    key=lambda component_instance_id: (get_request_context().request_id, component_instance_id),
-)
+@cached(cache=_component_cost_cache, key=_component_cost_cache_key)
 def get_cached_component_cost(component_instance_id: UUID) -> Optional[float]:
     return _fetch_from_db_with_managed_session(
         get_component_cost_per_call,
