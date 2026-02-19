@@ -159,6 +159,8 @@ class PythonCodeRunner(Component):
     def _save_images_from_results(self, execution_result: dict, files_records: list[SandboxFileRecord]) -> list[str]:
         """Extract all images from E2B execution results if any exist."""
         results = execution_result.get("results", [])
+        if not results:
+            return []
         output_dir = get_output_dir()
         images_paths: list[str] = []
 
@@ -194,8 +196,11 @@ class PythonCodeRunner(Component):
             after_map[p] for p in (set(after_map.keys()) - set(before_map.keys())) if self._is_file_to_save(p)
         ]
 
-        output_dir = get_output_dir()
+        if not new_entries:
+            LOGGER.info("E2B execution completed with 0 new files created.")
+            return []
 
+        output_dir = get_output_dir()
         records = []
 
         for entry in new_entries:
