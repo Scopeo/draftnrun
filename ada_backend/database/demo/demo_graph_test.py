@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 from ada_backend.database import models as db
 from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
-from ada_backend.schemas.parameter_schema import PipelineParameterSchema
+from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import (
     ComponentInstanceSchema,
     ComponentRelationshipSchema,
@@ -68,6 +68,7 @@ def build_graph_test_chatbot(
                 PipelineParameterSchema(
                     name="prompt_template",
                     value="Reformulate the question as a customer service query :\n{input}",
+                    kind=ParameterKind.INPUT,
                 ),
                 PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-5-mini"),
             ],
@@ -121,6 +122,7 @@ def build_graph_test_chatbot(
                 PipelineParameterSchema(
                     name="prompt_template",
                     value="Evaluate the pertinence of the following answer:\n{input}",
+                    kind=ParameterKind.INPUT,
                 ),
                 PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-5-mini"),
             ],
