@@ -67,6 +67,7 @@ DEFAULT_LLM_CALL_TOOL_DESCRIPTION = ToolDescription(
 
 class LLMCallInputs(BaseModel):
     messages: list[ChatMessage] = Field(
+        default_factory=list,
         description="The input messages",
     )
     prompt_template: Optional[str] = Field(

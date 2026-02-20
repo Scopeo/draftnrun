@@ -37,6 +37,7 @@ OUTPUT_TOOL_DESCRIPTION = (
 
 class AIAgentInputs(BaseModel):
     messages: list[ChatMessage] = Field(
+        default_factory=list,
         description="The history of messages in the conversation.",
     )
     initial_prompt: Optional[str] = Field(
@@ -285,7 +286,7 @@ class AIAgent(Component):
             tool_arguments["tool_name"] = tool_function_name
         try:
             LOGGER.info(f"Calling tool {tool_function_name} with arguments: {tool_arguments}")
-            tool_output = await tool_to_use.run(*original_agent_inputs, ctx=ctx, **tool_arguments)
+            tool_output = await tool_to_use.run(ctx=ctx, **tool_arguments)
             LOGGER.info(f"Tool {tool_function_name} returned: {tool_output}")
         except Exception as e:
             LOGGER.error(f"Error running tool {tool_function_name}: {e}")
