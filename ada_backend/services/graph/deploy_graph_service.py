@@ -173,6 +173,7 @@ def clone_graph_runner(
             target_node_id=ids_map[edge.target_node_id],
             graph_runner_id=new_graph_runner_id,
             order=edge.order,
+            source_port_name=edge.source_port_name,
         )
     LOGGER.info(f"Copied edges to new graph runner with ID {new_graph_runner_id}")
 
