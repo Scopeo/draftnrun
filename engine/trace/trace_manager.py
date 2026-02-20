@@ -5,7 +5,7 @@ from opentelemetry import trace as trace_api
 from opentelemetry.context import Context
 from opentelemetry.sdk import trace as trace_sdk
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor
 
 from engine.trace.span_context import get_tracing_span
 from engine.trace.sql_exporter import SQLSpanExporter
@@ -15,6 +15,7 @@ LOGGER = logging.getLogger(__name__)
 
 def setup_tracer(
     project_name: str,
+    use_simple_processor: bool = False,
 ) -> tuple[trace_api.Tracer, trace_sdk.TracerProvider]:
     """Setup a tracer with the given project name and collector endpoint."""
 
@@ -26,7 +27,10 @@ def setup_tracer(
 
     tracer_provider = trace_sdk.TracerProvider(resource=resource)
     sql_exporter = SQLSpanExporter()
-    tracer_provider.add_span_processor(BatchSpanProcessor(sql_exporter))
+    if use_simple_processor:
+        tracer_provider.add_span_processor(SimpleSpanProcessor(sql_exporter))
+    else:
+        tracer_provider.add_span_processor(BatchSpanProcessor(sql_exporter))
 
     tracer = tracer_provider.get_tracer(__name__)
 
@@ -41,11 +45,13 @@ class TraceManager:
     def __init__(
         self,
         project_name: str,
+        use_simple_processor: bool = False,
     ):
         LOGGER.info("Setting up trace manager")
 
         self.tracer, self.tracer_provider = setup_tracer(
             project_name=project_name,
+            use_simple_processor=use_simple_processor,
         )
 
     def start_span(

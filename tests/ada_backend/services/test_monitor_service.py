@@ -64,7 +64,7 @@ def test_monitor_service(
     mock_function_call.return_value = (create_mock_chat_completion(), 10, 20, 30)
     mock_constrained_complete.return_value = ('{"response": "test"}', 10, 20, 30)
 
-    trace_manager = TraceManager(project_name="ada-backend-test")
+    trace_manager = TraceManager(project_name="ada-backend-test", use_simple_processor=True)
     set_trace_manager(trace_manager)
 
     user_id = uuid4()
@@ -83,9 +83,6 @@ def test_monitor_service(
         assert isinstance(output.message, str)
         assert output.error is None, f"Graph execution failed with error: {output.error}"
         assert isinstance(output.artifacts, dict)
-
-        # Force flush the trace manager to ensure spans are exported
-        trace_manager.force_flush()
 
         duration = 7
         paginated_response = get_root_traces_by_project(

@@ -219,7 +219,7 @@ def test_check_project_has_input_component(db_session: Session, test_organizatio
     )
 
     assert len(graph.component_instances) > 0
-    assert graph.component_instances[0].component_id == str(COMPONENT_UUIDS["start"])
+    assert graph.component_instances[0].component_id == COMPONENT_UUIDS["start"]
 
 
 def test_update_project(db_session: Session, test_organization, test_user_id):
