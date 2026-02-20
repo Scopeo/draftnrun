@@ -40,6 +40,7 @@ class HubSpotMCPTool(LocalMCPTool):
             env={
                 "HUBSPOT_ACCESS_TOKEN": access_token,
                 "TELEMETRY_ENABLED": "false",
+                "PORT": "0",
             },
             timeout=timeout,
         )
