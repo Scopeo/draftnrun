@@ -8,9 +8,12 @@ import pandas as pd
 from ada_backend.database.models import CallType
 from ada_backend.schemas.monitor_schema import KPI, CostKPI, KPISResponse, TraceKPIS
 from ada_backend.segment_analytics import track_projects_monitoring_loaded
+from ada_backend.services.metrics.utils import round_to_n_significant_figures
 from engine.trace.sql_exporter import get_session_trace
 
 LOGGER = logging.getLogger(__name__)
+
+SIGNIFICANT_FIGURES_CREDIT_FORMAT = 2
 
 
 def get_trace_metrics(project_ids: List[UUID], duration_days: int, call_type: CallType | None = None) -> TraceKPIS:
@@ -158,11 +161,11 @@ def get_trace_cost_kpis(project_ids: List[UUID], duration_days: int, call_type: 
         )
         SELECT
             (
-                SELECT COALESCE(AVG(total_cost_per_run), 0)::int
+                SELECT COALESCE(AVG(total_cost_per_run), 0)::numeric
                 FROM run_totals
             ) as mean_cost_per_run,
             (
-                SELECT COALESCE(AVG(total_cost_per_conversation), 0)::int
+                SELECT COALESCE(AVG(total_cost_per_conversation), 0)::numeric
                 FROM conversation_totals
             ) as mean_cost_per_conversation
     """
@@ -189,8 +192,12 @@ def get_trace_cost_kpis(project_ids: List[UUID], duration_days: int, call_type: 
     mean_cost_per_run = 0
     mean_cost_per_conversation = 0
     if not df.empty:
-        mean_cost_per_run = df["mean_cost_per_run"].iloc[0]
-        mean_cost_per_conversation = df["mean_cost_per_conversation"].iloc[0]
+        mean_cost_per_run = round_to_n_significant_figures(
+            df["mean_cost_per_run"].iloc[0], significant_figures=SIGNIFICANT_FIGURES_CREDIT_FORMAT
+        )
+        mean_cost_per_conversation = round_to_n_significant_figures(
+            df["mean_cost_per_conversation"].iloc[0], significant_figures=SIGNIFICANT_FIGURES_CREDIT_FORMAT
+        )
         if pd.isna(mean_cost_per_run):
             LOGGER.warning(
                 f"Mean cost per run is NaN for projects requests {project_ids} "

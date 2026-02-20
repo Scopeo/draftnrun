@@ -16,8 +16,8 @@ class KPISResponse(BaseModel):
 
 
 class CostKPI(BaseModel):
-    cost_per_call: int
-    cost_per_conversation: int
+    cost_per_call: Union[int, float]
+    cost_per_conversation: Union[int, float]
 
 
 class TraceKPIS(BaseModel):
