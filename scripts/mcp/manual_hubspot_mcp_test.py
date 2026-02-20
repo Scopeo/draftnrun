@@ -68,18 +68,21 @@ async def main():
     if len(descriptions) > 10:
         print(f"  ... and {len(descriptions) - 10} more")
 
-    if args.call_tool:
-        tool_args = json.loads(args.tool_args) if args.tool_args else {}
-        inputs = MCPToolInputs(tool_name=args.call_tool, tool_arguments=tool_args)
-        print(f"\n🔧 Calling tool '{args.call_tool}' with args: {tool_args}")
-        result = await tool._run_without_io_trace(inputs=inputs, ctx={})
-        print(f"\n✅ Tool '{args.call_tool}' response:")
-        print(f"   Output: {result.output}")
-        if result.is_error:
-            print("   ⚠️  Server marked this as an error")
-    else:
-        print("\n💡 Tip: Use --call-tool <tool_name> to test a specific tool")
-        print('   Example: --call-tool crm_get_contact --tool-args \'{"objectId": "123"}\'')
+    try:
+        if args.call_tool:
+            tool_args = json.loads(args.tool_args) if args.tool_args else {}
+            inputs = MCPToolInputs(tool_name=args.call_tool, tool_arguments=tool_args)
+            print(f"\n🔧 Calling tool '{args.call_tool}' with args: {tool_args}")
+            result = await tool._run_without_io_trace(inputs=inputs, ctx={})
+            print(f"\n✅ Tool '{args.call_tool}' response:")
+            print(f"   Output: {result.output}")
+            if result.is_error:
+                print("   ⚠️  Server marked this as an error")
+        else:
+            print("\n💡 Tip: Use --call-tool <tool_name> to test a specific tool")
+            print('   Example: --call-tool crm_get_contact --tool-args \'{"objectId": "123"}\'')
+    finally:
+        await tool.close()
 
 
 if __name__ == "__main__":
