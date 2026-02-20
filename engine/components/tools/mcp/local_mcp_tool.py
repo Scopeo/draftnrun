@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Self
 
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -161,7 +161,7 @@ class LocalMCPTool(Component):
         env: dict[str, str] | None = None,
         cwd: str | Path | None = None,
         timeout: int = 30,
-    ) -> "LocalMCPTool":
+    ) -> Self:
         """
         Convenience async constructor that fetches tool descriptions via MCP SDK.
 
