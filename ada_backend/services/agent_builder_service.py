@@ -109,16 +109,17 @@ def _resolve_literal_field_expressions(
     Only LiteralNode expressions are returned. Reference, variable, and concat
     expressions depend on runtime graph context and cannot be resolved here.
     """
+    # TODO: do not resolve tool inputs here, resolve them in the tool itself
     input_port_instances = get_input_port_instances_for_component_instance(
         session, component_instance_id, eager_load_field_expression=True
     )
-    result: dict[str, Any] = {}
-    for ipi in input_port_instances:
-        if ipi.field_expression and ipi.field_expression.expression_json:
-            expr_ast = expression_from_json(ipi.field_expression.expression_json)
+    literal_values: dict[str, Any] = {}
+    for input_port_instance in input_port_instances:
+        if input_port_instance.field_expression and input_port_instance.field_expression.expression_json:
+            expr_ast = expression_from_json(input_port_instance.field_expression.expression_json)
             if isinstance(expr_ast, LiteralNode):
-                result[ipi.name] = expr_ast.value
-    return result
+                literal_values[input_port_instance.name] = expr_ast.value
+    return literal_values
 
 
 def instantiate_component(
@@ -193,14 +194,12 @@ def instantiate_component(
 
             # Collect literal field expressions for this tool and map them to their
             # tool description names so AIAgent can inject them at _run_tool_call time.
-            pre_configured = _resolve_literal_field_expressions(
-                session, sub_component.child_component_instance.id
-            )
+            pre_configured = _resolve_literal_field_expressions(session, sub_component.child_component_instance.id)
             if pre_configured:
                 get_descriptions = getattr(instantiated_sub_component, "get_tool_descriptions", None)
                 if get_descriptions:
-                    for desc in get_descriptions():
-                        tool_pre_configured_inputs[desc.name] = pre_configured
+                    for tool_description in get_descriptions():
+                        tool_pre_configured_inputs[tool_description.name] = pre_configured
 
             # Group sub-components by parameter name
             if param_name not in grouped_sub_components:
