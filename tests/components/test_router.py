@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from engine.components.errors import NoMatchingRouteError
-from engine.components.router import Router, RouteCondition, RouterInputs
+from engine.components.router import RouteCondition, Router, RouterInputs
 from engine.components.types import ComponentAttributes, ExecutionStrategy
 from engine.trace.trace_manager import TraceManager
 
