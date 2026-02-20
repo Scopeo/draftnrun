@@ -1,4 +1,3 @@
-import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -66,7 +65,7 @@ def test_tool_description_structure():
     assert "python_code" in desc.required_tool_properties
 
 
-def test_sandbox_timeout_configuration():
+def test_sandbox_timeout_configuration(mock_e2b_api_key):
     """Test that the tool respects the sandbox timeout configuration."""
     tool = PythonCodeRunner(
         trace_manager=MagicMock(spec=TraceManager),
@@ -76,17 +75,18 @@ def test_sandbox_timeout_configuration():
     assert tool.sandbox_timeout == 10
 
 
-def test_missing_api_key():
+@pytest.mark.asyncio
+@patch("engine.components.tools.python_code_runner.settings")
+async def test_missing_api_key(mock_settings):
     """Test that the tool raises an error when E2B API key is not configured."""
-    with pytest.MonkeyPatch().context() as m:
-        m.setattr("settings.settings.E2B_API_KEY", None)
+    mock_settings.E2B_API_KEY = None
 
-        tool = PythonCodeRunner(
-            trace_manager=MagicMock(spec=TraceManager),
-            component_attributes=ComponentAttributes(component_instance_name="test_no_api_key"),
-        )
-        with pytest.raises(ValueError, match="E2B API key not configured"):
-            asyncio.run(tool.execute_python_code("print('test')"))
+    tool = PythonCodeRunner(
+        trace_manager=MagicMock(spec=TraceManager),
+        component_attributes=ComponentAttributes(component_instance_name="test_no_api_key"),
+    )
+    with pytest.raises(ValueError, match="E2B API key not configured"):
+        await tool.execute_python_code("print('test')")
 
 
 @pytest.mark.asyncio
