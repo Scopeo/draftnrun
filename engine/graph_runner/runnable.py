@@ -12,6 +12,9 @@ class Runnable(Protocol):
     async def run(self, *inputs: AgentPayload | NodeData, **kwargs) -> AgentPayload | NodeData:
         """Run the runnable with the given inputs and kwargs."""
 
+    async def close(self) -> None:
+        """Release any resources held by this runnable."""
+
     def run_sync(self, *inputs: AgentPayload | NodeData, **kwargs) -> AgentPayload | NodeData:
         """Run the runnable with the given inputs and kwargs synchronously."""
 

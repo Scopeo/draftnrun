@@ -276,5 +276,11 @@ class Component(ABC):
                 span.record_exception(e)
                 raise e
 
+    async def close(self) -> None:
+        """Release any resources held by this component (e.g. subprocesses, connections).
+
+        No-op by default. Override in subclasses that hold resources.
+        """
+
     def run_sync(self, *inputs, **kwargs):
         return asyncio.run(self.run(*inputs, **kwargs))

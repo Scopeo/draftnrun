@@ -352,6 +352,14 @@ class GraphRunner:
 
         return input_data
 
+    async def close(self) -> None:
+        """Close all runnables that hold resources"""
+        for runnable in self.runnables.values():
+            try:
+                await runnable.close()
+            except Exception as e:
+                LOGGER.error(f"Failed to close component '{runnable}': {e}")
+
     def reset(self):
         """Reset the graph runner state to allow reuse.
 

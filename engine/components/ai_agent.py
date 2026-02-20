@@ -535,6 +535,10 @@ class AIAgent(Component):
                 is_final=False,
             )
 
+    async def close(self) -> None:
+        for tool in self.agent_tools:
+            await tool.close()
+
     # --- Thin adapter to typed I/O ---
     async def _run_without_io_trace(self, inputs: AIAgentInputs, ctx: dict) -> AIAgentOutputs:
         # Map typed inputs to the original call style

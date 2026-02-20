@@ -298,6 +298,7 @@ async def run_agent(
         tb = traceback.format_exc()
         raise ValueError(f"Error running agent: {tb}") from e
     finally:
+        await agent.close()
         # TODO: Rename the function
         params = get_tracing_span()
         if params and params.shared_sandbox:
