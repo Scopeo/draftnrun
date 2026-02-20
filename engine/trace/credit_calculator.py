@@ -1,4 +1,3 @@
-import ast
 import logging
 from functools import wraps
 from typing import Any, Callable, Optional
@@ -12,7 +11,6 @@ from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.credits_repository import get_component_cost_per_call, get_llm_cost
 
 LOGGER = logging.getLogger(__name__)
-
 
 _llm_cost_cache: TTLCache[tuple[UUID, UUID], tuple[Optional[float], Optional[float]]] = TTLCache(maxsize=1000, ttl=300)
 
@@ -68,24 +66,6 @@ def get_cached_component_cost(component_instance_id: UUID) -> Optional[float]:
     )
 
 
-def convert_to_list(obj: Any) -> list[str] | None:
-    """Convert object to list of strings if possible."""
-    if isinstance(obj, list):
-        return obj
-    if isinstance(obj, tuple):
-        return list(obj)
-    if obj is None:
-        return None
-    if isinstance(obj, str):
-        try:
-            result = ast.literal_eval(obj)
-            if isinstance(result, (list, tuple)):
-                return list(result)
-        except (ValueError, SyntaxError):
-            pass
-    return None
-
-
 def calculate_llm_credits(func: Callable) -> Callable:
     """Decorator to calculate and set LLM credits on span after setting token counts."""
 
@@ -97,13 +77,6 @@ def calculate_llm_credits(func: Callable) -> Callable:
             return
 
         try:
-            org_llm_providers = convert_to_list(span.attributes.get("organization_llm_providers"))
-            if self._provider and org_llm_providers and self._provider in org_llm_providers:
-                LOGGER.debug(
-                    f"Provider {self._provider} is in organization_llm_providers, skipping credit calculation"
-                )
-                return
-
             completion_tokens_value = completion_tokens if completion_tokens is not None else 0
 
             credits_per_input_token, credits_per_output_token = get_cached_llm_cost(self._model_id)
@@ -118,6 +91,7 @@ def calculate_llm_credits(func: Callable) -> Callable:
                 attributes["credits.output_token"] = credits_output_token
 
             if attributes:
+                attributes["provider"] = self._provider
                 span.set_attributes(attributes)
                 LOGGER.info(f"LLM credits calculated: {attributes}")
             else:
@@ -137,10 +111,8 @@ def calculate_and_set_component_credits(span: Span) -> None:
             return
 
         credits_per_call = get_cached_component_cost(component_instance_id)
-
         if credits_per_call:
             span.set_attributes({"credits.per_call": credits_per_call})
             LOGGER.info(f"Component credits calculated: per_call={credits_per_call}")
-
     except Exception as e:
         LOGGER.error(f"Error calculating component credits: {e}", exc_info=True)
