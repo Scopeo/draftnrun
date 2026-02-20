@@ -1069,6 +1069,8 @@ class PortDefinition(Base):
     nullable = mapped_column(Boolean, nullable=False, default=False)
     default = mapped_column(String, nullable=True)
     is_tool_input = mapped_column(Boolean, nullable=False, default=True)
+    is_advanced = mapped_column(Boolean, nullable=False, default=False)
+
     component_version = relationship("ComponentVersion", back_populates="port_definitions")
 
     def get_default(self):
@@ -2036,9 +2038,7 @@ class OrgVariableDefinition(Base):
 
     project = relationship("Project", backref="variable_definitions")
 
-    __table_args__ = (
-        UniqueConstraint("organization_id", "name", name="uq_org_variable_definition"),
-    )
+    __table_args__ = (UniqueConstraint("organization_id", "name", name="uq_org_variable_definition"),)
 
 
 class OrgVariableSet(Base):

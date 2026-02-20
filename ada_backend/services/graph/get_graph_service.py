@@ -131,6 +131,7 @@ def get_graph_service(
             comp_instance.parameters.append(
                 PipelineParameterReadSchema(
                     kind=ParameterKind.INPUT,
+                    is_tool_input=input_port.is_tool_input,
                     id=input_port.id,
                     name=input_port.name,
                     type=input_port.parameter_type or ParameterType.STRING,
@@ -138,7 +139,7 @@ def get_graph_service(
                     default=input_port.get_default() if input_port.default is not None else None,
                     ui_component=input_port.ui_component,
                     ui_component_properties=input_port.ui_component_properties,
-                    is_advanced=False,
+                    is_advanced=input_port.is_advanced,
                     value=field_expression_by_name.get(input_port.name),
                 )
             )

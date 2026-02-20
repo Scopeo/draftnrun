@@ -6,6 +6,7 @@ from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 
+from ada_backend.database.models import UIComponent, UIComponentProperties
 from engine.components.component import Component
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
 from engine.components.utils import merge_constrained_output_to_root, parse_openai_message_format
@@ -15,6 +16,8 @@ from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
+
+DEFAULT_PROMPT_TEMPLATE = "Answer this question: {{input}}"
 
 DEFAULT_LLM_CALL_TOOL_DESCRIPTION = ToolDescription(
     name="LLM Call",
@@ -70,14 +73,27 @@ class LLMCallInputs(BaseModel):
         description="The input messages",
     )
     prompt_template: Optional[str] = Field(
-        default=None,
+        default=DEFAULT_PROMPT_TEMPLATE,
         description="Prompt template to use for the LLM call.",
-        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
+        json_schema_extra={
+            "is_tool_input": False,
+            "ui_component": UIComponent.TEXTAREA,
+        },
     )
     output_format: Optional[dict[str, Any]] = Field(
         default=None,
-        description="Structured output format.",
-        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
+        description=(
+            "Enter the output format here using this documentation from OpenAI: "
+            "https://platform.openai.com/docs/guides/structured-outputs#supported-schemas"
+        ),
+        json_schema_extra={
+            "is_tool_input": False,
+            "ui_component": UIComponent.TEXTAREA,
+            "ui_component_properties": UIComponentProperties(
+                label="Output Format",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+            "is_advanced": True,
+        },
     )
     # Allow extra fields for backward compatibility
     model_config = {"extra": "allow"}
@@ -112,11 +128,9 @@ class LLMCallAgent(Component):
         completion_service: CompletionService,
         tool_description: ToolDescription,
         component_attributes: ComponentAttributes,
-        prompt_template: str,
-        capability_resolver: Callable[[list[str]], set[str]],
+        capability_resolver: Optional[Callable[[list[str]], set[str]]] = None,
         file_content_key: Optional[str] = None,
         file_url_key: Optional[str] = None,
-        output_format: Optional[dict[str] | None] = None,
     ):
         super().__init__(
             trace_manager=trace_manager,
@@ -124,10 +138,8 @@ class LLMCallAgent(Component):
             component_attributes=component_attributes,
         )
         self._completion_service = completion_service
-        self._prompt_template = prompt_template
         self._file_content_key = file_content_key
         self._file_url_key = file_url_key
-        self.output_format = output_format
         self._capability_resolver = capability_resolver
 
     def _extract_file_content(self, inputs: LLMCallInputs, ctx: Optional[dict]) -> list:
@@ -164,8 +176,8 @@ class LLMCallAgent(Component):
 
     async def _run_without_io_trace(self, inputs: LLMCallInputs, ctx: Optional[dict] = None) -> LLMCallOutputs:
         LOGGER.info(f"Running LLM call agent with inputs: {inputs} and ctx: {ctx}")
-        prompt_template = inputs.prompt_template or self._prompt_template
-        output_format = inputs.output_format or self.output_format
+        prompt_template = inputs.prompt_template or DEFAULT_PROMPT_TEMPLATE
+        output_format = inputs.output_format
 
         files_content = []
         images_content = []
@@ -250,4 +262,6 @@ class LLMCallAgent(Component):
         return outputs
 
     def _resolve_capabilities(self, capabilities: list[str]) -> set[str]:
+        if self._capability_resolver is None:
+            return set()
         return self._capability_resolver(capabilities)
