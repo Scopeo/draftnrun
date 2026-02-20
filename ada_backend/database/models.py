@@ -1856,6 +1856,7 @@ class Usage(Base):
     project = relationship("Project", back_populates="usage")
 
 
+# TODO: rename SpanUsage-> SpanCount
 class SpanUsage(Base):
     """Stores credit usage for spans that have billable usage."""
 

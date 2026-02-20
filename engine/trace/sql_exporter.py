@@ -1,7 +1,8 @@
+import ast
 import json
 import logging
 from datetime import datetime, timezone
-from typing import cast
+from typing import Any, cast
 
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.sdk.trace import BoundedAttributes, Event, ReadableSpan
@@ -83,9 +84,38 @@ def extract_messages_from_attributes(attributes: dict) -> tuple[list[dict], list
         return [], [], attributes
 
 
+def convert_to_list(obj: Any) -> list[str] | None:
+    """Convert object to list of strings if possible."""
+    if isinstance(obj, list):
+        return obj
+    if isinstance(obj, tuple):
+        return list(obj)
+    if obj is None:
+        return None
+    if isinstance(obj, str):
+        try:
+            result = ast.literal_eval(obj)
+            if isinstance(result, (list, tuple)):
+                return list(result)
+        except (ValueError, SyntaxError):
+            pass
+    return None
+
+
 class SQLSpanExporter(SpanExporter):
     def __init__(self):
         self.session = get_session_trace()
+
+    @staticmethod
+    def _should_count_as_usage(
+        component_instance_id: str | None,
+        organization_llm_providers: list[str] | None,
+        provider: str | None,
+    ) -> bool:
+        org_llm_providers = convert_to_list(organization_llm_providers)
+        if component_instance_id is not None:
+            return True
+        return not (provider is not None and org_llm_providers is not None and provider in org_llm_providers)
 
     def export(self, spans: list[ReadableSpan]) -> SpanExportResult:
         LOGGER.info(f"Exporting {len(spans)} spans to SQL database")
@@ -128,6 +158,8 @@ class SQLSpanExporter(SpanExporter):
             tag_name = formatted_attributes.pop("tag_name", None)
             component_instance_id = formatted_attributes.pop("component_instance_id", None)
             model_id = formatted_attributes.pop("model_id", None)
+            provider = formatted_attributes.get("provider", None)
+            organization_llm_providers = formatted_attributes.get("organization_llm_providers", None)
             input, output, formatted_attributes = extract_messages_from_attributes(formatted_attributes)
 
             openinference_span_kind = json_span["attributes"].get(SpanAttributes.OPENINFERENCE_SPAN_KIND, "UNKNOWN")
@@ -193,7 +225,10 @@ class SQLSpanExporter(SpanExporter):
                 self.session.add(span_usage)
 
                 # Update Usage table with total credits
-                if project_id:
+                count_as_usage = self._should_count_as_usage(
+                    component_instance_id, organization_llm_providers, provider
+                )
+                if project_id and count_as_usage:
                     total_span_credits = (
                         (credits_input_token or 0) + (credits_output_token or 0) + (credits_per_call or 0)
                     )

@@ -1,17 +1,28 @@
+from datetime import datetime
+from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from ada_backend.context import RequestContext, set_request_context
 from ada_backend.database import models as db
+from ada_backend.database.models import SpanUsage, Usage
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
-from ada_backend.database.setup_db import SessionLocal
+from ada_backend.database.setup_db import SessionLocal, get_db_session
+from ada_backend.database.trace_models import Span
 from ada_backend.repositories.credits_repository import (
     create_component_version_cost,
+    create_llm_cost,
     create_organization_limit,
     delete_component_version_cost,
     delete_organization_limit,
+    upsert_component_version_cost,
 )
+from ada_backend.repositories.llm_models_repository import create_llm_model
+from ada_backend.repositories.organization_repository import delete_organization_secret, upsert_organization_secret
+from ada_backend.services.agent_runner_service import run_env_agent, setup_tracing_context
 from ada_backend.services.credits_service import (
     create_organization_limit_service,
     delete_component_version_cost_service,
@@ -21,6 +32,11 @@ from ada_backend.services.credits_service import (
     upsert_component_version_cost_service,
 )
 from ada_backend.services.errors import OrganizationLimitNotFound
+from ada_backend.services.llm_models_service import delete_llm_model_service
+from ada_backend.services.project_service import delete_project_service
+from engine.trace.trace_context import set_trace_manager
+from engine.trace.trace_manager import TraceManager
+from tests.ada_backend.test_utils import create_graph_with_start_node_and_ai_agent, create_project_and_graph_runner
 
 ORGANIZATION_ID = UUID("37b7d67f-8f29-4fce-8085-19dea582f605")  # umbrella organization
 COMPONENT_VERSION_ID = str(COMPONENT_VERSION_UUIDS["llm_call"])
@@ -383,3 +399,147 @@ def test_upsert_component_version_cost_empty_payload(db_session, ensure_componen
     assert result.credits_per is None
 
     delete_component_version_cost(db_session, component_version_id)
+
+
+def assert_llm_span_usage(
+    session, project_id: UUID, model_id: UUID, mock_credits_input_token: float, mock_credits_output_token: float
+):
+    span_llm_count = session.execute(
+        select(SpanUsage)
+        .join(Span, SpanUsage.span_id == Span.span_id)
+        .where(Span.model_id == model_id, Span.project_id == str(project_id))
+        .order_by(Span.start_time.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    assert span_llm_count is not None
+    assert span_llm_count.credits_input_token == mock_credits_input_token
+    assert span_llm_count.credits_output_token == mock_credits_output_token
+    assert span_llm_count.credits_per_call is None
+
+
+def assert_ai_agent_span_usage(session, project_id: UUID, ai_agent_id: str, mock_credits_per_call: float):
+    ai_agent_span_count = session.execute(
+        select(SpanUsage)
+        .join(Span, SpanUsage.span_id == Span.span_id)
+        .where(Span.component_instance_id == UUID(ai_agent_id), Span.project_id == str(project_id))
+        .order_by(Span.start_time.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    assert ai_agent_span_count is not None
+    assert ai_agent_span_count.credits_per_call == mock_credits_per_call
+    assert ai_agent_span_count.credits_input_token is None
+    assert ai_agent_span_count.credits_output_token is None
+
+
+def assert_usage(
+    session,
+    project_id: UUID,
+    expected_usage: float,
+):
+    now = datetime.now()
+    usage = session.execute(
+        select(Usage).where(Usage.project_id == project_id, Usage.year == now.year, Usage.month == now.month)
+    ).scalar_one_or_none()
+    assert usage is not None
+    assert usage.credits_used == expected_usage
+
+
+@pytest.mark.asyncio
+async def test_llm_credits_count_as_usage_flag(db_session):
+    """Test that LLM credits are counted in Usage table only when not using org API key."""
+    with get_db_session() as session:
+        project_id, graph_runner_id = create_project_and_graph_runner(
+            session, project_name_prefix="credits_test", organization_id=ORGANIZATION_ID
+        )
+        fake_model_name = f"test-model-{uuid4()}"
+        fake_model = create_llm_model(session, "Test Model", "Test model", ["completion"], "google", fake_model_name)
+        mock_credits_per_input_token = 1000000.0
+        mock_credits_per_output_token = 2000000.0
+        mock_credits_per_call = 5.0
+        create_llm_cost(
+            session,
+            fake_model.id,
+            credits_per_input_token=mock_credits_per_input_token,
+            credits_per_output_token=mock_credits_per_output_token,
+        )
+
+        ai_agent_version_id = COMPONENT_VERSION_UUIDS["base_ai_agent"]
+        upsert_component_version_cost(session, ai_agent_version_id, credits_per_call=mock_credits_per_call)
+
+        ai_agent_id = await create_graph_with_start_node_and_ai_agent(
+            session, project_id, graph_runner_id, provider="google", model_name=fake_model_name
+        )
+        mock_input_tokens = 10
+        mock_output_tokens = 20
+
+        mock_response = ("response", mock_input_tokens, mock_output_tokens, mock_input_tokens + mock_output_tokens)
+
+        trace_manager = TraceManager(project_name="credits-test")
+        set_trace_manager(trace_manager)
+
+        request_ctx = RequestContext(request_id=uuid4())
+        set_request_context(request_ctx)
+
+        # Case 1: No org secret (DraftNRun API key)
+        setup_tracing_context(session, project_id)
+        with patch(
+            "engine.llm_services.providers.google_provider.GoogleProvider.complete", new_callable=AsyncMock
+        ) as mock_complete:
+            mock_complete.return_value = mock_response
+            result = await run_env_agent(
+                session,
+                project_id,
+                db.EnvType.DRAFT,
+                {"messages": [{"role": "user", "content": "test"}]},
+                db.CallType.SANDBOX,
+            )
+            assert result.error is None
+        trace_manager.force_flush()
+
+        # Credit calculator divides by 1_000_000 (credits_per_token is per million tokens)
+        mock_credits_input_token = mock_credits_per_input_token * mock_input_tokens / 1_000_000
+        mock_credits_output_token = mock_credits_per_output_token * mock_output_tokens / 1_000_000
+
+        assert_llm_span_usage(session, project_id, fake_model.id, mock_credits_input_token, mock_credits_output_token)
+
+        assert_ai_agent_span_usage(session, project_id, ai_agent_id, mock_credits_per_call)
+
+        assert_usage(session, project_id, mock_credits_input_token + mock_credits_output_token + mock_credits_per_call)
+
+        # Case 2: Create org secret (org API key)
+        upsert_organization_secret(session, ORGANIZATION_ID, "google_api_key", "org-key", db.OrgSecretType.LLM_API_KEY)
+        setup_tracing_context(session, project_id)
+
+        with patch(
+            "engine.llm_services.providers.google_provider.GoogleProvider.complete", new_callable=AsyncMock
+        ) as mock_complete:
+            mock_complete.return_value = mock_response
+            result = await run_env_agent(
+                session,
+                project_id,
+                db.EnvType.DRAFT,
+                {"messages": [{"role": "user", "content": "test"}]},
+                db.CallType.SANDBOX,
+            )
+            assert result.error is None
+        trace_manager.force_flush()
+
+        # Case 2: Query most recent LLM span (with model_id) and component span (with component_instance_id)
+        # These will be from Case 2 since they're ordered by start_time desc
+        assert_llm_span_usage(session, project_id, fake_model.id, mock_credits_input_token, mock_credits_output_token)
+        assert_ai_agent_span_usage(session, project_id, ai_agent_id, mock_credits_per_call)
+        assert_usage(
+            session, project_id, mock_credits_input_token + mock_credits_output_token + 2 * mock_credits_per_call
+        )
+
+        session.query(Span).filter(Span.project_id == str(project_id)).delete()
+        session.commit()
+
+        delete_llm_model_service(session, fake_model.id)
+
+        delete_project_service(session, project_id)
+
+        try:
+            delete_organization_secret(session, ORGANIZATION_ID, "google_api_key")
+        except Exception:
+            pass
