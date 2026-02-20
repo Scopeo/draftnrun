@@ -24,7 +24,7 @@ def router_component(mock_trace_manager):
 @pytest.mark.asyncio
 async def test_router_single_route_match(router_component):
     """Test router with single route that matches"""
-    inputs = RouterInputs(routes=[RouteCondition(value_a="bottle")])
+    inputs = RouterInputs(routes=[RouteCondition(value_a="bottle", value_b="bottle")])
     result = await router_component._run_without_io_trace(inputs, {})
 
     assert result._directive.strategy == ExecutionStrategy.SELECTIVE_PORTS
@@ -45,9 +45,9 @@ async def test_router_multiple_routes_first_matches(router_component):
     """Test router with multiple routes where first matches"""
     inputs = RouterInputs(
         routes=[
-            RouteCondition(value_a="bottle"),
-            RouteCondition(value_a="cup"),
-            RouteCondition(value_a="water"),
+            RouteCondition(value_a="bottle", value_b="bottle"),  # Matches
+            RouteCondition(value_a="cup", value_b="no_match"),
+            RouteCondition(value_a="water", value_b="no_match"),
         ],
     )
     result = await router_component._run_without_io_trace(inputs, {})
@@ -61,7 +61,7 @@ async def test_router_multiple_routes_middle_matches(router_component):
     inputs = RouterInputs(
         routes=[
             RouteCondition(value_a="bottle", value_b="no_match"),
-            RouteCondition(value_a="cup"),
+            RouteCondition(value_a="cup", value_b="cup"),  # Matches
             RouteCondition(value_a="water", value_b="no_match"),
         ],
     )
@@ -77,7 +77,7 @@ async def test_router_multiple_routes_last_matches(router_component):
         routes=[
             RouteCondition(value_a="bottle", value_b="no_match"),
             RouteCondition(value_a="cup", value_b="no_match"),
-            RouteCondition(value_a="water"),
+            RouteCondition(value_a="water", value_b="water"),  # Matches
         ],
     )
     result = await router_component._run_without_io_trace(inputs, {})
@@ -109,7 +109,7 @@ async def test_router_numeric_equality_exact(router_component):
         routes=[
             RouteCondition(value_a=1, value_b=2),
             RouteCondition(value_a=2, value_b=3),
-            RouteCondition(value_a=5),
+            RouteCondition(value_a=5, value_b=5),  # Matches
             RouteCondition(value_a=10, value_b=11),
         ],
     )
@@ -124,7 +124,7 @@ async def test_router_string_equality(router_component):
     inputs = RouterInputs(
         routes=[
             RouteCondition(value_a="world", value_b="no_match"),
-            RouteCondition(value_a="hello"),
+            RouteCondition(value_a="hello", value_b="hello"),  # Matches
             RouteCondition(value_a="foo", value_b="no_match"),
         ],
     )
@@ -140,7 +140,7 @@ async def test_router_complex_data_comparison(router_component):
     inputs = RouterInputs(
         routes=[
             RouteCondition(value_a="simple", value_b="no_match"),
-            RouteCondition(value_a=complex_data),
+            RouteCondition(value_a=complex_data, value_b=complex_data),  # Matches
             RouteCondition(value_a="other", value_b="no_match"),
         ],
     )
@@ -165,7 +165,7 @@ async def test_router_float_comparison(router_component):
         routes=[
             RouteCondition(value_a=1.5, value_b=2.0),
             RouteCondition(value_a=2.7, value_b=3.0),
-            RouteCondition(value_a=3.14),
+            RouteCondition(value_a=3.14, value_b=3.14),  # Matches
             RouteCondition(value_a=4.2, value_b=5.0),
         ],
     )
@@ -181,7 +181,7 @@ async def test_router_mixed_type_routes(router_component):
         routes=[
             RouteCondition(value_a=1, value_b=2),
             RouteCondition(value_a="hello", value_b="world"),
-            RouteCondition(value_a="5"),
+            RouteCondition(value_a="5", value_b="5"),  # Matches
             RouteCondition(value_a=True, value_b=False),
         ],
     )
@@ -196,7 +196,7 @@ async def test_router_boolean_values(router_component):
     inputs = RouterInputs(
         routes=[
             RouteCondition(value_a=False, value_b=True),
-            RouteCondition(value_a=True),
+            RouteCondition(value_a=True, value_b=True),  # Matches
             RouteCondition(value_a="true", value_b="false"),
         ],
     )
@@ -211,7 +211,7 @@ async def test_router_none_value(router_component):
     inputs = RouterInputs(
         routes=[
             RouteCondition(value_a="test", value_b="no_match"),
-            RouteCondition(value_a=None),
+            RouteCondition(value_a=None, value_b=None),  # Matches
             RouteCondition(value_a="other", value_b="no_match"),
         ],
     )
@@ -227,7 +227,7 @@ async def test_router_list_value_comparison(router_component):
     inputs = RouterInputs(
         routes=[
             RouteCondition(value_a=[4, 5], value_b=[6, 7]),
-            RouteCondition(value_a=list_value),
+            RouteCondition(value_a=list_value, value_b=list_value),  # Matches
             RouteCondition(value_a=[7, 8], value_b=[9, 10]),
         ],
     )
@@ -243,7 +243,7 @@ async def test_router_dict_value_comparison(router_component):
     inputs = RouterInputs(
         routes=[
             RouteCondition(value_a={"c": 3}, value_b={"d": 4}),
-            RouteCondition(value_a=dict_value),
+            RouteCondition(value_a=dict_value, value_b=dict_value),  # Matches
             RouteCondition(value_a={"d": 4}, value_b={"e": 5}),
         ],
     )
@@ -259,7 +259,7 @@ async def test_router_case_sensitive_strings(router_component):
         routes=[
             RouteCondition(value_a="hello", value_b="HELLO"),
             RouteCondition(value_a="HELLO", value_b="hello"),
-            RouteCondition(value_a="Hello"),
+            RouteCondition(value_a="Hello", value_b="Hello"),  # Matches
         ],
     )
     result = await router_component._run_without_io_trace(inputs, {})
@@ -311,15 +311,16 @@ async def test_router_value_b_comparison(router_component):
 
 @pytest.mark.asyncio
 async def test_router_value_b_defaults_to_value_a(router_component):
-    """Test router uses value_a when value_b is not provided"""
+    """Test router uses value_a when value_b is not provided (defaults to value_a, so always matches)"""
     inputs = RouterInputs(
         routes=[
-            RouteCondition(value_a="apple"),  # value_b defaults to value_a
+            RouteCondition(value_a="apple"),  # value_b defaults to value_a, so matches
             RouteCondition(value_a="banana", value_b="cherry"),
         ],
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
+    # When value_b is None, it defaults to value_a, so route_0 matches
     assert result._directive.selected_ports == ["route_0"]
 
 
@@ -328,9 +329,9 @@ async def test_router_multiple_routes_match(router_component):
     """Test router returns all matching routes"""
     inputs = RouterInputs(
         routes=[
-            RouteCondition(value_a="match"),  # Matches
+            RouteCondition(value_a="match", value_b="match"),  # Matches
             RouteCondition(value_a="no", value_b="match"),  # Doesn't match
-            RouteCondition(value_a="match"),  # Matches
+            RouteCondition(value_a="test", value_b="test"),  # Matches
         ],
     )
     result = await router_component._run_without_io_trace(inputs, {})
