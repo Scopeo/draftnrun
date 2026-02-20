@@ -9,6 +9,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry import trace as trace_api
 from pydantic import BaseModel, Field
 
+from ada_backend.database.models import UIComponent, UIComponentProperties
 from engine.components.component import Component
 from engine.components.history_message_handling import HistoryMessageHandler
 from engine.components.rag.formatter import Formatter
@@ -33,6 +34,11 @@ OUTPUT_TOOL_NAME = "chat_formatting_output_tool"
 OUTPUT_TOOL_DESCRIPTION = (
     "Default tool to be used by the agent to answer in a structured format if no other tool is called"
 )
+SYSTEM_PROMPT_DEFAULT = (
+    "Act as a helpful assistant. "
+    "You can use tools to answer questions,"
+    " but you can also answer directly if you have enough information."
+)
 
 
 class AIAgentInputs(BaseModel):
@@ -40,14 +46,39 @@ class AIAgentInputs(BaseModel):
         description="The history of messages in the conversation.",
     )
     initial_prompt: Optional[str] = Field(
-        default=None,
-        description="Initial prompt to use for the agent.",
-        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
+        default=SYSTEM_PROMPT_DEFAULT,
+        description=(
+            "This prompt will be used to initialize the agent and set its behavior."
+            " It can be used to provide context or instructions for the agent."
+            " It will be used as the first message of the conversation in the agent's memory."
+            " You can use it to set the agent's personality, role,"
+            "or to provide specific instructions on how to handle certain types of questions."
+            " The conversation you have with the agent (or your single message)"
+            " is going to be added after this first message."
+        ),
+        json_schema_extra={
+            "is_tool_input": False,
+            "ui_component": UIComponent.TEXTAREA,
+            "ui_component_properties": UIComponentProperties(
+                label="System Prompt",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        },
     )
     output_format: Optional[str | dict] = Field(
         default=None,
-        description="Structured output format.",
-        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
+        description=(
+            "JSON schema defining the properties/parameters of the output tool. "
+            'Example: {"answer": {"type": "string", "description": "The answer content"}, '
+            '"is_ending_conversation": {"type": "boolean", "description": "End conversation?"}}'
+        ),
+        json_schema_extra={
+            "is_tool_input": False,
+            "ui_component": UIComponent.TEXTAREA,
+            "ui_component_properties": UIComponentProperties(
+                label="Output Format",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+            "is_advanced": True,
+        },
     )
     # Allow any other fields to be passed through
     model_config = {"extra": "allow"}
@@ -147,7 +178,6 @@ class AIAgent(Component):
         component_attributes: ComponentAttributes,
         agent_tools: Optional[list[Runnable] | Runnable] = None,
         run_tools_in_parallel: bool = True,
-        initial_prompt: str = INITIAL_PROMPT,
         max_iterations: int = 3,
         max_tools_per_iteration: Optional[int] = 4,
         input_data_field_for_messages_history: str = "messages",
@@ -155,7 +185,6 @@ class AIAgent(Component):
         last_history_messages: int = 50,
         allow_tool_shortcuts: bool = False,
         date_in_system_prompt: bool = False,
-        output_format: Optional[str | dict] = None,
     ) -> None:
         super().__init__(
             trace_manager=trace_manager,
@@ -167,7 +196,6 @@ class AIAgent(Component):
             self.agent_tools = []
         else:
             self.agent_tools = agent_tools if isinstance(agent_tools, list) else [agent_tools]
-        self.initial_prompt = initial_prompt
         self._first_history_messages = first_history_messages
         self._last_history_messages = last_history_messages
         self._memory_handling = HistoryMessageHandler(self._first_history_messages, self._last_history_messages)
@@ -180,8 +208,6 @@ class AIAgent(Component):
         self._date_in_system_prompt = date_in_system_prompt
         self._tool_registry: dict[str, tuple[Runnable, ToolDescription]] = {}
 
-        self._output_format = output_format
-        self._output_tool_agent_description = self._get_output_tool_description(output_format)
         # Tool cache is snapshotted at init; provide agent_tools up front.
         self._build_tool_cache()
         self._formatter = Formatter(add_sources=False, component_attributes=component_attributes)
@@ -538,8 +564,8 @@ class AIAgent(Component):
     # --- Thin adapter to typed I/O ---
     async def _run_without_io_trace(self, inputs: AIAgentInputs, ctx: dict) -> AIAgentOutputs:
         # Map typed inputs to the original call style
-        initial_prompt = inputs.initial_prompt or self.initial_prompt
-        output_format = inputs.output_format or self._output_format
+        initial_prompt = inputs.initial_prompt or INITIAL_PROMPT
+        output_format = inputs.output_format
         output_tool_description = self._get_output_tool_description(output_format)
 
         payload_dict = inputs.model_dump(exclude_none=True)
