@@ -22,3 +22,18 @@ class MCPConnectionError(Exception):
 
     def __init__(self, endpoint: str, detail: str):
         super().__init__(f"MCP Tool failed to connect to {endpoint}: {detail}")
+
+
+class NoMatchingRouteError(Exception):
+    """Raised when no route condition matches in a Router component."""
+
+    def __init__(self, num_routes: int, routes_info: str = ""):
+        self.num_routes = num_routes
+        message = (
+            f"No matching route found. "
+            f"Evaluated {num_routes} route(s) but none matched. "
+            f"Check your route conditions and input values."
+        )
+        if routes_info:
+            message += f"\n{routes_info}"
+        super().__init__(message)

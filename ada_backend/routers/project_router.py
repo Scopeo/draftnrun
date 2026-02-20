@@ -45,7 +45,11 @@ from ada_backend.services.project_service import (
     update_project_service,
 )
 from ada_backend.services.tag_service import compose_tag_name
-from engine.components.errors import KeyTypePromptTemplateError, MissingKeyPromptTemplateError
+from engine.components.errors import (
+    KeyTypePromptTemplateError,
+    MissingKeyPromptTemplateError,
+    NoMatchingRouteError,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -370,6 +374,13 @@ async def chat(
     except KeyTypePromptTemplateError as e:
         LOGGER.error(
             f"Key type error in prompt template for project {project_id} for graph runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except NoMatchingRouteError as e:
+        LOGGER.error(
+            f"No matching route in Router component for project {project_id}, "
+            f"graph_runner {graph_runner_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e

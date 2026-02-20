@@ -162,6 +162,7 @@ class UIComponent(StrEnum):
     CONDITION_BUILDER = "ConditionBuilder"
     OAUTH_CONNECTION = "OAuthConnection"
     CODE = "Code"
+    ROUTE_BUILDER = "RouteBuilder"
 
 
 class SourceType(StrEnum):
@@ -1026,6 +1027,7 @@ class GraphRunnerEdge(Base):
         nullable=False,
     )
     order = mapped_column(Integer, nullable=True)
+    source_port_name = mapped_column(String, nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

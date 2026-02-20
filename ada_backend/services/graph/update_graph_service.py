@@ -18,10 +18,7 @@ from ada_backend.repositories.component_repository import (
 )
 from ada_backend.repositories.edge_repository import delete_edge, get_edges, upsert_edge
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
-from ada_backend.repositories.field_expression_repository import (
-    create_field_expression,
-    update_field_expression,
-)
+from ada_backend.repositories.field_expression_repository import create_field_expression, update_field_expression
 from ada_backend.repositories.graph_runner_repository import (
     delete_node,
     get_component_nodes,
@@ -315,6 +312,7 @@ async def update_graph_service(
             target_node_id=edge.destination,
             graph_runner_id=graph_runner_id,
             order=edge.order,
+            source_port_name=edge.source_port_name,
         )
 
     edge_ids_to_delete = previous_edge_ids - {edge.id for edge in graph_project.edges}
@@ -324,7 +322,7 @@ async def update_graph_service(
         delete_edge(session, edge_id)
 
     # Port mappings: ensure explicit wiring for all edges (save-time defaults)
-    _ensure_port_mappings_for_edges(session, graph_runner_id, graph_project)
+    explicit_port_mapping_targets = _ensure_port_mappings_for_edges(session, graph_runner_id, graph_project)
 
     db_port_instances_by_instance: dict[UUID, dict[str, UUID]] = defaultdict(dict)
     for instance_id in instance_ids:
@@ -401,6 +399,7 @@ async def update_graph_service(
                     component_instance_id=instance.id,
                     field_name=field_name,
                     ref_node=ref_node,
+                    explicit_port_mapping_targets=explicit_port_mapping_targets,
                 )
 
     for instance_id, incoming_fields in incoming_field_expressions_by_instance.items():
@@ -437,14 +436,92 @@ async def update_graph_service(
     )
 
 
+def _is_router_component(session: Session, component_version_id: UUID) -> bool:
+    """Check if a component is a Router by checking its name."""
+    component_version = session.query(db.ComponentVersion).filter_by(id=component_version_id).first()
+    if component_version:
+        component = session.query(db.Component).filter_by(id=component_version.component_id).first()
+        if component:
+            return component.name == "Router"
+    return False
+
+
+def _create_router_bypass_mappings(
+    session: Session,
+    router_instance_id: UUID,
+    target_instance_id: UUID,
+    edges_by_target: dict[UUID, list[UUID]],
+    instance_to_component_version: dict[UUID, UUID],
+    canonical_ports_by_component: dict[UUID, dict[str, str]],
+    graph_runner_id: UUID,
+) -> list[db.PortMapping]:
+    mappings = []
+
+    # Find router's predecessors
+    router_predecessors = edges_by_target.get(router_instance_id, [])
+    if not router_predecessors:
+        LOGGER.warning(f"Router {router_instance_id} has no predecessors, cannot create bypass mapping")
+        return mappings
+
+    # Get target component info
+    target_component_version_id = instance_to_component_version[target_instance_id]
+    target_ports = canonical_ports_by_component.get(target_component_version_id, {})
+    target_port_name = target_ports.get("input") or "input"
+
+    target_port_def_id = get_input_port_definition_id(session, target_component_version_id, target_port_name)
+    if not target_port_def_id:
+        LOGGER.warning(f"Input port '{target_port_name}' not found for target {target_component_version_id}")
+        return mappings
+
+    # Create mapping from each predecessor to target (bypassing router)
+    for predecessor_id in router_predecessors:
+        if predecessor_id not in instance_to_component_version:
+            LOGGER.warning(f"Predecessor {predecessor_id} not found, skipping bypass mapping")
+            continue
+
+        predecessor_component_version_id = instance_to_component_version[predecessor_id]
+        predecessor_ports = canonical_ports_by_component.get(predecessor_component_version_id, {})
+        predecessor_port_name = predecessor_ports.get("output") or "output"
+
+        predecessor_port_def_id = get_output_port_definition_id(
+            session, predecessor_component_version_id, predecessor_port_name
+        )
+        if not predecessor_port_def_id:
+            LOGGER.warning(
+                f"Output port '{predecessor_port_name}' not found for predecessor {predecessor_component_version_id}"
+            )
+            continue
+
+        validate_port_definition_types(session, predecessor_port_def_id, target_port_def_id)
+
+        LOGGER.info(
+            f"Creating bypass mapping: {predecessor_id}.{predecessor_port_name} → "
+            f"{target_instance_id}.{target_port_name} (bypassing Router)"
+        )
+
+        mappings.append(
+            db.PortMapping(
+                graph_runner_id=graph_runner_id,
+                source_instance_id=predecessor_id,
+                source_port_definition_id=predecessor_port_def_id,
+                target_instance_id=target_instance_id,
+                target_port_definition_id=target_port_def_id,
+                dispatch_strategy="direct",
+            )
+        )
+
+    return mappings
+
+
 def _ensure_port_mappings_for_edges(
     session: Session,
     graph_runner_id: UUID,
     graph_project: GraphUpdateSchema,
-) -> None:
+) -> set[tuple[UUID, str]]:
     # Full replacement (PUT) semantics for port mappings
     delete_port_mappings_for_graph(session, graph_runner_id)
     explicitly_mapped_pairs: set[tuple[UUID, UUID]] = set()
+    explicit_port_mapping_targets: set[tuple[UUID, str]] = set()
 
     if hasattr(graph_project, "port_mappings") and graph_project.port_mappings:
         new_mappings: list[db.PortMapping] = []
@@ -487,6 +564,7 @@ def _ensure_port_mappings_for_edges(
                 )
             )
             explicitly_mapped_pairs.add((pm_schema.source_instance_id, pm_schema.target_instance_id))
+            explicit_port_mapping_targets.add((pm_schema.target_instance_id, pm_schema.target_port_name))
 
         if new_mappings:
             session.bulk_save_objects(new_mappings)
@@ -497,7 +575,7 @@ def _ensure_port_mappings_for_edges(
     unmapped_edges = actual_edges - explicitly_mapped_pairs
 
     if not unmapped_edges:
-        return
+        return explicit_port_mapping_targets
 
     instance_to_component_version: dict[UUID, UUID] = {}
     for inst in graph_project.component_instances:
@@ -516,6 +594,11 @@ def _ensure_port_mappings_for_edges(
     )
     canonical_ports_by_component = get_canonical_ports_for_component_versions(session, component_version_ids)
 
+    # Build edge map for Router bypass logic
+    edges_by_target: dict[UUID, list[UUID]] = defaultdict(list)
+    for edge in graph_project.edges:
+        edges_by_target[edge.destination].append(edge.origin)
+
     auto_generated_mappings: list[db.PortMapping] = []
     for source_instance_id, target_instance_id in unmapped_edges:
         if (
@@ -529,6 +612,28 @@ def _ensure_port_mappings_for_edges(
         source_component_version_id = instance_to_component_version[source_instance_id]
         target_component_version_id = instance_to_component_version[target_instance_id]
 
+        # Check if target is a Router - if so, skip creating mappings (Router handles routing only)
+        if _is_router_component(session, target_component_version_id):
+            LOGGER.info(f"Skipping port mapping for edge to Router {target_instance_id} - Router doesn't accept input")
+            continue
+
+        # Check if source is a Router - create bypass mappings from Router's predecessors
+        if _is_router_component(session, source_component_version_id):
+            LOGGER.info(f"Creating bypass mappings for Router {source_instance_id}")
+
+            bypass_mappings = _create_router_bypass_mappings(
+                session,
+                source_instance_id,
+                target_instance_id,
+                edges_by_target,
+                instance_to_component_version,
+                canonical_ports_by_component,
+                graph_runner_id,
+            )
+            auto_generated_mappings.extend(bypass_mappings)
+            continue
+
+        # Normal (non-Router) edge mapping
         source_ports = canonical_ports_by_component.get(source_component_version_id, {})
         target_ports = canonical_ports_by_component.get(target_component_version_id, {})
 
@@ -562,6 +667,8 @@ def _ensure_port_mappings_for_edges(
         session.bulk_save_objects(auto_generated_mappings)
         session.commit()
 
+    return explicit_port_mapping_targets
+
 
 def _create_port_mappings_for_pure_ref_expressions(
     session: Session,
@@ -569,12 +676,21 @@ def _create_port_mappings_for_pure_ref_expressions(
     component_instance_id: UUID,
     field_name: str,
     ref_node: RefNode,
+    explicit_port_mapping_targets: set[tuple[UUID, str]] | None = None,
 ) -> None:
     """
     Create a port mapping when the expression is a pure reference.
     Skip mapping creation for non-ref (literal/concat/multi-ref) expressions.
-    This will be harmonized with port mappings later.
+    Skip if target input already has an explicit port mapping (e.g., from router).
     """
+    # Check if this target input already has an explicit port mapping
+    if explicit_port_mapping_targets and (component_instance_id, field_name) in explicit_port_mapping_targets:
+        LOGGER.info(
+            f"Skipping field expression port mapping for {component_instance_id}.{field_name} "
+            f"(already has explicit port mapping)"
+        )
+        return
+
     source_component_version_id = resolve_component_version_id_from_instance_id(session, UUID(ref_node.instance))
     target_component_version_id = resolve_component_version_id_from_instance_id(session, component_instance_id)
 

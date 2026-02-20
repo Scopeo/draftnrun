@@ -55,6 +55,7 @@ from engine.components.rag.hybrid_rag import HybridRAG
 from engine.components.rag.rag import RAG
 from engine.components.rag.retriever import Retriever
 from engine.components.rag.vocabulary_search import VocabularySearch
+from engine.components.router import Router
 from engine.components.sql.react_sql_tool import ReactSQLAgent
 from engine.components.sql.run_sql_query_tool import RunSQLQueryTool
 from engine.components.sql.sql_tool import SQLTool
@@ -564,6 +565,13 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["if_else"],
         factory=AgentFactory(
             entity_class=IfElse,
+        ),
+    )
+
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["router"],
+        factory=AgentFactory(
+            entity_class=Router,
         ),
     )
 

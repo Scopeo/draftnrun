@@ -158,7 +158,12 @@ class Component(ABC):
                                 f"Component returned type {type(output_model_instance).__name__}, "
                                 f"but expected {OutputModel.__name__}"
                             )
-                        output_node_data = NodeData(data=output_model_instance.model_dump(), ctx=input_node_data.ctx)
+                        directive = getattr(output_model_instance, "_directive", None)
+                        output_node_data = NodeData(
+                            data=output_model_instance.model_dump(exclude={"_directive"}),
+                            ctx=input_node_data.ctx,
+                            directive=directive,
+                        )
                         span.set_attributes({
                             SpanAttributes.OUTPUT_VALUE: serialize_to_json(output_node_data.data, shorten_string=True)
                         })
