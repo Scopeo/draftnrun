@@ -5,6 +5,7 @@ from jsonschema_pydantic import jsonschema_to_pydantic
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field
 
+from ada_backend.database.models import UIComponent, UIComponentProperties
 from engine.components.component import Component
 from engine.components.types import (
     ChatMessage,
@@ -36,8 +37,18 @@ class FilterInputs(BaseModel):
     is_final: bool = Field(default=False, description="Whether this is a final output.")
     filtering_json_schema: Optional[str] = Field(
         default=None,
-        description="JSON schema for filtering data.",
-        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
+        description=(
+            "Describe here the schema for filtering the final workflow response."
+            " Must be a correct json schema. The output will be validated against this schema"
+            " and filtered to only include the specified fields."
+        ),
+        json_schema_extra={
+            "is_tool_input": False,
+            "ui_component": UIComponent.TEXTAREA,
+            "ui_component_properties": UIComponentProperties(
+                label="Filtering JSON Schema",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        },
     )
     # Allow any other fields to be passed through
     model_config = {"extra": "allow"}

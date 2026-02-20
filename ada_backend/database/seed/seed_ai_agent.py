@@ -1,4 +1,3 @@
-import json
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -30,11 +29,10 @@ from ada_backend.database.seed.utils import (
     build_parameters_group_definitions,
 )
 
-SYSTEM_PROMPT_PARAMETER_DEF_ID = UUID("1cd1cd58-f066-4cf5-a0f5-9b2018fc4c6a")
-SYSTEM_PROMPT_PARAMETER_NAME = "initial_prompt"
 AGENT_TOOLS_PARAMETER_NAME = "agent_tools"
+OUTPUT_FORMAT_PARAM_DEF_ID = UUID("e5282ccb-dcaa-4970-93c1-f6ef5018492d")
+
 AI_MODEL_PARAMETER_IDS = {
-    "output_format": UUID("e5282ccb-dcaa-4970-93c1-f6ef5018492d"),
     "max_iterations": UUID("89efb2e1-9228-44db-91d6-871a41042067"),
     TEMPERATURE_IN_DB: UUID("5bdece0d-bbc1-4cc7-a192-c4b7298dc163"),
     VERBOSITY_IN_DB: UUID("a897bbaa-f6cd-46a2-90d2-22b239d757cb"),
@@ -124,32 +122,6 @@ def seed_ai_agent_components(session: Session):
                 is_advanced=True,
             ),
             db.ComponentParameterDefinition(
-                id=SYSTEM_PROMPT_PARAMETER_DEF_ID,
-                component_version_id=base_ai_agent_version.id,
-                name=SYSTEM_PROMPT_PARAMETER_NAME,
-                type=ParameterType.STRING,
-                nullable=True,
-                default=(
-                    "Act as a helpful assistant. "
-                    "You can use tools to answer questions,"
-                    " but you can also answer directly if you have enough information."
-                ),
-                ui_component=UIComponent.TEXTAREA,
-                ui_component_properties=UIComponentProperties(
-                    label="System Prompt",
-                    description=(
-                        "This prompt will be used to initialize the agent and set its behavior."
-                        " It can be used to provide context or instructions for the agent."
-                        " It will be used as the first message of the conversation in the agent's memory."
-                        " You can use it to set the agent's personality, role,"
-                        "or to provide specific instructions on how to handle certain types of questions."
-                        " The conversation you have with the agent (or your single message)"
-                        " is going to be added after this first message."
-                    ),
-                ).model_dump(exclude_unset=True, exclude_none=True),
-            ),
-
-            db.ComponentParameterDefinition(
                 id=AI_MODEL_PARAMETER_IDS["first_history_messages"],
                 component_version_id=base_ai_agent_version.id,
                 name="first_history_messages",
@@ -211,34 +183,6 @@ def seed_ai_agent_components(session: Session):
                         "When enabled, the current date and time will be automatically added to the"
                         " beginning of the system prompt."
                         " This can help the AI agent be aware of the current date for time-sensitive tasks."
-                    ),
-                ).model_dump(exclude_unset=True, exclude_none=True),
-                is_advanced=True,
-            ),
-            db.ComponentParameterDefinition(
-                id=UUID("e5282ccb-dcaa-4970-93c1-f6ef5018492d"),
-                component_version_id=base_ai_agent_version.id,
-                name="output_format",
-                type=ParameterType.STRING,
-                nullable=True,
-                default=None,
-                ui_component=UIComponent.TEXTAREA,
-                ui_component_properties=UIComponentProperties(
-                    label="Output Format",
-                    placeholder=json.dumps(
-                        {
-                            "answer": {"type": "string", "description": "The imposed format of the agent's answer."},
-                            "is_ending_conversation": {
-                                "type": "boolean",
-                                "description": "Boolean detecting if the conversation is over or not",
-                            },
-                        },
-                        indent=4,
-                    ),
-                    description=(
-                        "JSON schema defining the properties/parameters of the output tool. "
-                        'Example: {"answer": {"type": "string", "description": "The answer content"}, '
-                        '"is_ending_conversation": {"type": "boolean", "description": "End conversation?"}}'
                     ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
@@ -320,10 +264,6 @@ def seed_ai_agent_parameter_groups(session: Session):
     # Update existing parameter definitions to link them to groups
     parameter_group_assignments = {
         # Agent behavior settings Group
-        AI_MODEL_PARAMETER_IDS["output_format"]: {
-            "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
-            "parameter_order_within_group": 1,
-        },
         AI_MODEL_PARAMETER_IDS["allow_tool_shortcuts"]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
             "parameter_order_within_group": 2,

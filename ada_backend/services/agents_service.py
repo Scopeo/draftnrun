@@ -9,8 +9,6 @@ from ada_backend.database import models as db
 from ada_backend.database.seed.seed_ai_agent import (
     AGENT_TOOLS_PARAMETER_NAME,
     AI_MODEL_PARAMETER_IDS,
-    SYSTEM_PROMPT_PARAMETER_DEF_ID,
-    SYSTEM_PROMPT_PARAMETER_NAME,
 )
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 from ada_backend.repositories.agent_repository import fetch_agents_with_graph_runners_by_organization
@@ -23,7 +21,7 @@ from ada_backend.schemas.agent_schema import (
     AgentWithGraphRunnersSchema,
     ProjectAgentSchema,
 )
-from ada_backend.schemas.parameter_schema import PipelineParameterSchema
+from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
 from ada_backend.schemas.project_schema import GraphRunnerEnvDTO, ProjectWithGraphRunnersSchema
@@ -34,8 +32,11 @@ from ada_backend.services.graph.update_graph_service import update_graph_with_hi
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
 from ada_backend.services.project_service import create_project_with_graph_runner
 from ada_backend.services.tag_service import compose_tag_name
+from engine.components.ai_agent import SYSTEM_PROMPT_DEFAULT
 
 LOGGER = logging.getLogger(__name__)
+
+SYSTEM_PROMPT_PARAMETER_NAME = "initial_prompt"
 
 
 def get_all_agents_service(session: Session, organization_id: UUID) -> list[AgentWithGraphRunnersSchema]:
@@ -84,8 +85,8 @@ def _extract_system_prompt_and_model_params(
     model_parameters = []
 
     for param in component_instance.parameters:
-        if param.id == SYSTEM_PROMPT_PARAMETER_DEF_ID:
-            system_prompt = param.value if param.value else param.default
+        if param.name == SYSTEM_PROMPT_PARAMETER_NAME:
+            system_prompt = param.value or SYSTEM_PROMPT_DEFAULT
         elif param.id in AI_MODEL_PARAMETER_IDS.values():
             model_parameters.append(param)
 
@@ -218,7 +219,9 @@ def build_ai_agent_component(
     Helper function to build the AI agent component instance with the provided model configuration and system prompt.
     """
     parameters = model_parameters.copy()
-    parameters.append(PipelineParameterSchema(value=system_prompt, name=SYSTEM_PROMPT_PARAMETER_NAME))
+    parameters.append(
+        PipelineParameterSchema(value=system_prompt, name=SYSTEM_PROMPT_PARAMETER_NAME, kind=ParameterKind.INPUT)
+    )
     return ComponentInstanceSchema(
         id=ai_agent_instance_id,
         component_id=COMPONENT_UUIDS["base_ai_agent"],

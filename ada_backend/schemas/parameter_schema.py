@@ -35,6 +35,8 @@ class WithValue(BaseModel):
 class PipelineParameterReadSchema(ParameterDefinition, WithValue):
     """Represents a parameter value in the pipeline input with its definition"""
 
+    is_tool_input: bool = False
+
 
 class PipelineParameterSchema(ParameterBase, WithValue):
     """Represents a parameter value in the pipeline input"""
