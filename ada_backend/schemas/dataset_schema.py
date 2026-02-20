@@ -28,7 +28,8 @@ class DatasetResponse(BaseModel):
     """Schema for dataset response."""
 
     id: UUID
-    project_id: UUID
+    organization_id: UUID
+    project_id: Optional[UUID] = None
     dataset_name: str
     created_at: datetime
     updated_at: datetime

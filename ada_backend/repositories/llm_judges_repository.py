@@ -6,11 +6,16 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import EvaluationType, LLMJudge
 
 
-def get_llm_judges_by_project(
+def get_llm_judges_by_organization(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
 ) -> List[LLMJudge]:
-    return session.query(LLMJudge).filter(LLMJudge.project_id == project_id).order_by(LLMJudge.created_at.desc()).all()
+    return (
+        session.query(LLMJudge)
+        .filter(LLMJudge.organization_id == organization_id)
+        .order_by(LLMJudge.created_at.desc())
+        .all()
+    )
 
 
 def get_llm_judge_by_id(
@@ -20,9 +25,9 @@ def get_llm_judge_by_id(
     return session.query(LLMJudge).filter(LLMJudge.id == judge_id).first()
 
 
-def create_llm_judge(
+def create_llm_judge_for_organization(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     name: str,
     description: Optional[str],
     evaluation_type: EvaluationType,
@@ -31,7 +36,7 @@ def create_llm_judge(
     temperature: Optional[float] = 1.0,
 ) -> LLMJudge:
     llm_judge = LLMJudge(
-        project_id=project_id,
+        organization_id=organization_id,
         name=name,
         description=description,
         evaluation_type=evaluation_type,
@@ -49,7 +54,6 @@ def create_llm_judge(
 def update_llm_judge(
     session: Session,
     judge_id: UUID,
-    project_id: UUID,
     name: Optional[str] = None,
     description: Optional[str] = None,
     evaluation_type: Optional[EvaluationType] = None,
@@ -57,7 +61,7 @@ def update_llm_judge(
     prompt_template: Optional[str] = None,
     temperature: Optional[float] = None,
 ) -> Optional[LLMJudge]:
-    judge = session.query(LLMJudge).filter(LLMJudge.id == judge_id, LLMJudge.project_id == project_id).first()
+    judge = get_llm_judge_by_id(session, judge_id)
 
     if not judge:
         return None
@@ -80,14 +84,15 @@ def update_llm_judge(
     return judge
 
 
-def delete_llm_judges(
+def delete_llm_judges_from_organization(
     session: Session,
     judge_ids: List[UUID],
-    project_id: UUID,
+    organization_id: UUID,
 ) -> int:
+    """Delete LLM judges from an organization."""
     deleted_count = (
         session.query(LLMJudge)
-        .filter(LLMJudge.id.in_(judge_ids), LLMJudge.project_id == project_id)
+        .filter(LLMJudge.id.in_(judge_ids), LLMJudge.organization_id == organization_id)
         .delete(synchronize_session=False)
     )
 
