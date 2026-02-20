@@ -150,6 +150,7 @@ def simple_graph_payload():
                     {
                         "value": "Test prompt",
                         "name": "prompt_template",
+                        "kind": "input",
                         "order": None,
                         "type": "string",
                         "nullable": False,
