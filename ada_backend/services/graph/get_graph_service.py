@@ -74,6 +74,7 @@ def get_graph_service(
                 origin=edge.source_node_id,
                 destination=edge.target_node_id,
                 order=edge.order,
+                source_port_name=edge.source_port_name,
             )
         )
         LOGGER.info(f"Edge from {edge.source_node_id} to {edge.target_node_id}")

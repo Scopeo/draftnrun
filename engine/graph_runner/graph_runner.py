@@ -477,24 +477,17 @@ class GraphRunner:
             source_node_id: The source node ID
             selected_ports: List of port names that should execute (e.g., ["route_0", "route_2"])
         """
-        LOGGER.debug(f"Selective execution for {source_node_id} with selected ports: {selected_ports}")
+        LOGGER.info(f"Selective execution for {source_node_id} with selected ports: {selected_ports}")
 
         for successor in self.graph.successors(source_node_id):
-            mappings = [
-                pm for pm in self._mappings_by_target.get(successor, []) if pm.source_instance_id == source_node_id
-            ]
+            # Check edge metadata (source_port_name)
+            edge_data = self.graph.get_edge_data(source_node_id, successor)
+            edge_source_port = edge_data.get("source_port_name") if edge_data else None
 
-            should_execute = False
-            for mapping in mappings:
-                source_port = mapping.source_port_name
-
-                if source_port in selected_ports:
-                    should_execute = True
-                    break
-
-            if should_execute:
-                LOGGER.debug(f"Executing successor '{successor}'")
+            if edge_source_port and edge_source_port in selected_ports:
+                LOGGER.info(f"Executing '{successor}' via edge source_port_name='{edge_source_port}'")
                 self.tasks[successor].decrement_pending_deps()
             else:
-                LOGGER.debug(f"Halting successor '{successor}' (not in selected ports)")
+                # No match - halt this successor
+                LOGGER.info(f"Halting '{successor}' (not in selected ports)")
                 self._halt_downstream_execution(successor)

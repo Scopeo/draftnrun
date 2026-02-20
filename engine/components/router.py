@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Optional, Type
+from typing import Any, Optional, Type
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, ConfigDict, Field, create_model
@@ -12,8 +12,6 @@ from engine.components.types import ComponentAttributes, ExecutionDirective, Exe
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
-
-MAX_ROUTER_ROUTES = 10
 
 ROUTER_OPERATOR_METADATA = [
     {
@@ -33,7 +31,7 @@ class RouteCondition(BaseModel):
     """Schema for a single route condition."""
 
     value_a: Any = Field(
-        description="First value to compare",
+        description="First value to compare (supports template expressions like @{{start.messages}})",
         json_schema_extra={"parameter_type": ParameterType.JSON},
     )
     operator: str = Field(
@@ -49,28 +47,18 @@ class RouteCondition(BaseModel):
 
 
 class RouterInputs(BaseModel):
-    """Router inputs: data to route and conditions to check."""
+    """Router inputs: conditions to check. Data flows automatically from previous to next nodes."""
 
-    input: Any = Field(
-        default=None,
-        description=(
-            "Input data to pass through the matched route. Auto-populated from previous component if not provided."
-        ),
-        json_schema_extra={
-            "parameter_type": ParameterType.JSON,
-            "placeholder": "Auto-populated from previous component",
-        },
-    )
     routes: list[RouteCondition] = Field(
-        description="List of route conditions to check",
+        description="List of route conditions to check. Data automatically passes through to downstream nodes.",
         json_schema_extra={
             "parameter_type": ParameterType.JSON,
             "ui_component": UIComponent.ROUTE_BUILDER,
             "ui_component_properties": {
                 "label": "Routes",
-                "description": "Define route conditions. Each route will have its own output.",
+                "description": "Define route conditions. Data from previous nodes automatically flows to matched downstream nodes.",
                 "placeholder": (
-                    '[{"value_a": "@{{start.additional_field}}", "operator": "equals", "value_b": "value_1"}, '
+                    '[{"value_a": "@{{start.messages}}", "operator": "equals", "value_b": "test"}, '
                     '{"value_a": "@{{start.additional_field}}", "operator": "equals", "value_b": "value_2"}]'
                 ),
                 "operators": ROUTER_OPERATOR_METADATA,
@@ -98,69 +86,52 @@ class Router(Component):
 
     @classmethod
     def get_inputs_schema(cls):
-        """Return the inputs schema."""
         return RouterInputs
 
     @classmethod
-    def get_outputs_schema(cls, num_routes: Optional[int] = None) -> Type[BaseModel]:
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        """
+        Router doesn't output data - it only controls routing via ExecutionDirective.
+        Data flows directly from predecessor to successors via bypass mappings.
+        """
         if cls._outputs_schema_cache is not None:
             return cls._outputs_schema_cache
 
-        num_routes = MAX_ROUTER_ROUTES
-        fields: Dict[str, tuple] = {}
-
-        for i in range(num_routes):
-            route_name = get_route_port_name(i)
-            fields[route_name] = (
-                Any,
-                Field(
-                    default=None,
-                    description=f"Output for route {i}",
-                    json_schema_extra={
-                        "parameter_type": ParameterType.JSON,
-                        "disabled_as_input": True,
-                    },
-                ),
-            )
-
-        schema = create_model("RouterOutputs", __config__=ConfigDict(extra="allow"), **fields)
+        schema = create_model("RouterOutputs", __config__=ConfigDict(extra="allow"))
         cls._outputs_schema_cache = schema
 
         return schema
 
     @classmethod
     def get_canonical_ports(cls) -> dict[str, str | None]:
-        return {"input": "input", "output": None}
-
-    def _compare_equal(self, value_a: Any, value_b: Any) -> bool:
-        """Compare two values for equality."""
-        return value_a == value_b
+        return {"input": None, "output": None}
 
     async def _run_without_io_trace(
         self,
         inputs: RouterInputs,
         ctx: dict,
     ) -> BaseModel:
+        """
+        Router evaluates conditions and signals which routes are active via ExecutionDirective.
+        Actual data passthrough is handled by the graph runner via bypass port mappings based on edges.
+        """
         OutputModel = self.get_outputs_schema()
-
-        output_data: dict = {}
+        matched_routes: list[str] = []
 
         for i, route in enumerate(inputs.routes):
             route_name = get_route_port_name(i)
             value_b = route.value_b if route.value_b is not None else route.value_a
-            if self._compare_equal(route.value_a, value_b):
+            if route.value_a == value_b:
                 LOGGER.info(f"Route {i} matched")
+                matched_routes.append(route_name)
 
-                output_data[route_name] = inputs.input
-
-        if not output_data:
+        if not matched_routes:
             LOGGER.error(f"Router: No routes matched out of {len(inputs.routes)} configured route(s)")
             raise NoMatchingRouteError(num_routes=len(inputs.routes))
 
         return OutputModel(
-            **output_data,
             _directive=ExecutionDirective(
                 strategy=ExecutionStrategy.SELECTIVE_PORTS,
-                selected_ports=list(output_data.keys()),
+                selected_ports=matched_routes,
             ),
         )

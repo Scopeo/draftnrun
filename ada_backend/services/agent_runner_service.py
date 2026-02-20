@@ -152,7 +152,12 @@ async def build_graph_runner(
 
     for edge in edges:
         if edge.source_node_id:
-            graph.add_edge(str(edge.source_node_id), str(edge.target_node_id), order=edge.order)
+            graph.add_edge(
+                str(edge.source_node_id),
+                str(edge.target_node_id),
+                order=edge.order,
+                source_port_name=edge.source_port_name,
+            )
 
     return GraphRunner(
         graph,
