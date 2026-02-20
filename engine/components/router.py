@@ -56,7 +56,10 @@ class RouterInputs(BaseModel):
             "ui_component": UIComponent.ROUTE_BUILDER,
             "ui_component_properties": {
                 "label": "Routes",
-                "description": "Define route conditions. Data from previous nodes automatically flows to matched downstream nodes.",
+                "description": (
+                    "Define route conditions. "
+                    "Data from previous nodes automatically flows to matched downstream nodes."
+                ),
                 "placeholder": (
                     '[{"value_a": "@{{start.messages}}", "operator": "equals", "value_b": "test"}, '
                     '{"value_a": "@{{start.additional_field}}", "operator": "equals", "value_b": "value_2"}]'
