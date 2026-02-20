@@ -24,6 +24,7 @@ from ada_backend.routers.integration_router import router as integration_router
 from ada_backend.routers.knowledge_router import router as knowledge_router
 from ada_backend.routers.llm_judges_router import router as llm_judges_router
 from ada_backend.routers.llm_models_router import router as llm_models_router
+from ada_backend.routers.monitor_router import router as monitor_router
 from ada_backend.routers.oauth_router import router as oauth_router
 from ada_backend.routers.organization_router import router as org_router
 from ada_backend.routers.project_router import router as project_router
@@ -184,6 +185,7 @@ app.include_router(global_secret_router)
 app.include_router(knowledge_router)
 app.include_router(ingestion_database_router)
 app.include_router(llm_models_router)
+app.include_router(monitor_router)
 app.include_router(credits_router)
 app.include_router(widget_router)
 app.include_router(provider_webhooks_router)
