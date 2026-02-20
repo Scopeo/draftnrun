@@ -16,6 +16,7 @@ from ada_backend.repositories.component_repository import (
     get_tool_description,
     get_tool_description_component,
 )
+from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
 from ada_backend.repositories.integration_repository import (
     get_component_instance_integration_relationship,
     get_integration_from_component,
@@ -31,6 +32,8 @@ from engine.components.errors import (
     MissingKeyPromptTemplateError,
 )
 from engine.components.types import ComponentAttributes, ToolDescription
+from engine.field_expressions.ast import LiteralNode
+from engine.field_expressions.serializer import from_json as expression_from_json
 
 LOGGER = logging.getLogger(__name__)
 
@@ -97,6 +100,27 @@ def get_component_params(
     return params
 
 
+def _resolve_literal_field_expressions(
+    session: Session,
+    component_instance_id: UUID,
+) -> dict[str, Any]:
+    """Return field expression values that are plain literals for a component instance.
+
+    Only LiteralNode expressions are returned. Reference, variable, and concat
+    expressions depend on runtime graph context and cannot be resolved here.
+    """
+    input_port_instances = get_input_port_instances_for_component_instance(
+        session, component_instance_id, eager_load_field_expression=True
+    )
+    result: dict[str, Any] = {}
+    for ipi in input_port_instances:
+        if ipi.field_expression and ipi.field_expression.expression_json:
+            expr_ast = expression_from_json(ipi.field_expression.expression_json)
+            if isinstance(expr_ast, LiteralNode):
+                result[ipi.name] = expr_ast.value
+    return result
+
+
 def instantiate_component(
     session: Session,
     component_instance_id: UUID,
@@ -127,6 +151,7 @@ def instantiate_component(
         component_instance_id,
         project_id=project_id,
     )
+
     LOGGER.debug(f"{input_params=}\n")
 
     component_integration = get_integration_from_component(session, component_instance.component_version_id)
@@ -151,6 +176,9 @@ def instantiate_component(
     sub_components = get_component_sub_components(session, component_instance_id)
 
     grouped_sub_components: dict[str, list[tuple[int, Any]]] = {}  # name -> [(order, instance), ...]
+    # Maps tool description names to their pre-configured literal run inputs.
+    # Passed to AIAgent so _run_tool_call can merge them with LLM-provided arguments.
+    tool_pre_configured_inputs: dict[str, dict[str, Any]] = {}
 
     for sub_component in sub_components:
         param_name = sub_component.parameter_definition.name
@@ -162,6 +190,18 @@ def instantiate_component(
                 project_id=project_id,
             )
             LOGGER.debug(f"Instantiated sub-component: {instantiated_sub_component}\n")
+
+            # Collect literal field expressions for this tool and map them to their
+            # tool description names so AIAgent can inject them at _run_tool_call time.
+            pre_configured = _resolve_literal_field_expressions(
+                session, sub_component.child_component_instance.id
+            )
+            if pre_configured:
+                get_descriptions = getattr(instantiated_sub_component, "get_tool_descriptions", None)
+                if get_descriptions:
+                    for desc in get_descriptions():
+                        tool_pre_configured_inputs[desc.name] = pre_configured
+
             # Group sub-components by parameter name
             if param_name not in grouped_sub_components:
                 grouped_sub_components[param_name] = []
@@ -252,6 +292,8 @@ def instantiate_component(
         component_instance_name=component_instance.name,
         component_instance_id=component_instance.id,
     )
+    if tool_pre_configured_inputs:
+        input_params["tool_pre_configured_inputs"] = tool_pre_configured_inputs
     # Instantiate the component using its factory
     LOGGER.debug(
         f"Trying to create component: {component_name} "
