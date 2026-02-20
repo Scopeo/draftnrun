@@ -19,7 +19,6 @@ DEFAULT_HUBSPOT_MCP_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
-    migrated = True
 class HubSpotMCPTool(LocalMCPTool):
     """Expose tools from shinzo-labs/hubspot-mcp via stdio (npx subprocess)."""
 
