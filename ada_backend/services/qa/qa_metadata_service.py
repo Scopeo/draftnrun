@@ -92,7 +92,8 @@ def rename_qa_column_service(
         )
 
         LOGGER.info(
-            f"Renamed QA column {column_id} to '{column_name}' for dataset {dataset_id} in organization {organization_id}"
+            f"Renamed QA column {column_id} to '{column_name}' for dataset "
+            f"{dataset_id} in organization {organization_id}"
         )
 
         return QAColumnResponse.model_validate(qa_metadata)
