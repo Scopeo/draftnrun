@@ -17,7 +17,6 @@ from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthUpdateWithId,
     QARunRequest,
 )
-from ada_backend.schemas.parameter_schema import ParameterKind
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
@@ -370,7 +369,6 @@ def _create_dummy_agent_workflow_config():
                             " The output will be validated against this schema and "
                             "filtered to only include the specified fields.",
                         },
-                        "kind": ParameterKind.INPUT,
                         "is_advanced": False,
                     }
                 ],

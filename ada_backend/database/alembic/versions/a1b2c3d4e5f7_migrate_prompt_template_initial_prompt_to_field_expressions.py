@@ -1,6 +1,7 @@
-"""migrate prompt_template, initial_prompt, filtering_json_schema and output_format
+"""migrate prompt_template, initial_prompt and output_format
 from BasicParameter to FieldExpression, and delete the corresponding stale
 ComponentParameterDefinition rows (which are now superseded by port definitions).
+filtering_json_schema remains a BasicParameter (PARAMETER kind, not INPUT).
 
 Revision ID: a1b2c3d4e5f7
 Revises: a1c2e3f4b5d6
@@ -23,16 +24,16 @@ depends_on: Union[str, Sequence[str], None] = None
 PROMPT_TEMPLATE_PARAM_DEF_ID = "e79b8f5f-d9cc-4a1f-a98a-4992f42a0196"
 INITIAL_PROMPT_PARAM_DEF_ID = "1cd1cd58-f066-4cf5-a0f5-9b2018fc4c6a"
 FILTERING_JSON_SCHEMA_PARAM_DEF_ID = "59443366-5b1f-5543-9fc5-57378f9aaf6e"
+FILTER_COMPONENT_VERSION_ID = "02468c0b-bc99-44ce-a435-995acc5e2545"
 OUTPUT_FORMAT_PARAM_DEF_ID = "e5282ccb-dcaa-4970-93c1-f6ef5018492d"  # AI Agent
 LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID = "d7ee43ab-80f8-4ee5-ac38-938163933610"  # LLM Call
 
 
-MIGRATED_PARAM_NAMES = "ARRAY['prompt_template', 'initial_prompt', 'filtering_json_schema', 'output_format']"
+MIGRATED_PARAM_NAMES = "ARRAY['prompt_template', 'initial_prompt', 'output_format']"
 
 STALE_CPD_IDS = [
     PROMPT_TEMPLATE_PARAM_DEF_ID,
     INITIAL_PROMPT_PARAM_DEF_ID,
-    FILTERING_JSON_SCHEMA_PARAM_DEF_ID,
     OUTPUT_FORMAT_PARAM_DEF_ID,
     LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID,
 ]
@@ -103,6 +104,18 @@ def upgrade() -> None:
     """)
     )
 
+    # Remove the filtering_json_schema input port definition from the Filter component.
+    # This field remains a BasicParameter (PARAMETER kind), so it must not exist as
+    # a PortDefinition — seed_ports.py is also updated to skip it via disabled_as_input.
+    bind.execute(
+        sa.text(f"""
+        DELETE FROM port_definitions
+        WHERE component_version_id = '{FILTER_COMPONENT_VERSION_ID}'::uuid
+          AND name = 'filtering_json_schema'
+          AND port_type = 'INPUT'
+    """)
+    )
+
 
 def downgrade() -> None:
     bind = op.get_bind()
@@ -124,7 +137,6 @@ def downgrade() -> None:
         FROM (VALUES
             ('{PROMPT_TEMPLATE_PARAM_DEF_ID}',       'AI',       'prompt_template'),
             ('{INITIAL_PROMPT_PARAM_DEF_ID}',         'AI Agent', 'initial_prompt'),
-            ('{FILTERING_JSON_SCHEMA_PARAM_DEF_ID}',  'AI Agent', 'filtering_json_schema'),
             ('{OUTPUT_FORMAT_PARAM_DEF_ID}',          'AI Agent', 'output_format'),
             ('{LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID}', 'AI',       'output_format')
         ) AS cpd_data(id, component_name, param_name)
@@ -157,11 +169,10 @@ def downgrade() -> None:
              AND cpd.id = ANY(ARRAY[
                     :prompt_template_def_id      ::uuid,
                     :initial_prompt_def_id       ::uuid,
-                    :filtering_json_schema_def_id       ::uuid,
                     :output_format_def_id               ::uuid,
                     :llm_call_output_format_def_id      ::uuid
                  ])
-            WHERE ipi.name  = ANY(ARRAY['prompt_template', 'initial_prompt', 'filtering_json_schema', 'output_format'])
+            WHERE ipi.name  = ANY(ARRAY['prompt_template', 'initial_prompt', 'output_format'])
               AND ipi.port_definition_id IS NULL
               AND fe.expression_json->>'type' = 'literal'
         ),
@@ -177,7 +188,6 @@ def downgrade() -> None:
         {
             "prompt_template_def_id": PROMPT_TEMPLATE_PARAM_DEF_ID,
             "initial_prompt_def_id": INITIAL_PROMPT_PARAM_DEF_ID,
-            "filtering_json_schema_def_id": FILTERING_JSON_SCHEMA_PARAM_DEF_ID,
             "output_format_def_id": OUTPUT_FORMAT_PARAM_DEF_ID,
             "llm_call_output_format_def_id": LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID,
         },
