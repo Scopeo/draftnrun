@@ -1,5 +1,5 @@
 import json
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -10,12 +10,7 @@ from engine.components.tools.python_code_runner import (
     PythonCodeRunnerToolOutputs,
 )
 from engine.components.types import ComponentAttributes
-from engine.trace.trace_manager import TraceManager
-
-
-@pytest.fixture
-def mock_trace_manager():
-    return MagicMock(spec=TraceManager)
+from tests.mocks.trace_manager import MockTraceManager
 
 
 @pytest.fixture
@@ -26,9 +21,9 @@ def mock_e2b_api_key():
 
 
 @pytest.fixture
-def python_code_runner_tool(mock_e2b_api_key, mock_trace_manager):
+def python_code_runner_tool(mock_e2b_api_key):
     return PythonCodeRunner(
-        trace_manager=mock_trace_manager,
+        trace_manager=MockTraceManager(project_name="test_project"),
         component_attributes=ComponentAttributes(component_instance_name="test_python_code_runner"),
         timeout=30,
     )
@@ -41,9 +36,9 @@ def mock_sandbox():
     mock_execution.error = None
     mock_execution.results = []
     mock_execution.logs = Mock(stdout=["Hello, World!"], stderr=[])
-    mock.run_code.return_value = mock_execution
-    mock.files.list.return_value = []
-    mock.kill.return_value = None
+    mock.run_code = AsyncMock(return_value=mock_execution)
+    mock.files.list = AsyncMock(return_value=[])
+    mock.kill = AsyncMock()
     return mock
 
 
@@ -68,7 +63,7 @@ def test_tool_description_structure():
 def test_sandbox_timeout_configuration(mock_e2b_api_key):
     """Test that the tool respects the sandbox timeout configuration."""
     tool = PythonCodeRunner(
-        trace_manager=MagicMock(spec=TraceManager),
+        trace_manager=MockTraceManager(project_name="test_timeout"),
         component_attributes=ComponentAttributes(component_instance_name="test_timeout"),
         timeout=10,
     )
@@ -82,7 +77,7 @@ async def test_missing_api_key(mock_settings):
     mock_settings.E2B_API_KEY = None
 
     tool = PythonCodeRunner(
-        trace_manager=MagicMock(spec=TraceManager),
+        trace_manager=MockTraceManager(project_name="test_no_api_key"),
         component_attributes=ComponentAttributes(component_instance_name="test_no_api_key"),
     )
     with pytest.raises(ValueError, match="E2B API key not configured"):
@@ -160,9 +155,9 @@ async def test_execute_python_code_with_shared_sandbox(
     mock_execution.error = None
     mock_execution.results = []
     mock_execution.logs = Mock(stdout=["Shared output"], stderr=[])
-    shared_sandbox.run_code.return_value = mock_execution
-    shared_sandbox.is_running.return_value = True
-    shared_sandbox.files.list.return_value = []
+    shared_sandbox.run_code = AsyncMock(return_value=mock_execution)
+    shared_sandbox.is_running = AsyncMock(return_value=True)
+    shared_sandbox.files.list = AsyncMock(return_value=[])
 
     mock_params = Mock()
     mock_params.shared_sandbox = shared_sandbox
@@ -184,7 +179,6 @@ async def test_run_without_io_trace_success(
 ):
     """Test _run_without_io_trace returns correct output structure."""
     mock_get_tracing_span.return_value = None
-    mock_get_output_dir.return_value = MagicMock()
     mock_sandbox_class.create = AsyncMock(return_value=mock_sandbox)
 
     inputs = PythonCodeRunnerToolInputs(python_code="print('Hello, World!')")
@@ -207,7 +201,6 @@ async def test_run_without_io_trace_no_images_in_artifacts(
 ):
     """Test that images key is absent from artifacts when no images are generated."""
     mock_get_tracing_span.return_value = None
-    mock_get_output_dir.return_value = MagicMock()
     mock_sandbox_class.create = AsyncMock(return_value=mock_sandbox)
 
     inputs = PythonCodeRunnerToolInputs(python_code="x = 1 + 1")
