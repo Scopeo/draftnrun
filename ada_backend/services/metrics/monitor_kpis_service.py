@@ -8,12 +8,32 @@ import pandas as pd
 from ada_backend.database.models import CallType
 from ada_backend.schemas.monitor_schema import KPI, CostKPI, KPISResponse, TraceKPIS
 from ada_backend.segment_analytics import track_projects_monitoring_loaded
-from ada_backend.services.metrics.utils import round_to_n_significant_figures
+from ada_backend.services.metrics.utils import QUERY_COSTS_BASIS, round_to_n_significant_figures
 from engine.trace.sql_exporter import get_session_trace
 
 LOGGER = logging.getLogger(__name__)
 
 SIGNIFICANT_FIGURES_CREDIT_FORMAT = 2
+
+
+def _run_trace_kpis_query(
+    query: str,
+    project_ids: List[UUID],
+    call_type: CallType | None,
+    **params: object,
+) -> pd.DataFrame:
+    call_type_filter = "AND call_type = %(call_type)s" if call_type is not None else ""
+    project_id_placeholders = ", ".join([f"%(project_id_{i})s" for i in range(len(project_ids))])
+    query = query.format(call_type_filter=call_type_filter, project_id_placeholders=project_id_placeholders)
+    full_params = {f"project_id_{i}": str(pid) for i, pid in enumerate(project_ids)}
+    if call_type is not None:
+        full_params["call_type"] = call_type.value
+    full_params.update(params)
+    session = get_session_trace()
+    try:
+        return pd.read_sql_query(query, session.bind, params=full_params)
+    finally:
+        session.close()
 
 
 def get_trace_metrics(project_ids: List[UUID], duration_days: int, call_type: CallType | None = None) -> TraceKPIS:
@@ -22,14 +42,7 @@ def get_trace_metrics(project_ids: List[UUID], duration_days: int, call_type: Ca
     current_start = now - timedelta(days=duration_days)
     previous_start = now - timedelta(days=2 * duration_days)
 
-    # Build the call_type filter clause
-    call_type_filter = ""
-    if call_type is not None:
-        call_type_filter = "AND call_type = %(call_type)s"
-
-    project_id_list = "', '".join(str(project_id) for project_id in project_ids)
-
-    query = f"""
+    query = """
     SELECT
         CASE
             WHEN start_time >= %(current_start)s THEN 'current'
@@ -41,27 +54,13 @@ def get_trace_metrics(project_ids: List[UUID], duration_days: int, call_type: Ca
     FROM traces.spans
     WHERE start_time >= %(previous_start)s
     AND parent_id IS NULL
-    AND project_id IN ('{project_id_list}')
+    AND project_id IN ({project_id_placeholders})
     {call_type_filter}
     GROUP BY period
     """
-
-    session = get_session_trace()
-    try:
-        params = {
-            "current_start": current_start,
-            "previous_start": previous_start,
-        }
-        if call_type is not None:
-            params["call_type"] = call_type.value
-
-        df = pd.read_sql_query(
-            query,
-            session.bind,
-            params=params,
-        )
-    finally:
-        session.close()
+    df = _run_trace_kpis_query(
+        query, project_ids, call_type, current_start=current_start, previous_start=previous_start
+    )
 
     # Initialize default values
     current_metrics = {"request_count": 0, "total_tokens": 0, "avg_latency_seconds": None}
@@ -114,31 +113,13 @@ def get_trace_metrics(project_ids: List[UUID], duration_days: int, call_type: Ca
 def get_trace_cost_kpis(project_ids: List[UUID], duration_days: int, call_type: CallType | None = None) -> CostKPI:
     """Get mean cost per run and per conversation over a given period."""
     now = datetime.now()
-    start_date_query = now - timedelta(days=duration_days)
-    end_date_query = now
+    start_time = now - timedelta(days=duration_days)
+    end_time = now
 
-    call_type_filter = ""
-    if call_type is not None:
-        call_type_filter = "AND call_type = %(call_type)s"
-
-    project_id_placeholders = ", ".join([f"%(project_id_{i})s" for i in range(len(project_ids))])
-
-    query = f"""
-        WITH trace_costs AS (
-            SELECT
-                s.attributes->>'conversation_id' as conversation_id,
-                s.trace_rowid,
-                COALESCE(
-                        SUM(
-                            COALESCE(su.credits_input_token, 0) +
-                            COALESCE(su.credits_output_token, 0) +
-                            COALESCE(su.credits_per_call, 0)
-                        ),
-                        0
-                    ) as cost_per_run
-            FROM traces.spans s
-            LEFT JOIN credits.span_usages su ON su.span_id = s.span_id
-            WHERE project_id IN ({project_id_placeholders})
+    query = (
+        QUERY_COSTS_BASIS
+        + """
+         WHERE project_id IN ({project_id_placeholders})
                 AND s.start_time >= %(start_time)s
                 AND s.start_time < %(end_time)s
                 {call_type_filter}
@@ -169,26 +150,8 @@ def get_trace_cost_kpis(project_ids: List[UUID], duration_days: int, call_type: 
                 FROM conversation_totals
             ) as mean_cost_per_conversation
     """
-
-    session = get_session_trace()
-    try:
-        params = {
-            "start_time": start_date_query,
-            "end_time": end_date_query,
-        }
-
-        for i, project_id in enumerate(project_ids):
-            params[f"project_id_{i}"] = str(project_id)
-        if call_type is not None:
-            params["call_type"] = call_type.value
-
-        df = pd.read_sql_query(
-            query,
-            session.bind,
-            params=params,
-        )
-    finally:
-        session.close()
+    )
+    df = _run_trace_kpis_query(query, project_ids, call_type, start_time=start_time, end_time=end_time)
     mean_cost_per_run = 0
     mean_cost_per_conversation = 0
     if not df.empty:
