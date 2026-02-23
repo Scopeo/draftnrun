@@ -8,6 +8,7 @@ from apscheduler.executors.asyncio import AsyncIOExecutor
 from apscheduler.job import Job
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from ada_backend.context import CronExecutionContext, set_cron_execution_context
 from ada_backend.database.models import CronEntrypoint, CronStatus
@@ -245,20 +246,22 @@ def add_job_to_scheduler(
     """Add a job to APScheduler."""
     scheduler = get_scheduler()
 
-    # Parse cron expression
-    # APScheduler expects: second, minute, hour, day, month, day_of_week
-    # Standard cron is: minute, hour, day, month, day_of_week
-    # So we need to prepend "0" for seconds
-    if len(cron_expr.split()) == 5:
-        cron_expr = f"0 {cron_expr}"
+    parts = cron_expr.split()
+    if len(parts) == 5:
+        crontab_expr = cron_expr
+    elif len(parts) == 6:
+        # 6-field format: second, minute, hour, day, month, day_of_week — use last 5 for crontab
+        crontab_expr = " ".join(parts[1:])
+    else:
+        raise ValueError(f"Invalid cron expression (expected 5 or 6 fields): {cron_expr!r}")
+
+    trigger = CronTrigger.from_crontab(crontab_expr, timezone=tz)
 
     job = scheduler.add_job(
         func=_execute_cron_job,
-        trigger="cron",
+        trigger=trigger,
         args=[cron_id, entrypoint, payload],
         id=str(cron_id),
-        timezone=tz,
-        **dict(zip(["second", "minute", "hour", "day", "month", "day_of_week"], cron_expr.split(), strict=False)),
         replace_existing=True,
     )
 
