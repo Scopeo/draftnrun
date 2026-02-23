@@ -8,6 +8,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field, field_validator
 
+from ada_backend.database.models import UIComponent
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, SourceChunk, SourcedResponse, ToolDescription
 from engine.trace.trace_manager import TraceManager
@@ -58,13 +59,24 @@ class LinkupDepth(str, Enum):
 
 
 class LinkupSearchToolInputs(BaseModel):
-    query: Optional[str] = Field(
-        default=None,
+    query: str = Field(
         description="The standalone question to be answered using web search.",
     )
     depth: LinkupDepth = Field(
         default=LinkupDepth.STANDARD,
-        description="The depth format: 'standard' or 'deep'",
+        description="Defines the precision of the search. "
+        "standard returns results faster; "
+        "deep takes longer but yields more comprehensive results.",
+        json_schema_extra={
+            "ui_component": UIComponent.SELECT,
+            "ui_component_properties": {
+                "label": "Search Depth",
+                "options": [
+                    {"label": "Standard", "value": LinkupDepth.STANDARD},
+                    {"label": "Deep", "value": LinkupDepth.DEEP},
+                ],
+            },
+        },
     )
     from_date: Optional[date] = Field(
         default=None,
@@ -182,8 +194,6 @@ class LinkupSearchTool(Component):
         ctx: dict,
     ) -> LinkupSearchToolOutputs:
         query_str = inputs.query
-        if not query_str:
-            raise ValueError("No content provided for the Linkup search tool.")
 
         span = get_current_span()
         trace_input = (
