@@ -1,3 +1,4 @@
+import json
 import logging
 from collections.abc import Callable
 from typing import Any, Optional, Type
@@ -197,7 +198,9 @@ class LLMCallAgent(Component):
                 images_content.extend(payload_images_content)
 
         input_dict = inputs.model_dump(exclude_none=True)
-        input_dict["input"] = input_from_messages
+        # Only use input_from_messages if no input was provided directly (e.g., from tool call)
+        if "input" not in input_dict or not input_dict.get("input"):
+            input_dict["input"] = input_from_messages
 
         merged_dict = {**(ctx or {}), **input_dict}
 
