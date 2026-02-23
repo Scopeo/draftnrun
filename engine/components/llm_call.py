@@ -81,7 +81,7 @@ class LLMCallInputs(BaseModel):
             "ui_component": UIComponent.TEXTAREA,
         },
     )
-    output_format: Optional[dict[str, Any]] = Field(
+    output_format: Optional[str | dict] = Field(
         default=None,
         description=(
             "Enter the output format here using this documentation from OpenAI: "
