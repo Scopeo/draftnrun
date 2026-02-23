@@ -236,3 +236,13 @@ def query_conversation_messages(trace_id: str) -> tuple[dict, dict]:
     output_payload = result[1] if result[1] else {}
 
     return input_payload, output_payload
+
+
+def round_to_n_significant_figures(value: float, significant_figures: int) -> float:
+    if value == 0:
+        return 0
+    if value >= 1:
+        return round(value)
+    else:
+        first_digit_with_non_zero_value = -int(np.floor(np.log10(abs(value))))
+        return round(value, first_digit_with_non_zero_value + significant_figures - 1)
