@@ -38,7 +38,6 @@ def test_file_url_from_api_input(get_span_mock, agent_calls_mock):
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
-        prompt_template="Process this file: {{input}}",
         file_url_key="document_url",
         capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-5-mini"}),
     )
@@ -48,6 +47,7 @@ def test_file_url_from_api_input(get_span_mock, agent_calls_mock):
     input_node_data = NodeData(
         data={
             "messages": [{"role": "user", "content": "Analyze this document"}],
+            "prompt_template": "Process this file: {{input}}",
             "document_url": file_url,  # file_url in data, not ctx
         },
         ctx={},  # Empty ctx to ensure file_url comes from data
@@ -88,7 +88,6 @@ def test_file_content_from_api_input(get_span_mock, agent_calls_mock):
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
-        prompt_template="Process this file: {{input}}",
         file_content_key="document_file",
         capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-5-mini"}),
     )
@@ -104,6 +103,7 @@ def test_file_content_from_api_input(get_span_mock, agent_calls_mock):
     input_node_data = NodeData(
         data={
             "messages": [{"role": "user", "content": "Analyze this document"}],
+            "prompt_template": "Process this file: {{input}}",
             "document_file": {
                 "filename": "sample.pdf",
                 "file_data": file_data,
@@ -148,7 +148,6 @@ def test_template_vars_from_api_input(get_span_mock, agent_calls_mock):
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
-        prompt_template="Hello {{username}}, answer this: {{input}}. Use style: {{style}}",
         capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-5-mini"}),
     )
 
@@ -156,6 +155,7 @@ def test_template_vars_from_api_input(get_span_mock, agent_calls_mock):
     input_node_data = NodeData(
         data={
             "messages": [{"role": "user", "content": "What is AI?"}],
+            "prompt_template": "Hello {{username}}, answer this: {{input}}. Use style: {{style}}",
             "username": "Alice",  # template var in data
             "style": "formal",  # template var in data
         },
@@ -214,7 +214,6 @@ def test_file_url_as_tool_property(get_span_mock, agent_calls_mock):
             required_tool_properties=["document_url"],
         ),
         component_attributes=ComponentAttributes(component_instance_name="Analyze Document"),
-        prompt_template="Analyze this document.",
         file_url_key="document_url",
         capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-5-mini"}),
     )
@@ -235,7 +234,7 @@ def test_file_url_as_tool_property(get_span_mock, agent_calls_mock):
     document_url = "https://example.com/report.pdf"
     fn = SimpleNamespace(
         name="AnalyzeDocument",
-        arguments=f'{{"messages": [], "document_url": "{document_url}"}}',
+        arguments=f'{{"messages": [], "prompt_template": "Analyze this document.", "document_url": "{document_url}"}}',
     )
     tool_call = SimpleNamespace(id="call_1", function=fn)
 
@@ -292,7 +291,6 @@ def test_template_vars_as_tool_property(get_span_mock, agent_calls_mock):
             required_tool_properties=["username", "tone", "question"],
         ),
         component_attributes=ComponentAttributes(component_instance_name="Generate Response"),
-        prompt_template="Hello {{username}}. Answer this question: {{question}}. Use a {{tone}} tone.",
         capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-5-mini"}),
     )
 
@@ -314,7 +312,11 @@ def test_template_vars_as_tool_property(get_span_mock, agent_calls_mock):
     question = "What is Python?"
     fn = SimpleNamespace(
         name="GenerateResponse",
-        arguments=f'{{"messages": [], "username": "{username}", "tone": "{tone}", "question": "{question}"}}',
+        arguments=(
+            f'{{"messages": [], "prompt_template": "Hello {{{{username}}}}. Answer this '
+            f'question: {{{{question}}}}. Use a {{{{tone}}}} tone.", "username": "{username}", "tone": "{tone}", '
+            f'"question": "{question}"}}'
+        ),
     )
     tool_call = SimpleNamespace(id="call_1", function=fn)
 

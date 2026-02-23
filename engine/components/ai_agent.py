@@ -23,11 +23,6 @@ from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
 
-INITIAL_PROMPT = (
-    "Don't make assumptions about what values to plug into functions. Ask for "
-    "clarification if a user request is ambiguous. "
-)
-
 DEFAULT_FALLBACK_REACT_ANSWER = "I couldn't find a solution to your problem."
 
 OUTPUT_TOOL_NAME = "chat_formatting_output_tool"

@@ -132,14 +132,12 @@ def llm_call_with_file_content():
     component_attributes = ComponentAttributes(
         component_instance_name="test_component",
     )
-    prompt_template = "{{input}}"
     file_content = "{file}"
     return LLMCallAgent(
         trace_manager,
         llm_service,
         tool_description,
         component_attributes,
-        prompt_template,
         file_content_key=file_content,
         capability_resolver=make_capability_resolver(llm_service),
     )
@@ -158,13 +156,11 @@ def llm_call_without_file_content():
 
     tool_description = MagicMock()
     component_attributes = ComponentAttributes(component_instance_name="test_component")
-    prompt_template = "{{input}}"
     return LLMCallAgent(
         trace_manager,
         llm_service,
         tool_description,
         component_attributes,
-        prompt_template,
         capability_resolver=make_capability_resolver(llm_service),
     )
 
@@ -191,7 +187,7 @@ def test_agent_input_combinations(agent, input_payload, expected_file, request):
     payload_instance = request.getfixturevalue(input_payload)
 
     # Convert dict to LLMCallInputs Pydantic model
-    inputs = LLMCallInputs.model_validate(payload_instance)
+    inputs = LLMCallInputs.model_validate({**payload_instance, "prompt_template": "{{input}}"})
 
     response = asyncio.run(agent_instance._run_without_io_trace(inputs, ctx={}))
 
