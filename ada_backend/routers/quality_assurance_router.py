@@ -969,12 +969,16 @@ async def import_qa_data_from_csv_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     try:
         await file.seek(0)
 
         result = import_qa_data_from_csv_service(
             session=session,
-            project_id=project_id,
+            organization_id=project.organization_id,
             dataset_id=dataset_id,
             csv_file=file.file,
         )

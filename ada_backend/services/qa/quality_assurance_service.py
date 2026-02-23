@@ -592,7 +592,7 @@ def export_qa_data_to_csv_service(
 
 def import_qa_data_from_csv_service(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     dataset_id: UUID,
     csv_file: BinaryIO,
 ) -> InputGroundtruthResponseList:
@@ -617,7 +617,7 @@ def import_qa_data_from_csv_service(
         for column_name in custom_columns_to_add:
             create_qa_column_service(
                 session=session,
-                project_id=project_id,
+                organization_id=organization_id,
                 dataset_id=dataset_id,
                 column_name=column_name,
             )
