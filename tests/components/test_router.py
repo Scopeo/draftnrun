@@ -29,7 +29,7 @@ async def test_router_single_route_match(router_component):
     result = await router_component._run_without_io_trace(inputs, {})
 
     assert result._directive.strategy == ExecutionStrategy.SELECTIVE_PORTS
-    assert result._directive.selected_ports == ["route_0"]
+    assert result._directive.selected_indices == [0]
     assert result.output == output_data
 
 
@@ -56,7 +56,7 @@ async def test_router_multiple_routes_first_matches(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result._directive.selected_ports == ["route_0"]
+    assert result._directive.selected_indices == [0]
     assert result.output == output_data
 
 
@@ -74,7 +74,7 @@ async def test_router_multiple_routes_middle_matches(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result._directive.selected_ports == ["route_1"]
+    assert result._directive.selected_indices == [1]
     assert result.output == output_data
 
 
@@ -92,7 +92,7 @@ async def test_router_multiple_routes_last_matches(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result._directive.selected_ports == ["route_2"]
+    assert result._directive.selected_indices == [2]
     assert result.output == output_data
 
 
@@ -129,7 +129,7 @@ async def test_router_numeric_equality_exact(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result._directive.selected_ports == ["route_2"]
+    assert result._directive.selected_indices == [2]
     assert result.output == output_data
 
 
@@ -147,7 +147,7 @@ async def test_router_string_equality(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result._directive.selected_ports == ["route_1"]
+    assert result._directive.selected_indices == [1]
     assert result.output == output_data
 
 
@@ -166,7 +166,7 @@ async def test_router_complex_data_comparison(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result._directive.selected_ports == ["route_1"]
+    assert result._directive.selected_indices == [1]
     assert result.output == output_data
 
 
@@ -194,7 +194,7 @@ async def test_router_float_comparison(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result._directive.selected_ports == ["route_2"]
+    assert result._directive.selected_indices == [2]
     assert result.output == output_data
 
 
@@ -213,7 +213,7 @@ async def test_router_mixed_type_routes(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result._directive.selected_ports == ["route_2"]
+    assert result._directive.selected_indices == [2]
     assert result.output == output_data
 
 
@@ -231,7 +231,7 @@ async def test_router_boolean_values(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result._directive.selected_ports == ["route_1"]
+    assert result._directive.selected_indices == [1]
     assert result.output == output_data
 
 
@@ -249,7 +249,7 @@ async def test_router_none_value(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result._directive.selected_ports == ["route_1"]
+    assert result._directive.selected_indices == [1]
     assert result.output == output_data
 
 
@@ -268,7 +268,7 @@ async def test_router_list_value_comparison(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result._directive.selected_ports == ["route_1"]
+    assert result._directive.selected_indices == [1]
     assert result.output == output_data
 
 
@@ -287,7 +287,7 @@ async def test_router_dict_value_comparison(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result._directive.selected_ports == ["route_1"]
+    assert result._directive.selected_indices == [1]
     assert result.output == output_data
 
 
@@ -305,7 +305,7 @@ async def test_router_case_sensitive_strings(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result._directive.selected_ports == ["route_2"]
+    assert result._directive.selected_indices == [2]
     assert result.output == output_data
 
 
@@ -350,7 +350,7 @@ async def test_router_value_b_comparison(router_component):
     )
     result = await router_component._run_without_io_trace(inputs, {})
 
-    assert result._directive.selected_ports == ["route_1"]
+    assert result._directive.selected_indices == [1]
     assert result.output == output_data
 
 
@@ -368,7 +368,7 @@ async def test_router_value_b_defaults_to_value_a(router_component):
     result = await router_component._run_without_io_trace(inputs, {})
 
     # When value_b is None, it defaults to value_a, so route_0 matches
-    assert result._directive.selected_ports == ["route_0"]
+    assert result._directive.selected_indices == [0]
     assert result.output == output_data
 
 
@@ -387,9 +387,9 @@ async def test_router_multiple_routes_match(router_component):
     result = await router_component._run_without_io_trace(inputs, {})
 
     # Router returns all matching routes
-    assert "route_0" in result._directive.selected_ports
-    assert "route_2" in result._directive.selected_ports
-    assert len(result._directive.selected_ports) == 2
+    assert 0 in result._directive.selected_indices
+    assert 2 in result._directive.selected_indices
+    assert len(result._directive.selected_indices) == 2
     # Both matching routes should have output data
     assert result.output == output_data
     assert result.output == output_data
@@ -406,7 +406,7 @@ async def test_router_directive_structure(router_component):
     assert hasattr(result, "_directive")
     assert result._directive is not None
     assert result._directive.strategy == ExecutionStrategy.SELECTIVE_PORTS
-    assert isinstance(result._directive.selected_ports, list)
-    assert all(isinstance(port, str) for port in result._directive.selected_ports)
+    assert isinstance(result._directive.selected_indices, list)
+    assert all(isinstance(idx, int) for idx in result._directive.selected_indices)
     # Check output data is present
     assert result.output == output_data

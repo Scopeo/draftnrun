@@ -22,14 +22,8 @@ def upgrade() -> None:
     # Add "RouteBuilder" value to the ui_component enum
     op.execute("ALTER TYPE ui_component ADD VALUE IF NOT EXISTS 'RouteBuilder'")
 
-    # Add source_port_name column to graph_runner_edges
-    op.add_column("graph_runner_edges", sa.Column("source_port_name", sa.String(), nullable=True))
-
 
 def downgrade() -> None:
-    # Remove source_port_name column from graph_runner_edges
-    op.drop_column("graph_runner_edges", "source_port_name")
-
     # Update any existing RouteBuilder components to use CONDITION_BUILDER or JSON_BUILDER
     op.execute(
         """

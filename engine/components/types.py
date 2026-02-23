@@ -22,10 +22,13 @@ class ExecutionDirective:
 
     Only emitted by components that override default execution flow
     (e.g., IfElse, Router). Regular components don't emit this.
+
+    For SELECTIVE_PORTS strategy, selected_indices specifies which
+    edges should execute based on their order value (e.g., [0, 2]).
     """
 
     strategy: ExecutionStrategy = ExecutionStrategy.CONTINUE
-    selected_ports: list[str] = field(default_factory=list)
+    selected_indices: list[int] = field(default_factory=list)
 
 
 class NodeData(BaseModel):

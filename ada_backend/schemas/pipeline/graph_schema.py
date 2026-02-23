@@ -26,7 +26,6 @@ class EdgeSchema(BaseModel):
     origin: UUID
     destination: UUID
     order: Optional[int] = None
-    source_port_name: Optional[str] = None
 
 
 class GraphGetResponse(BaseModel):

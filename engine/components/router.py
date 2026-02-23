@@ -22,11 +22,6 @@ ROUTER_OPERATOR_METADATA = [
 ]
 
 
-def get_route_port_name(index: int) -> str:
-    """Get the port name for a route by index (e.g., 'route_0', 'route_1')."""
-    return f"route_{index}"
-
-
 class RouteCondition(BaseModel):
     """Schema for a single route condition."""
 
@@ -116,29 +111,28 @@ class Router(Component):
     ) -> RouterOutputs:
         """
         Router evaluates conditions and outputs user-specified data to single output port.
-        Uses ExecutionDirective to control which routes execute based on edge source_port_name.
+        Uses ExecutionDirective to control which routes execute based on edge order.
         """
-        matched_routes: list[str] = []
+        matched_indices: list[int] = []
 
         for i, route in enumerate(inputs.routes):
-            route_name = get_route_port_name(i)
             value_b = route.value_b if route.value_b is not None else route.value_a
             matched = route.value_a == value_b
             LOGGER.info(
-                f"Route {i} ({route_name}): value_a={route.value_a}, value_b={value_b}, "
+                f"Route {i}: value_a={route.value_a}, value_b={value_b}, "
                 f"matched={matched}"
             )
             if matched:
-                matched_routes.append(route_name)
+                matched_indices.append(i)
 
-        LOGGER.info(f"Router matched routes: {matched_routes} out of {len(inputs.routes)} total routes")
-        if not matched_routes:
+        LOGGER.info(f"Router matched indices: {matched_indices} out of {len(inputs.routes)} total routes")
+        if not matched_indices:
             LOGGER.error(f"Router: No routes matched out of {len(inputs.routes)} configured route(s)")
             raise NoMatchingRouteError(num_routes=len(inputs.routes))
 
         result = RouterOutputs(output=inputs.output_data)
         result._directive = ExecutionDirective(
             strategy=ExecutionStrategy.SELECTIVE_PORTS,
-            selected_ports=matched_routes,
+            selected_indices=matched_indices,
         )
         return result

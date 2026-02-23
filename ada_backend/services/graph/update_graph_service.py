@@ -316,7 +316,6 @@ async def update_graph_service(
             target_node_id=edge.destination,
             graph_runner_id=graph_runner_id,
             order=edge.order,
-            source_port_name=edge.source_port_name,
         )
 
     edge_ids_to_delete = previous_edge_ids - {edge.id for edge in graph_project.edges}

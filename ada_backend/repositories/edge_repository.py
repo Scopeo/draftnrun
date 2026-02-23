@@ -30,7 +30,6 @@ def upsert_edge(
     target_node_id: UUID,
     graph_runner_id: Optional[UUID] = None,
     order: Optional[int] = None,
-    source_port_name: Optional[str] = None,
 ) -> None:
     """
     Creates or updates an edge.
@@ -42,7 +41,6 @@ def upsert_edge(
         edge.source_node_id = source_node_id
         edge.target_node_id = target_node_id
         edge.order = order
-        edge.source_port_name = source_port_name
     elif graph_runner_id:
         edge = db.GraphRunnerEdge(
             id=id,
@@ -50,7 +48,6 @@ def upsert_edge(
             target_node_id=target_node_id,
             graph_runner_id=graph_runner_id,
             order=order,
-            source_port_name=source_port_name,
         )
         session.add(edge)
     else:

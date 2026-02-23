@@ -195,8 +195,8 @@ class GraphRunner:
                 self._halt_downstream_execution(node_id)
 
             elif directive.strategy == ExecutionStrategy.SELECTIVE_PORTS:
-                LOGGER.debug(f"Node '{node_id}' selective execution on ports: {directive.selected_ports}")
-                self._execute_selective_ports(node_id, directive.selected_ports)
+                LOGGER.debug(f"Node '{node_id}' selective execution on indices: {directive.selected_indices}")
+                self._execute_selective_ports(node_id, directive.selected_indices)
 
         return legacy_compatibility.collect_legacy_outputs(self.graph, self.tasks, self._input_node_id, self.runnables)
 
@@ -499,26 +499,25 @@ class GraphRunner:
                         task.result = NodeData(data={}, ctx=self.run_context)
                     queue.append(successor)
 
-    def _execute_selective_ports(self, source_node_id: str, selected_ports: list[str]) -> None:
+    def _execute_selective_ports(self, source_node_id: str, selected_indices: list[int]) -> None:
         """
-        Selectively execute downstream nodes based on selected output ports.
-        Only successors connected to ports in selected_ports will execute.
+        Selectively execute downstream nodes based on selected edge indices.
+        Only successors connected via edges with order in selected_indices will execute.
 
         Args:
             source_node_id: The source node ID
-            selected_ports: List of port names that should execute (e.g., ["route_0", "route_2"])
+            selected_indices: List of edge order values that should execute (e.g., [0, 2])
         """
-        LOGGER.info(f"Selective execution for {source_node_id} with selected ports: {selected_ports}")
+        LOGGER.info(f"Selective execution for {source_node_id} with selected indices: {selected_indices}")
 
         for successor in self.graph.successors(source_node_id):
-            # Check edge metadata (source_port_name)
             edge_data = self.graph.get_edge_data(source_node_id, successor)
-            edge_source_port = edge_data.get("source_port_name") if edge_data else None
+            edge_order = edge_data.get("order") if edge_data else None
 
-            if edge_source_port and edge_source_port in selected_ports:
-                LOGGER.info(f"Executing '{successor}' via edge source_port_name='{edge_source_port}'")
+            if edge_order is not None and edge_order in selected_indices:
+                LOGGER.info(f"Executing '{successor}' via edge order={edge_order}")
                 self.tasks[successor].decrement_pending_deps()
             else:
                 # No match - halt this successor
-                LOGGER.info(f"Halting '{successor}' (not in selected ports)")
+                LOGGER.info(f"Halting '{successor}' (order {edge_order} not in selected indices)")
                 self._halt_downstream_execution(successor)
