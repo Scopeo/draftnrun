@@ -23,13 +23,13 @@ LOGGER = logging.getLogger(__name__)
 
 def get_qa_columns_by_dataset_service(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     dataset_id: UUID,
 ) -> List[QAColumnResponse]:
     try:
-        dataset_existence = check_dataset_belongs_to_organization(session, project_id, dataset_id)
+        dataset_existence = check_dataset_belongs_to_organization(session, organization_id, dataset_id)
         if not dataset_existence:
-            raise QADatasetNotInOrgError(project_id, dataset_id)
+            raise QADatasetNotInOrgError(organization_id, dataset_id)
 
         columns = get_qa_columns_by_dataset(session, dataset_id)
 
@@ -40,14 +40,14 @@ def get_qa_columns_by_dataset_service(
 
 def create_qa_column_service(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     dataset_id: UUID,
     column_name: str,
 ) -> QAColumnResponse:
     try:
-        dataset_existence = check_dataset_belongs_to_organization(session, project_id, dataset_id)
+        dataset_existence = check_dataset_belongs_to_organization(session, organization_id, dataset_id)
         if not dataset_existence:
-            raise QADatasetNotInOrgError(project_id, dataset_id)
+            raise QADatasetNotInOrgError(organization_id, dataset_id)
 
         max_position = get_dataset_custom_columns_display_max_position(session, dataset_id)
         new_position = (max_position + 1) if max_position is not None else 0
@@ -64,21 +64,21 @@ def create_qa_column_service(
 
         return QAColumnResponse.model_validate(qa_metadata)
     except QADatasetNotInOrgError:
-        LOGGER.error(f"Dataset {dataset_id} not found in project {project_id}")
+        LOGGER.error(f"Dataset {dataset_id} not found in organization {organization_id}")
         raise
 
 
 def rename_qa_column_service(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     dataset_id: UUID,
     column_id: UUID,
     column_name: str,
 ) -> QAColumnResponse:
     try:
-        dataset_existence = check_dataset_belongs_to_organization(session, project_id, dataset_id)
+        dataset_existence = check_dataset_belongs_to_organization(session, organization_id, dataset_id)
         if not dataset_existence:
-            raise QADatasetNotInOrgError(project_id, dataset_id)
+            raise QADatasetNotInOrgError(organization_id, dataset_id)
 
         column_existence = check_column_exist(session, dataset_id, column_id)
         if not column_existence:
@@ -92,7 +92,7 @@ def rename_qa_column_service(
         )
 
         LOGGER.info(
-            f"Renamed QA column {column_id} to '{column_name}' for dataset {dataset_id} in project {project_id}"
+            f"Renamed QA column {column_id} to '{column_name}' for dataset {dataset_id} in organization {organization_id}"
         )
 
         return QAColumnResponse.model_validate(qa_metadata)
@@ -102,14 +102,14 @@ def rename_qa_column_service(
 
 def delete_qa_column_service(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     dataset_id: UUID,
     column_id: UUID,
 ) -> dict:
     try:
-        dataset_existence = check_dataset_belongs_to_organization(session, project_id, dataset_id)
+        dataset_existence = check_dataset_belongs_to_organization(session, organization_id, dataset_id)
         if not dataset_existence:
-            raise QADatasetNotInOrgError(project_id, dataset_id)
+            raise QADatasetNotInOrgError(organization_id, dataset_id)
 
         column_existence = check_column_exist(session, dataset_id, column_id)
         if not column_existence:
@@ -118,7 +118,7 @@ def delete_qa_column_service(
         remove_column_value_from_custom_column(session, dataset_id, column_id)
         delete_custom_column(session, dataset_id, column_id)
 
-        LOGGER.info(f"Deleted QA column {column_id} from dataset {dataset_id} in project {project_id}")
+        LOGGER.info(f"Deleted QA column {column_id} from dataset {dataset_id} in organization {organization_id}")
 
         return {"message": f"Deleted column {column_id} successfully"}
     except (QADatasetNotInOrgError, QAColumnNotFoundError):
