@@ -17,6 +17,7 @@ from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthUpdateWithId,
     QARunRequest,
 )
+from ada_backend.schemas.parameter_schema import ParameterKind
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
@@ -352,7 +353,27 @@ def _create_dummy_agent_workflow_config():
                 "is_start_node": False,
                 "component_id": "02468c0b-bc99-44ce-a435-995acc5e2545",  # filter component UUID
                 "component_version_id": "02468c0b-bc99-44ce-a435-995acc5e2545",
-                "parameters": [],
+                "parameters": [
+                    {
+                        "value": json.dumps(DEFAULT_FILTER_SCHEMA),
+                        "name": "filtering_json_schema",
+                        "order": None,
+                        "id": "59443366-5b1f-5543-9fc5-57378f9aaf6e",
+                        "type": "string",
+                        "nullable": False,
+                        "default": json.dumps(DEFAULT_FILTER_SCHEMA),
+                        "ui_component": "Textarea",
+                        "ui_component_properties": {
+                            "label": "Filtering schema to apply",
+                            "description": "Describe here the schema for filtering "
+                            "the final workflow response. Must be a correct json schema."
+                            " The output will be validated against this schema and "
+                            "filtered to only include the specified fields.",
+                        },
+                        "kind": ParameterKind.INPUT,
+                        "is_advanced": False,
+                    }
+                ],
                 "tool_description": {
                     "name": "Filter_Tool",
                     "description": "An filter tool that filters the input data to return an AgentPayload.",

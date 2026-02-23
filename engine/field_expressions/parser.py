@@ -32,7 +32,7 @@ def parse_expression(expression_text: str) -> ExpressionNode:
     total_close = expression_text.count("}}")
     template_var_count = len(re.findall(r"(?<!@)\{\{[^}]*\}\}", expression_text))
     close_count = total_close - template_var_count
-    if open_count != close_count:
+    if open_count > 0 and open_count != close_count:
         raise FieldExpressionParseError("Unbalanced reference delimiters '@{{' and '}}'")
 
     parts: list[LiteralNode | RefNode | VarNode] = []

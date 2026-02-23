@@ -70,7 +70,7 @@ def _create_component_instance(
     input_expression: dict | None = None,
 ) -> dict:
     params = [
-        {"value": prompt_template_value, "name": "prompt_template", "order": None},
+        {"value": prompt_template_value, "name": "prompt_template", "order": None, "kind": ParameterKind.INPUT},
         {"value": "openai:gpt-5-mini", "name": "completion_model", "order": None},
         {"value": 0.2, "name": "default_temperature", "order": None},
     ]
@@ -200,6 +200,7 @@ def test_field_expressions_e2e():
                             "order": None,
                             "type": "string",
                             "nullable": False,
+                            "kind": ParameterKind.INPUT,
                             "default": "Answer this question: {input}",
                             "ui_component": "Textarea",
                             "ui_component_properties": {},
@@ -253,6 +254,7 @@ def test_field_expressions_e2e():
                             "name": "prompt_template",
                             "order": None,
                             "type": "string",
+                            "kind": ParameterKind.INPUT,
                             "nullable": False,
                             "default": "Answer this question: {input}",
                             "ui_component": "Textarea",
@@ -307,14 +309,10 @@ def test_field_expressions_e2e():
         assert str(graph_data.edges[0].destination) == dst_instance_id
 
         dst = next(ci for ci in graph_data.component_instances if str(ci.id) == dst_instance_id)
-        field_expressions = _get_field_expressions_from_instance(dst.model_dump())
-        assert len(field_expressions) == 1
-        stored_expression = field_expressions[0]
-        assert stored_expression["field_name"] == "messages"
 
         assert dst.field_expressions is not None
-        assert len(dst.field_expressions) == 1
-        expression_json = dst.field_expressions[0].expression_json
+        messages_fe = next(fe for fe in dst.field_expressions if fe.field_name == "messages")
+        expression_json = messages_fe.expression_json
         assert expression_json is not None
 
         assert expression_json["type"] == "concat"
@@ -363,7 +361,7 @@ def test_invalid_reference_uuid_returns_error():
                     "is_start_node": True,
                     "component_id": COMPONENT_ID,
                     "component_version_id": COMPONENT_VERSION_ID,
-                    "parameters": [],
+                    "parameters": [{"value": "openai:gpt-5-mini", "name": "completion_model", "order": None}],
                     "tool_description": {
                         "name": "Test Tool",
                         "description": "d",
@@ -400,7 +398,8 @@ def test_invalid_reference_uuid_returns_error():
                             "value": expression_text,
                             "kind": ParameterKind.INPUT,
                             "order": None,
-                        }
+                        },
+                        {"value": "openai:gpt-5-mini", "name": "completion_model", "order": None},
                     ],
                 },
             ],
@@ -450,12 +449,12 @@ def test_deploy_remaps_field_expression_instance_ids():
 
         target_instance = next(ci for ci in new_graph.component_instances if ci.name == "Target Agent")
         field_expressions = _get_field_expressions_from_instance(target_instance.model_dump())
-        assert len(field_expressions) == 1
+        messages_fe = next(fe for fe in field_expressions if fe["field_name"] == "messages")
+        expr_text = messages_fe["expression_text"]
 
-        expr_text = field_expressions[0]["expression_text"]
         assert target_instance.field_expressions is not None
-        assert len(target_instance.field_expressions) == 1
-        expr_json = target_instance.field_expressions[0].expression_json
+        messages_fe_obj = next(fe for fe in target_instance.field_expressions if fe.field_name == "messages")
+        expr_json = messages_fe_obj.expression_json
         assert expr_json is not None
 
         src_instance_new = next(ci for ci in new_graph.component_instances if ci.name == "Source Agent")
@@ -498,8 +497,8 @@ def test_load_copy_includes_field_expressions_and_roundtrip():
         assert new_dst.id != dst_instance_id
 
         field_expressions = _get_field_expressions_from_instance(new_dst.model_dump())
-        assert len(field_expressions) == 1
-        expr_text_new = field_expressions[0]["expression_text"]
+        messages_fe = next(fe for fe in field_expressions if fe["field_name"] == "messages")
+        expr_text_new = messages_fe["expression_text"]
         assert str(src_instance_id) not in expr_text_new
         assert str(new_src.id) in expr_text_new
 
@@ -513,7 +512,7 @@ def test_load_copy_includes_field_expressions_and_roundtrip():
         )
         cloned_dst = next(ci for ci in cloned.component_instances if ci.name == "Target Agent")
         field_expressions = _get_field_expressions_from_instance(cloned_dst.model_dump())
-        assert len(field_expressions) == 1
+        assert any(fe["field_name"] == "messages" for fe in field_expressions)
 
         delete_project_service(session, project_id)
         delete_project_service(session, project_id_2)
@@ -560,12 +559,12 @@ def test_load_copy_cloned_graph_has_remapped_field_expressions():
         cloned_src_id = cloned_src.id
 
         field_expressions = _get_field_expressions_from_instance(cloned_dst.model_dump())
-        assert len(field_expressions) == 1
+        cloned_messages_fe = next(fe for fe in field_expressions if fe["field_name"] == "messages")
+        cloned_expr_text = cloned_messages_fe["expression_text"]
 
-        cloned_expr_text = field_expressions[0]["expression_text"]
         assert cloned_dst.field_expressions is not None
-        assert len(cloned_dst.field_expressions) == 1
-        cloned_expr_json = cloned_dst.field_expressions[0].expression_json
+        cloned_messages_fe_obj = next(fe for fe in cloned_dst.field_expressions if fe.field_name == "messages")
+        cloned_expr_json = cloned_messages_fe_obj.expression_json
         assert cloned_expr_json is not None
 
         _assert_expression_remapped(
@@ -602,7 +601,7 @@ def test_invalid_reference_unknown_port_returns_error():
                     "is_start_node": True,
                     "component_id": COMPONENT_ID,
                     "component_version_id": COMPONENT_VERSION_ID,
-                    "parameters": [],
+                    "parameters": [{"value": "openai:gpt-5-mini", "name": "completion_model", "order": None}],
                     "tool_description": {
                         "name": "Test Tool",
                         "description": "d",
@@ -639,7 +638,8 @@ def test_invalid_reference_unknown_port_returns_error():
                             "value": expression_text,
                             "kind": ParameterKind.INPUT,
                             "order": None,
-                        }
+                        },
+                        {"value": "openai:gpt-5-mini", "name": "completion_model", "order": None},
                     ],
                 },
             ],

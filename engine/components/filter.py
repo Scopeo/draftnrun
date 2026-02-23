@@ -81,17 +81,15 @@ class Filter(Component):
         trace_manager: TraceManager,
         tool_description: ToolDescription,
         component_attributes: ComponentAttributes,
-        filtering_json_schema: str,
     ):
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
-        self.filtering_json_schema = filtering_json_schema
 
     async def _run_without_io_trace(self, inputs: FilterInputs, ctx: dict) -> FilterOutputs:
-        filtering_json_schema = inputs.filtering_json_schema or self.filtering_json_schema
+        filtering_json_schema = inputs.filtering_json_schema
         try:
             filtering_json_schema_dict = load_str_to_json(filtering_json_schema)
         except ValueError as e:
