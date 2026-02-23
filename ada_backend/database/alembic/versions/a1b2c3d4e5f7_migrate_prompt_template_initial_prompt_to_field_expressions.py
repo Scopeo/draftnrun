@@ -20,20 +20,19 @@ down_revision: Union[str, None] = "a1c2e3f4b5d6"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# Known ComponentParameterDefinition IDs (from seed files) — needed for downgrade.
-PROMPT_TEMPLATE_PARAM_DEF_ID = "e79b8f5f-d9cc-4a1f-a98a-4992f42a0196"
-INITIAL_PROMPT_PARAM_DEF_ID = "1cd1cd58-f066-4cf5-a0f5-9b2018fc4c6a"
+# Known ComponentParameterDefinition IDs (from seed files).
+# Only these are migrated: LLM Call and AI Agent params. RAG/Synthesizer etc. are left as BasicParameters.
+PROMPT_TEMPLATE_PARAM_DEF_ID_LLM_CALL = "e79b8f5f-d9cc-4a1f-a98a-4992f42a0196"  # LLM Call prompt_template
+INITIAL_PROMPT_PARAM_DEF_ID_AI_AGENT = "1cd1cd58-f066-4cf5-a0f5-9b2018fc4c6a"  # AI Agent initial_prompt
 FILTERING_JSON_SCHEMA_PARAM_DEF_ID = "59443366-5b1f-5543-9fc5-57378f9aaf6e"
 FILTER_COMPONENT_VERSION_ID = "02468c0b-bc99-44ce-a435-995acc5e2545"
-OUTPUT_FORMAT_PARAM_DEF_ID = "e5282ccb-dcaa-4970-93c1-f6ef5018492d"  # AI Agent
-LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID = "d7ee43ab-80f8-4ee5-ac38-938163933610"  # LLM Call
+OUTPUT_FORMAT_PARAM_DEF_ID = "e5282ccb-dcaa-4970-93c1-f6ef5018492d"  # AI Agent output_format
+LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID = "d7ee43ab-80f8-4ee5-ac38-938163933610"  # LLM Call output_format
 
-
-MIGRATED_PARAM_NAMES = "ARRAY['prompt_template', 'initial_prompt', 'output_format']"
-
+# Only migrate BasicParameters that reference these CPDs (by id), not by param name.
 STALE_CPD_IDS = [
-    PROMPT_TEMPLATE_PARAM_DEF_ID,
-    INITIAL_PROMPT_PARAM_DEF_ID,
+    PROMPT_TEMPLATE_PARAM_DEF_ID_LLM_CALL,
+    INITIAL_PROMPT_PARAM_DEF_ID_AI_AGENT,
     OUTPUT_FORMAT_PARAM_DEF_ID,
     LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID,
 ]
@@ -43,11 +42,9 @@ _STALE_CPD_IDS_ARRAY = "ARRAY[" + ", ".join(f"'{i}'::uuid" for i in STALE_CPD_ID
 def upgrade() -> None:
     bind = op.get_bind()
 
-    # DISTINCT ON ensures one row per (component_instance_id, param_name) even
-    # when duplicate BasicParameter rows exist for the same name, which would
-    # otherwise cause "ON CONFLICT DO UPDATE command cannot affect row a second time".
-    # The final DELETE removes ALL matching BasicParameter rows (not just the
-    # deduplicated ones) so no orphan rows remain.
+    # Migrate only LLM Call and AI Agent params (by CPD id). RAG/Synthesizer prompt_template etc. are unchanged.
+    # DISTINCT ON ensures one row per (component_instance_id, param_name) even when duplicate BasicParameter
+    # rows exist; the final DELETE removes ALL matching BasicParameter rows so no orphan rows remain.
     bind.execute(
         sa.text(f"""
         WITH source AS (
@@ -59,7 +56,7 @@ def upgrade() -> None:
             FROM basic_parameters bp
             JOIN component_parameter_definitions cpd
               ON bp.parameter_definition_id = cpd.id
-            WHERE cpd.name = ANY({MIGRATED_PARAM_NAMES})
+            WHERE cpd.id = ANY({_STALE_CPD_IDS_ARRAY})
             ORDER BY bp.component_instance_id, cpd.name, bp.id
         ),
         insert_fe AS (
@@ -89,7 +86,7 @@ def upgrade() -> None:
         DELETE FROM basic_parameters bp
         USING component_parameter_definitions cpd
         WHERE bp.parameter_definition_id = cpd.id
-          AND cpd.name = ANY({MIGRATED_PARAM_NAMES})
+          AND cpd.id = ANY({_STALE_CPD_IDS_ARRAY})
     """)
     )
 
@@ -135,10 +132,10 @@ def downgrade() -> None:
             FALSE,
             FALSE
         FROM (VALUES
-            ('{PROMPT_TEMPLATE_PARAM_DEF_ID}',       'AI',       'prompt_template'),
-            ('{INITIAL_PROMPT_PARAM_DEF_ID}',         'AI Agent', 'initial_prompt'),
-            ('{OUTPUT_FORMAT_PARAM_DEF_ID}',          'AI Agent', 'output_format'),
-            ('{LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID}', 'AI',       'output_format')
+            ('{PROMPT_TEMPLATE_PARAM_DEF_ID_LLM_CALL}', 'AI',       'prompt_template'),
+            ('{INITIAL_PROMPT_PARAM_DEF_ID_AI_AGENT}', 'AI Agent', 'initial_prompt'),
+            ('{OUTPUT_FORMAT_PARAM_DEF_ID}',            'AI Agent', 'output_format'),
+            ('{LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID}',   'AI',       'output_format')
         ) AS cpd_data(id, component_name, param_name)
         CROSS JOIN LATERAL (
             SELECT cv2.id
@@ -186,8 +183,8 @@ def downgrade() -> None:
         WHERE id IN (SELECT ipi_id FROM source)
     """),
         {
-            "prompt_template_def_id": PROMPT_TEMPLATE_PARAM_DEF_ID,
-            "initial_prompt_def_id": INITIAL_PROMPT_PARAM_DEF_ID,
+            "prompt_template_def_id": PROMPT_TEMPLATE_PARAM_DEF_ID_LLM_CALL,
+            "initial_prompt_def_id": INITIAL_PROMPT_PARAM_DEF_ID_AI_AGENT,
             "output_format_def_id": OUTPUT_FORMAT_PARAM_DEF_ID,
             "llm_call_output_format_def_id": LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID,
         },
