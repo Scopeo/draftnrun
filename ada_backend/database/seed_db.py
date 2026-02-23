@@ -19,6 +19,7 @@ from ada_backend.database.seed.seed_ai_agent import seed_ai_agent_components, se
 from ada_backend.database.seed.seed_api_call_tool import seed_api_call_components
 from ada_backend.database.seed.seed_categories import seed_categories
 from ada_backend.database.seed.seed_categorizer import (
+    add_categorizer_output_ports,
     seed_categorizer_components,
     seed_categorizer_parameter_groups,
 )
@@ -101,6 +102,7 @@ def seed_db(session: Session):
         seed_port_definitions(session)
         seed_custom_llm_models(session)
         seed_anthropic_models(session)
+        add_categorizer_output_ports(session)
 
         # Verify components exist
         for name, uuid_value in COMPONENT_UUIDS.items():

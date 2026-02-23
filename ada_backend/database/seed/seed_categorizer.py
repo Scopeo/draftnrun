@@ -18,7 +18,6 @@ from ada_backend.database.seed.constants import (
     VERBOSITY_IN_DB,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
-from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
     COMPONENT_VERSION_UUIDS,
@@ -28,6 +27,7 @@ from ada_backend.database.seed.utils import (
     build_parameters_group,
     build_parameters_group_definitions,
 )
+from engine.components.types import ToolDescription
 
 # Parameter IDs for Categorizer
 CATEGORIZER_PARAMETER_IDS = {
@@ -45,8 +45,32 @@ CATEGORIZER_PARAMETER_GROUP_UUIDS = {
     "advanced_llm_parameters": UUID("dc7c98b3-db0e-401b-a5a8-57af085c133d"),
 }
 
+# Tool Description UUID for Categorizer
+CATEGORIZER_TOOL_DESCRIPTION_ID = UUID("8f9d4c3e-7a2b-4e1d-9c8f-5b6a3d2e1f0a")
+
+# Categorizer Tool Description
+CATEGORIZER_TOOL_DESCRIPTION = ToolDescription(
+    name="Categorizer",
+    description="Categorizes content into predefined categories",
+    tool_properties={
+        "input": {
+            "type": "string",
+            "description": "The content to categorize",
+        }
+    },
+    required_tool_properties=["input"],
+)
+
 
 def seed_categorizer_components(session: Session):
+    # Create custom tool description for categorizer
+    categorizer_tool_description = db.ToolDescription(
+        id=CATEGORIZER_TOOL_DESCRIPTION_ID,
+        **CATEGORIZER_TOOL_DESCRIPTION.model_dump(),
+    )
+    session.merge(categorizer_tool_description)
+    session.commit()
+
     categorizer = db.Component(
         id=COMPONENT_UUIDS["categorizer"],
         name="Categorizer",
@@ -66,7 +90,7 @@ def seed_categorizer_components(session: Session):
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,
         description="A component that categorizes content into user-defined categories using AI.",
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_llm_call_tool_description"],
+        default_tool_description_id=CATEGORIZER_TOOL_DESCRIPTION_ID,
     )
     upsert_component_versions(
         session=session,
@@ -81,22 +105,19 @@ def seed_categorizer_components(session: Session):
                 name="categories",
                 type=ParameterType.JSON,
                 nullable=False,
-                default='[{"name": "Category1", "description": "Description of category 1"}]',
-                ui_component=UIComponent.TEXTAREA,
+                default="[]",
+                ui_component=UIComponent.JSON_BUILDER,
                 ui_component_properties=UIComponentProperties(
                     label="Categories",
                     placeholder=(
-                        '[\n'
+                        "[\n"
                         '  {"name": "Positive", "description": "Content expressing positive sentiment"},\n'
                         '  {"name": "Negative", "description": "Content expressing negative sentiment"},\n'
                         '  {"name": "Neutral", "description": "Content with neutral sentiment"}\n'
-                        ']'
+                        "]"
                     ),
-                    description=(
-                        "List of categories as JSON array. "
-                        "Each category should have 'name' and 'description' fields."
-                    ),
-                ).model_dump(exclude_unset=True, exclude_none=True),
+                    description=("List of categories. Each category should have 'name' and 'description' fields."),
+                ).model_dump(exclude_unset=True, exclude_none=False),
             ),
             db.ComponentParameterDefinition(
                 id=CATEGORIZER_PARAMETER_IDS["additional_context"],
@@ -189,5 +210,55 @@ def seed_categorizer_parameter_groups(session: Session):
         },
     }
     build_components_parameters_assignments_to_parameter_groups(session, parameter_group_assignments)
+
+    session.commit()
+
+
+def add_categorizer_output_ports(session: Session):
+    """
+    Fix categorizer ports:
+    2. Add explicit output ports for category, score, reason
+    This must run AFTER seed_port_definitions.
+    """
+    output_ports = [
+        {
+            "name": "category",
+            "description": "The selected category",
+            "parameter_type": ParameterType.STRING,
+        },
+        {
+            "name": "score",
+            "description": "Confidence score (0-1)",
+            "parameter_type": ParameterType.FLOAT,
+        },
+        {
+            "name": "reason",
+            "description": "Explanation for the categorization",
+            "parameter_type": ParameterType.STRING,
+        },
+    ]
+
+    for port_def in output_ports:
+        existing_port = (
+            session.query(db.PortDefinition)
+            .filter_by(
+                component_version_id=COMPONENT_VERSION_UUIDS["categorizer"],
+                name=port_def["name"],
+                port_type=db.PortType.OUTPUT,
+            )
+            .first()
+        )
+
+        if not existing_port:
+            new_port = db.PortDefinition(
+                component_version_id=COMPONENT_VERSION_UUIDS["categorizer"],
+                name=port_def["name"],
+                port_type=db.PortType.OUTPUT,
+                is_canonical=False,
+                description=port_def["description"],
+                parameter_type=port_def["parameter_type"],
+                nullable=True,
+            )
+            session.add(new_port)
 
     session.commit()
