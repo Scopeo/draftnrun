@@ -30,7 +30,6 @@ from ada_backend.database.seed.utils import (
 )
 
 AGENT_TOOLS_PARAMETER_NAME = "agent_tools"
-OUTPUT_FORMAT_PARAM_DEF_ID = UUID("e5282ccb-dcaa-4970-93c1-f6ef5018492d")
 
 AI_MODEL_PARAMETER_IDS = {
     "max_iterations": UUID("89efb2e1-9228-44db-91d6-871a41042067"),
@@ -286,7 +285,6 @@ def seed_ai_agent_parameter_groups(session: Session):
             "parameter_order_within_group": 3,
         },
         # History Management Group
-
         AI_MODEL_PARAMETER_IDS["first_history_messages"]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["history_management"],
             "parameter_order_within_group": 2,

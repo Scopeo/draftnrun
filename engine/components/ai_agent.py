@@ -572,7 +572,7 @@ class AIAgent(Component):
     # --- Thin adapter to typed I/O ---
     async def _run_without_io_trace(self, inputs: AIAgentInputs, ctx: dict) -> AIAgentOutputs:
         # Map typed inputs to the original call style
-        initial_prompt = inputs.initial_prompt or INITIAL_PROMPT
+        initial_prompt = inputs.initial_prompt
         output_format = inputs.output_format
         output_tool_description = self._get_output_tool_description(output_format)
 

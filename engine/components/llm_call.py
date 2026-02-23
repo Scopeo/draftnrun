@@ -177,7 +177,7 @@ class LLMCallAgent(Component):
 
     async def _run_without_io_trace(self, inputs: LLMCallInputs, ctx: Optional[dict] = None) -> LLMCallOutputs:
         LOGGER.info(f"Running LLM call agent with inputs: {inputs} and ctx: {ctx}")
-        prompt_template = inputs.prompt_template or DEFAULT_PROMPT_TEMPLATE
+        prompt_template = inputs.prompt_template
         output_format = inputs.output_format
 
         files_content = []
