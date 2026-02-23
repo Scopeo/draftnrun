@@ -1,6 +1,6 @@
 """migrate prompt_template, initial_prompt, filtering_json_schema and output_format
-from BasicParameter to FieldExpression
-
+from BasicParameter to FieldExpression, and delete the corresponding stale
+ComponentParameterDefinition rows (which are now superseded by port definitions).
 
 Revision ID: a1b2c3d4e5f7
 Revises: a1c2e3f4b5d6
@@ -27,18 +27,28 @@ OUTPUT_FORMAT_PARAM_DEF_ID = "e5282ccb-dcaa-4970-93c1-f6ef5018492d"  # AI Agent
 LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID = "d7ee43ab-80f8-4ee5-ac38-938163933610"  # LLM Call
 
 
-MIGRATED_PARAM_NAMES = (
-    "ARRAY['prompt_template', 'initial_prompt', 'filtering_json_schema', 'output_format']"
-)
+MIGRATED_PARAM_NAMES = "ARRAY['prompt_template', 'initial_prompt', 'filtering_json_schema', 'output_format']"
+
+STALE_CPD_IDS = [
+    PROMPT_TEMPLATE_PARAM_DEF_ID,
+    INITIAL_PROMPT_PARAM_DEF_ID,
+    FILTERING_JSON_SCHEMA_PARAM_DEF_ID,
+    OUTPUT_FORMAT_PARAM_DEF_ID,
+    LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID,
+]
+_STALE_CPD_IDS_ARRAY = "ARRAY[" + ", ".join(f"'{i}'::uuid" for i in STALE_CPD_IDS) + "]"
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+
     # DISTINCT ON ensures one row per (component_instance_id, param_name) even
     # when duplicate BasicParameter rows exist for the same name, which would
     # otherwise cause "ON CONFLICT DO UPDATE command cannot affect row a second time".
     # The final DELETE removes ALL matching BasicParameter rows (not just the
     # deduplicated ones) so no orphan rows remain.
-    op.get_bind().execute(sa.text(f"""
+    bind.execute(
+        sa.text(f"""
         WITH source AS (
             SELECT DISTINCT ON (bp.component_instance_id, cpd.name)
                 bp.component_instance_id,
@@ -79,13 +89,58 @@ def upgrade() -> None:
         USING component_parameter_definitions cpd
         WHERE bp.parameter_definition_id = cpd.id
           AND cpd.name = ANY({MIGRATED_PARAM_NAMES})
-    """))
+    """)
+    )
+
+    # Delete the stale ComponentParameterDefinition rows. These parameters are
+    # now handled as port definitions (seeded via seed_ports.py from the
+    # component's input schema), so the CPD rows are obsolete and their
+    # nullable=False constraint causes spurious validation errors.
+    bind.execute(
+        sa.text(f"""
+        DELETE FROM component_parameter_definitions
+        WHERE id = ANY({_STALE_CPD_IDS_ARRAY})
+    """)
+    )
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+
+    # Re-create the CPD rows that were deleted in upgrade so the JOIN in the
+    # data-restore step below can find them.  component_version_id values are
+    # looked up dynamically to avoid hard-coding UUIDs that differ per env.
+    # UUIDs are module-level constants (no user input), so f-string interpolation is safe.
+    bind.execute(sa.text(f"""
+        INSERT INTO component_parameter_definitions
+            (id, component_version_id, name, type, nullable, is_advanced)
+        SELECT
+            cpd_data.id::uuid,
+            cv.id,
+            cpd_data.param_name,
+            'string'::parameter_type,
+            FALSE,
+            FALSE
+        FROM (VALUES
+            ('{PROMPT_TEMPLATE_PARAM_DEF_ID}',       'AI',       'prompt_template'),
+            ('{INITIAL_PROMPT_PARAM_DEF_ID}',         'AI Agent', 'initial_prompt'),
+            ('{FILTERING_JSON_SCHEMA_PARAM_DEF_ID}',  'AI Agent', 'filtering_json_schema'),
+            ('{OUTPUT_FORMAT_PARAM_DEF_ID}',          'AI Agent', 'output_format'),
+            ('{LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID}', 'AI',       'output_format')
+        ) AS cpd_data(id, component_name, param_name)
+        CROSS JOIN LATERAL (
+            SELECT cv2.id
+            FROM component_versions cv2
+            JOIN components c ON c.id = cv2.component_id
+            WHERE c.name = cpd_data.component_name
+            LIMIT 1
+        ) AS cv(id)
+        ON CONFLICT (id) DO NOTHING
+    """))
+
     # Restore BasicParameter rows from InputPortInstance + FieldExpression.
     # Only literal expressions can be converted back; injected (ref/concat) values are left as-is.
-    op.get_bind().execute(
+    bind.execute(
         sa.text("""
         WITH source AS (
             SELECT
@@ -124,6 +179,6 @@ def downgrade() -> None:
             "initial_prompt_def_id": INITIAL_PROMPT_PARAM_DEF_ID,
             "filtering_json_schema_def_id": FILTERING_JSON_SCHEMA_PARAM_DEF_ID,
             "output_format_def_id": OUTPUT_FORMAT_PARAM_DEF_ID,
-        "llm_call_output_format_def_id": LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID,
+            "llm_call_output_format_def_id": LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID,
         },
     )
