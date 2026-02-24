@@ -14,6 +14,7 @@ from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,
     get_component_instances_by_ids,
     get_component_parameter_definition_by_component_version,
+    get_output_ports_for_component_version,
     upsert_sub_component_input,
 )
 from ada_backend.repositories.edge_repository import delete_edge, get_edges, upsert_edge
@@ -580,9 +581,18 @@ def _create_port_mappings_for_pure_ref_expressions(
 
     source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)
     if not source_port_def_id:
+        available = get_output_ports_for_component_version(session, source_component_version_id)
+        available_names = [p.name for p in available]
         LOGGER.warning(
-            msg=f"Output port '{ref_node.port}' not found for component "
-            f"{source_component_version_id}, skipping port mapping"
+            "[save] pure ref port mapping skipped: output port '%s' not found for component %s "
+            "(ref %s.%s -> %s.%s). Available output ports: %s",
+            ref_node.port,
+            source_component_version_id,
+            ref_node.instance,
+            ref_node.port,
+            component_instance_id,
+            field_name,
+            available_names if available_names else "(none)",
         )
         return
 
