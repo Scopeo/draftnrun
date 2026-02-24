@@ -31,6 +31,30 @@ WITH trace_costs AS (
 """
 
 
+SQL_COST_KPIS_ROUNDED_TAIL = """
+        ), raw AS (
+            SELECT
+                (SELECT COALESCE(AVG(total_cost_per_run), 0)::numeric FROM run_totals) as mean_cost_per_run,
+                (SELECT COALESCE(AVG(total_cost_per_conversation), 0)::numeric
+                 FROM conversation_totals) as mean_cost_per_conversation
+        )
+        SELECT
+            CASE
+                WHEN raw.mean_cost_per_run = 0 OR raw.mean_cost_per_run IS NULL THEN 0
+                WHEN raw.mean_cost_per_run >= 1 THEN ROUND(raw.mean_cost_per_run::numeric, 0)
+                ELSE ROUND(raw.mean_cost_per_run::numeric,
+                    (-(FLOOR(LOG(ABS(raw.mean_cost_per_run)))::integer) + %(significant_figures)s - 1)
+            END as mean_cost_per_run,
+            CASE
+                WHEN raw.mean_cost_per_conversation = 0 OR raw.mean_cost_per_conversation IS NULL THEN 0
+                WHEN raw.mean_cost_per_conversation >= 1 THEN ROUND(raw.mean_cost_per_conversation::numeric, 0)
+                ELSE ROUND(raw.mean_cost_per_conversation::numeric,
+                    (-(FLOOR(LOG(ABS(raw.mean_cost_per_conversation)))::integer) + %(significant_figures)s - 1)
+            END as mean_cost_per_conversation
+        FROM raw
+"""
+
+
 def query_trace_duration(
     project_ids: List[UUID], duration_days: int, call_type: CallType | None = None
 ) -> pd.DataFrame:
