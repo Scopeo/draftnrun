@@ -1,7 +1,7 @@
 """add organization_id to qa tables
 
-Revision ID: a1b2c3d4e5f7
-Revises: a1c2e3f4b5d6
+Revision ID: a1b2c3d4e5f8
+Revises: b2c3d4e5f6a7
 Create Date: 2026-02-09 10:00:00.000000
 
 """
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "a1b2c3d4e5f7"
-down_revision: Union[str, None] = "a1c2e3f4b5d6"
+revision: str = "a1b2c3d4e5f8"
+down_revision: Union[str, None] = "b2c3d4e5f6a7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
