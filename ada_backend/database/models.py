@@ -1070,6 +1070,7 @@ class PortDefinition(Base):
     default = mapped_column(String, nullable=True)
     is_tool_input = mapped_column(Boolean, nullable=False, default=True)
     is_advanced = mapped_column(Boolean, nullable=False, default=False)
+    drives_output_schema = mapped_column(Boolean, nullable=False, default=False)
 
     component_version = relationship("ComponentVersion", back_populates="port_definitions")
 

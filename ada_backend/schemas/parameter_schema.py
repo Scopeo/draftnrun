@@ -26,6 +26,7 @@ class ParameterDefinition(ParameterBase):
     ui_component: Optional[UIComponent] = None
     ui_component_properties: Optional[dict] = None
     is_advanced: bool = False
+    drives_output_schema: bool = False
 
 
 class WithValue(BaseModel):
