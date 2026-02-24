@@ -34,11 +34,6 @@ class FilterInputs(BaseModel):
     error: Optional[str] = Field(default=None, description="Error message if any.")
     artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts to filter.")
     is_final: bool = Field(default=False, description="Whether this is a final output.")
-    filtering_json_schema: Optional[str] = Field(
-        default=None,
-        description="JSON schema for filtering data.",
-        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
-    )
     # Allow any other fields to be passed through
     model_config = {"extra": "allow"}
 
@@ -80,7 +75,7 @@ class Filter(Component):
         self.filtering_json_schema = filtering_json_schema
 
     async def _run_without_io_trace(self, inputs: FilterInputs, ctx: dict) -> FilterOutputs:
-        filtering_json_schema = inputs.filtering_json_schema or self.filtering_json_schema
+        filtering_json_schema = self.filtering_json_schema
         try:
             filtering_json_schema_dict = load_str_to_json(filtering_json_schema)
         except ValueError as e:

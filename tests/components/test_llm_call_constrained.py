@@ -11,6 +11,38 @@ from tests.components.test_llm_call import make_capability_resolver
 
 base64_string = base64.b64encode(b"dummy pdf content").decode("utf-8")
 QUESTION = "What is the ideal weather for a pool party?"
+PROMPT_TEMPLATE = "{{input}}"
+OUTPUT_FORMAT = load_str_to_json(
+    """{
+    "name": "weather_data",
+    "type": "json_schema",
+    "strict": true,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "location": {
+                "type": "string",
+                "description": "The location to get the weather for"
+            },
+            "unit": {
+                "type": ["string", "null"],
+                "description": "The unit to return the temperature in",
+                "enum": ["F", "C"]
+            },
+            "value": {
+                "type": "number",
+                "description": "The actual temperature value in the location",
+                "minimum": -130,
+                "maximum": 130
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "location", "unit", "value"
+        ]
+    }
+}"""
+)
 
 
 @pytest.fixture
@@ -65,45 +97,11 @@ def llm_call_with_output_format():
     component_attributes = ComponentAttributes(
         component_instance_name="test_component",
     )
-    prompt_template = "{{input}}"
-    output_format = load_str_to_json(
-        """{
-        "name": "weather_data",
-        "type": "json_schema",
-        "strict": true,
-        "schema": {
-            "type": "object",
-            "properties": {
-                "location": {
-                    "type": "string",
-                    "description": "The location to get the weather for"
-                },
-                "unit": {
-                    "type": ["string", "null"],
-                    "description": "The unit to return the temperature in",
-                    "enum": ["F", "C"]
-                },
-                "value": {
-                    "type": "number",
-                    "description": "The actual temperature value in the location",
-                    "minimum": -130,
-                    "maximum": 130
-                }
-            },
-            "additionalProperties": false,
-            "required": [
-                "location", "unit", "value"
-            ]
-        }
-    }"""
-    )
     agent = LLMCallAgent(
         trace_manager,
         llm_service,
         tool_description,
         component_attributes,
-        prompt_template,
-        output_format=output_format,
         capability_resolver=make_capability_resolver(llm_service),
     )
     return agent
@@ -112,24 +110,31 @@ def llm_call_with_output_format():
 @pytest.mark.anyio
 async def test_agent_input_combinations(llm_call_with_output_format, input_payload):
     # Convert dict to LLMCallInputs Pydantic model
-    inputs = LLMCallInputs.model_validate(input_payload)
+    inputs = LLMCallInputs.model_validate({
+        **input_payload,
+        "prompt_template": PROMPT_TEMPLATE,
+        "output_format": OUTPUT_FORMAT,
+    })
     response = await llm_call_with_output_format._run_without_io_trace(inputs, ctx={})
 
     # Check that the response is the correct type
     assert isinstance(response.output, str)
 
     # Check that response_format was passed
-    response_format = llm_call_with_output_format.output_format
-    assert response_format is not None
-    assert response_format["name"] == "weather_data"
-    assert response_format["type"] == "json_schema"
-    assert isinstance(response_format["strict"], bool) and response_format["strict"] is True
+    assert OUTPUT_FORMAT is not None
+    assert OUTPUT_FORMAT["name"] == "weather_data"
+    assert OUTPUT_FORMAT["type"] == "json_schema"
+    assert isinstance(OUTPUT_FORMAT["strict"], bool) and OUTPUT_FORMAT["strict"] is True
 
 
 @pytest.mark.anyio
 async def test_chat_completion_to_response(llm_call_with_output_format, input_payload_with_file):
     # Convert dict to LLMCallInputs Pydantic model
-    inputs = LLMCallInputs.model_validate(input_payload_with_file)
+    inputs = LLMCallInputs.model_validate({
+        **input_payload_with_file,
+        "prompt_template": PROMPT_TEMPLATE,
+        "output_format": OUTPUT_FORMAT,
+    })
     response = await llm_call_with_output_format._run_without_io_trace(inputs, ctx={})
     # Check that the response is the correct type
     assert isinstance(response.output, str)

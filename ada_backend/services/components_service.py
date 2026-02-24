@@ -41,6 +41,8 @@ def _process_components_with_ports(
                 description=port.description,
                 nullable=port.nullable,
                 default=port.get_default() if port.default is not None else None,
+                is_tool_input=port.is_tool_input,
+                is_advanced=port.is_advanced,
             )
         )
         # Track input ports per component_version for input-parameter synthesis
@@ -65,7 +67,7 @@ def _process_components_with_ports(
                     default=input_port.get_default() if input_port.default is not None else None,
                     ui_component=input_port.ui_component,
                     ui_component_properties=input_port.ui_component_properties,
-                    is_advanced=False,
+                    is_advanced=input_port.is_advanced,
                     parameter_group_id=None,
                     parameter_order_within_group=None,
                     parameter_group_name=None,

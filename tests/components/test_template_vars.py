@@ -55,7 +55,6 @@ def llm_agent(mock_trace_manager, mock_llm_service):
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
-        prompt_template="Say {{yes}} to {{name}}. User said: {{input}}",
         capability_resolver=make_capability_resolver(mock_llm_service),
     )
 
@@ -70,7 +69,6 @@ def react_agent(mock_trace_manager, mock_llm_service):
         tool_description=ToolDescription(
             name="react", description="react", tool_properties={}, required_tool_properties=[]
         ),
-        initial_prompt="You are {{name}}, say {{yes}}",
         agent_tools=[],  # No tools for this test
     )
 
@@ -109,7 +107,11 @@ def test_llm_call_with_template_vars(get_span_mock, agent_calls_mock, llm_agent)
 
     # Simulate Input -> LLMCallAgent flow with NodeData
     input_node_data = NodeData(
-        data={"messages": [{"role": "user", "content": "hi"}]}, ctx={"yes": "LOL", "name": "John"}
+        data={
+            "messages": [{"role": "user", "content": "hi"}],
+            "prompt_template": "Say {{yes}} to {{name}}. User said: {{input}}",
+        },
+        ctx={"yes": "LOL", "name": "John"},
     )
 
     result = asyncio.run(llm_agent.run(input_node_data))
@@ -138,12 +140,11 @@ def test_llm_call_missing_template_var(get_span_mock, agent_calls_mock, mock_llm
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
-        prompt_template="Say {{missing_var}}",
         capability_resolver=make_capability_resolver(mock_llm_service),
     )
 
     input_node_data = NodeData(
-        data={"messages": [{"role": "user", "content": "hi"}]},
+        data={"messages": [{"role": "user", "content": "hi"}], "prompt_template": "Say {{missing_var}}"},
         ctx={"yes": "LOL"},  # missing_var not provided
     )
 
@@ -169,12 +170,11 @@ def test_llm_call_wrong_type_template_var(get_span_mock, agent_calls_mock, mock_
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
-        prompt_template="Say {{bad_var}}",
         capability_resolver=make_capability_resolver(mock_llm_service),
     )
 
     input_node_data = NodeData(
-        data={"messages": [{"role": "user", "content": "hi"}]},
+        data={"messages": [{"role": "user", "content": "hi"}], "prompt_template": "Say {{bad_var}}"},
         ctx={"bad_var": UnstringableValue()},
     )
 
@@ -201,11 +201,13 @@ def test_llm_call_with_input_var(get_span_mock, agent_calls_mock, llm_agent):
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
-        prompt_template="User said: {{input}}",
         capability_resolver=make_capability_resolver(llm_agent._completion_service),
     )
 
-    input_node_data = NodeData(data={"messages": [{"role": "user", "content": "Hello world!"}]}, ctx={})
+    input_node_data = NodeData(
+        data={"messages": [{"role": "user", "content": "Hello world!"}], "prompt_template": "User said: {{input}}"},
+        ctx={},
+    )
 
     result = asyncio.run(agent.run(input_node_data))
 
@@ -223,7 +225,8 @@ def test_react_agent_with_template_vars(get_span_mock, agent_calls_mock, react_a
     agent_calls_mock.labels.return_value = counter_mock
 
     input_node_data = NodeData(
-        data={"messages": [{"role": "user", "content": "hi"}]}, ctx={"yes": "LOL", "name": "Alice"}
+        data={"messages": [{"role": "user", "content": "hi"}], "initial_prompt": "You are {{name}}, say {{yes}}"},
+        ctx={"yes": "LOL", "name": "Alice"},
     )
 
     result = asyncio.run(react_agent.run(input_node_data))
@@ -248,12 +251,11 @@ def test_react_agent_wrong_type_template_var(get_span_mock, agent_calls_mock, mo
         tool_description=ToolDescription(
             name="react", description="react", tool_properties={}, required_tool_properties=[]
         ),
-        initial_prompt="You are {{name}}, say {{bad_var}}",
         agent_tools=[],
     )
 
     input_node_data = NodeData(
-        data={"messages": [{"role": "user", "content": "hi"}]},
+        data={"messages": [{"role": "user", "content": "hi"}], "initial_prompt": "You are {{name}}, say {{bad_var}}"},
         ctx={"name": "Alice", "bad_var": UnstringableValue()},
     )
 
@@ -278,12 +280,14 @@ def test_template_vars_priority(get_span_mock, agent_calls_mock, mock_llm_servic
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
-        prompt_template="Message: {{input}}, Template var: {{yes}}",
         capability_resolver=make_capability_resolver(mock_llm_service),
     )
 
     input_node_data = NodeData(
-        data={"messages": [{"role": "user", "content": "Hello from message"}]},
+        data={
+            "messages": [{"role": "user", "content": "Hello from message"}],
+            "prompt_template": "Message: {{input}}, Template var: {{yes}}",
+        },
         ctx={"yes": "Hello from template"},
     )
 
@@ -310,14 +314,16 @@ def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, mock_llm_s
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
-        prompt_template="Process this file: {{input}}",
         file_content_key="my_file_content",
         file_url_key="my_file_url",
         capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-5-mini"}),
     )
 
     input_node_data = NodeData(
-        data={"messages": [{"role": "user", "content": "Hello world!"}]},
+        data={
+            "messages": [{"role": "user", "content": "Hello world!"}],
+            "prompt_template": "Process this file: {{input}}",
+        },
         ctx={
             "my_file_content": {
                 "filename": "test.pdf",
@@ -378,13 +384,15 @@ def test_llm_call_with_flat_template_vars(get_span_mock, agent_calls_mock, mock_
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
-        prompt_template="The user's name it's {{username}}. Greet it.\nAnswer this question: {{input}}",
         file_url_key="cs_book",
         capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-5-mini"}),
     )
 
     input_node_data = NodeData(
-        data={"messages": [{"role": "user", "content": "Hello"}]},
+        data={
+            "messages": [{"role": "user", "content": "Hello"}],
+            "prompt_template": "The user's name it's {{username}}. Greet it.\nAnswer this question: {{input}}",
+        },
         ctx={"username": "John", "cs_book": "https://example.com/book.pdf"},
     )
 
@@ -415,7 +423,6 @@ def test_llm_call_template_vars_from_tool_args(get_span_mock, agent_calls_mock, 
             name="Get_content", description="", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
-        prompt_template="Respond to {{query}}. Speak like a {{speak}}",
         file_url_key="doc_url",
         capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-5-mini"}),
     )
@@ -429,6 +436,9 @@ def test_llm_call_template_vars_from_tool_args(get_span_mock, agent_calls_mock, 
         ),
         agent_tools=[llm_tool],
         run_tools_in_parallel=False,
+        tool_pre_configured_inputs={
+            "Get_content": {"prompt_template": "Respond to {{query}}. Speak like a {{speak}}"}
+        },
     )
 
     doc_url = "https://example.com/a.pdf"
@@ -481,7 +491,6 @@ def test_react_agent_two_tool_calls_different_urls(
             name="Get_content", description="", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Get content"),
-        prompt_template="Describe: {{input}}",
         file_url_key="file_url",
         capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-5-mini"}),
     )
@@ -496,6 +505,7 @@ def test_react_agent_two_tool_calls_different_urls(
         ),
         agent_tools=[llm_tool],
         run_tools_in_parallel=False,
+        tool_pre_configured_inputs={"Get_content": {"prompt_template": "Describe: {{input}}"}},
     )
 
     # Build two fake tool calls

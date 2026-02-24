@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 from ada_backend.database.setup_db import get_db_session
-from ada_backend.schemas.parameter_schema import PipelineParameterSchema
+from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import (
     ComponentInstanceSchema,
     ToolDescriptionSchema,
@@ -94,6 +94,7 @@ def test_update_graph_runner():
                         PipelineParameterSchema(
                             value="Reformulate the question as a customer service query :\n{question}",
                             name="prompt_template",
+                            kind=ParameterKind.INPUT,
                             order=None,
                         ),
                         PipelineParameterSchema(
@@ -120,6 +121,7 @@ def test_update_graph_runner():
                         PipelineParameterSchema(
                             value="Add polite expressions to the question: {question} \n",
                             name="prompt_template",
+                            kind=ParameterKind.INPUT,
                             order=None,
                         ),
                         PipelineParameterSchema(

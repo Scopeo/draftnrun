@@ -354,13 +354,13 @@ def _create_dummy_agent_workflow_config():
                 "component_version_id": "02468c0b-bc99-44ce-a435-995acc5e2545",
                 "parameters": [
                     {
-                        "value": DEFAULT_FILTER_SCHEMA,
+                        "value": json.dumps(DEFAULT_FILTER_SCHEMA),
                         "name": "filtering_json_schema",
                         "order": None,
                         "id": "59443366-5b1f-5543-9fc5-57378f9aaf6e",
                         "type": "string",
                         "nullable": False,
-                        "default": DEFAULT_FILTER_SCHEMA,
+                        "default": json.dumps(DEFAULT_FILTER_SCHEMA),
                         "ui_component": "Textarea",
                         "ui_component_properties": {
                             "label": "Filtering schema to apply",

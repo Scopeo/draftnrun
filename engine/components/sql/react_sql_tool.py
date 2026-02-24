@@ -1,6 +1,6 @@
 from typing import Optional
 
-from engine.components.ai_agent import AIAgent
+from engine.components.ai_agent import AIAgent, AIAgentInputs, AIAgentOutputs
 from engine.components.sql.run_sql_query_tool import RunSQLQueryTool
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService
@@ -82,7 +82,7 @@ class ReactSQLAgent(AIAgent):
         except Exception as e:
             raise ValueError(f"Failed to get database schema description. Error: {str(e)}") from e
 
-        initial_prompt = prompt.format(
+        self._sql_initial_prompt = prompt.format(
             additional_db_description=additional_db_description, schema=schema, dialect=db_service.dialect
         )
 
@@ -91,8 +91,11 @@ class ReactSQLAgent(AIAgent):
             tool_description=tool_description,
             component_attributes=component_attributes,
             completion_service=completion_service,
-            initial_prompt=initial_prompt,
             agent_tools=[RunSQLQueryTool(trace_manager, db_service, component_attributes=component_attributes)],
         )
 
         self._db_service = db_service
+
+    async def _run_without_io_trace(self, inputs: AIAgentInputs, ctx: dict) -> AIAgentOutputs:
+        inputs = inputs.model_copy(update={"initial_prompt": self._sql_initial_prompt})
+        return await super()._run_without_io_trace(inputs, ctx)

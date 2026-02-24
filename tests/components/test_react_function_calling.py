@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from engine.components.ai_agent import DEFAULT_FALLBACK_REACT_ANSWER, INITIAL_PROMPT, AIAgent
+from engine.components.ai_agent import DEFAULT_FALLBACK_REACT_ANSWER, SYSTEM_PROMPT_DEFAULT, AIAgent
 from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
@@ -190,7 +190,7 @@ def test_initial_prompt_insertion(agent_calls_mock, get_span_mock, react_agent, 
     mock_llm_service.function_call_async.assert_called_once()
     called_messages = mock_llm_service.function_call_async.call_args.kwargs["messages"]
     assert called_messages[0]["role"] == "system"
-    assert called_messages[0]["content"] == INITIAL_PROMPT
+    assert called_messages[0]["content"] == SYSTEM_PROMPT_DEFAULT
 
 
 @patch("engine.prometheus_metric.get_tracing_span")
@@ -244,7 +244,6 @@ def test_react_agent_without_tools(mock_trace_manager, mock_tool_description, mo
     assert react_agent.agent_tools == []
     assert react_agent.component_attributes.component_instance_name == "Test React Agent Without Tools"
     assert react_agent._max_iterations == 3
-    assert react_agent.initial_prompt == INITIAL_PROMPT
 
 
 @patch("engine.prometheus_metric.get_tracing_span")
@@ -276,7 +275,7 @@ def test_date_in_system_prompt_enabled(
         system_message = called_messages[0]
         assert system_message["role"] == "system"
         assert system_message.get("content").startswith("Current date and time: 2024-01-15 10:30:00")
-        assert INITIAL_PROMPT in system_message.get("content")
+        assert SYSTEM_PROMPT_DEFAULT in system_message.get("content")
 
 
 @patch("engine.prometheus_metric.get_tracing_span")
@@ -305,7 +304,7 @@ def test_date_in_system_prompt_disabled(
     system_message = called_messages[0]
     assert system_message["role"] == "system"
     assert "Current date and time:" not in system_message.get("content")
-    assert system_message.get("content") == INITIAL_PROMPT
+    assert system_message.get("content") == SYSTEM_PROMPT_DEFAULT
 
 
 @patch("engine.prometheus_metric.get_tracing_span")
@@ -335,12 +334,11 @@ def test_structured_output_in_function_call_async(
         component_attributes=ComponentAttributes(component_instance_name="Test Structured Output"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
-        output_format=output_tool_properties,
         max_iterations=2,  # Allow for 2 iterations: tool call + structured output
     )
 
     # Test 1: Verify structured output tool is constructed correctly
-    output_tool = react_agent._get_output_tool_description(react_agent._output_format)
+    output_tool = react_agent._get_output_tool_description(output_tool_properties)
     assert output_tool is not None
     assert output_tool.name == "chat_formatting_output_tool"
     assert output_tool.tool_properties == output_tool_properties
@@ -355,7 +353,7 @@ def test_structured_output_in_function_call_async(
         mock_parse_response.usage = MagicMock(output_tokens=10, input_tokens=5, total_tokens=15)
         mock_client.responses.parse = AsyncMock(return_value=mock_parse_response)
 
-        output = react_agent.run_sync(agent_input)
+        output = react_agent.run_sync(agent_input, output_format=output_tool_properties)
         assert output.last_message.content == json.dumps({"answer": "Final answer", "is_final": True})
         assert output.is_final
 
@@ -384,7 +382,6 @@ def test_structured_output_in_function_call_async(
         component_attributes=ComponentAttributes(component_instance_name="Test Structured Output With Tool"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
-        output_format=output_tool_properties,
         max_iterations=2,
         agent_tools=[mock_agent_tool],
     )
@@ -431,7 +428,7 @@ def test_structured_output_in_function_call_async(
                 ],
             )
 
-            output = react_agent_with_tool.run_sync(agent_input)
+            output = react_agent_with_tool.run_sync(agent_input, output_format=output_tool_properties)
             assert output.last_message.content == json.dumps({"answer": "Final structured answer", "is_final": True})
             assert output.is_final
             # First iteration: responses.create with tool_choice="auto"
@@ -445,7 +442,6 @@ def test_structured_output_in_function_call_async(
         component_attributes=ComponentAttributes(component_instance_name="Test Max Iterations"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
-        output_format=output_tool_properties,
         max_iterations=2,  # Allows iteration 0 (tool call) and iteration 1 (forced constrained output)
         agent_tools=[mock_agent_tool],
     )
@@ -497,7 +493,7 @@ def test_structured_output_in_function_call_async(
                 ],
             )
 
-            output = react_agent_max_iter.run_sync(agent_input)
+            output = react_agent_max_iter.run_sync(agent_input, output_format=output_tool_properties)
             # Should return the structured output from the constrained_complete method
             assert output.last_message.content == json.dumps({
                 "answer": "Max iterations reached answer",
@@ -527,15 +523,13 @@ def test_react_agent_with_null_output_format(mock_trace_manager, mock_tool_descr
         component_attributes=ComponentAttributes(component_instance_name="Test React Agent With Null Output"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
-        output_format="null",  # This was causing the bug
     )
 
     # Verify the agent was created successfully
     assert react_agent.component_attributes.component_instance_name == "Test React Agent With Null Output"
-    assert react_agent._output_format == "null"
 
     # Verify that _get_output_tool_description returns None (handles the null case gracefully)
-    output_tool = react_agent._get_output_tool_description(react_agent._output_format)
+    output_tool = react_agent._get_output_tool_description("null")
     assert output_tool is None  # Should return None instead of crashing
 
 
@@ -546,15 +540,13 @@ def test_react_agent_with_none_output_format(mock_trace_manager, mock_tool_descr
         component_attributes=ComponentAttributes(component_instance_name="Test React Agent With None Output"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
-        output_format=None,  # This should work fine
     )
 
     # Verify the agent was created successfully
     assert react_agent.component_attributes.component_instance_name == "Test React Agent With None Output"
-    assert react_agent._output_format is None
 
     # Verify that _get_output_tool_description returns None
-    output_tool = react_agent._get_output_tool_description(react_agent._output_format)
+    output_tool = react_agent._get_output_tool_description(None)
     assert output_tool is None
 
 

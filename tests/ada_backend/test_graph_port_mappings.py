@@ -71,20 +71,6 @@ def test_get_put_roundtrip_port_mappings_migration():
                     "component_version_id": COMPONENT_VERSION_ID,
                     "parameters": [
                         {
-                            "value": "Reformulate the question as a customer service query :\n{input}",
-                            "name": "prompt_template",
-                            "order": None,
-                            "type": "string",
-                            "nullable": False,
-                            "default": "Answer this question: {input}",
-                            "ui_component": "Textarea",
-                            "ui_component_properties": {
-                                "label": "Prompt Template",
-                                "placeholder": "Enter the prompt here. Use {input} (or similar) to insert dynamic content -  the {} braces with a keyword are mandatory.",
-                            },
-                            "is_advanced": False,
-                        },
-                        {
                             "value": "openai:gpt-5-mini",
                             "name": "completion_model",
                             "order": None,
@@ -148,20 +134,6 @@ def test_get_put_roundtrip_port_mappings_migration():
                     "component_id": COMPONENT_ID,
                     "component_version_id": COMPONENT_VERSION_ID,
                     "parameters": [
-                        {
-                            "value": "Add polite expressions to the question: {question} \n",
-                            "name": "prompt_template",
-                            "order": None,
-                            "type": "string",
-                            "nullable": False,
-                            "default": "Answer this question: {input}",
-                            "ui_component": "Textarea",
-                            "ui_component_properties": {
-                                "label": "Prompt Template",
-                                "placeholder": "Enter the prompt here. Use {input} (or similar) to insert dynamic content -  the {} braces with a keyword are mandatory.",
-                            },
-                            "is_advanced": False,
-                        },
                         {
                             "value": "openai:gpt-5-mini",
                             "name": "completion_model",
@@ -283,20 +255,6 @@ def test_deploy_graph_copies_port_mappings():
                     "component_version_id": COMPONENT_VERSION_ID,
                     "parameters": [
                         {
-                            "value": "Reformulate the question as a customer service query :\n{input}",
-                            "name": "prompt_template",
-                            "order": None,
-                            "type": "string",
-                            "nullable": False,
-                            "default": "Answer this question: {input}",
-                            "ui_component": "Textarea",
-                            "ui_component_properties": {
-                                "label": "Prompt Template",
-                                "placeholder": "Enter the prompt here. Use {input} (or similar) to insert dynamic content -  the {} braces with a keyword are mandatory.",
-                            },
-                            "is_advanced": False,
-                        },
-                        {
                             "value": "openai:gpt-5-mini",
                             "name": "completion_model",
                             "order": None,
@@ -359,20 +317,6 @@ def test_deploy_graph_copies_port_mappings():
                     "component_id": COMPONENT_ID,
                     "component_version_id": COMPONENT_VERSION_ID,
                     "parameters": [
-                        {
-                            "value": "Add polite expressions to the question: {question} \n",
-                            "name": "prompt_template",
-                            "order": None,
-                            "type": "string",
-                            "nullable": False,
-                            "default": "Answer this question: {input}",
-                            "ui_component": "Textarea",
-                            "ui_component_properties": {
-                                "label": "Prompt Template",
-                                "placeholder": "Enter the prompt here. Use {input} (or similar) to insert dynamic content -  the {} braces with a keyword are mandatory.",
-                            },
-                            "is_advanced": False,
-                        },
                         {
                             "value": "openai:gpt-5-mini",
                             "name": "completion_model",
