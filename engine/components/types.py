@@ -12,7 +12,7 @@ class ExecutionStrategy(StrEnum):
 
     CONTINUE = "continue"  # Default: execute all successors
     HALT = "halt"  # Stop all downstream execution
-    SELECTIVE_PORTS = "selective_ports"  # Execute only specific output ports
+    SELECTIVE_EDGE_INDICES = "selective_edge_indices"  # Execute only specific edge indices
 
 
 @dataclass(frozen=True)
@@ -23,12 +23,12 @@ class ExecutionDirective:
     Only emitted by components that override default execution flow
     (e.g., IfElse, Router). Regular components don't emit this.
 
-    For SELECTIVE_PORTS strategy, selected_indices specifies which
+    For SELECTIVE_EDGE_INDICES strategy, selected_edge_indices specifies which
     edges should execute based on their order value (e.g., [0, 2]).
     """
 
     strategy: ExecutionStrategy = ExecutionStrategy.CONTINUE
-    selected_indices: list[int] = field(default_factory=list)
+    selected_edge_indices: list[int] = field(default_factory=list)
 
 
 class NodeData(BaseModel):

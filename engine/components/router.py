@@ -118,13 +118,9 @@ class Router(Component):
         for i, route in enumerate(inputs.routes):
             value_b = route.value_b if route.value_b is not None else route.value_a
             matched = route.value_a == value_b
-            LOGGER.info(
-                f"Route {i}: value_a={route.value_a}, value_b={value_b}, "
-                f"matched={matched}"
-            )
+            LOGGER.info(f"Route {i}: value_a={route.value_a}, value_b={value_b}, matched={matched}")
             if matched:
                 matched_indices.append(i)
-
         LOGGER.info(f"Router matched indices: {matched_indices} out of {len(inputs.routes)} total routes")
         if not matched_indices:
             LOGGER.error(f"Router: No routes matched out of {len(inputs.routes)} configured route(s)")
@@ -132,7 +128,7 @@ class Router(Component):
 
         result = RouterOutputs(output=inputs.output_data)
         result._directive = ExecutionDirective(
-            strategy=ExecutionStrategy.SELECTIVE_PORTS,
-            selected_indices=matched_indices,
+            strategy=ExecutionStrategy.SELECTIVE_EDGE_INDICES,
+            selected_edge_indices=matched_indices,
         )
         return result
