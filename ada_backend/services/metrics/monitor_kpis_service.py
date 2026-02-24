@@ -25,7 +25,7 @@ def _run_trace_kpis_query(
     call_type_filter = "AND call_type = %(call_type)s" if call_type is not None else ""
     project_id_placeholders = ", ".join([f"%(project_id_{i})s" for i in range(len(project_ids))])
     query = query.format(call_type_filter=call_type_filter, project_id_placeholders=project_id_placeholders)
-    full_params = {f"project_id_{i}": str(pid) for i, pid in enumerate(project_ids)}
+    full_params = {f"project_id_{i}": str(project_id) for i, project_id in enumerate(project_ids)}
     if call_type is not None:
         full_params["call_type"] = call_type.value
     full_params.update(params)
