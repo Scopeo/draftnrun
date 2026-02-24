@@ -68,11 +68,18 @@ jobs:
             # Wait for job to complete (or fail)
             echo "⏳ Waiting for sync job to complete..."
             if kubectl wait --for=condition=complete job/${JOB_NAME} -n ${NS} --timeout=15m 2>/dev/null; then
-              # Job completed successfully - check logs to see if it was skipped
+              # Job completed successfully - check logs to see if it was skipped (unless force_sync was requested)
               echo "📋 Checking job logs..."
               LOGS=$(kubectl logs job/${JOB_NAME} -n ${NS})
               echo "$LOGS"
               
+              FORCE_SYNC="${{ inputs.force_sync }}"
+              if [ "$FORCE_SYNC" = "true" ]; then
+                echo "✅ Sync completed (force_sync was requested)"
+                echo "SYNCED" > "$STATE_FILE"
+                kubectl delete job ${JOB_NAME} -n ${NS}
+                exit 0
+              fi
               if echo "$LOGS" | grep -qi "skip\|cache.*valid\|already.*synced"; then
                 echo "⏭️ Sync not needed - TTL cache is valid"
                 echo "SKIPPED" > "$STATE_FILE"
@@ -109,13 +116,10 @@ jobs:
             STATE_FILE="/tmp/ada-sync-status-${{ github.run_id }}.txt"
             REPLICA_FILE="/tmp/ada-sync-replicas-${{ github.run_id }}.txt"
             
-            # Check if sync was actually performed
-            if [ -f "$STATE_FILE" ]; then
-              SYNC_STATUS=$(cat "$STATE_FILE")
-              if [ "$SYNC_STATUS" = "SKIPPED" ]; then
-                echo "⏭️ Skipping scale down - sync was not needed"
-                exit 0
-              fi
+            # Skip scale down if sync was skipped
+            if [ -f "$STATE_FILE" ] && [ "$(cat "$STATE_FILE")" = "SKIPPED" ]; then
+              echo "⏭️ Skipping scale down - sync was not needed"
+              exit 0
             fi
             
             # Save current replica counts
@@ -152,13 +156,10 @@ jobs:
             NS="ada-staging"
             STATE_FILE="/tmp/ada-sync-status-${{ github.run_id }}.txt"
             
-            # Check if sync was actually performed
-            if [ -f "$STATE_FILE" ]; then
-              SYNC_STATUS=$(cat "$STATE_FILE")
-              if [ "$SYNC_STATUS" = "SKIPPED" ]; then
-                echo "⏭️ Skipping migrations - sync was not performed"
-                exit 0
-              fi
+            # Skip migrations if sync was skipped (sync step already writes SYNCED when force_sync is true)
+            if [ -f "$STATE_FILE" ] && [ "$(cat "$STATE_FILE")" = "SKIPPED" ]; then
+              echo "⏭️ Skipping migrations - sync was not performed"
+              exit 0
             fi
 
             echo "🗄️ Running migrations as Kubernetes Job..."
@@ -193,14 +194,11 @@ jobs:
             STATE_FILE="/tmp/ada-sync-status-${{ github.run_id }}.txt"
             REPLICA_FILE="/tmp/ada-sync-replicas-${{ github.run_id }}.txt"
             
-            # Check if sync was skipped (no scale down happened)
-            if [ -f "$STATE_FILE" ]; then
-              SYNC_STATUS=$(cat "$STATE_FILE")
-              if [ "$SYNC_STATUS" = "SKIPPED" ]; then
-                echo "⏭️ No scale up needed - sync was skipped, pods never scaled down"
-                rm -f "$STATE_FILE" /tmp/sync-output.log
-                exit 0
-              fi
+            # No scale up needed if sync was skipped (sync step already writes SYNCED when force_sync is true)
+            if [ -f "$STATE_FILE" ] && [ "$(cat "$STATE_FILE")" = "SKIPPED" ]; then
+              echo "⏭️ No scale up needed - sync was skipped, pods never scaled down"
+              rm -f "$STATE_FILE" /tmp/sync-output.log
+              exit 0
             fi
             
             # Scale up was needed (sync happened)
