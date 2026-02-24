@@ -509,7 +509,9 @@ class GraphRunner:
             selected_edge_indices: List of edge order values that should execute (e.g., [0, 2])
         """
         LOGGER.info(f"Selective execution for {source_node_id} with selected edge indices: {selected_edge_indices}")
-
+        # TODO: Temporary workaround for executing selective edges.
+        # We should refactor this to implement a more robust execution strategy.
+        # Possibly move the selection logic to the frontend and rely on edge IDs instead of execution order.
         for successor in self.graph.successors(source_node_id):
             edge_data = self.graph.get_edge_data(source_node_id, successor)
             edge_order = edge_data.get("order") if edge_data else None
