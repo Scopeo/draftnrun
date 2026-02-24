@@ -10,6 +10,16 @@ from pydantic import BaseModel, Field, field_validator
 
 from ada_backend.database.models import UIComponent
 from engine.components.component import Component
+from engine.components.port_definition_ids import (
+    LinkupSearchToolInputs_DEPTH,
+    LinkupSearchToolInputs_EXCLUDE_DOMAINS,
+    LinkupSearchToolInputs_FROM_DATE,
+    LinkupSearchToolInputs_INCLUDE_DOMAINS,
+    LinkupSearchToolInputs_QUERY,
+    LinkupSearchToolInputs_TO_DATE,
+    LinkupSearchToolOutputs_OUTPUT,
+    LinkupSearchToolOutputs_SOURCES,
+)
 from engine.components.types import ComponentAttributes, SourceChunk, SourcedResponse, ToolDescription
 from engine.trace.trace_manager import TraceManager
 from settings import settings
@@ -61,6 +71,7 @@ class LinkupDepth(str, Enum):
 class LinkupSearchToolInputs(BaseModel):
     query: str = Field(
         description="The standalone question to be answered using web search.",
+        json_schema_extra={"port_definition_id": LinkupSearchToolInputs_QUERY},
     )
     depth: LinkupDepth = Field(
         default=LinkupDepth.STANDARD,
@@ -76,23 +87,28 @@ class LinkupSearchToolInputs(BaseModel):
                     {"label": "Deep", "value": LinkupDepth.DEEP},
                 ],
             },
+            "port_definition_id": LinkupSearchToolInputs_DEPTH,
         },
     )
     from_date: Optional[date] = Field(
         default=None,
         description="The date from which the search results should be considered.",
+        json_schema_extra={"port_definition_id": LinkupSearchToolInputs_FROM_DATE},
     )
     to_date: Optional[date] = Field(
         default=None,
         description="The date until which the search results should be considered.",
+        json_schema_extra={"port_definition_id": LinkupSearchToolInputs_TO_DATE},
     )
     include_domains: Optional[list[str]] = Field(
         default=None,
         description="The domains you want to search on.",
+        json_schema_extra={"port_definition_id": LinkupSearchToolInputs_INCLUDE_DOMAINS},
     )
     exclude_domains: Optional[list[str]] = Field(
         default=None,
         description="The domains you want to exclude from the search.",
+        json_schema_extra={"port_definition_id": LinkupSearchToolInputs_EXCLUDE_DOMAINS},
     )
     model_config = {"extra": "allow"}  # For backward compatibility
 
@@ -118,8 +134,14 @@ class LinkupSearchToolInputs(BaseModel):
 
 
 class LinkupSearchToolOutputs(BaseModel):
-    output: str = Field(description="The answer from the Linkup web search.")
-    sources: list[SourceChunk] = Field(description="The sources from the Linkup web search.")
+    output: str = Field(
+        description="The answer from the Linkup web search.",
+        json_schema_extra={"port_definition_id": LinkupSearchToolOutputs_OUTPUT},
+    )
+    sources: list[SourceChunk] = Field(
+        description="The sources from the Linkup web search.",
+        json_schema_extra={"port_definition_id": LinkupSearchToolOutputs_SOURCES},
+    )
 
 
 class LinkupSearchTool(Component):

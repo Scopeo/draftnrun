@@ -5,6 +5,10 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field
 
 from engine.components.component import Component
+from engine.components.port_definition_ids import (
+    TableLookupInputs_LOOKUP_KEY,
+    TableLookupOutputs_LOOKUP_VALUE,
+)
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.components.utils import load_str_to_json
 from engine.components.utils_prompt import fill_prompt_template
@@ -26,11 +30,17 @@ DEFAULT_TABLE_LOOKUP_TOOL_DESCRIPTION = ToolDescription(
 
 
 class TableLookupInputs(BaseModel):
-    lookup_key: str = Field(description="The key to look up in the table mapping.")
+    lookup_key: str = Field(
+        description="The key to look up in the table mapping.",
+        json_schema_extra={"port_definition_id": TableLookupInputs_LOOKUP_KEY},
+    )
 
 
 class TableLookupOutputs(BaseModel):
-    lookup_value: str = Field(description="The value returned from the table mapping.")
+    lookup_value: str = Field(
+        description="The value returned from the table mapping.",
+        json_schema_extra={"port_definition_id": TableLookupOutputs_LOOKUP_VALUE},
+    )
 
 
 class TableLookup(Component):

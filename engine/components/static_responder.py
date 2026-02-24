@@ -5,6 +5,11 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field
 
 from engine.components.component import Component
+from engine.components.port_definition_ids import (
+    StaticResponderInputs_INPUT,
+    StaticResponderOutputs_INPUT_FROM_PREVIOUS,
+    StaticResponderOutputs_STATIC_MESSAGE,
+)
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
 
@@ -19,12 +24,21 @@ DEFAULT_STATIC_RESPONDER_TOOL_DESCRIPTION = ToolDescription(
 
 
 class StaticResponderInputs(BaseModel):
-    input: Any = Field(description="Input it's ignored.")
+    input: Any = Field(
+        description="Input it's ignored.",
+        json_schema_extra={"port_definition_id": StaticResponderInputs_INPUT},
+    )
 
 
 class StaticResponderOutputs(BaseModel):
-    input_from_previous: Any = Field(description="Propagated input from the previous node.")
-    static_message: str = Field(description="The message that will be returned.")
+    input_from_previous: Any = Field(
+        description="Propagated input from the previous node.",
+        json_schema_extra={"port_definition_id": StaticResponderOutputs_INPUT_FROM_PREVIOUS},
+    )
+    static_message: str = Field(
+        description="The message that will be returned.",
+        json_schema_extra={"port_definition_id": StaticResponderOutputs_STATIC_MESSAGE},
+    )
 
 
 class StaticResponder(Component):

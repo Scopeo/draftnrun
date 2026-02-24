@@ -16,6 +16,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ada_backend.database.models import UIComponent
 from engine.components.component import Component
+from engine.components.port_definition_ids import (
+    PythonCodeRunnerToolInputs_INPUT_FILEPATHS,
+    PythonCodeRunnerToolInputs_PYTHON_CODE,
+    PythonCodeRunnerToolOutputs_ARTIFACTS,
+    PythonCodeRunnerToolOutputs_OUTPUT,
+)
 from engine.components.tools.sandbox_utils import get_or_create_sandbox
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.temps_folder_utils import get_output_dir
@@ -80,19 +86,28 @@ class PythonCodeRunnerToolInputs(BaseModel):
     python_code: str = Field(
         default="",
         description="The code python to run",
-        json_schema_extra={"ui_component": UIComponent.CODE},
+        json_schema_extra={
+            "ui_component": UIComponent.CODE,
+            "port_definition_id": PythonCodeRunnerToolInputs_PYTHON_CODE,
+        },
     )
     input_filepaths: Optional[list[str]] = Field(
         default=None,
         description="The filepaths to load into the sandbox",
+        json_schema_extra={"port_definition_id": PythonCodeRunnerToolInputs_INPUT_FILEPATHS},
     )
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
 
 class PythonCodeRunnerToolOutputs(BaseModel):
-    output: str = Field(description="The result of the executed python code.")
+    output: str = Field(
+        description="The result of the executed python code.",
+        json_schema_extra={"port_definition_id": PythonCodeRunnerToolOutputs_OUTPUT},
+    )
     artifacts: dict[str, Any] = Field(
-        default_factory=dict, description="Artifacts produced by the python code runner."
+        default_factory=dict,
+        description="Artifacts produced by the python code runner.",
+        json_schema_extra={"port_definition_id": PythonCodeRunnerToolOutputs_ARTIFACTS},
     )
 
 

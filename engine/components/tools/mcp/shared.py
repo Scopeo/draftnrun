@@ -7,6 +7,13 @@ from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 
+from engine.components.port_definition_ids import (
+    MCPToolInputs_TOOL_ARGUMENTS,
+    MCPToolInputs_TOOL_NAME,
+    MCPToolOutputs_CONTENT,
+    MCPToolOutputs_IS_ERROR,
+    MCPToolOutputs_OUTPUT,
+)
 from engine.components.types import ToolDescription
 
 DEFAULT_MCP_TOOL_DESCRIPTION = ToolDescription(
@@ -22,12 +29,20 @@ class MCPToolInputs(BaseModel):
 
     tool_name: str = Field(
         description="Name of the MCP tool to call.",
-        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
+        json_schema_extra={
+            "disabled_as_input": True,
+            "is_tool_input": False,
+            "port_definition_id": MCPToolInputs_TOOL_NAME,
+        },
     )
     tool_arguments: dict[str, Any] = Field(
         default_factory=dict,
         description="Arguments to pass to the MCP tool.",
-        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
+        json_schema_extra={
+            "disabled_as_input": True,
+            "is_tool_input": False,
+            "port_definition_id": MCPToolInputs_TOOL_ARGUMENTS,
+        },
     )
     # TODO: Remove this after function-calling refactor
     model_config = {"extra": "allow"}
@@ -36,9 +51,19 @@ class MCPToolInputs(BaseModel):
 class MCPToolOutputs(BaseModel):
     """Shared output schema for both Local and Remote MCP tools."""
 
-    output: str
-    content: list[Any] = Field(default_factory=list, description="Raw MCP content items.")
-    is_error: bool = Field(default=False, description="Whether the MCP server marked the call as an error.")
+    output: str = Field(
+        json_schema_extra={"port_definition_id": MCPToolOutputs_OUTPUT},
+    )
+    content: list[Any] = Field(
+        default_factory=list,
+        description="Raw MCP content items.",
+        json_schema_extra={"port_definition_id": MCPToolOutputs_CONTENT},
+    )
+    is_error: bool = Field(
+        default=False,
+        description="Whether the MCP server marked the call as an error.",
+        json_schema_extra={"port_definition_id": MCPToolOutputs_IS_ERROR},
+    )
 
 
 def process_mcp_result(result) -> tuple[str, list[Any], bool]:

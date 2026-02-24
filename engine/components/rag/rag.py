@@ -8,6 +8,13 @@ from pydantic import BaseModel, Field
 
 from engine.components.build_context import build_context_from_vocabulary_chunks
 from engine.components.component import Component
+from engine.components.port_definition_ids import (
+    RAGInputs_FILTERS,
+    RAGInputs_QUERY_TEXT,
+    RAGOutputs_ARTIFACTS,
+    RAGOutputs_IS_FINAL,
+    RAGOutputs_OUTPUT,
+)
 from engine.components.rag.formatter import Formatter
 from engine.components.rag.reranker import Reranker
 from engine.components.rag.retriever import Retriever
@@ -25,14 +32,30 @@ FILTERING_CONDITION_WITH_METADATA_QDRANT = "AND"
 
 
 class RAGInputs(BaseModel):
-    query_text: str = Field(description="The search query for the knowledge base.")
-    filters: Optional[dict] = Field(default=None, description="Qdrant filter object.")
+    query_text: str = Field(
+        description="The search query for the knowledge base.",
+        json_schema_extra={"port_definition_id": RAGInputs_QUERY_TEXT},
+    )
+    filters: Optional[dict] = Field(
+        default=None,
+        description="Qdrant filter object.",
+        json_schema_extra={"port_definition_id": RAGInputs_FILTERS},
+    )
 
 
 class RAGOutputs(BaseModel):
-    output: str = Field(description="The synthesized response from the RAG pipeline.")
-    is_final: bool = Field(description="Indicates if the response is final and successful.")
-    artifacts: dict[str, Any] = Field(description="Artifacts produced by the RAG pipeline, such as sources.")
+    output: str = Field(
+        description="The synthesized response from the RAG pipeline.",
+        json_schema_extra={"port_definition_id": RAGOutputs_OUTPUT},
+    )
+    is_final: bool = Field(
+        description="Indicates if the response is final and successful.",
+        json_schema_extra={"port_definition_id": RAGOutputs_IS_FINAL},
+    )
+    artifacts: dict[str, Any] = Field(
+        description="Artifacts produced by the RAG pipeline, such as sources.",
+        json_schema_extra={"port_definition_id": RAGOutputs_ARTIFACTS},
+    )
 
 
 class RAG(Component):

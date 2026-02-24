@@ -12,6 +12,15 @@ from pydantic import BaseModel, Field
 from ada_backend.database.models import UIComponent, UIComponentProperties
 from engine.components.component import Component
 from engine.components.history_message_handling import HistoryMessageHandler
+from engine.components.port_definition_ids import (
+    AIAgentInputs_INITIAL_PROMPT,
+    AIAgentInputs_MESSAGES,
+    AIAgentInputs_OUTPUT_FORMAT,
+    AIAgentOutputs_ARTIFACTS,
+    AIAgentOutputs_FULL_MESSAGE,
+    AIAgentOutputs_IS_FINAL,
+    AIAgentOutputs_OUTPUT,
+)
 from engine.components.rag.formatter import Formatter
 from engine.components.rag.retriever import RETRIEVER_CITATION_INSTRUCTION, RETRIEVER_TOOL_DESCRIPTION
 from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, SourcedResponse, ToolDescription
@@ -40,6 +49,7 @@ class AIAgentInputs(BaseModel):
     messages: list[ChatMessage] = Field(
         default_factory=list,
         description="The history of messages in the conversation.",
+        json_schema_extra={"port_definition_id": AIAgentInputs_MESSAGES},
     )
     initial_prompt: Optional[str] = Field(
         default=SYSTEM_PROMPT_DEFAULT,
@@ -58,6 +68,7 @@ class AIAgentInputs(BaseModel):
             "ui_component_properties": UIComponentProperties(
                 label="System Prompt",
             ).model_dump(exclude_unset=True, exclude_none=True),
+            "port_definition_id": AIAgentInputs_INITIAL_PROMPT,
         },
     )
     output_format: Optional[str | dict] = Field(
@@ -74,6 +85,7 @@ class AIAgentInputs(BaseModel):
                 label="Output Format",
             ).model_dump(exclude_unset=True, exclude_none=True),
             "is_advanced": True,
+            "port_definition_id": AIAgentInputs_OUTPUT_FORMAT,
         },
     )
     # Allow any other fields to be passed through
@@ -81,10 +93,24 @@ class AIAgentInputs(BaseModel):
 
 
 class AIAgentOutputs(BaseModel):
-    output: str = Field(description="The string content of the final message from the agent.")
-    full_message: ChatMessage = Field(description="The full final message object from the agent.")
-    is_final: bool = Field(default=False, description="Indicates if this is the final output of the agent.")
-    artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts produced by the agent.")
+    output: str = Field(
+        description="The string content of the final message from the agent.",
+        json_schema_extra={"port_definition_id": AIAgentOutputs_OUTPUT},
+    )
+    full_message: ChatMessage = Field(
+        description="The full final message object from the agent.",
+        json_schema_extra={"port_definition_id": AIAgentOutputs_FULL_MESSAGE},
+    )
+    is_final: bool = Field(
+        default=False,
+        description="Indicates if this is the final output of the agent.",
+        json_schema_extra={"port_definition_id": AIAgentOutputs_IS_FINAL},
+    )
+    artifacts: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Artifacts produced by the agent.",
+        json_schema_extra={"port_definition_id": AIAgentOutputs_ARTIFACTS},
+    )
 
     model_config = {"extra": "allow"}
 

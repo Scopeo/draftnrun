@@ -6,6 +6,12 @@ from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 
 from engine.components.component import Component
+from engine.components.port_definition_ids import (
+    WebSearchOpenAIToolInputs_FILTERS,
+    WebSearchOpenAIToolInputs_MESSAGES,
+    WebSearchOpenAIToolInputs_QUERY,
+    WebSearchOpenAIToolOutputs_OUTPUT,
+)
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import WebSearchService
 from engine.trace.serializer import serialize_to_json
@@ -47,14 +53,29 @@ class SearchFilters(BaseModel):
 
 
 class WebSearchOpenAIToolInputs(BaseModel):
-    query: Optional[str] = Field(default=None, description="The standalone question to be answered using web search.")
-    messages: Optional[list[ChatMessage]] = Field(default=None, description="Optional legacy message context.")
-    filters: Optional[SearchFilters] = Field(default=None, description="Optional filters to restrict search results")
+    query: Optional[str] = Field(
+        default=None,
+        description="The standalone question to be answered using web search.",
+        json_schema_extra={"port_definition_id": WebSearchOpenAIToolInputs_QUERY},
+    )
+    messages: Optional[list[ChatMessage]] = Field(
+        default=None,
+        description="Optional legacy message context.",
+        json_schema_extra={"port_definition_id": WebSearchOpenAIToolInputs_MESSAGES},
+    )
+    filters: Optional[SearchFilters] = Field(
+        default=None,
+        description="Optional filters to restrict search results",
+        json_schema_extra={"port_definition_id": WebSearchOpenAIToolInputs_FILTERS},
+    )
     model_config = {"extra": "allow"}
 
 
 class WebSearchOpenAIToolOutputs(BaseModel):
-    output: str = Field(description="The result from the web search.")
+    output: str = Field(
+        description="The result from the web search.",
+        json_schema_extra={"port_definition_id": WebSearchOpenAIToolOutputs_OUTPUT},
+    )
 
 
 class WebSearchOpenAITool(Component):

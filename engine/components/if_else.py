@@ -8,6 +8,13 @@ from pydantic import BaseModel, Field, field_validator
 from ada_backend.database.models import ParameterType, UIComponent
 from ada_backend.database.utils import DEFAULT_TOOL_DESCRIPTION
 from engine.components.component import Component
+from engine.components.port_definition_ids import (
+    IfElseInputs_CONDITIONS,
+    IfElseInputs_OUTPUT_VALUE_IF_TRUE,
+    IfElseOutputs_OUTPUT,
+    IfElseOutputs_RESULT,
+    IfElseOutputs_SHOULD_HALT,
+)
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
 
@@ -108,6 +115,7 @@ class IfElseInputs(BaseModel):
                 ),
                 "available_operators": OPERATOR_METADATA,
             },
+            "port_definition_id": IfElseInputs_CONDITIONS,
         },
     )
     output_value_if_true: Any | None = Field(
@@ -115,6 +123,7 @@ class IfElseInputs(BaseModel):
         description="Value to output when the whole condition evaluate to true",
         json_schema_extra={
             "parameter_type": ParameterType.JSON,
+            "port_definition_id": IfElseInputs_OUTPUT_VALUE_IF_TRUE,
         },
     )
 
@@ -122,15 +131,24 @@ class IfElseInputs(BaseModel):
 class IfElseOutputs(BaseModel):
     result: bool = Field(
         description="The result of the comparison.",
-        json_schema_extra={"parameter_type": ParameterType.BOOLEAN},
+        json_schema_extra={
+            "parameter_type": ParameterType.BOOLEAN,
+            "port_definition_id": IfElseOutputs_RESULT,
+        },
     )
     output: Any = Field(
         description="Pass-through data when condition is true, None otherwise.",
-        json_schema_extra={"parameter_type": ParameterType.JSON},
+        json_schema_extra={
+            "parameter_type": ParameterType.JSON,
+            "port_definition_id": IfElseOutputs_OUTPUT,
+        },
     )
     should_halt: bool = Field(
         description="Signal to halt downstream execution (true when condition is false).",
-        json_schema_extra={"parameter_type": ParameterType.BOOLEAN},
+        json_schema_extra={
+            "parameter_type": ParameterType.BOOLEAN,
+            "port_definition_id": IfElseOutputs_SHOULD_HALT,
+        },
     )
 
 

@@ -6,6 +6,15 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field
 
 from engine.components.component import Component
+from engine.components.port_definition_ids import (
+    FilterInputs_ARTIFACTS,
+    FilterInputs_ERROR,
+    FilterInputs_IS_FINAL,
+    FilterInputs_MESSAGES,
+    FilterOutputs_ARTIFACTS,
+    FilterOutputs_IS_FINAL,
+    FilterOutputs_OUTPUT,
+)
 from engine.components.types import (
     ChatMessage,
     ComponentAttributes,
@@ -30,18 +39,45 @@ DEFAULT_FILTER_TOOL_DESCRIPTION = ToolDescription(
 
 
 class FilterInputs(BaseModel):
-    messages: Optional[list[ChatMessage]] = Field(default=None, description="The messages to filter.")
-    error: Optional[str] = Field(default=None, description="Error message if any.")
-    artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts to filter.")
-    is_final: bool = Field(default=False, description="Whether this is a final output.")
+    messages: Optional[list[ChatMessage]] = Field(
+        default=None,
+        description="The messages to filter.",
+        json_schema_extra={"port_definition_id": FilterInputs_MESSAGES},
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Error message if any.",
+        json_schema_extra={"port_definition_id": FilterInputs_ERROR},
+    )
+    artifacts: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Artifacts to filter.",
+        json_schema_extra={"port_definition_id": FilterInputs_ARTIFACTS},
+    )
+    is_final: bool = Field(
+        default=False,
+        description="Whether this is a final output.",
+        json_schema_extra={"port_definition_id": FilterInputs_IS_FINAL},
+    )
     # Allow any other fields to be passed through
     model_config = {"extra": "allow"}
 
 
 class FilterOutputs(BaseModel):
-    output: str = Field(description="The string content of the final message from the agent.")
-    is_final: bool = Field(default=False, description="Indicates if this is the final output of the agent.")
-    artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts produced by the agent.")
+    output: str = Field(
+        description="The string content of the final message from the agent.",
+        json_schema_extra={"port_definition_id": FilterOutputs_OUTPUT},
+    )
+    is_final: bool = Field(
+        default=False,
+        description="Indicates if this is the final output of the agent.",
+        json_schema_extra={"port_definition_id": FilterOutputs_IS_FINAL},
+    )
+    artifacts: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Artifacts produced by the agent.",
+        json_schema_extra={"port_definition_id": FilterOutputs_ARTIFACTS},
+    )
 
 
 class Filter(Component):

@@ -8,6 +8,12 @@ from weasyprint import CSS, HTML
 
 from ada_backend.database.models import UIComponent
 from engine.components.component import Component
+from engine.components.port_definition_ids import (
+    PDFGenerationToolInputs_FILENAME,
+    PDFGenerationToolInputs_MARKDOWN_CONTENT,
+    PDFGenerationToolOutputs_ARTIFACTS,
+    PDFGenerationToolOutputs_OUTPUT_MESSAGE,
+)
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.components.utils import prepare_markdown_output_path
 from engine.temps_folder_utils import get_output_dir
@@ -112,18 +118,29 @@ DEFAULT_CSS_FORMATTING = """
 
 
 class PDFGenerationToolInputs(BaseModel):
-
     markdown_content: str = Field(
         description="The markdown text to convert to PDF.",
-        json_schema_extra={"ui_component": UIComponent.TEXTAREA},
+        json_schema_extra={
+            "ui_component": UIComponent.TEXTAREA,
+            "port_definition_id": PDFGenerationToolInputs_MARKDOWN_CONTENT,
+        },
     )
-    filename: Optional[str] = Field(description="The desired filename for the generated PDF file.")
+    filename: Optional[str] = Field(
+        description="The desired filename for the generated PDF file.",
+        json_schema_extra={"port_definition_id": PDFGenerationToolInputs_FILENAME},
+    )
 
 
 class PDFGenerationToolOutputs(BaseModel):
-    output_message: str = Field(description="The output message to be returned to the user.")
+    output_message: str = Field(
+        description="The output message to be returned to the user.",
+        json_schema_extra={"port_definition_id": PDFGenerationToolOutputs_OUTPUT_MESSAGE},
+    )
     # TODO: Make simple pdf_filename field instead of artifacts dictionary
-    artifacts: dict[str, Any] = Field(description="The artifacts to be returned to the user.")
+    artifacts: dict[str, Any] = Field(
+        description="The artifacts to be returned to the user.",
+        json_schema_extra={"port_definition_id": PDFGenerationToolOutputs_ARTIFACTS},
+    )
 
 
 class PDFGenerationTool(Component):

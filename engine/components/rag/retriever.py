@@ -10,6 +10,12 @@ from pydantic import BaseModel, Field
 
 from engine.components.build_context import build_context_from_source_chunks
 from engine.components.component import Component
+from engine.components.port_definition_ids import (
+    RetrieverInputs_FILTERS,
+    RetrieverInputs_QUERY,
+    RetrieverOutputs_ARTIFACTS,
+    RetrieverOutputs_FORMATTED_CONTENT,
+)
 from engine.components.synthesizer_prompts import DEFAULT_INSTRUCTIONS_FEW_SHOT_LEARNING
 from engine.components.types import ComponentAttributes, SourceChunk, ToolDescription
 from engine.components.utils import merge_qdrant_filters_with_and_conditions
@@ -50,20 +56,26 @@ def cast_string_to_list(string: Optional[str]) -> list[str]:
 class RetrieverInputs(BaseModel):
     query: str = Field(
         description="The search query to retrieve relevant chunks from the knowledge base.",
+        json_schema_extra={"port_definition_id": RetrieverInputs_QUERY},
     )
     filters: Optional[dict] = Field(
         default=None,
         description="Optional filters to apply to the retrieval (e.g., metadata filters).",
+        json_schema_extra={"port_definition_id": RetrieverInputs_FILTERS},
     )
     model_config = {"extra": "allow"}
 
 
 class RetrieverOutputs(BaseModel):
-    formatted_content: str = Field(description="Formatted content of the retrieved chunks.")
+    formatted_content: str = Field(
+        description="Formatted content of the retrieved chunks.",
+        json_schema_extra={"port_definition_id": RetrieverOutputs_FORMATTED_CONTENT},
+    )
     # TODO: Remove nested artifacts dict use directly the sources
     artifacts: dict[str, Any] = Field(
         default_factory=dict,
         description="Artifacts including sources for display in the UI.",
+        json_schema_extra={"port_definition_id": RetrieverOutputs_ARTIFACTS},
     )
 
 

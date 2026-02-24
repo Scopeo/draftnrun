@@ -8,6 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ada_backend.database.models import UIComponent
 from engine.components.component import Component
+from engine.components.port_definition_ids import (
+    TerminalCommandRunnerToolInputs_COMMAND,
+    TerminalCommandRunnerToolOutputs_ARTIFACTS,
+    TerminalCommandRunnerToolOutputs_OUTPUT,
+)
 from engine.components.tools.sandbox_utils import get_or_create_sandbox
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
@@ -35,15 +40,23 @@ class TerminalCommandRunnerToolInputs(BaseModel):
     command: str = Field(
         default="",
         description="The command to run on the terminal",
-        json_schema_extra={"ui_component": UIComponent.TEXTAREA},
+        json_schema_extra={
+            "ui_component": UIComponent.TEXTAREA,
+            "port_definition_id": TerminalCommandRunnerToolInputs_COMMAND,
+        },
     )
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
 
 class TerminalCommandRunnerToolOutputs(BaseModel):
-    output: str = Field(description="The result of the executed command on the terminal.")
+    output: str = Field(
+        description="The result of the executed command on the terminal.",
+        json_schema_extra={"port_definition_id": TerminalCommandRunnerToolOutputs_OUTPUT},
+    )
     artifacts: dict[str, Any] = Field(
-        default_factory=dict, description="Artifacts produced by the terminal code runner."
+        default_factory=dict,
+        description="Artifacts produced by the terminal code runner.",
+        json_schema_extra={"port_definition_id": TerminalCommandRunnerToolOutputs_ARTIFACTS},
     )
 
 

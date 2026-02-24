@@ -3,6 +3,7 @@ import sys
 import types
 from enum import Enum
 from typing import Union, get_args, get_origin
+from uuid import UUID, uuid4
 
 from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
@@ -41,6 +42,38 @@ def get_field_default(field_info: FieldInfo) -> str | None:
     return str(value)
 
 
+def get_port_definition_id_from_extra(field_info: FieldInfo) -> UUID | None:
+    """If the field defines port_definition_id in json_schema_extra, return it; otherwise None.
+
+    The ID MUST come from the engine: set json_schema_extra["port_definition_id"] on the
+    field. Seed uses only this; if absent, a new id is generated (uuid4). Name is not an id.
+    """
+    extra = getattr(field_info, "json_schema_extra", None)
+    if not isinstance(extra, dict):
+        return None
+    raw = extra.get("port_definition_id")
+    if raw is None:
+        return None
+    if isinstance(raw, UUID):
+        return raw
+    if isinstance(raw, str):
+        try:
+            return UUID(raw)
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def get_existing_port_definition(
+    session: Session,
+    port_definition_id: UUID | None,
+) -> db.PortDefinition | None:
+    """Find existing port by id only. Returns None if port_definition_id is None."""
+    if port_definition_id is None:
+        return None
+    return session.query(db.PortDefinition).filter_by(id=port_definition_id).first()
+
+
 def is_field_nullable(field_info: FieldInfo) -> bool:
     """Determine if a Pydantic field can accept None.
 
@@ -77,7 +110,12 @@ def is_field_nullable(field_info: FieldInfo) -> bool:
 def seed_port_definitions(session: Session):
     """
     Seeds or updates port definitions by introspecting Agent classes from the FACTORY_REGISTRY.
-    This function performs an upsert operation and cleans up orphaned ports.
+
+    Only component versions that are registered in FACTORY_REGISTRY are processed.
+    Old or deprecated component versions (present in the DB but not in the registry)
+    are never touched: their port_definitions are not created or updated.
+
+    This function performs an upsert per registered version and cleans up orphaned ports.
     """
     LOGGER.info("Starting to seed/update port definitions from code...")
 
@@ -129,11 +167,8 @@ def seed_port_definitions(session: Session):
                 LOGGER.info(f"  - Skipping disabled INPUT port: {field_name}")
                 continue
 
-            port = (
-                session.query(db.PortDefinition)
-                .filter_by(component_version_id=component_version.id, name=field_name, port_type=db.PortType.INPUT)
-                .first()
-            )
+            port_definition_id_from_extra = get_port_definition_id_from_extra(field_info)
+            port = get_existing_port_definition(session, port_definition_id_from_extra)
             is_canonical = canonical_ports.get("input") == field_name
             ui_component = None
             ui_component_properties = None
@@ -183,7 +218,11 @@ def seed_port_definitions(session: Session):
                 port.is_advanced = is_advanced
                 LOGGER.info(f"  - Updating INPUT port: {field_name}")
             else:
+                port_definition_id = (
+                    port_definition_id_from_extra if port_definition_id_from_extra else uuid4()
+                )
                 port = db.PortDefinition(
+                    id=port_definition_id,
                     component_version_id=component_version.id,
                     name=field_name,
                     port_type=db.PortType.INPUT,
@@ -202,11 +241,8 @@ def seed_port_definitions(session: Session):
 
         # Upsert output ports
         for field_name, field_info in outputs_schema.model_fields.items():
-            port = (
-                session.query(db.PortDefinition)
-                .filter_by(component_version_id=component_version.id, name=field_name, port_type=db.PortType.OUTPUT)
-                .first()
-            )
+            port_definition_id_from_extra = get_port_definition_id_from_extra(field_info)
+            port = get_existing_port_definition(session, port_definition_id_from_extra)
             is_canonical = canonical_ports.get("output") == field_name
             parameter_type = get_parameter_type(field_info)
             is_nullable = is_field_nullable(field_info)
@@ -218,7 +254,11 @@ def seed_port_definitions(session: Session):
                 port.nullable = is_nullable
                 LOGGER.info(f"  - Updating OUTPUT port: {field_name}")
             else:
+                port_definition_id = (
+                    port_definition_id_from_extra if port_definition_id_from_extra else uuid4()
+                )
                 port = db.PortDefinition(
+                    id=port_definition_id,
                     component_version_id=component_version.id,
                     name=field_name,
                     port_type=db.PortType.OUTPUT,

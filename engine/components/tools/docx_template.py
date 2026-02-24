@@ -13,6 +13,13 @@ from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from engine.components.component import Component
+from engine.components.port_definition_ids import (
+    DocxTemplateInputs_OUTPUT_FILENAME,
+    DocxTemplateInputs_TEMPLATE_INFORMATION_BRIEF,
+    DocxTemplateInputs_TEMPLATE_INPUT_PATH,
+    DocxTemplateOutputs_ARTIFACTS,
+    DocxTemplateOutputs_OUTPUT,
+)
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService
 from engine.temps_folder_utils import get_output_dir
@@ -411,22 +418,33 @@ DOCX_TEMPLATE_TOOL_DESCRIPTION = ToolDescription(
 class DocxTemplateInputs(BaseModel):
     template_input_path: Optional[str] = Field(
         default=None,
-        json_schema_extra={"disabled_as_input": True},
+        json_schema_extra={
+            "disabled_as_input": True,
+            "port_definition_id": DocxTemplateInputs_TEMPLATE_INPUT_PATH,
+        },
     )
     template_information_brief: str = Field(
         description="Instructions describing what content to inject in the template placeholders.",
+        json_schema_extra={"port_definition_id": DocxTemplateInputs_TEMPLATE_INFORMATION_BRIEF},
     )
     output_filename: str = Field(
         default="filled_template.docx",
         description="Filename for the filled DOCX file.",
+        json_schema_extra={"port_definition_id": DocxTemplateInputs_OUTPUT_FILENAME},
     )
     model_config = {"extra": "allow"}
 
 
 class DocxTemplateOutputs(BaseModel):
-    output: str = Field(description="The success or error message from the DOCX template processing.")
+    output: str = Field(
+        description="The success or error message from the DOCX template processing.",
+        json_schema_extra={"port_definition_id": DocxTemplateOutputs_OUTPUT},
+    )
     # TODO: Make simple docx_filename field instead of artifacts dictionary
-    artifacts: dict[str, Any] = Field(description="The artifacts to be returned to the user.")
+    artifacts: dict[str, Any] = Field(
+        description="The artifacts to be returned to the user.",
+        json_schema_extra={"port_definition_id": DocxTemplateOutputs_ARTIFACTS},
+    )
 
 
 class DocxTemplateAgent(Component):

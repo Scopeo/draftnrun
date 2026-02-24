@@ -8,6 +8,13 @@ from pydantic import BaseModel, Field
 
 from ada_backend.database.models import UIComponent, UIComponentProperties
 from engine.components.component import Component
+from engine.components.port_definition_ids import (
+    LLMCallInputs_MESSAGES,
+    LLMCallInputs_OUTPUT_FORMAT,
+    LLMCallInputs_PROMPT_TEMPLATE,
+    LLMCallOutputs_ARTIFACTS,
+    LLMCallOutputs_OUTPUT,
+)
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
 from engine.components.utils import merge_constrained_output_to_root, parse_openai_message_format
 from engine.components.utils_prompt import fill_prompt_template
@@ -72,6 +79,7 @@ class LLMCallInputs(BaseModel):
     messages: list[ChatMessage] = Field(
         default_factory=list,
         description="The input messages",
+        json_schema_extra={"port_definition_id": LLMCallInputs_MESSAGES},
     )
     prompt_template: Optional[str] = Field(
         default=DEFAULT_PROMPT_TEMPLATE,
@@ -79,6 +87,7 @@ class LLMCallInputs(BaseModel):
         json_schema_extra={
             "is_tool_input": False,
             "ui_component": UIComponent.TEXTAREA,
+            "port_definition_id": LLMCallInputs_PROMPT_TEMPLATE,
         },
     )
     output_format: Optional[str | dict] = Field(
@@ -94,6 +103,7 @@ class LLMCallInputs(BaseModel):
                 label="Output Format",
             ).model_dump(exclude_unset=True, exclude_none=True),
             "is_advanced": True,
+            "port_definition_id": LLMCallInputs_OUTPUT_FORMAT,
         },
     )
     # Allow extra fields for backward compatibility
@@ -101,8 +111,14 @@ class LLMCallInputs(BaseModel):
 
 
 class LLMCallOutputs(BaseModel):
-    output: str = Field(description="The LLM response")
-    artifacts: dict[str, Any] = Field(default_factory=dict)
+    output: str = Field(
+        description="The LLM response",
+        json_schema_extra={"port_definition_id": LLMCallOutputs_OUTPUT},
+    )
+    artifacts: dict[str, Any] = Field(
+        default_factory=dict,
+        json_schema_extra={"port_definition_id": LLMCallOutputs_ARTIFACTS},
+    )
 
     model_config = {"extra": "allow"}
 

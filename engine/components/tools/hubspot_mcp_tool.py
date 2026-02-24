@@ -23,6 +23,13 @@ from pydantic import BaseModel, Field
 
 from engine.components.component import Component
 from engine.components.errors import MCPConnectionError
+from engine.components.port_definition_ids import (
+    HubSpotMCPToolInputs_TOOL_ARGUMENTS,
+    HubSpotMCPToolInputs_TOOL_NAME,
+    HubSpotMCPToolOutputs_CONTENT,
+    HubSpotMCPToolOutputs_IS_ERROR,
+    HubSpotMCPToolOutputs_OUTPUT,
+)
 from engine.components.tools.mcp_utils import streamable_http_client
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
@@ -42,21 +49,39 @@ DEFAULT_HUBSPOT_MCP_TOOL_DESCRIPTION = ToolDescription(
 class HubSpotMCPToolInputs(BaseModel):
     tool_name: str = Field(
         description="Name of the MCP tool to call.",
-        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
+        json_schema_extra={
+            "disabled_as_input": True,
+            "is_tool_input": False,
+            "port_definition_id": HubSpotMCPToolInputs_TOOL_NAME,
+        },
     )
     tool_arguments: dict[str, Any] = Field(
         default_factory=dict,
         description="Arguments to pass to the MCP tool.",
-        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
+        json_schema_extra={
+            "disabled_as_input": True,
+            "is_tool_input": False,
+            "port_definition_id": HubSpotMCPToolInputs_TOOL_ARGUMENTS,
+        },
     )
     # TODO: Remove this after function-calling refactor
     model_config = {"extra": "allow"}
 
 
 class HubSpotMCPToolOutputs(BaseModel):
-    output: str
-    content: list[Any] = Field(default_factory=list, description="Raw MCP content items.")
-    is_error: bool = Field(default=False, description="Whether the MCP server marked the call as an error.")
+    output: str = Field(
+        json_schema_extra={"port_definition_id": HubSpotMCPToolOutputs_OUTPUT},
+    )
+    content: list[Any] = Field(
+        default_factory=list,
+        description="Raw MCP content items.",
+        json_schema_extra={"port_definition_id": HubSpotMCPToolOutputs_CONTENT},
+    )
+    is_error: bool = Field(
+        default=False,
+        description="Whether the MCP server marked the call as an error.",
+        json_schema_extra={"port_definition_id": HubSpotMCPToolOutputs_IS_ERROR},
+    )
 
 
 class HubSpotMCPTool(Component):
