@@ -31,3 +31,6 @@ class Runnable(Protocol):
     @classmethod
     def get_outputs_schema(cls) -> Type[BaseModel]:
         """Return the output schema for the runnable."""
+
+    async def close(self) -> None:
+        """Release any resources held by this runnable."""

@@ -422,6 +422,13 @@ class GraphRunner:
         """
         self.tasks.clear()
 
+    async def close(self) -> None:
+        for runnable in self.runnables.values():
+            try:
+                await runnable.close()
+            except Exception as e:
+                LOGGER.error(f"Error closing runnable: {e}", exc_info=True)
+
     def _validate_graph(self):
         """Ensures the graph and mappings are consistent before execution."""
         if len(set(self.runnables.keys())) != len(self.runnables):

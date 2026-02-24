@@ -302,7 +302,11 @@ async def run_agent(
         tb = traceback.format_exc()
         raise ValueError(f"Error running agent: {tb}") from e
     finally:
-        # TODO: Rename the function
+        try:
+            await agent.close()
+        except Exception as e:
+            LOGGER.error(f"Error closing agent resources: {e}", exc_info=True)
+        # TODO: Manage other components cleanup on their own close() methods
         params = get_tracing_span()
         if params and params.shared_sandbox:
             try:
