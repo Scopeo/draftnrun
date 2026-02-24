@@ -10,6 +10,7 @@ from engine import legacy_compatibility
 from engine.coercion_matrix import CoercionMatrix, create_default_coercion_matrix
 from engine.components.types import AgentPayload, NodeData
 from engine.field_expressions.ast import ExpressionNode, RefNode
+from engine.field_expressions.errors import FieldExpressionError
 from engine.field_expressions.traversal import select_nodes
 from engine.graph_runner.field_expression_management import evaluate_expression
 from engine.graph_runner.port_management import (
@@ -216,6 +217,40 @@ class GraphRunner:
                 f"Graph contains cycles after dependency augmentation. Edges: {dict(self.graph.edges())}",
             )
 
+    def _eval_expression_and_set_input(
+        self,
+        node_id: str,
+        field_name: str,
+        expression_ast: ExpressionNode,
+        target_component: Any,
+        input_data: dict[str, Any],
+        *,
+        log_prefix: str = "expression",
+    ) -> None:
+        """Evaluate a field expression, coerce to target type if needed, set input_data[field_name].
+        Raises FieldExpressionError on evaluation failure.
+        """
+        def _to_string(value: Any) -> str:
+            return self.coercion_matrix.coerce(value, str, type(value))
+
+        evaluated_value = evaluate_expression(
+            expression_ast,
+            field_name,
+            self.tasks,
+            to_string=_to_string,
+            variables=self.variables,
+        )
+        target_type = get_target_field_type(target_component, field_name)
+        if (
+            isinstance(evaluated_value, str)
+            and target_type is not str
+            and self.coercion_matrix.should_attempt_coercion(target_type)
+        ):
+            LOGGER.warning(f"Coercing expression result to {target_type} for field {field_name}")
+            evaluated_value = self.coercion_matrix.coerce(evaluated_value, target_type, str)
+        input_data[field_name] = evaluated_value
+        LOGGER.debug(f"Set {node_id}.{field_name} from {log_prefix}: {evaluated_value}")
+
     def _gather_inputs(self, node_id: str) -> dict[str, Any]:
         """Assembles the input data for a node based on explicit mappings,
         keeping start-node passthrough. Default mapping synthesis happens during
@@ -261,7 +296,6 @@ class GraphRunner:
                         # TODO: Pure refs with keys create coupling between port mappings and expressions.
                         # Decouple after system is stable/harmonized
                         pure_ref_expr = self._expressions_by_target_ast.get((node_id, port_mapping.target_port_name))
-
                         if isinstance(pure_ref_expr, RefNode) and pure_ref_expr.key:
                             if not isinstance(source_value, dict):
                                 raise ValueError(
@@ -312,7 +346,6 @@ class GraphRunner:
 
         # Handle field expressions for inputs (non-ref expressions like concat/literal)
         # Apply regardless of whether explicit port mappings exist; non-ref expressions override mapped values.
-        # Pure-ref expressions are ignored at runtime (port mappings authoritative).
         # NOTE: ConcatNodes that contain RefNodes pass the `not isinstance(expr_ast, RefNode)` filter
         # below. Their graph dependencies are correctly handled by `_augment_graph_with_dependencies`,
         # which uses `select_nodes` to find all RefNodes inside any expression type.
@@ -325,30 +358,42 @@ class GraphRunner:
 
             target_component = self.runnables[node_id]
             for field_name, expression_ast in non_ref_expressions:
-
-                def _to_string(value: Any) -> str:
-                    return self.coercion_matrix.coerce(value, str, type(value))
-
-                evaluated_value = evaluate_expression(
-                    expression_ast,
-                    field_name,
-                    self.tasks,
-                    to_string=_to_string,
-                    variables=self.variables,
-                )
                 LOGGER.debug(f"Evaluating non-ref expression for {node_id}.{field_name}")
-                target_type = get_target_field_type(target_component, field_name)
-                # Only coerce if the value is a string and target type is different
-                # JsonBuildNode returns dict/list directly, no coercion needed
-                if (
-                    isinstance(evaluated_value, str)
-                    and target_type is not str
-                    and self.coercion_matrix.should_attempt_coercion(target_type)
-                ):
-                    LOGGER.warning(f"Coercing expression result to {target_type} for field {field_name}")
-                    evaluated_value = self.coercion_matrix.coerce(evaluated_value, target_type, str)
-                input_data[field_name] = evaluated_value
-                LOGGER.debug(f"Set {node_id}.{field_name} from expression: {evaluated_value}")
+                self._eval_expression_and_set_input(
+                    node_id, field_name, expression_ast, target_component, input_data, log_prefix="expression"
+                )
+
+            # Pure refs that have no value yet (e.g. no port mapping because output port def doesn't exist,
+            # e.g. start node ctx): evaluate the ref from task result data/ctx.
+            pure_ref_expressions: list[tuple[str, ExpressionNode]] = [
+                (field_name, expr_ast)
+                for (target_id, field_name), expr_ast in self._expressions_by_target_ast.items()
+                if target_id == node_id
+                and isinstance(expr_ast, RefNode)
+                and field_name not in input_data
+            ]
+            for field_name, expression_ast in pure_ref_expressions:
+                ref_node = expression_ast
+                LOGGER.debug(
+                    "Evaluating pure ref (no port mapping value): %s.%s -> %s.%s",
+                    ref_node.instance,
+                    ref_node.port,
+                    node_id,
+                    field_name,
+                )
+                try:
+                    self._eval_expression_and_set_input(
+                        node_id, field_name, expression_ast, target_component, input_data, log_prefix="pure ref"
+                    )
+                except FieldExpressionError as e:
+                    LOGGER.warning(
+                        "Pure ref evaluation failed for %s.%s -> %s.%s: %s",
+                        ref_node.instance,
+                        ref_node.port,
+                        node_id,
+                        field_name,
+                        e,
+                    )
 
         return input_data
 
