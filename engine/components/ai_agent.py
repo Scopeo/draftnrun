@@ -74,6 +74,7 @@ class AIAgentInputs(BaseModel):
                 label="Output Format",
             ).model_dump(exclude_unset=True, exclude_none=True),
             "is_advanced": True,
+            "drives_output_schema": True,
         },
     )
     # Allow any other fields to be passed through

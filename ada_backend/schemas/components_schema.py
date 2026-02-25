@@ -46,6 +46,7 @@ class PortDefinitionSchema(BaseModel):
     default: Optional[Any] = None
     is_tool_input: bool = True
     is_advanced: bool = False
+    drives_output_schema: bool = False
 
 
 class ComponentWithParametersDTO(ComponentVersionUseInfoSchema, ComponentSchema):

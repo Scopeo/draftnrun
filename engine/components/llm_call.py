@@ -94,6 +94,7 @@ class LLMCallInputs(BaseModel):
                 label="Output Format",
             ).model_dump(exclude_unset=True, exclude_none=True),
             "is_advanced": True,
+            "drives_output_schema": True,
         },
     )
     # Allow extra fields for backward compatibility

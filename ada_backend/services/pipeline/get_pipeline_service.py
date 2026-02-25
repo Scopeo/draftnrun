@@ -78,6 +78,7 @@ def get_component_instance(
                         else parameter.ui_component_properties
                     ),
                     is_advanced=parameter.is_advanced,
+                    drives_output_schema=getattr(parameter, "drives_output_schema", False),
                 )
             )
 
@@ -144,6 +145,7 @@ def get_component_instance(
                     else param.ui_component_properties
                 ),
                 is_advanced=param.is_advanced,
+                drives_output_schema=getattr(param, "drives_output_schema", False),
             )
             for param in parameters
         ],

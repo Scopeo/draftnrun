@@ -139,11 +139,13 @@ def seed_port_definitions(session: Session):
             ui_component_properties = None
             is_tool_input = True
             is_advanced = False
+            drives_output_schema = False
             if isinstance(extra, dict):
                 ui_component = extra.get("ui_component")
                 ui_component_properties = extra.get("ui_component_properties")
                 is_tool_input = extra.get("is_tool_input", True)
                 is_advanced = extra.get("is_advanced", False)
+                drives_output_schema = extra.get("drives_output_schema", False)
 
             port_description = field_info.description
             parameter_type = get_parameter_type(field_info)
@@ -181,6 +183,7 @@ def seed_port_definitions(session: Session):
                 port.default = field_default
                 port.is_tool_input = is_tool_input
                 port.is_advanced = is_advanced
+                port.drives_output_schema = drives_output_schema
                 LOGGER.info(f"  - Updating INPUT port: {field_name}")
             else:
                 port = db.PortDefinition(
@@ -196,6 +199,7 @@ def seed_port_definitions(session: Session):
                     default=field_default,
                     is_tool_input=is_tool_input,
                     is_advanced=is_advanced,
+                    drives_output_schema=drives_output_schema,
                 )
                 session.add(port)
                 LOGGER.info(f"  - Creating INPUT port: {field_name}")
