@@ -2023,9 +2023,6 @@ class OrgVariableDefinition(Base):
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    project_id = mapped_column(
-        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
-    )
     name = mapped_column(String, nullable=False)
     type = mapped_column(make_pg_enum(VariableType), nullable=False)
     description = mapped_column(Text, nullable=True)
@@ -2037,9 +2034,31 @@ class OrgVariableDefinition(Base):
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    project = relationship("Project", backref="variable_definitions")
+    project_associations = relationship(
+        "OrgVariableDefinitionProjectAssociation", cascade="all, delete-orphan", lazy="selectin"
+    )
 
     __table_args__ = (UniqueConstraint("organization_id", "name", name="uq_org_variable_definition"),)
+
+
+class OrgVariableDefinitionProjectAssociation(Base):
+    __tablename__ = "org_variable_definition_projects"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    definition_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("org_variable_definitions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    project_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    __table_args__ = (UniqueConstraint("definition_id", "project_id", name="uq_variable_definition_project"),)
 
 
 class OrgVariableSet(Base):

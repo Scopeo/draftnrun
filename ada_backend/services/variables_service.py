@@ -1,12 +1,15 @@
 import logging
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
+from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.variable_definitions_repository import (
     delete_org_definition,
     list_org_definitions,
+    replace_definition_projects,
     upsert_org_definition,
 )
 from ada_backend.repositories.variable_sets_repository import (
@@ -26,11 +29,18 @@ from ada_backend.services.errors import VariableDefinitionNotFound, VariableSetN
 LOGGER = logging.getLogger(__name__)
 
 
+def _validate_project_ids_belong_to_org(session: Session, organization_id: UUID, project_ids: list[UUID]) -> None:
+    for project_id in project_ids:
+        project = get_project(session, project_id=project_id)
+        if not project or project.organization_id != organization_id:
+            raise ValueError(f"Project {project_id} does not belong to organization {organization_id}")
+
+
 def definition_to_response(definition: db.OrgVariableDefinition) -> VariableDefinitionResponse:
     return VariableDefinitionResponse(
         id=definition.id,
         organization_id=definition.organization_id,
-        project_id=definition.project_id,
+        project_ids=[assoc.project_id for assoc in definition.project_associations],
         name=definition.name,
         type=definition.type,
         description=definition.description,
@@ -59,8 +69,9 @@ def set_to_response(variable_set: db.OrgVariableSet) -> VariableSetResponse:
 def list_definitions_service(
     session: Session,
     organization_id: UUID,
+    project_id: Optional[UUID] = None,
 ) -> list[VariableDefinitionResponse]:
-    defs = list_org_definitions(session, organization_id)
+    defs = list_org_definitions(session, organization_id, project_id=project_id)
     return [definition_to_response(definition) for definition in defs]
 
 
@@ -71,7 +82,14 @@ def upsert_definition_service(
     body: VariableDefinitionUpsertRequest,
 ) -> VariableDefinitionResponse:
     fields = body.model_dump(exclude_none=True)
+    project_ids = fields.pop("project_ids", None)
     definition = upsert_org_definition(session, organization_id, name, **fields)
+    if project_ids is not None:
+        project_ids = list(set(project_ids))
+        _validate_project_ids_belong_to_org(session, organization_id, project_ids)
+        replace_definition_projects(session, definition.id, project_ids)
+        session.refresh(definition)
+    session.commit()
     return definition_to_response(definition)
 
 
@@ -83,6 +101,7 @@ def delete_definition_service(
     deleted = delete_org_definition(session, organization_id, name)
     if not deleted:
         raise VariableDefinitionNotFound(name, organization_id)
+    session.commit()
     return deleted
 
 

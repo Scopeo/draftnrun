@@ -38,9 +38,9 @@ def autocomplete_field_expression(
     query = request.query or ""
     phase = _get_phase_from_query(query)
 
-    # Variables are org-scoped — look up org from project
+    # Look up org from project; filter to project-relevant + global definitions
     project = get_project(session, project_id=project_id)
-    definitions = list_org_definitions(session, project.organization_id) if project else []
+    definitions = list_org_definitions(session, project.organization_id, project_id=project_id) if project else []
 
     instances = get_component_instances_for_graph_runner(session, graph_runner_id)
     upstream_instance_ids = _get_upstream_instance_ids(session, graph_runner_id, request.target_instance_id)

@@ -233,7 +233,7 @@ async def run_agent(
     if not project_details:
         raise ProjectNotFound(project_id)
 
-    variables = resolve_variables(session, project_details.organization_id, set_ids)
+    variables = resolve_variables(session, project_details.organization_id, set_ids, project_id=project_id)
 
     today = datetime.now()
     organization_limit = get_organization_limit(
