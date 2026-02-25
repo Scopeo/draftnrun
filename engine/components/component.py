@@ -283,3 +283,7 @@ class Component(ABC):
 
     def run_sync(self, *inputs, **kwargs):
         return asyncio.run(self.run(*inputs, **kwargs))
+
+    async def close(self) -> None:
+        """Release any resources held by this component."""
+        pass

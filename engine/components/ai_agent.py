@@ -214,6 +214,13 @@ class AIAgent(Component):
         self._formatter = Formatter(add_sources=False, component_attributes=component_attributes)
         self._has_retriever_tool = self._check_for_retriever_tool()
 
+    async def close(self) -> None:
+        for tool in self.agent_tools:
+            try:
+                await tool.close()
+            except Exception as e:
+                LOGGER.error(f"Error closing tool: {e}", exc_info=True)
+
     @staticmethod
     def _get_output_tool_description(output_format: str | dict | None) -> Optional[ToolDescription]:
         """

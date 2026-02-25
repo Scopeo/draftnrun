@@ -439,11 +439,12 @@ async def update_graph_service(
         delete_node(session, node_id)
     LOGGER.info("Deleted nodes: {}".format(len(nodes_to_delete)))
 
-    await get_agent_for_project(
+    agent = await get_agent_for_project(
         session,
         project_id=project_id,
         graph_runner_id=graph_runner_id,
     )
+    await agent.close()
     if user_id:
         track_project_saved(user_id, project_id)
 

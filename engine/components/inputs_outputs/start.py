@@ -69,6 +69,10 @@ class Start:
 
         return create_legacy_input_output_schema()
 
+    # TODO: Remove after migrating Start to Component base class
+    async def close(self) -> None:
+        pass
+
     # TODO: Refactor Agent I/O to use an unified input/output object:
     async def run(self, input_data: AgentPayload | dict | NodeData) -> NodeData:
         # Normalize input to a plain dict

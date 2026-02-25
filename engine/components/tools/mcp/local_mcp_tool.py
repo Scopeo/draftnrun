@@ -122,7 +122,21 @@ class LocalMCPTool(Component):
             raise MCPConnectionError(error_label, str(exc)) from exc
 
     async def close(self):
-        """Close the persistent MCP session and cleanup subprocess."""
+        """Close the persistent MCP session and cleanup subprocess.
+
+        TODO: This close() may log a RuntimeError warning:
+          "Attempted to exit cancel scope in a different task than it was entered in"
+
+        Root cause: OAuthComponentFactory (and the factory system in general) is synchronous.
+        It runs async constructors via _run_coroutine_sync → ThreadPoolExecutor + asyncio.run,
+        which creates a new event loop in a worker thread. The anyio cancel scope inside
+        stdio_client is therefore bound to that thread's event loop, but close() is called
+        from the main FastAPI event loop — a different asyncio task context.
+
+        The subprocess IS still terminated (MCP SDK falls back to process.terminate()),
+        so this is non-fatal. The correct fix is to make the factory system async so that
+        _ensure_session() and close() share the same event loop/task context.
+        """
         if self._session is not None:
             try:
                 await self._session.__aexit__(None, None, None)
