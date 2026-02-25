@@ -1,9 +1,34 @@
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Dict, Optional
 from uuid import UUID
 
 from openai.types.chat import ChatCompletionMessageToolCall
 from pydantic import BaseModel, Field
+
+
+class ExecutionStrategy(StrEnum):
+    """Control flow strategies for GraphRunner execution."""
+
+    CONTINUE = "continue"  # Default: execute all successors
+    HALT = "halt"  # Stop all downstream execution
+    SELECTIVE_EDGE_INDICES = "selective_edge_indices"  # Execute only specific edge indices
+
+
+@dataclass(frozen=True)
+class ExecutionDirective:
+    """
+    Directive from control-flow component to GraphRunner.
+
+    Only emitted by components that override default execution flow
+    (e.g., IfElse, Router). Regular components don't emit this.
+
+    For SELECTIVE_EDGE_INDICES strategy, selected_edge_indices specifies which
+    edges should execute based on their order value (e.g., [0, 2]).
+    """
+
+    strategy: ExecutionStrategy = ExecutionStrategy.CONTINUE
+    selected_edge_indices: list[int] = field(default_factory=list)
 
 
 class NodeData(BaseModel):
@@ -16,6 +41,10 @@ class NodeData(BaseModel):
     ctx: Dict[str, Any] = Field(
         default_factory=dict,
         description="Execution context and variables for the current node execution",
+    )
+    directive: Optional[ExecutionDirective] = Field(
+        default=None,
+        description="Execution control directive emitted by control-flow components",
     )
 
 

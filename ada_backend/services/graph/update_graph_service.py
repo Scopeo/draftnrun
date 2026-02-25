@@ -338,6 +338,24 @@ async def update_graph_service(
     for instance in graph_project.component_instances:
         incoming_field_expressions_by_instance[instance.id] = set()
 
+        if instance.input_port_instances:
+            for port_instance in instance.input_port_instances:
+                if port_instance.field_expression and port_instance.field_expression.expression_json:
+                    field_name = port_instance.name
+                    incoming_field_expressions_by_instance[instance.id].add(field_name)
+
+                    expr = create_field_expression(session, port_instance.field_expression.expression_json)
+                    existing_port_id = db_port_instances_by_instance[instance.id].get(field_name)
+                    if existing_port_id:
+                        update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
+                    else:
+                        create_input_port_instance(
+                            session=session,
+                            component_instance_id=instance.id,
+                            name=field_name,
+                            field_expression_id=expr.id,
+                        )
+
         # Convert Inputs from parameters[kind="input"] to field expressions.
         # TODO: this mixes API-level `kind="input"` with service-level types; needs decoupling.
         for param in input_params_by_instance.get(instance.id, []):

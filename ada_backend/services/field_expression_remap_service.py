@@ -7,6 +7,7 @@ from ada_backend.schemas.pipeline.field_expression_schema import FieldExpression
 from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.parser import unparse_expression
 from engine.field_expressions.serializer import from_json as expr_from_json
+from engine.field_expressions.serializer import to_json as expr_to_json
 from engine.field_expressions.traversal import map_expression
 
 
@@ -63,10 +64,13 @@ def remap_field_expressions_for_cloning(
                 original_ast = expr_from_json(input_port_instance.field_expression.expression_json)
                 remapped_ast = remap_instance_ids_in_expression(original_ast, id_mapping_str)
                 expr_text = unparse_expression(remapped_ast)
+                expression_json = expr_to_json(remapped_ast)
+
                 remapped_expressions.append(
                     FieldExpressionUpdateSchema(
                         field_name=input_port_instance.name,
                         expression_text=expr_text,
+                        expression_json=expression_json,
                     )
                 )
 

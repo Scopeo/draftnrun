@@ -128,6 +128,7 @@ class IfElseOutputs(BaseModel):
         description="Pass-through data when condition is true, None otherwise.",
         json_schema_extra={"parameter_type": ParameterType.JSON},
     )
+    # TODO: DEPRECATED - Replace with ExecutionDirective pattern
     should_halt: bool = Field(
         description="Signal to halt downstream execution (true when condition is false).",
         json_schema_extra={"parameter_type": ParameterType.BOOLEAN},
@@ -307,6 +308,9 @@ class IfElse(Component):
             output_data = None
             should_halt = True
 
+        # TODO: Migrate to ExecutionDirective pattern
+        # Replace should_halt with _directive field:
+        #   _directive=ExecutionDirective(strategy=HALT if not comparison_result else CONTINUE)
         return IfElseOutputs(
             result=comparison_result,
             output=output_data,

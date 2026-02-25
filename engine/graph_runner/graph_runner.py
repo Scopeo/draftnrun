@@ -8,7 +8,7 @@ from opentelemetry import trace as trace_api
 
 from engine import legacy_compatibility
 from engine.coercion_matrix import CoercionMatrix, create_default_coercion_matrix
-from engine.components.types import AgentPayload, NodeData
+from engine.components.types import AgentPayload, ExecutionDirective, ExecutionStrategy, NodeData
 from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.errors import FieldExpressionError
 from engine.field_expressions.traversal import select_nodes
@@ -173,13 +173,30 @@ class GraphRunner:
             self.run_context.update(result_packet.ctx or {})
             LOGGER.debug(f"Node '{node_id}' completed execution with result: {result_packet}")
 
-            should_halt = result_packet.data.get("should_halt", False)
-            if should_halt:
-                LOGGER.info(f"Node '{node_id}' signaled to halt downstream execution")
-                self._halt_downstream_execution(node_id)
-            else:
+            # Extract execution directive (normalized to CONTINUE if None)
+            # NOTE: If we add many more execution strategies in the future,
+            # consider using Strategy Pattern with dedicated handler classes.
+            directive = result_packet.directive
+
+            # TODO: Remove after IfElse migration - Backward compatibility
+            # IfElse currently uses should_halt in data dict (legacy pattern)
+            if directive is None and result_packet.data.get("should_halt", False):
+                directive = ExecutionDirective(strategy=ExecutionStrategy.HALT)
+
+            directive = directive or ExecutionDirective()
+
+            if directive.strategy == ExecutionStrategy.CONTINUE:
+                # Default: execute all successors
                 for successor in self.graph.successors(node_id):
                     self.tasks[successor].decrement_pending_deps()
+
+            elif directive.strategy == ExecutionStrategy.HALT:
+                LOGGER.info(f"Node '{node_id}' signaled to halt downstream execution")
+                self._halt_downstream_execution(node_id)
+
+            elif directive.strategy == ExecutionStrategy.SELECTIVE_EDGE_INDICES:
+                LOGGER.debug(f"Node '{node_id}' selective execution on indices: {directive.selected_edge_indices}")
+                self._execute_selective_edges_indices(node_id, directive.selected_edge_indices)
 
         return legacy_compatibility.collect_legacy_outputs(self.graph, self.tasks, self._input_node_id, self.runnables)
 
@@ -462,7 +479,6 @@ class GraphRunner:
         for pm in self.port_mappings:
             self._mappings_by_target.setdefault(pm.target_instance_id, []).append(pm)
 
-    # TODO: Add a ControlFlowManager to handle the control flow of the graph
     def _halt_downstream_execution(self, source_node_id: str) -> None:
         """Mark all downstream nodes from source as completed without execution."""
         visited = set()
@@ -483,3 +499,28 @@ class GraphRunner:
                         task.state = TaskState.COMPLETED
                         task.result = NodeData(data={}, ctx=self.run_context)
                     queue.append(successor)
+
+    def _execute_selective_edges_indices(self, source_node_id: str, selected_edge_indices: list[int]) -> None:
+        """
+        Selectively execute downstream nodes based on selected edge indices.
+        Only successors connected via edges with order in selected_edge_indices will execute.
+
+        Args:
+            source_node_id: The source node ID
+            selected_edge_indices: List of edge order values that should execute (e.g., [0, 2])
+        """
+        LOGGER.info(f"Selective execution for {source_node_id} with selected edge indices: {selected_edge_indices}")
+        # TODO: Temporary workaround for executing selective edges.
+        # We should refactor this to implement a more robust execution strategy.
+        # Possibly move the selection logic to the frontend and rely on edge IDs instead of execution order.
+        for successor in self.graph.successors(source_node_id):
+            edge_data = self.graph.get_edge_data(source_node_id, successor)
+            edge_order = edge_data.get("order") if edge_data else None
+
+            if edge_order is not None and edge_order in selected_edge_indices:
+                LOGGER.info(f"Executing '{successor}' via edge order={edge_order}")
+                self.tasks[successor].decrement_pending_deps()
+            else:
+                # No match - halt this successor
+                LOGGER.info(f"Halting '{successor}' (order {edge_order} not in selected indices)")
+                self._halt_downstream_execution(successor)
