@@ -1192,6 +1192,22 @@ class PortInstance(Base):
 
     Uses joined-table polymorphism: shared fields live here, type-specific fields
     live in input_port_instances and output_port_instances child tables.
+
+    Port sources appear asymmetric because InputPortInstance plays a double role,
+    but the underlying design is consistent:
+
+            | Catalogue ports              | Dynamic ports                          | Value
+    --------|------------------------------|----------------------------------------|-------------------------------
+    Input   | PortDefinition (type=INPUT)  | InputPortInstance (port_def_id=NULL)   | InputPortInstance.field_expr_id
+    Output  | PortDefinition (type=OUTPUT) | OutputPortInstance                     | n/a
+
+    InputPortInstance serves two purposes: it materialises dynamic input ports AND
+    stores the configured value (field_expression_id) for every input regardless of
+    whether it is catalogue-defined or dynamic. OutputPortInstance only materialises
+    dynamic output ports; outputs carry no value.
+
+    PortMapping reflects the output split explicitly via two mutually exclusive FKs:
+    source_port_definition_id (catalogue) vs. source_output_port_instance_id (dynamic).
     """
 
     __tablename__ = "port_instances"
@@ -1233,13 +1249,11 @@ class InputPortInstance(PortInstance):
 
     Allows API components to have ports that vary based on instance configuration.
 
-    Invariants:
-    - port_definition_id == NULL: Dynamic input port instance not part of the
-      official component catalogue (e.g., API-specific field)
-    - field_expression_id == NULL (with port_definition_id == NULL): Dynamic port
-      exists but doesn't have a value yet. The frontend can display it for configuration.
-    - Both NULL: Port is defined but not configured
-    - Both set: Port references a definition and has a configured value
+    Invariants (2x2 matrix of port_definition_id / field_expression_id):
+    - port_definition_id=NULL,  field_expression_id=NULL:  Dynamic port exists but has no value yet
+    - port_definition_id=NULL,  field_expression_id=SET:   Dynamic port exists and has a value
+    - port_definition_id=SET,   field_expression_id=NULL:  Catalogue-defined port exists but has no value yet
+    - port_definition_id=SET,   field_expression_id=SET:   Catalogue-defined port exists and has a value
     """
 
     __tablename__ = "input_port_instances"

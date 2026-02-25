@@ -20,7 +20,7 @@ from ada_backend.repositories.graph_runner_repository import (
 )
 from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
 from ada_backend.repositories.organization_repository import get_organization_secrets
-from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
+from ada_backend.repositories.port_mapping_repository import get_source_port_name, list_port_mappings_for_graph
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
@@ -114,11 +114,8 @@ async def build_graph_runner(
     port_mappings = list_port_mappings_for_graph(session, graph_runner_id)
     port_mappings_graph = []
     for port_mapping in port_mappings:
-        if port_mapping.source_port_definition_id is not None:
-            source_port_name = port_mapping.source_port_definition.name
-        elif port_mapping.source_output_port_instance_id is not None:
-            source_port_name = port_mapping.source_output_port_instance.name
-        else:
+        source_port_name = get_source_port_name(port_mapping)
+        if source_port_name is None:
             LOGGER.warning(
                 f"PortMapping {port_mapping.id} has neither source_port_definition_id nor "
                 "source_output_port_instance_id set; skipping"

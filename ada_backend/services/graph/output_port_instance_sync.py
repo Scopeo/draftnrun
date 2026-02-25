@@ -8,10 +8,7 @@ from ada_backend.repositories.output_port_instance_repository import (
     create_output_port_instance,
     delete_output_port_instances_for_component_instance,
 )
-from ada_backend.repositories.port_mapping_repository import (
-    get_input_port_definition_id,
-    get_port_definition_by_id,
-)
+from ada_backend.repositories.port_mapping_repository import is_drives_output_schema_port
 
 LOGGER = logging.getLogger(__name__)
 
@@ -46,24 +43,20 @@ def sync_output_port_instances_from_schema(
     value,
 ) -> None:
     """Create OutputPortInstance rows for each top-level key of the output schema value."""
-
-    port_def_id = get_input_port_definition_id(session, component_version_id, field_name)
-    if not port_def_id:
-        return
-
-    port_def = get_port_definition_by_id(session, port_def_id)
-    if not port_def or not port_def.drives_output_schema:
+    if not is_drives_output_schema_port(session, component_version_id, field_name):
         return
 
     keys = extract_schema_keys(value)
+
+    delete_output_port_instances_for_component_instance(session, component_instance_id)
+
     if not keys:
         LOGGER.debug(
-            f"No schema keys found for drives_output_schema field '{field_name}' "
-            f"on instance {component_instance_id}, skipping OutputPortInstance sync"
+            f"Cleared OutputPortInstance(s) for drives_output_schema field '{field_name}' "
+            f"on instance {component_instance_id} (empty or unparseable value)"
         )
         return
 
-    delete_output_port_instances_for_component_instance(session, component_instance_id)
     for key in keys:
         create_output_port_instance(
             session=session,

@@ -375,6 +375,13 @@ async def update_graph_service(
                 LOGGER.warning(
                     f"No expression value for input parameter {field_name} on instance {instance.id}, skipping"
                 )
+                sync_output_port_instances_from_schema(
+                    session=session,
+                    component_instance_id=instance.id,
+                    component_version_id=instance.component_version_id,
+                    field_name=field_name,
+                    value=None,
+                )
                 continue
 
             if field_name in incoming_field_expressions_by_instance[instance.id]:
@@ -709,6 +716,7 @@ def _validate_expression_references(session: Session, graph_runner_id: UUID, ast
 
         is_start = is_start_node(session, graph_runner_id, source_instance_uuid)
 
+        # TODO: remove this once start node output ports are supported
         if is_start:
             try:
                 component_instance_schema = get_component_instance(session, source_instance_uuid, is_start_node=True)

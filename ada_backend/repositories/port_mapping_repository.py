@@ -5,6 +5,19 @@ from sqlalchemy.orm import Session, joinedload
 from ada_backend.database import models as db
 
 
+def get_source_port_name(port_mapping: db.PortMapping) -> str | None:
+    """Resolve the source port name from a PortMapping.
+
+    Returns the name from source_port_definition (catalogue port) or
+    source_output_port_instance (dynamic port), or None if neither is set.
+    """
+    if port_mapping.source_port_definition_id is not None:
+        return port_mapping.source_port_definition.name
+    if port_mapping.source_output_port_instance_id is not None:
+        return port_mapping.source_output_port_instance.name
+    return None
+
+
 def list_port_mappings_for_graph(session: Session, graph_runner_id: UUID) -> list[db.PortMapping]:
     return (
         session.query(db.PortMapping)
@@ -71,6 +84,23 @@ def get_input_port_definition_id(session: Session, component_version_id: UUID, p
         .first()
     )
     return result[0] if result else None
+
+
+def is_drives_output_schema_port(
+    session: Session, component_version_id: UUID, port_name: str
+) -> bool:
+    """Return True if the named INPUT port exists and has drives_output_schema=True."""
+    result = (
+        session.query(db.PortDefinition.id)
+        .filter_by(
+            component_version_id=component_version_id,
+            name=port_name,
+            port_type=db.PortType.INPUT,
+            drives_output_schema=True,
+        )
+        .first()
+    )
+    return result is not None
 
 
 def get_port_definition_by_id(session: Session, port_def_id: UUID) -> db.PortDefinition | None:

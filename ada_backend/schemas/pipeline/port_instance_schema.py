@@ -34,7 +34,7 @@ class InputPortInstanceCreateSchema(BaseModel):
 
 
 class OutputPortInstanceSchema(BaseModel):
-    """Schema for output port instance (dynamic output port driven by a drives_output_schema input)."""
+    """Schema for output port instance (dynamic output ports)."""
 
     id: Optional[UUID] = None
     name: str
