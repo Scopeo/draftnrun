@@ -1,7 +1,7 @@
 """add router component support
 
 Revision ID: a1b2c3d4e5g7
-Revises: 6c3f812c5752
+Revises: a8b9c0d1e2f3
 Create Date: 2026-02-06 12:20:00.000000
 
 """
@@ -12,7 +12,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a1b2c3d4e5g7"
-down_revision: Union[str, None] = "6c3f812c5752"
+down_revision: Union[str, None] = "a8b9c0d1e2f3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
