@@ -199,8 +199,13 @@ def clone_graph_runner(
         for source_instance_id, remapped_expressions in remapped_expressions_by_source_id.items():
             target_instance_id = ids_map[source_instance_id]
             for remapped_expr in remapped_expressions:
-                remapped_ast = parse_expression(remapped_expr.expression_text)
-                expression_json = expr_to_json(remapped_ast)
+                # Use expression_json directly if available (preserves json_build structures for Router routes)
+                # Otherwise fall back to parsing expression_text (for backwards compatibility)
+                if remapped_expr.expression_json:
+                    expression_json = remapped_expr.expression_json
+                else:
+                    remapped_ast = parse_expression(remapped_expr.expression_text)
+                    expression_json = expr_to_json(remapped_ast)
 
                 field_expr = create_field_expression(
                     session=session,

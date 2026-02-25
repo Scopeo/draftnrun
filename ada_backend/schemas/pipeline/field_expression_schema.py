@@ -18,6 +18,7 @@ class FieldExpressionUpdateSchema(BaseModel):
 
     field_name: str
     expression_text: str
+    expression_json: Optional[dict] = None
 
 
 class FieldExpressionReadSchema(BaseModel):
