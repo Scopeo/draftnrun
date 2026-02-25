@@ -247,7 +247,6 @@ class GraphRunner:
         """Evaluate a field expression, coerce to target type if needed, set input_data[field_name].
         Raises FieldExpressionError on evaluation failure.
         """
-
         def _to_string(value: Any) -> str:
             return self.coercion_matrix.coerce(value, str, type(value))
 
@@ -386,7 +385,9 @@ class GraphRunner:
             pure_ref_expressions: list[tuple[str, ExpressionNode]] = [
                 (field_name, expr_ast)
                 for (target_id, field_name), expr_ast in self._expressions_by_target_ast.items()
-                if target_id == node_id and isinstance(expr_ast, RefNode) and field_name not in input_data
+                if target_id == node_id
+                and isinstance(expr_ast, RefNode)
+                and field_name not in input_data
             ]
             for field_name, expression_ast in pure_ref_expressions:
                 ref_node = expression_ast

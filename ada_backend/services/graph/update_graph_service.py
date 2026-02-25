@@ -596,17 +596,6 @@ def _create_port_mappings_for_pure_ref_expressions(
         )
         return
 
-    source_component_version_id = resolve_component_version_id_from_instance_id(session, UUID(ref_node.instance))
-    target_component_version_id = resolve_component_version_id_from_instance_id(session, component_instance_id)
-
-    source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)
-    if not source_port_def_id:
-        LOGGER.warning(
-            msg=f"Output port '{ref_node.port}' not found for component "
-            f"{source_component_version_id}, skipping port mapping"
-        )
-        return
-
     target_port_def_id = get_input_port_definition_id(session, target_component_version_id, field_name)
     if not target_port_def_id:
         LOGGER.warning(
