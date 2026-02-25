@@ -2,7 +2,7 @@ import logging
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -14,13 +14,22 @@ LOGGER = logging.getLogger(__name__)
 def list_org_definitions(
     session: Session,
     organization_id: UUID,
+    project_id: Optional[UUID] = None,
 ) -> list[db.OrgVariableDefinition]:
-    return (
-        session.query(db.OrgVariableDefinition)
-        .filter(db.OrgVariableDefinition.organization_id == organization_id)
-        .order_by(db.OrgVariableDefinition.display_order, db.OrgVariableDefinition.name)
-        .all()
-    )
+    query = session.query(db.OrgVariableDefinition).filter(db.OrgVariableDefinition.organization_id == organization_id)
+
+    if project_id is not None:
+        query = query.outerjoin(
+            db.OrgVariableDefinitionProjectAssociation,
+            db.OrgVariableDefinition.id == db.OrgVariableDefinitionProjectAssociation.definition_id,
+        ).filter(
+            or_(
+                db.OrgVariableDefinitionProjectAssociation.project_id == project_id,
+                db.OrgVariableDefinitionProjectAssociation.id.is_(None),
+            )
+        )
+
+    return query.order_by(db.OrgVariableDefinition.display_order, db.OrgVariableDefinition.name).all()
 
 
 def get_org_definition(
@@ -66,10 +75,25 @@ def upsert_org_definition(
     )
     stmt = stmt.returning(db.OrgVariableDefinition)
     result = session.execute(stmt)
-    session.commit()
     instance = result.scalars().one()
+    session.flush()
     session.refresh(instance)
     return instance
+
+
+def replace_definition_projects(
+    session: Session,
+    definition_id: UUID,
+    project_ids: list[UUID],
+) -> None:
+    session.query(db.OrgVariableDefinitionProjectAssociation).filter(
+        db.OrgVariableDefinitionProjectAssociation.definition_id == definition_id
+    ).delete()
+
+    for project_id in project_ids:
+        session.add(db.OrgVariableDefinitionProjectAssociation(definition_id=definition_id, project_id=project_id))
+
+    session.flush()
 
 
 def delete_org_definition(
@@ -81,5 +105,4 @@ def delete_org_definition(
     if not definition:
         return False
     session.delete(definition)
-    session.commit()
     return True

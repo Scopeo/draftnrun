@@ -6,10 +6,11 @@ Extracted from project_router.py.
 """
 
 import logging
-from typing import Annotated, List
+from typing import Annotated, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
@@ -57,9 +58,10 @@ def list_org_variable_definitions(
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
+    project_id: Optional[UUID] = None,
 ):
     try:
-        return list_definitions_service(session, organization_id)
+        return list_definitions_service(session, organization_id, project_id=project_id)
     except Exception as e:
         LOGGER.error(f"Failed to list variable definitions for org {organization_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -85,6 +87,12 @@ def upsert_org_variable_definition(
     except ValueError as e:
         LOGGER.error(f"Failed to upsert variable definition {name} for org {organization_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except IntegrityError as e:
+        LOGGER.error(
+            f"Integrity error upserting variable definition {name} for org {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail="Invalid project reference") from e
     except Exception as e:
         LOGGER.error(f"Failed to upsert variable definition {name} for org {organization_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

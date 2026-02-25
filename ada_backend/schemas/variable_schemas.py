@@ -16,12 +16,16 @@ class VariableDefinitionUpsertRequest(BaseModel):
     metadata: Optional[dict[str, Any]] = None
     editable: bool = True
     display_order: int = 0
+    project_ids: Optional[list[UUID]] = Field(
+        default=None,
+        description="Project IDs to scope this definition to. Omit to leave unchanged. Send [] to make global.",
+    )
 
 
 class VariableDefinitionResponse(BaseModel):
     id: UUID
     organization_id: UUID
-    project_id: Optional[UUID] = None
+    project_ids: list[UUID] = []
     name: str
     type: VariableType
     description: Optional[str] = None

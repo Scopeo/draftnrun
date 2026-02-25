@@ -1,5 +1,5 @@
 import logging
-from typing import Any
+from typing import Any, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -14,13 +14,14 @@ def resolve_variables(
     session: Session,
     organization_id: UUID,
     set_ids: list[str],
+    project_id: Optional[UUID] = None,
 ) -> dict[str, Any]:
     """Resolve variables from definitions + multiple sets.
 
     Merge order: defaults → set_ids[0] → set_ids[1] → ...
     Returns dict[str, Any] of fully resolved values (ready for engine layer).
     """
-    variable_definitions = list_org_definitions(session, organization_id)
+    variable_definitions = list_org_definitions(session, organization_id, project_id=project_id)
     defined_names = {definition.name for definition in variable_definitions}
 
     # 1. Start with defaults
