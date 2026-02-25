@@ -1,7 +1,7 @@
 """Add port_instances base table and output_port_instances with polymorphic hierarchy
 
 Revision ID: d0e1f2a3b4c5
-Revises: a8b9c0d1e2f3
+Revises: a1b2c3d4e5g7
 Create Date: 2026-02-25
 
 Introduces:
@@ -19,7 +19,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "d0e1f2a3b4c5"
-down_revision: Union[str, None] = "a8b9c0d1e2f3"
+down_revision: Union[str, None] = "a1b2c3d4e5g7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -160,9 +160,7 @@ def downgrade() -> None:
 
     # Reverse: make source_port_definition_id non-nullable again
     # (rows with source_output_port_instance_id set must be removed first)
-    connection.execute(
-        sa.text("DELETE FROM port_mappings WHERE source_port_definition_id IS NULL")
-    )
+    connection.execute(sa.text("DELETE FROM port_mappings WHERE source_port_definition_id IS NULL"))
     op.alter_column(
         "port_mappings",
         "source_port_definition_id",
