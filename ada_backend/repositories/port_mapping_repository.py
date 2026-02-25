@@ -1,12 +1,21 @@
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ada_backend.database import models as db
 
 
 def list_port_mappings_for_graph(session: Session, graph_runner_id: UUID) -> list[db.PortMapping]:
-    return session.query(db.PortMapping).filter(db.PortMapping.graph_runner_id == graph_runner_id).all()
+    return (
+        session.query(db.PortMapping)
+        .filter(db.PortMapping.graph_runner_id == graph_runner_id)
+        .options(
+            joinedload(db.PortMapping.source_port_definition),
+            joinedload(db.PortMapping.source_output_port_instance),
+            joinedload(db.PortMapping.target_port_definition),
+        )
+        .all()
+    )
 
 
 def delete_port_mappings_for_graph(session: Session, graph_runner_id: UUID) -> int:
@@ -82,6 +91,29 @@ def insert_port_mapping(
         graph_runner_id=graph_runner_id,
         source_instance_id=source_instance_id,
         source_port_definition_id=source_port_definition_id,
+        target_instance_id=target_instance_id,
+        target_port_definition_id=target_port_definition_id,
+        dispatch_strategy=dispatch_strategy or "direct",
+    )
+    session.add(mapping)
+    session.commit()
+    return mapping
+
+
+def insert_port_mapping_with_output_instance(
+    session: Session,
+    graph_runner_id: UUID,
+    source_instance_id: UUID,
+    source_output_port_instance_id: UUID,
+    target_instance_id: UUID,
+    target_port_definition_id: UUID,
+    dispatch_strategy: str,
+) -> db.PortMapping:
+    mapping = db.PortMapping(
+        graph_runner_id=graph_runner_id,
+        source_instance_id=source_instance_id,
+        source_port_definition_id=None,
+        source_output_port_instance_id=source_output_port_instance_id,
         target_instance_id=target_instance_id,
         target_port_definition_id=target_port_definition_id,
         dispatch_strategy=dispatch_strategy or "direct",

@@ -98,9 +98,7 @@ def delete_input_port_instance(
     session: Session,
     input_port_instance_id: UUID,
 ) -> bool:
-    deleted_count = (
-        session.query(db.InputPortInstance).filter(db.InputPortInstance.id == input_port_instance_id).delete()
-    )
+    deleted_count = session.query(db.PortInstance).filter(db.PortInstance.id == input_port_instance_id).delete()
     if deleted_count > 0:
         session.commit()
         return True

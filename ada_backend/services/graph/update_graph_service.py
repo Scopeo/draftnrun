@@ -40,6 +40,7 @@ from ada_backend.repositories.input_port_instance_repository import (
     get_input_port_instances_for_component_instance,
     update_input_port_instance,
 )
+from ada_backend.repositories.output_port_instance_repository import get_output_port_instance_by_name
 from ada_backend.repositories.port_mapping_repository import (
     delete_port_mapping_for_target_input,
     delete_port_mappings_for_graph,
@@ -47,6 +48,7 @@ from ada_backend.repositories.port_mapping_repository import (
     get_output_port_definition_id,
     get_port_definition_by_id,
     insert_port_mapping,
+    insert_port_mapping_with_output_instance,
 )
 from ada_backend.schemas.parameter_schema import ParameterKind
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
@@ -54,6 +56,7 @@ from ada_backend.segment_analytics import track_project_saved
 from ada_backend.services.agent_runner_service import get_agent_for_project
 from ada_backend.services.errors import GraphNotBoundToProjectError
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
+from ada_backend.services.graph.output_port_instance_sync import sync_output_port_instances_from_schema
 from ada_backend.services.graph.playground_utils import (
     extract_playground_configuration,
     extract_playground_schema_from_component,
@@ -411,6 +414,13 @@ async def update_graph_service(
                     name=field_name,
                     field_expression_id=expr.id,
                 )
+            sync_output_port_instances_from_schema(
+                session=session,
+                component_instance_id=instance.id,
+                component_version_id=instance.component_version_id,
+                field_name=field_name,
+                value=param.value,
+            )
 
             ref_node = get_pure_ref(ast)
             if ref_node is not None:
@@ -598,22 +608,8 @@ def _create_port_mappings_for_pure_ref_expressions(
     source_component_version_id = resolve_component_version_id_from_instance_id(session, UUID(ref_node.instance))
     target_component_version_id = resolve_component_version_id_from_instance_id(session, component_instance_id)
 
+    source_instance_uuid = UUID(ref_node.instance)
     source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)
-    if not source_port_def_id:
-        available = get_output_ports_for_component_version(session, source_component_version_id)
-        available_names = [p.name for p in available]
-        LOGGER.warning(
-            "[save] pure ref port mapping skipped: output port '%s' not found for component %s "
-            "(ref %s.%s -> %s.%s). Available output ports: %s",
-            ref_node.port,
-            source_component_version_id,
-            ref_node.instance,
-            ref_node.port,
-            component_instance_id,
-            field_name,
-            available_names if available_names else "(none)",
-        )
-        return
 
     target_port_def_id = get_input_port_definition_id(session, target_component_version_id, field_name)
     if not target_port_def_id:
@@ -623,28 +619,69 @@ def _create_port_mappings_for_pure_ref_expressions(
         )
         return
 
-    validate_port_definition_types(session, source_port_def_id, target_port_def_id)
+    if source_port_def_id:
+        validate_port_definition_types(session, source_port_def_id, target_port_def_id)
 
-    # Ensure only one mapping exists for this target input
-    delete_port_mapping_for_target_input(
-        session=session,
-        graph_runner_id=graph_runner_id,
-        target_instance_id=component_instance_id,
-        target_port_definition_id=target_port_def_id,
-    )
+        # Ensure only one mapping exists for this target input
+        delete_port_mapping_for_target_input(
+            session=session,
+            graph_runner_id=graph_runner_id,
+            target_instance_id=component_instance_id,
+            target_port_definition_id=target_port_def_id,
+        )
 
-    insert_port_mapping(
-        session=session,
-        graph_runner_id=graph_runner_id,
-        source_instance_id=UUID(ref_node.instance),
-        source_port_definition_id=source_port_def_id,
-        target_instance_id=component_instance_id,
-        target_port_definition_id=target_port_def_id,
-        dispatch_strategy="direct",
-    )
-    LOGGER.info(
-        f"Created port mapping for {ref_node.instance}.{ref_node.port} -> {component_instance_id}.{field_name}"
-    )
+        insert_port_mapping(
+            session=session,
+            graph_runner_id=graph_runner_id,
+            source_instance_id=source_instance_uuid,
+            source_port_definition_id=source_port_def_id,
+            target_instance_id=component_instance_id,
+            target_port_definition_id=target_port_def_id,
+            dispatch_strategy="direct",
+        )
+        LOGGER.info(
+            f"Created port mapping for {ref_node.instance}.{ref_node.port} -> {component_instance_id}.{field_name}"
+        )
+    else:
+        # Static output port not found; check for a dynamic OutputPortInstance
+        output_port_instance = get_output_port_instance_by_name(session, source_instance_uuid, ref_node.port)
+        if not output_port_instance:
+            available = get_output_ports_for_component_version(session, source_component_version_id)
+            available_names = [p.name for p in available]
+            LOGGER.warning(
+                "[save] pure ref port mapping skipped: output port '%s' not found for component %s "
+                "(ref %s.%s -> %s.%s). Available static output ports: %s",
+                ref_node.port,
+                source_component_version_id,
+                ref_node.instance,
+                ref_node.port,
+                component_instance_id,
+                field_name,
+                available_names if available_names else "(none)",
+            )
+            return
+
+        # Ensure only one mapping exists for this target input
+        delete_port_mapping_for_target_input(
+            session=session,
+            graph_runner_id=graph_runner_id,
+            target_instance_id=component_instance_id,
+            target_port_definition_id=target_port_def_id,
+        )
+
+        insert_port_mapping_with_output_instance(
+            session=session,
+            graph_runner_id=graph_runner_id,
+            source_instance_id=source_instance_uuid,
+            source_output_port_instance_id=output_port_instance.id,
+            target_instance_id=component_instance_id,
+            target_port_definition_id=target_port_def_id,
+            dispatch_strategy="direct",
+        )
+        LOGGER.info(
+            f"Created dynamic port mapping for {ref_node.instance}.{ref_node.port} "
+            f"(OutputPortInstance) -> {component_instance_id}.{field_name}"
+        )
 
 
 def _validate_expression_references(session: Session, graph_runner_id: UUID, ast: ExpressionNode) -> None:
@@ -688,13 +725,21 @@ def _validate_expression_references(session: Session, graph_runner_id: UUID, ast
 
             source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)
             if not source_port_def_id:
-                raise FieldExpressionError(
-                    f"Port '{ref_node.port}' not found for start node '{source_component_version_id}' "
-                    f"(checked both input fields and output ports)"
-                )
+                # Also accept dynamic output port instances on the start node
+                output_port_instance = get_output_port_instance_by_name(session, source_instance_uuid, ref_node.port)
+                if not output_port_instance:
+                    raise FieldExpressionError(
+                        f"Port '{ref_node.port}' not found for start node '{source_component_version_id}' "
+                        f"(checked input fields, static output ports, and dynamic output port instances)"
+                    )
         else:
             source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)
             if not source_port_def_id:
-                raise FieldExpressionError(
-                    f"Output port '{ref_node.port}' not found for component version '{source_component_version_id}'"
-                )
+                # Also accept dynamic output port instances (e.g. keys from drives_output_schema)
+                output_port_instance = get_output_port_instance_by_name(session, source_instance_uuid, ref_node.port)
+                if not output_port_instance:
+                    raise FieldExpressionError(
+                        f"Output port '{ref_node.port}' not found for component version "
+                        f"'{source_component_version_id}' (checked static output ports "
+                        "and dynamic output port instances)"
+                    )

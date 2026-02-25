@@ -94,7 +94,8 @@ class LLMCallInputs(BaseModel):
                 label="Output Format",
             ).model_dump(exclude_unset=True, exclude_none=True),
             "is_advanced": True,
-            "drives_output_schema": True,
+            # TODO: Set to “True” once the output schema is unified to match the AI agent’s format.
+            "drives_output_schema": False,
         },
     )
     # Allow extra fields for backward compatibility

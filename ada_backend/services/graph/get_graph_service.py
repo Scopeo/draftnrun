@@ -81,10 +81,17 @@ def get_graph_service(
     # Include port mappings at top-level so GET->PUT roundtrips
     pms = list_port_mappings_for_graph(session, graph_runner_id)
     for pm in pms:
+        if pm.source_port_definition_id is not None:
+            source_port_name = pm.source_port_definition.name
+        elif pm.source_output_port_instance_id is not None:
+            source_port_name = pm.source_output_port_instance.name
+        else:
+            LOGGER.warning(f"PortMapping {pm.id} has no source port; skipping in graph response")
+            continue
         port_mappings.append(
             PortMappingSchema(
                 source_instance_id=pm.source_instance_id,
-                source_port_name=pm.source_port_definition.name,
+                source_port_name=source_port_name,
                 target_instance_id=pm.target_instance_id,
                 target_port_name=pm.target_port_definition.name,
                 dispatch_strategy=pm.dispatch_strategy,
