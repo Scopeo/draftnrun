@@ -2,7 +2,7 @@
 from BasicParameter to FieldExpression.
 
 Revision ID: b2c3d4e5f6a7
-Revises: a8b9c0d1e2f3
+Revises: d0e1f2a3b4c5
 Create Date: 2026-02-25 00:00:00.000000
 
 """
@@ -14,7 +14,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "b2c3d4e5f6a7"
-down_revision: Union[str, None] = "a8b9c0d1e2f3"
+down_revision: Union[str, None] = "d0e1f2a3b4c5"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -35,8 +35,12 @@ def upgrade() -> None:
     bind = op.get_bind()
 
     # Migrate only API Call tool params (by CPD id).
-    # DISTINCT ON ensures one row per (component_instance_id, param_name) even when duplicate BasicParameter
-    # rows exist; the final DELETE removes ALL matching BasicParameter rows so no orphan rows remain.
+    # input_port_instances is now a child table of port_instances (joined-table inheritance
+    # introduced in d0e1f2a3b4c5): columns component_instance_id/name/port_definition_id/
+    # created_at live in port_instances; input_port_instances only holds id + field_expression_id.
+    #
+    # DISTINCT ON ensures one row per (component_instance_id, param_name) even when duplicate
+    # BasicParameter rows exist; the final DELETE removes ALL matching rows so no orphans remain.
     bind.execute(
         sa.text(f"""
         WITH source AS (
@@ -44,7 +48,8 @@ def upgrade() -> None:
                 bp.component_instance_id,
                 COALESCE(bp.value, '')  AS value,
                 cpd.name                AS param_name,
-                gen_random_uuid()       AS new_fe_id
+                gen_random_uuid()       AS new_fe_id,
+                gen_random_uuid()       AS new_pi_id
             FROM basic_parameters bp
             JOIN component_parameter_definitions cpd
               ON bp.parameter_definition_id = cpd.id
@@ -60,20 +65,31 @@ def upgrade() -> None:
             FROM source
             RETURNING id
         ),
-        insert_ipi AS (
-            INSERT INTO input_port_instances
-                (id, component_instance_id, name, port_definition_id, field_expression_id, created_at)
+        upsert_pi AS (
+            INSERT INTO port_instances (id, component_instance_id, name, port_definition_id, type, created_at)
             SELECT
-                gen_random_uuid(),
+                new_pi_id,
                 component_instance_id,
                 param_name,
                 NULL,
-                new_fe_id,
+                'INPUT'::port_type,
                 now()
             FROM source
-            ON CONFLICT (component_instance_id, name)
-            DO UPDATE SET field_expression_id = EXCLUDED.field_expression_id,
-                          port_definition_id   = NULL
+            ON CONFLICT ON CONSTRAINT uq_port_instance_name
+            DO UPDATE SET port_definition_id = NULL
+            RETURNING id, name, component_instance_id
+        ),
+        upsert_ipi AS (
+            INSERT INTO input_port_instances (id, field_expression_id)
+            SELECT
+                upsert_pi.id,
+                insert_fe.id
+            FROM upsert_pi
+            JOIN source ON upsert_pi.component_instance_id = source.component_instance_id
+                       AND upsert_pi.name = source.param_name
+            JOIN insert_fe ON insert_fe.id = source.new_fe_id
+            ON CONFLICT (id)
+            DO UPDATE SET field_expression_id = EXCLUDED.field_expression_id
         )
         DELETE FROM basic_parameters bp
         USING component_parameter_definitions cpd
@@ -127,27 +143,31 @@ def downgrade() -> None:
 
     # Restore BasicParameter rows from InputPortInstance + FieldExpression.
     # Only literal expressions can be converted back; injected (ref/concat) values are left as-is.
+    # After d0e1f2a3b4c5, input_port_instances is a child of port_instances: name/
+    # component_instance_id/port_definition_id now live in port_instances, so we JOIN to get them.
+    # Deleting from port_instances cascades to input_port_instances.
     bind.execute(
         sa.text("""
         WITH source AS (
             SELECT
                 ipi.id                          AS ipi_id,
-                ipi.component_instance_id,
-                ipi.name                        AS param_name,
+                pi.component_instance_id,
+                pi.name                         AS param_name,
                 fe.expression_json->>'value'    AS literal_value,
                 cpd.id                          AS param_def_id
             FROM input_port_instances ipi
+            JOIN port_instances pi ON pi.id = ipi.id
             JOIN field_expressions fe
               ON ipi.field_expression_id = fe.id
             JOIN component_parameter_definitions cpd
-              ON cpd.name = ipi.name
+              ON cpd.name = pi.name
              AND cpd.id = ANY(ARRAY[
                     :endpoint_def_id         ::uuid,
                     :headers_def_id          ::uuid,
                     :fixed_parameters_def_id ::uuid
                  ])
-            WHERE ipi.name = ANY(ARRAY['endpoint', 'headers', 'fixed_parameters'])
-              AND ipi.port_definition_id IS NULL
+            WHERE pi.name = ANY(ARRAY['endpoint', 'headers', 'fixed_parameters'])
+              AND pi.port_definition_id IS NULL
               AND fe.expression_json->>'type' = 'literal'
         ),
         restore_bp AS (
@@ -156,7 +176,7 @@ def downgrade() -> None:
             FROM source
             ON CONFLICT DO NOTHING
         )
-        DELETE FROM input_port_instances
+        DELETE FROM port_instances
         WHERE id IN (SELECT ipi_id FROM source)
     """),
         {
