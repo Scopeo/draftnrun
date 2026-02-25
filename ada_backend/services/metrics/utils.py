@@ -43,13 +43,13 @@ SQL_COST_KPIS_ROUNDED_TAIL = """
                 WHEN raw.mean_cost_per_run = 0 OR raw.mean_cost_per_run IS NULL THEN 0
                 WHEN raw.mean_cost_per_run >= 1 THEN ROUND(raw.mean_cost_per_run::numeric, 0)
                 ELSE ROUND(raw.mean_cost_per_run::numeric,
-                    (-(FLOOR(LOG(ABS(raw.mean_cost_per_run)))::integer) + %(significant_figures)s - 1)
+                    (-(FLOOR(LOG(ABS(raw.mean_cost_per_run)))::integer) + %(significant_figures)s - 1))
             END as mean_cost_per_run,
             CASE
                 WHEN raw.mean_cost_per_conversation = 0 OR raw.mean_cost_per_conversation IS NULL THEN 0
                 WHEN raw.mean_cost_per_conversation >= 1 THEN ROUND(raw.mean_cost_per_conversation::numeric, 0)
                 ELSE ROUND(raw.mean_cost_per_conversation::numeric,
-                    (-(FLOOR(LOG(ABS(raw.mean_cost_per_conversation)))::integer) + %(significant_figures)s - 1)
+                    (-(FLOOR(LOG(ABS(raw.mean_cost_per_conversation)))::integer) + %(significant_figures)s - 1))
             END as mean_cost_per_conversation
         FROM raw
 """
@@ -277,13 +277,3 @@ def query_conversation_messages(trace_id: str) -> tuple[dict, dict]:
     output_payload = result[1] if result[1] else {}
 
     return input_payload, output_payload
-
-
-def round_to_n_significant_figures(value: float, significant_figures: int) -> float:
-    if value == 0:
-        return 0
-    if value >= 1:
-        return round(value)
-    else:
-        first_digit_with_non_zero_value = -int(np.floor(np.log10(abs(value))))
-        return round(value, first_digit_with_non_zero_value + significant_figures - 1)
