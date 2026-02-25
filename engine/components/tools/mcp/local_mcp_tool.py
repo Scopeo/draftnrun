@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Self
 
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -75,10 +75,7 @@ class LocalMCPTool(Component):
         self._mcp_tool_descriptions = tool_descriptions
         self._tool_description_map = {td.name: td for td in self._mcp_tool_descriptions}
 
-        # Persistent session management
-        self._session: Optional[ClientSession] = None
-        self._stdio_context = None
-        self._session_exit_stack = None
+        self._init_session_state()
 
         super().__init__(
             trace_manager=trace_manager,
@@ -101,25 +98,34 @@ class LocalMCPTool(Component):
             cwd=self.cwd,
         )
 
+    def _init_session_state(self):
+        self._session: Optional[ClientSession] = None
+        self._stdio_context = None
+        self._session_lock = asyncio.Lock()
+
     async def _ensure_session(self):
         """Ensure the MCP session is initialized. Creates it if it doesn't exist."""
         if self._session is not None:
             return
 
-        server_params = self._get_server_params()
-        try:
-            # Store the context managers to keep the session alive
-            self._stdio_context = stdio_client(server_params)
-            read, write = await self._stdio_context.__aenter__()
+        async with self._session_lock:
+            if self._session is not None:
+                return
 
-            self._session = ClientSession(read, write)
-            await self._session.__aenter__()
-            await self._session.initialize()
+            server_params = self._get_server_params()
+            try:
+                # Store the context managers to keep the session alive
+                self._stdio_context = stdio_client(server_params)
+                read, write = await self._stdio_context.__aenter__()
 
-            LOGGER.info(f"Initialized persistent MCP session for {self.command}")
-        except Exception as exc:
-            error_label = f"stdio://{self.command} {' '.join(self.args)}"
-            raise MCPConnectionError(error_label, str(exc)) from exc
+                self._session = ClientSession(read, write)
+                await self._session.__aenter__()
+                await self._session.initialize()
+
+                LOGGER.info(f"Initialized persistent MCP session for {self.command}")
+            except Exception as exc:
+                error_label = f"stdio://{self.command} {' '.join(self.args)}"
+                raise MCPConnectionError(error_label, str(exc)) from exc
 
     async def close(self):
         """Close the persistent MCP session and cleanup subprocess.
@@ -175,7 +181,7 @@ class LocalMCPTool(Component):
         env: dict[str, str] | None = None,
         cwd: str | Path | None = None,
         timeout: int = 30,
-    ) -> "LocalMCPTool":
+    ) -> Self:
         """
         Convenience async constructor that fetches tool descriptions via MCP SDK.
 
@@ -199,8 +205,7 @@ class LocalMCPTool(Component):
         instance.env = env
         instance.cwd = Path(cwd) if cwd else None
         instance.timeout = timeout
-        instance._session = None
-        instance._stdio_context = None
+        instance._init_session_state()
 
         try:
             await instance._ensure_session()
@@ -233,6 +238,11 @@ class LocalMCPTool(Component):
             ),
             component_attributes=component_attributes,
         )
+
+        # TODO: workaround until OAuthComponentFactory is async. _run_coroutine_sync uses
+        # asyncio.run() in a ThreadPoolExecutor; closing here (same event loop) prevents
+        # ClosedResourceError when _ensure_session() re-opens lazily in FastAPI's loop.
+        await instance.close()
 
         return instance
 
