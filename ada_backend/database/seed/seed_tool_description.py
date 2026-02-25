@@ -19,7 +19,6 @@ from engine.components.sql.run_sql_query_tool import DEFAULT_RUN_SQL_QUERY_TOOL_
 from engine.components.table_lookup import DEFAULT_TABLE_LOOKUP_TOOL_DESCRIPTION
 from engine.components.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION
 from engine.components.tools.docx_template import DOCX_TEMPLATE_TOOL_DESCRIPTION
-from engine.components.tools.hubspot_mcp_tool import DEFAULT_HUBSPOT_MCP_TOOL_DESCRIPTION
 from engine.components.tools.linkup_tool import LINKUP_TOOL_DESCRIPTION
 from engine.components.tools.mcp.remote_mcp_tool import DEFAULT_MCP_TOOL_DESCRIPTION
 from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
@@ -146,7 +145,7 @@ def seed_tool_description(session: Session):
     )
     hubspot_mcp_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["hubspot_mcp_tool_description"],
-        **DEFAULT_HUBSPOT_MCP_TOOL_DESCRIPTION.model_dump(),
+        **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
     )
     upsert_tool_descriptions(
         session=session,

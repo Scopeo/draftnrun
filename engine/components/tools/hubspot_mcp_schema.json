@@ -1,0 +1,6532 @@
+[
+  {
+    "name": "crm_create_company",
+    "description": "Create a new company with validated properties",
+    "required": [
+      "properties"
+    ],
+    "properties": {
+      "properties": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "website": {
+            "type": "string",
+            "format": "uri"
+          },
+          "description": {
+            "type": "string"
+          },
+          "industry": {
+            "type": "string"
+          },
+          "numberofemployees": {
+            "type": "number"
+          },
+          "annualrevenue": {
+            "type": "number"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "address2": {
+            "type": "string"
+          },
+          "zip": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "lifecyclestage": {
+            "type": "string",
+            "enum": [
+              "lead",
+              "customer",
+              "opportunity",
+              "subscriber",
+              "other"
+            ]
+          }
+        },
+        "additionalProperties": {}
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "associationCategory": {
+                    "type": "string"
+                  },
+                  "associationTypeId": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "associationCategory",
+                  "associationTypeId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "to",
+            "types"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_update_company",
+    "description": "Update an existing company with validated properties",
+    "required": [
+      "companyId",
+      "properties"
+    ],
+    "properties": {
+      "companyId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "website": {
+            "type": "string",
+            "format": "uri"
+          },
+          "description": {
+            "type": "string"
+          },
+          "industry": {
+            "type": "string"
+          },
+          "numberofemployees": {
+            "type": "number"
+          },
+          "annualrevenue": {
+            "type": "number"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "address2": {
+            "type": "string"
+          },
+          "zip": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "lifecyclestage": {
+            "type": "string",
+            "enum": [
+              "lead",
+              "customer",
+              "opportunity",
+              "subscriber",
+              "other"
+            ]
+          }
+        },
+        "additionalProperties": {}
+      }
+    }
+  },
+  {
+    "name": "crm_get_company",
+    "description": "Get a single company by ID with specific properties and associations",
+    "required": [
+      "companyId"
+    ],
+    "properties": {
+      "companyId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "contacts",
+            "deals",
+            "tickets"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_search_companies",
+    "description": "Search companies with company-specific filters",
+    "required": [
+      "filterGroups"
+    ],
+    "properties": {
+      "filterGroups": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "filters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "propertyName": {
+                    "type": "string"
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": [
+                      "EQ",
+                      "NEQ",
+                      "LT",
+                      "LTE",
+                      "GT",
+                      "GTE",
+                      "BETWEEN",
+                      "IN",
+                      "NOT_IN",
+                      "HAS_PROPERTY",
+                      "NOT_HAS_PROPERTY",
+                      "CONTAINS_TOKEN",
+                      "NOT_CONTAINS_TOKEN"
+                    ]
+                  },
+                  "value": {}
+                },
+                "required": [
+                  "propertyName",
+                  "operator"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "filters"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "after": {
+        "type": "string"
+      },
+      "sorts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "propertyName": {
+              "type": "string"
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "ASCENDING",
+                "DESCENDING"
+              ]
+            }
+          },
+          "required": [
+            "propertyName",
+            "direction"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_batch_create_companies",
+    "description": "Create multiple companies in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "properties": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "domain": {
+                  "type": "string"
+                },
+                "website": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "industry": {
+                  "type": "string"
+                },
+                "numberofemployees": {
+                  "type": "number"
+                },
+                "annualrevenue": {
+                  "type": "number"
+                },
+                "city": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "country": {
+                  "type": "string"
+                },
+                "phone": {
+                  "type": "string"
+                },
+                "address": {
+                  "type": "string"
+                },
+                "address2": {
+                  "type": "string"
+                },
+                "zip": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "lifecyclestage": {
+                  "type": "string",
+                  "enum": [
+                    "lead",
+                    "customer",
+                    "opportunity",
+                    "subscriber",
+                    "other"
+                  ]
+                }
+              },
+              "additionalProperties": {}
+            },
+            "associations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "associationCategory": {
+                          "type": "string"
+                        },
+                        "associationTypeId": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "associationCategory",
+                        "associationTypeId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "to",
+                  "types"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_batch_update_companies",
+    "description": "Update multiple companies in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "domain": {
+                  "type": "string"
+                },
+                "website": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "industry": {
+                  "type": "string"
+                },
+                "numberofemployees": {
+                  "type": "number"
+                },
+                "annualrevenue": {
+                  "type": "number"
+                },
+                "city": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "country": {
+                  "type": "string"
+                },
+                "phone": {
+                  "type": "string"
+                },
+                "address": {
+                  "type": "string"
+                },
+                "address2": {
+                  "type": "string"
+                },
+                "zip": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "lifecyclestage": {
+                  "type": "string",
+                  "enum": [
+                    "lead",
+                    "customer",
+                    "opportunity",
+                    "subscriber",
+                    "other"
+                  ]
+                }
+              },
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "id",
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_get_company_properties",
+    "description": "Get all properties for companies",
+    "required": [],
+    "properties": {
+      "archived": {
+        "type": "boolean"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_create_company_property",
+    "description": "Create a new company property",
+    "required": [
+      "name",
+      "label",
+      "type",
+      "fieldType",
+      "groupName"
+    ],
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "label": {
+        "type": "string"
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "string",
+          "number",
+          "date",
+          "datetime",
+          "enumeration",
+          "bool"
+        ]
+      },
+      "fieldType": {
+        "type": "string",
+        "enum": [
+          "text",
+          "textarea",
+          "select",
+          "radio",
+          "checkbox",
+          "number",
+          "date",
+          "file"
+        ]
+      },
+      "groupName": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "options": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "displayOrder": {
+              "type": "number"
+            },
+            "hidden": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "label",
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "displayOrder": {
+        "type": "number"
+      },
+      "hasUniqueValue": {
+        "type": "boolean"
+      },
+      "hidden": {
+        "type": "boolean"
+      },
+      "formField": {
+        "type": "boolean"
+      }
+    }
+  },
+  {
+    "name": "crm_list_objects",
+    "description": "List CRM objects of a specific type with optional filtering and pagination",
+    "required": [
+      "objectType"
+    ],
+    "properties": {
+      "objectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "after": {
+        "type": "string"
+      },
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "archived": {
+        "type": "boolean"
+      }
+    }
+  },
+  {
+    "name": "crm_get_object",
+    "description": "Get a single CRM object by ID",
+    "required": [
+      "objectType",
+      "objectId"
+    ],
+    "properties": {
+      "objectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "objectId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_create_object",
+    "description": "Create a new CRM object",
+    "required": [
+      "objectType",
+      "properties"
+    ],
+    "properties": {
+      "objectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "properties": {
+        "type": "object",
+        "additionalProperties": {}
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "associationCategory": {
+                    "type": "string"
+                  },
+                  "associationTypeId": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "associationCategory",
+                  "associationTypeId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "to",
+            "types"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_update_object",
+    "description": "Update an existing CRM object",
+    "required": [
+      "objectType",
+      "objectId",
+      "properties"
+    ],
+    "properties": {
+      "objectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "objectId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "object",
+        "additionalProperties": {}
+      }
+    }
+  },
+  {
+    "name": "crm_archive_object",
+    "description": "Archive (delete) a CRM object",
+    "required": [
+      "objectType",
+      "objectId"
+    ],
+    "properties": {
+      "objectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "objectId": {
+        "type": "string"
+      }
+    }
+  },
+  {
+    "name": "crm_search_objects",
+    "description": "Search CRM objects using filters",
+    "required": [
+      "objectType",
+      "filterGroups"
+    ],
+    "properties": {
+      "objectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "filterGroups": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "filters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "propertyName": {
+                    "type": "string"
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": [
+                      "EQ",
+                      "NEQ",
+                      "LT",
+                      "LTE",
+                      "GT",
+                      "GTE",
+                      "BETWEEN",
+                      "IN",
+                      "NOT_IN",
+                      "HAS_PROPERTY",
+                      "NOT_HAS_PROPERTY",
+                      "CONTAINS_TOKEN",
+                      "NOT_CONTAINS_TOKEN"
+                    ]
+                  },
+                  "value": {}
+                },
+                "required": [
+                  "propertyName",
+                  "operator"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "filters"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "after": {
+        "type": "string"
+      },
+      "sorts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "propertyName": {
+              "type": "string"
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "ASCENDING",
+                "DESCENDING"
+              ]
+            }
+          },
+          "required": [
+            "propertyName",
+            "direction"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_batch_create_objects",
+    "description": "Create multiple CRM objects in a single request",
+    "required": [
+      "objectType",
+      "inputs"
+    ],
+    "properties": {
+      "objectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "properties": {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            "associations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "associationCategory": {
+                          "type": "string"
+                        },
+                        "associationTypeId": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "associationCategory",
+                        "associationTypeId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "to",
+                  "types"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_batch_read_objects",
+    "description": "Create multiple CRM objects in a single request",
+    "required": [
+      "objectType",
+      "objectIds"
+    ],
+    "properties": {
+      "objectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "propertiesWithHistory": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "idProperty": {
+        "type": "string"
+      },
+      "objectIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_batch_update_objects",
+    "description": "Update multiple CRM objects in a single request",
+    "required": [
+      "objectType",
+      "inputs"
+    ],
+    "properties": {
+      "objectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "id",
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_batch_archive_objects",
+    "description": "Archive (delete) multiple CRM objects in a single request",
+    "required": [
+      "objectType",
+      "objectIds"
+    ],
+    "properties": {
+      "objectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "objectIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_list_association_types",
+    "description": "List all available association types for a given object type pair",
+    "required": [
+      "fromObjectType",
+      "toObjectType"
+    ],
+    "properties": {
+      "fromObjectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "toObjectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      }
+    }
+  },
+  {
+    "name": "crm_get_associations",
+    "description": "Get all associations of a specific type between objects",
+    "required": [
+      "fromObjectType",
+      "toObjectType",
+      "fromObjectId"
+    ],
+    "properties": {
+      "fromObjectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "toObjectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "fromObjectId": {
+        "type": "string"
+      },
+      "after": {
+        "type": "string"
+      },
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 500
+      }
+    }
+  },
+  {
+    "name": "crm_create_association",
+    "description": "Create an association between two objects",
+    "required": [
+      "fromObjectType",
+      "toObjectType",
+      "fromObjectId",
+      "toObjectId",
+      "associationTypes"
+    ],
+    "properties": {
+      "fromObjectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "toObjectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "fromObjectId": {
+        "type": "string"
+      },
+      "toObjectId": {
+        "type": "string"
+      },
+      "associationTypes": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "associationCategory": {
+              "type": "string"
+            },
+            "associationTypeId": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "associationCategory",
+            "associationTypeId"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_archive_association",
+    "description": "Archive (delete) an association between two objects",
+    "required": [
+      "fromObjectType",
+      "toObjectType",
+      "fromObjectId",
+      "toObjectId"
+    ],
+    "properties": {
+      "fromObjectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "toObjectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "fromObjectId": {
+        "type": "string"
+      },
+      "toObjectId": {
+        "type": "string"
+      }
+    }
+  },
+  {
+    "name": "crm_batch_create_associations",
+    "description": "Create multiple associations in a single request",
+    "required": [
+      "fromObjectType",
+      "toObjectType",
+      "inputs"
+    ],
+    "properties": {
+      "fromObjectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "toObjectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "to": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "associationCategory": {
+                    "type": "string"
+                  },
+                  "associationTypeId": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "associationCategory",
+                  "associationTypeId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "from",
+            "to",
+            "types"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_batch_archive_associations",
+    "description": "Archive (delete) multiple associations in a single request",
+    "required": [
+      "fromObjectType",
+      "toObjectType",
+      "inputs"
+    ],
+    "properties": {
+      "fromObjectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "toObjectType": {
+        "type": "string",
+        "enum": [
+          "companies",
+          "contacts",
+          "deals",
+          "tickets",
+          "products",
+          "line_items",
+          "quotes",
+          "custom"
+        ]
+      },
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "to": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "from",
+            "to"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_create_contact",
+    "description": "Create a new contact with validated properties",
+    "required": [
+      "properties"
+    ],
+    "properties": {
+      "properties": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "firstname": {
+            "type": "string"
+          },
+          "lastname": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "mobilephone": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "jobtitle": {
+            "type": "string"
+          },
+          "lifecyclestage": {
+            "type": "string",
+            "enum": [
+              "subscriber",
+              "lead",
+              "marketingqualifiedlead",
+              "salesqualifiedlead",
+              "opportunity",
+              "customer",
+              "evangelist",
+              "other"
+            ]
+          },
+          "leadstatus": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open",
+              "inprogress",
+              "opennotcontacted",
+              "opencontacted",
+              "closedconverted",
+              "closednotconverted"
+            ]
+          },
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "zip": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "website": {
+            "type": "string",
+            "format": "uri"
+          },
+          "twitterhandle": {
+            "type": "string"
+          },
+          "facebookfanpage": {
+            "type": "string"
+          },
+          "linkedinbio": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": {}
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "associationCategory": {
+                    "type": "string"
+                  },
+                  "associationTypeId": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "associationCategory",
+                  "associationTypeId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "to",
+            "types"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_update_contact",
+    "description": "Update an existing contact with validated properties",
+    "required": [
+      "contactId",
+      "properties"
+    ],
+    "properties": {
+      "contactId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "firstname": {
+            "type": "string"
+          },
+          "lastname": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "mobilephone": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "jobtitle": {
+            "type": "string"
+          },
+          "lifecyclestage": {
+            "type": "string",
+            "enum": [
+              "subscriber",
+              "lead",
+              "marketingqualifiedlead",
+              "salesqualifiedlead",
+              "opportunity",
+              "customer",
+              "evangelist",
+              "other"
+            ]
+          },
+          "leadstatus": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open",
+              "inprogress",
+              "opennotcontacted",
+              "opencontacted",
+              "closedconverted",
+              "closednotconverted"
+            ]
+          },
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "zip": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "website": {
+            "type": "string",
+            "format": "uri"
+          },
+          "twitterhandle": {
+            "type": "string"
+          },
+          "facebookfanpage": {
+            "type": "string"
+          },
+          "linkedinbio": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": {}
+      }
+    }
+  },
+  {
+    "name": "crm_get_contact",
+    "description": "Get a single contact by ID with specific properties and associations",
+    "required": [
+      "contactId"
+    ],
+    "properties": {
+      "contactId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "companies",
+            "deals",
+            "tickets",
+            "calls",
+            "emails",
+            "meetings",
+            "notes"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_search_contacts",
+    "description": "Search contacts with contact-specific filters",
+    "required": [
+      "filterGroups"
+    ],
+    "properties": {
+      "filterGroups": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "filters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "propertyName": {
+                    "type": "string"
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": [
+                      "EQ",
+                      "NEQ",
+                      "LT",
+                      "LTE",
+                      "GT",
+                      "GTE",
+                      "BETWEEN",
+                      "IN",
+                      "NOT_IN",
+                      "HAS_PROPERTY",
+                      "NOT_HAS_PROPERTY",
+                      "CONTAINS_TOKEN",
+                      "NOT_CONTAINS_TOKEN"
+                    ]
+                  },
+                  "value": {}
+                },
+                "required": [
+                  "propertyName",
+                  "operator"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "filters"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "after": {
+        "type": "string"
+      },
+      "sorts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "propertyName": {
+              "type": "string"
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "ASCENDING",
+                "DESCENDING"
+              ]
+            }
+          },
+          "required": [
+            "propertyName",
+            "direction"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_batch_create_contacts",
+    "description": "Create multiple contacts in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "properties": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "firstname": {
+                  "type": "string"
+                },
+                "lastname": {
+                  "type": "string"
+                },
+                "phone": {
+                  "type": "string"
+                },
+                "mobilephone": {
+                  "type": "string"
+                },
+                "company": {
+                  "type": "string"
+                },
+                "jobtitle": {
+                  "type": "string"
+                },
+                "lifecyclestage": {
+                  "type": "string",
+                  "enum": [
+                    "subscriber",
+                    "lead",
+                    "marketingqualifiedlead",
+                    "salesqualifiedlead",
+                    "opportunity",
+                    "customer",
+                    "evangelist",
+                    "other"
+                  ]
+                },
+                "leadstatus": {
+                  "type": "string",
+                  "enum": [
+                    "new",
+                    "open",
+                    "inprogress",
+                    "opennotcontacted",
+                    "opencontacted",
+                    "closedconverted",
+                    "closednotconverted"
+                  ]
+                },
+                "address": {
+                  "type": "string"
+                },
+                "city": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "zip": {
+                  "type": "string"
+                },
+                "country": {
+                  "type": "string"
+                },
+                "website": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "twitterhandle": {
+                  "type": "string"
+                },
+                "facebookfanpage": {
+                  "type": "string"
+                },
+                "linkedinbio": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {}
+            },
+            "associations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "associationCategory": {
+                          "type": "string"
+                        },
+                        "associationTypeId": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "associationCategory",
+                        "associationTypeId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "to",
+                  "types"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_batch_update_contacts",
+    "description": "Update multiple contacts in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "firstname": {
+                  "type": "string"
+                },
+                "lastname": {
+                  "type": "string"
+                },
+                "phone": {
+                  "type": "string"
+                },
+                "mobilephone": {
+                  "type": "string"
+                },
+                "company": {
+                  "type": "string"
+                },
+                "jobtitle": {
+                  "type": "string"
+                },
+                "lifecyclestage": {
+                  "type": "string",
+                  "enum": [
+                    "subscriber",
+                    "lead",
+                    "marketingqualifiedlead",
+                    "salesqualifiedlead",
+                    "opportunity",
+                    "customer",
+                    "evangelist",
+                    "other"
+                  ]
+                },
+                "leadstatus": {
+                  "type": "string",
+                  "enum": [
+                    "new",
+                    "open",
+                    "inprogress",
+                    "opennotcontacted",
+                    "opencontacted",
+                    "closedconverted",
+                    "closednotconverted"
+                  ]
+                },
+                "address": {
+                  "type": "string"
+                },
+                "city": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "zip": {
+                  "type": "string"
+                },
+                "country": {
+                  "type": "string"
+                },
+                "website": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "twitterhandle": {
+                  "type": "string"
+                },
+                "facebookfanpage": {
+                  "type": "string"
+                },
+                "linkedinbio": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "id",
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_get_contact_properties",
+    "description": "Get all properties for contacts",
+    "required": [],
+    "properties": {
+      "archived": {
+        "type": "boolean"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_create_contact_property",
+    "description": "Create a new contact property",
+    "required": [
+      "name",
+      "label",
+      "type",
+      "fieldType",
+      "groupName"
+    ],
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "label": {
+        "type": "string"
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "string",
+          "number",
+          "date",
+          "datetime",
+          "enumeration",
+          "bool"
+        ]
+      },
+      "fieldType": {
+        "type": "string",
+        "enum": [
+          "text",
+          "textarea",
+          "select",
+          "radio",
+          "checkbox",
+          "number",
+          "date",
+          "file"
+        ]
+      },
+      "groupName": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "options": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "displayOrder": {
+              "type": "number"
+            },
+            "hidden": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "label",
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "displayOrder": {
+        "type": "number"
+      },
+      "hasUniqueValue": {
+        "type": "boolean"
+      },
+      "hidden": {
+        "type": "boolean"
+      },
+      "formField": {
+        "type": "boolean"
+      }
+    }
+  },
+  {
+    "name": "crm_create_lead",
+    "description": "Create a new lead with validated properties",
+    "required": [
+      "properties"
+    ],
+    "properties": {
+      "properties": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "firstname": {
+            "type": "string"
+          },
+          "lastname": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "jobtitle": {
+            "type": "string"
+          },
+          "leadstatus": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open",
+              "in_progress",
+              "qualified",
+              "unqualified",
+              "converted",
+              "lost"
+            ]
+          },
+          "leadsource": {
+            "type": "string"
+          },
+          "industry": {
+            "type": "string"
+          },
+          "annualrevenue": {
+            "type": "number"
+          },
+          "numberofemployees": {
+            "type": "number"
+          },
+          "rating": {
+            "type": "string",
+            "enum": [
+              "hot",
+              "warm",
+              "cold"
+            ]
+          },
+          "website": {
+            "type": "string",
+            "format": "uri"
+          },
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "zip": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": {}
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "associationCategory": {
+                    "type": "string"
+                  },
+                  "associationTypeId": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "associationCategory",
+                  "associationTypeId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "to",
+            "types"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_update_lead",
+    "description": "Update an existing lead with validated properties",
+    "required": [
+      "leadId",
+      "properties"
+    ],
+    "properties": {
+      "leadId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "firstname": {
+            "type": "string"
+          },
+          "lastname": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "jobtitle": {
+            "type": "string"
+          },
+          "leadstatus": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open",
+              "in_progress",
+              "qualified",
+              "unqualified",
+              "converted",
+              "lost"
+            ]
+          },
+          "leadsource": {
+            "type": "string"
+          },
+          "industry": {
+            "type": "string"
+          },
+          "annualrevenue": {
+            "type": "number"
+          },
+          "numberofemployees": {
+            "type": "number"
+          },
+          "rating": {
+            "type": "string",
+            "enum": [
+              "hot",
+              "warm",
+              "cold"
+            ]
+          },
+          "website": {
+            "type": "string",
+            "format": "uri"
+          },
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "zip": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": {}
+      }
+    }
+  },
+  {
+    "name": "crm_get_lead",
+    "description": "Get a single lead by ID with specific properties and associations",
+    "required": [
+      "leadId"
+    ],
+    "properties": {
+      "leadId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "companies",
+            "contacts",
+            "deals",
+            "notes",
+            "tasks"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_search_leads",
+    "description": "Search leads with lead-specific filters",
+    "required": [
+      "filterGroups"
+    ],
+    "properties": {
+      "filterGroups": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "filters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "propertyName": {
+                    "type": "string"
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": [
+                      "EQ",
+                      "NEQ",
+                      "LT",
+                      "LTE",
+                      "GT",
+                      "GTE",
+                      "BETWEEN",
+                      "IN",
+                      "NOT_IN",
+                      "HAS_PROPERTY",
+                      "NOT_HAS_PROPERTY",
+                      "CONTAINS_TOKEN",
+                      "NOT_CONTAINS_TOKEN"
+                    ]
+                  },
+                  "value": {}
+                },
+                "required": [
+                  "propertyName",
+                  "operator"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "filters"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "after": {
+        "type": "string"
+      },
+      "sorts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "propertyName": {
+              "type": "string"
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "ASCENDING",
+                "DESCENDING"
+              ]
+            }
+          },
+          "required": [
+            "propertyName",
+            "direction"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_batch_create_leads",
+    "description": "Create multiple leads in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "properties": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "firstname": {
+                  "type": "string"
+                },
+                "lastname": {
+                  "type": "string"
+                },
+                "phone": {
+                  "type": "string"
+                },
+                "company": {
+                  "type": "string"
+                },
+                "jobtitle": {
+                  "type": "string"
+                },
+                "leadstatus": {
+                  "type": "string",
+                  "enum": [
+                    "new",
+                    "open",
+                    "in_progress",
+                    "qualified",
+                    "unqualified",
+                    "converted",
+                    "lost"
+                  ]
+                },
+                "leadsource": {
+                  "type": "string"
+                },
+                "industry": {
+                  "type": "string"
+                },
+                "annualrevenue": {
+                  "type": "number"
+                },
+                "numberofemployees": {
+                  "type": "number"
+                },
+                "rating": {
+                  "type": "string",
+                  "enum": [
+                    "hot",
+                    "warm",
+                    "cold"
+                  ]
+                },
+                "website": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "address": {
+                  "type": "string"
+                },
+                "city": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "zip": {
+                  "type": "string"
+                },
+                "country": {
+                  "type": "string"
+                },
+                "notes": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {}
+            },
+            "associations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "associationCategory": {
+                          "type": "string"
+                        },
+                        "associationTypeId": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "associationCategory",
+                        "associationTypeId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "to",
+                  "types"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_batch_update_leads",
+    "description": "Update multiple leads in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "firstname": {
+                  "type": "string"
+                },
+                "lastname": {
+                  "type": "string"
+                },
+                "phone": {
+                  "type": "string"
+                },
+                "company": {
+                  "type": "string"
+                },
+                "jobtitle": {
+                  "type": "string"
+                },
+                "leadstatus": {
+                  "type": "string",
+                  "enum": [
+                    "new",
+                    "open",
+                    "in_progress",
+                    "qualified",
+                    "unqualified",
+                    "converted",
+                    "lost"
+                  ]
+                },
+                "leadsource": {
+                  "type": "string"
+                },
+                "industry": {
+                  "type": "string"
+                },
+                "annualrevenue": {
+                  "type": "number"
+                },
+                "numberofemployees": {
+                  "type": "number"
+                },
+                "rating": {
+                  "type": "string",
+                  "enum": [
+                    "hot",
+                    "warm",
+                    "cold"
+                  ]
+                },
+                "website": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "address": {
+                  "type": "string"
+                },
+                "city": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "zip": {
+                  "type": "string"
+                },
+                "country": {
+                  "type": "string"
+                },
+                "notes": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "id",
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_get_lead_properties",
+    "description": "Get all properties for leads",
+    "required": [],
+    "properties": {
+      "archived": {
+        "type": "boolean"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "crm_create_lead_property",
+    "description": "Create a new lead property",
+    "required": [
+      "name",
+      "label",
+      "type",
+      "fieldType",
+      "groupName"
+    ],
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "label": {
+        "type": "string"
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "string",
+          "number",
+          "date",
+          "datetime",
+          "enumeration",
+          "bool"
+        ]
+      },
+      "fieldType": {
+        "type": "string",
+        "enum": [
+          "text",
+          "textarea",
+          "select",
+          "radio",
+          "checkbox",
+          "number",
+          "date",
+          "file"
+        ]
+      },
+      "groupName": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "options": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "displayOrder": {
+              "type": "number"
+            },
+            "hidden": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "label",
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "displayOrder": {
+        "type": "number"
+      },
+      "hasUniqueValue": {
+        "type": "boolean"
+      },
+      "hidden": {
+        "type": "boolean"
+      },
+      "formField": {
+        "type": "boolean"
+      }
+    }
+  },
+  {
+    "name": "meetings_list",
+    "description": "List all meetings with optional filtering",
+    "required": [],
+    "properties": {
+      "after": {
+        "type": "string"
+      },
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "createdAfter": {
+        "type": "string"
+      },
+      "createdBefore": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "meetings_get",
+    "description": "Get details of a specific meeting",
+    "required": [
+      "meetingId"
+    ],
+    "properties": {
+      "meetingId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "contacts",
+            "companies",
+            "deals"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "meetings_create",
+    "description": "Create a new meeting",
+    "required": [
+      "properties"
+    ],
+    "properties": {
+      "properties": {
+        "type": "object",
+        "properties": {
+          "hs_timestamp": {
+            "type": "string"
+          },
+          "hs_meeting_title": {
+            "type": "string"
+          },
+          "hs_meeting_body": {
+            "type": "string"
+          },
+          "hs_meeting_location": {
+            "type": "string"
+          },
+          "hs_meeting_start_time": {
+            "type": "string"
+          },
+          "hs_meeting_end_time": {
+            "type": "string"
+          },
+          "hs_meeting_outcome": {
+            "type": "string",
+            "enum": [
+              "SCHEDULED",
+              "COMPLETED",
+              "CANCELED"
+            ]
+          },
+          "hubspot_owner_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hs_timestamp",
+          "hs_meeting_title",
+          "hs_meeting_start_time",
+          "hs_meeting_end_time"
+        ],
+        "additionalProperties": false
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "associationCategory": {
+                    "type": "string"
+                  },
+                  "associationTypeId": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "associationCategory",
+                  "associationTypeId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "to",
+            "types"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "meetings_update",
+    "description": "Update an existing meeting",
+    "required": [
+      "meetingId",
+      "properties"
+    ],
+    "properties": {
+      "meetingId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "object",
+        "properties": {
+          "hs_meeting_title": {
+            "type": "string"
+          },
+          "hs_meeting_body": {
+            "type": "string"
+          },
+          "hs_meeting_location": {
+            "type": "string"
+          },
+          "hs_meeting_start_time": {
+            "type": "string"
+          },
+          "hs_meeting_end_time": {
+            "type": "string"
+          },
+          "hs_meeting_outcome": {
+            "type": "string",
+            "enum": [
+              "SCHEDULED",
+              "COMPLETED",
+              "CANCELED"
+            ]
+          },
+          "hubspot_owner_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "name": "meetings_archive",
+    "description": "Archive (delete) a meeting",
+    "required": [
+      "meetingId"
+    ],
+    "properties": {
+      "meetingId": {
+        "type": "string"
+      }
+    }
+  },
+  {
+    "name": "meetings_search",
+    "description": "Search meetings with specific filters",
+    "required": [
+      "filterGroups"
+    ],
+    "properties": {
+      "filterGroups": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "filters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "propertyName": {
+                    "type": "string"
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": [
+                      "EQ",
+                      "NEQ",
+                      "LT",
+                      "LTE",
+                      "GT",
+                      "GTE",
+                      "BETWEEN",
+                      "IN",
+                      "NOT_IN",
+                      "HAS_PROPERTY",
+                      "NOT_HAS_PROPERTY",
+                      "CONTAINS_TOKEN",
+                      "NOT_CONTAINS_TOKEN"
+                    ]
+                  },
+                  "value": {}
+                },
+                "required": [
+                  "propertyName",
+                  "operator"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "filters"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "after": {
+        "type": "string"
+      },
+      "sorts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "propertyName": {
+              "type": "string"
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "ASCENDING",
+                "DESCENDING"
+              ]
+            }
+          },
+          "required": [
+            "propertyName",
+            "direction"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "meetings_batch_create",
+    "description": "Create multiple meetings in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "properties": {
+              "type": "object",
+              "properties": {
+                "hs_timestamp": {
+                  "type": "string"
+                },
+                "hs_meeting_title": {
+                  "type": "string"
+                },
+                "hs_meeting_body": {
+                  "type": "string"
+                },
+                "hs_meeting_location": {
+                  "type": "string"
+                },
+                "hs_meeting_start_time": {
+                  "type": "string"
+                },
+                "hs_meeting_end_time": {
+                  "type": "string"
+                },
+                "hs_meeting_outcome": {
+                  "type": "string",
+                  "enum": [
+                    "SCHEDULED",
+                    "COMPLETED",
+                    "CANCELED"
+                  ]
+                },
+                "hubspot_owner_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "hs_timestamp",
+                "hs_meeting_title",
+                "hs_meeting_start_time",
+                "hs_meeting_end_time"
+              ],
+              "additionalProperties": false
+            },
+            "associations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "associationCategory": {
+                          "type": "string"
+                        },
+                        "associationTypeId": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "associationCategory",
+                        "associationTypeId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "to",
+                  "types"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "meetings_batch_update",
+    "description": "Update multiple meetings in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "object",
+              "properties": {
+                "hs_meeting_title": {
+                  "type": "string"
+                },
+                "hs_meeting_body": {
+                  "type": "string"
+                },
+                "hs_meeting_location": {
+                  "type": "string"
+                },
+                "hs_meeting_start_time": {
+                  "type": "string"
+                },
+                "hs_meeting_end_time": {
+                  "type": "string"
+                },
+                "hs_meeting_outcome": {
+                  "type": "string",
+                  "enum": [
+                    "SCHEDULED",
+                    "COMPLETED",
+                    "CANCELED"
+                  ]
+                },
+                "hubspot_owner_id": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "meetings_batch_archive",
+    "description": "Archive (delete) multiple meetings in a single request",
+    "required": [
+      "meetingIds"
+    ],
+    "properties": {
+      "meetingIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "notes_create",
+    "description": "Create a new note",
+    "required": [
+      "properties"
+    ],
+    "properties": {
+      "properties": {
+        "type": "object",
+        "properties": {
+          "hs_note_body": {
+            "type": "string"
+          },
+          "hs_timestamp": {
+            "type": "string"
+          },
+          "hubspot_owner_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hs_note_body",
+          "hs_timestamp"
+        ],
+        "additionalProperties": {}
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "associationCategory": {
+                    "type": "string"
+                  },
+                  "associationTypeId": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "associationCategory",
+                  "associationTypeId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "to",
+            "types"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "notes_get",
+    "description": "Get details of a specific note",
+    "required": [
+      "noteId"
+    ],
+    "properties": {
+      "noteId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "contacts",
+            "companies",
+            "deals",
+            "tickets"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "notes_update",
+    "description": "Update an existing note",
+    "required": [
+      "noteId",
+      "properties"
+    ],
+    "properties": {
+      "noteId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "object",
+        "properties": {
+          "hs_note_body": {
+            "type": "string"
+          },
+          "hs_timestamp": {
+            "type": "string"
+          },
+          "hubspot_owner_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hs_note_body"
+        ],
+        "additionalProperties": {}
+      }
+    }
+  },
+  {
+    "name": "notes_archive",
+    "description": "Archive (delete) a note",
+    "required": [
+      "noteId"
+    ],
+    "properties": {
+      "noteId": {
+        "type": "string"
+      }
+    }
+  },
+  {
+    "name": "notes_list",
+    "description": "List all notes with optional filtering",
+    "required": [],
+    "properties": {
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "after": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "contacts",
+            "companies",
+            "deals",
+            "tickets"
+          ]
+        }
+      },
+      "archived": {
+        "type": "boolean"
+      }
+    }
+  },
+  {
+    "name": "notes_search",
+    "description": "Search notes with specific filters",
+    "required": [
+      "filterGroups"
+    ],
+    "properties": {
+      "filterGroups": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "filters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "propertyName": {
+                    "type": "string"
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": [
+                      "EQ",
+                      "NEQ",
+                      "LT",
+                      "LTE",
+                      "GT",
+                      "GTE",
+                      "BETWEEN",
+                      "IN",
+                      "NOT_IN",
+                      "HAS_PROPERTY",
+                      "NOT_HAS_PROPERTY",
+                      "CONTAINS_TOKEN",
+                      "NOT_CONTAINS_TOKEN"
+                    ]
+                  },
+                  "value": {}
+                },
+                "required": [
+                  "propertyName",
+                  "operator"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "filters"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "after": {
+        "type": "string"
+      },
+      "sorts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "propertyName": {
+              "type": "string"
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "ASCENDING",
+                "DESCENDING"
+              ]
+            }
+          },
+          "required": [
+            "propertyName",
+            "direction"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "notes_batch_create",
+    "description": "Create multiple notes in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "properties": {
+              "type": "object",
+              "properties": {
+                "hs_note_body": {
+                  "type": "string"
+                },
+                "hs_timestamp": {
+                  "type": "string"
+                },
+                "hubspot_owner_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "hs_note_body"
+              ],
+              "additionalProperties": {}
+            },
+            "associations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "associationCategory": {
+                          "type": "string"
+                        },
+                        "associationTypeId": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "associationCategory",
+                        "associationTypeId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "to",
+                  "types"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "notes_batch_read",
+    "description": "Read multiple notes in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "associations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "contacts",
+                  "companies",
+                  "deals",
+                  "tickets"
+                ]
+              }
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "notes_batch_update",
+    "description": "Update multiple notes in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "object",
+              "properties": {
+                "hs_note_body": {
+                  "type": "string"
+                },
+                "hs_timestamp": {
+                  "type": "string"
+                },
+                "hubspot_owner_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "hs_note_body"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "id",
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "notes_batch_archive",
+    "description": "Archive (delete) multiple notes in a single request",
+    "required": [
+      "noteIds"
+    ],
+    "properties": {
+      "noteIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "tasks_create",
+    "description": "Create a new task",
+    "required": [
+      "properties"
+    ],
+    "properties": {
+      "properties": {
+        "type": "object",
+        "properties": {
+          "hs_task_body": {
+            "type": "string"
+          },
+          "hs_task_priority": {
+            "type": "string",
+            "enum": [
+              "HIGH",
+              "MEDIUM",
+              "LOW"
+            ]
+          },
+          "hs_task_status": {
+            "type": "string",
+            "enum": [
+              "NOT_STARTED",
+              "IN_PROGRESS",
+              "WAITING",
+              "COMPLETED",
+              "DEFERRED"
+            ]
+          },
+          "hs_task_subject": {
+            "type": "string"
+          },
+          "hs_task_type": {
+            "type": "string"
+          },
+          "hs_timestamp": {
+            "type": "string"
+          },
+          "hs_task_due_date": {
+            "type": "string"
+          },
+          "hubspot_owner_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hs_task_body",
+          "hs_task_subject",
+          "hs_timestamp"
+        ],
+        "additionalProperties": {}
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "associationCategory": {
+                    "type": "string"
+                  },
+                  "associationTypeId": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "associationCategory",
+                  "associationTypeId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "to",
+            "types"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "tasks_get",
+    "description": "Get details of a specific task",
+    "required": [
+      "taskId"
+    ],
+    "properties": {
+      "taskId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "contacts",
+            "companies",
+            "deals",
+            "tickets"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "tasks_update",
+    "description": "Update an existing task",
+    "required": [
+      "taskId",
+      "properties"
+    ],
+    "properties": {
+      "taskId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "object",
+        "properties": {
+          "hs_task_body": {
+            "type": "string"
+          },
+          "hs_task_priority": {
+            "type": "string",
+            "enum": [
+              "HIGH",
+              "MEDIUM",
+              "LOW"
+            ]
+          },
+          "hs_task_status": {
+            "type": "string",
+            "enum": [
+              "NOT_STARTED",
+              "IN_PROGRESS",
+              "WAITING",
+              "COMPLETED",
+              "DEFERRED"
+            ]
+          },
+          "hs_task_subject": {
+            "type": "string"
+          },
+          "hs_task_type": {
+            "type": "string"
+          },
+          "hs_timestamp": {
+            "type": "string"
+          },
+          "hs_task_due_date": {
+            "type": "string"
+          },
+          "hubspot_owner_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hs_task_body",
+          "hs_task_subject"
+        ],
+        "additionalProperties": {}
+      }
+    }
+  },
+  {
+    "name": "tasks_archive",
+    "description": "Archive (delete) a task",
+    "required": [
+      "taskId"
+    ],
+    "properties": {
+      "taskId": {
+        "type": "string"
+      }
+    }
+  },
+  {
+    "name": "tasks_list",
+    "description": "List all tasks with optional filtering",
+    "required": [],
+    "properties": {
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "after": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "contacts",
+            "companies",
+            "deals",
+            "tickets"
+          ]
+        }
+      },
+      "archived": {
+        "type": "boolean"
+      }
+    }
+  },
+  {
+    "name": "tasks_search",
+    "description": "Search tasks with specific filters",
+    "required": [
+      "filterGroups"
+    ],
+    "properties": {
+      "filterGroups": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "filters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "propertyName": {
+                    "type": "string"
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": [
+                      "EQ",
+                      "NEQ",
+                      "LT",
+                      "LTE",
+                      "GT",
+                      "GTE",
+                      "BETWEEN",
+                      "IN",
+                      "NOT_IN",
+                      "HAS_PROPERTY",
+                      "NOT_HAS_PROPERTY",
+                      "CONTAINS_TOKEN",
+                      "NOT_CONTAINS_TOKEN"
+                    ]
+                  },
+                  "value": {}
+                },
+                "required": [
+                  "propertyName",
+                  "operator"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "filters"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "after": {
+        "type": "string"
+      },
+      "sorts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "propertyName": {
+              "type": "string"
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "ASCENDING",
+                "DESCENDING"
+              ]
+            }
+          },
+          "required": [
+            "propertyName",
+            "direction"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "tasks_batch_create",
+    "description": "Create multiple tasks in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "properties": {
+              "type": "object",
+              "properties": {
+                "hs_task_body": {
+                  "type": "string"
+                },
+                "hs_task_priority": {
+                  "type": "string",
+                  "enum": [
+                    "HIGH",
+                    "MEDIUM",
+                    "LOW"
+                  ]
+                },
+                "hs_task_status": {
+                  "type": "string",
+                  "enum": [
+                    "NOT_STARTED",
+                    "IN_PROGRESS",
+                    "WAITING",
+                    "COMPLETED",
+                    "DEFERRED"
+                  ]
+                },
+                "hs_task_subject": {
+                  "type": "string"
+                },
+                "hs_task_type": {
+                  "type": "string"
+                },
+                "hs_timestamp": {
+                  "type": "string"
+                },
+                "hs_task_due_date": {
+                  "type": "string"
+                },
+                "hubspot_owner_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "hs_task_body",
+                "hs_task_subject"
+              ],
+              "additionalProperties": {}
+            },
+            "associations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "associationCategory": {
+                          "type": "string"
+                        },
+                        "associationTypeId": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "associationCategory",
+                        "associationTypeId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "to",
+                  "types"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "tasks_batch_read",
+    "description": "Read multiple tasks in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "associations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "contacts",
+                  "companies",
+                  "deals",
+                  "tickets"
+                ]
+              }
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "tasks_batch_update",
+    "description": "Update multiple tasks in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "object",
+              "properties": {
+                "hs_task_body": {
+                  "type": "string"
+                },
+                "hs_task_priority": {
+                  "type": "string",
+                  "enum": [
+                    "HIGH",
+                    "MEDIUM",
+                    "LOW"
+                  ]
+                },
+                "hs_task_status": {
+                  "type": "string",
+                  "enum": [
+                    "NOT_STARTED",
+                    "IN_PROGRESS",
+                    "WAITING",
+                    "COMPLETED",
+                    "DEFERRED"
+                  ]
+                },
+                "hs_task_subject": {
+                  "type": "string"
+                },
+                "hs_task_type": {
+                  "type": "string"
+                },
+                "hs_timestamp": {
+                  "type": "string"
+                },
+                "hs_task_due_date": {
+                  "type": "string"
+                },
+                "hubspot_owner_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "hs_task_body",
+                "hs_task_subject"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "id",
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "tasks_batch_archive",
+    "description": "Archive (delete) multiple tasks in a single request",
+    "required": [
+      "taskIds"
+    ],
+    "properties": {
+      "taskIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "engagement_details_get",
+    "description": "Get details of a specific engagement",
+    "required": [
+      "engagementId"
+    ],
+    "properties": {
+      "engagementId": {
+        "type": "string"
+      }
+    }
+  },
+  {
+    "name": "engagement_details_create",
+    "description": "Create a new engagement with details",
+    "required": [
+      "engagement"
+    ],
+    "properties": {
+      "engagement": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "EMAIL",
+              "CALL",
+              "MEETING",
+              "TASK",
+              "NOTE"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string",
+                "format": "email"
+              }
+            },
+            "required": [
+              "id",
+              "email"
+            ],
+            "additionalProperties": false
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "endTime": {
+            "type": "string"
+          },
+          "activityType": {
+            "type": "string"
+          },
+          "loggedAt": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title"
+        ],
+        "additionalProperties": {}
+      },
+      "associations": {
+        "type": "object",
+        "properties": {
+          "contactIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "companyIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dealIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ownerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ticketIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "metadata": {
+        "type": "object",
+        "additionalProperties": {}
+      }
+    }
+  },
+  {
+    "name": "engagement_details_update",
+    "description": "Update an existing engagement's details",
+    "required": [
+      "engagementId",
+      "engagement"
+    ],
+    "properties": {
+      "engagementId": {
+        "type": "string"
+      },
+      "engagement": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "EMAIL",
+              "CALL",
+              "MEETING",
+              "TASK",
+              "NOTE"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string",
+                "format": "email"
+              }
+            },
+            "required": [
+              "id",
+              "email"
+            ],
+            "additionalProperties": false
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "endTime": {
+            "type": "string"
+          },
+          "activityType": {
+            "type": "string"
+          },
+          "loggedAt": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title"
+        ],
+        "additionalProperties": {}
+      },
+      "metadata": {
+        "type": "object",
+        "additionalProperties": {}
+      }
+    }
+  },
+  {
+    "name": "engagement_details_list",
+    "description": "List all engagements with optional filtering",
+    "required": [],
+    "properties": {
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "offset": {
+        "type": "number"
+      },
+      "startTime": {
+        "type": "string"
+      },
+      "endTime": {
+        "type": "string"
+      },
+      "activityTypes": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "engagement_details_archive",
+    "description": "Archive (delete) an engagement",
+    "required": [
+      "engagementId"
+    ],
+    "properties": {
+      "engagementId": {
+        "type": "string"
+      }
+    }
+  },
+  {
+    "name": "engagement_details_get_associated",
+    "description": "Get all engagements associated with an object",
+    "required": [
+      "objectType",
+      "objectId"
+    ],
+    "properties": {
+      "objectType": {
+        "type": "string",
+        "enum": [
+          "CONTACT",
+          "COMPANY",
+          "DEAL",
+          "TICKET"
+        ]
+      },
+      "objectId": {
+        "type": "string"
+      },
+      "startTime": {
+        "type": "string"
+      },
+      "endTime": {
+        "type": "string"
+      },
+      "activityTypes": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "offset": {
+        "type": "number"
+      }
+    }
+  },
+  {
+    "name": "calls_create",
+    "description": "Create a new call record",
+    "required": [
+      "properties"
+    ],
+    "properties": {
+      "properties": {
+        "type": "object",
+        "properties": {
+          "hs_call_body": {
+            "type": "string"
+          },
+          "hs_call_direction": {
+            "type": "string",
+            "enum": [
+              "INBOUND",
+              "OUTBOUND"
+            ]
+          },
+          "hs_call_disposition": {
+            "type": "string"
+          },
+          "hs_call_duration": {
+            "type": "number"
+          },
+          "hs_call_recording_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "hs_call_status": {
+            "type": "string",
+            "enum": [
+              "SCHEDULED",
+              "COMPLETED",
+              "CANCELED",
+              "NO_ANSWER"
+            ]
+          },
+          "hs_call_title": {
+            "type": "string"
+          },
+          "hs_timestamp": {
+            "type": "string"
+          },
+          "hubspot_owner_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hs_call_body",
+          "hs_call_title"
+        ],
+        "additionalProperties": {}
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "associationCategory": {
+                    "type": "string"
+                  },
+                  "associationTypeId": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "associationCategory",
+                  "associationTypeId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "to",
+            "types"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "calls_get",
+    "description": "Get details of a specific call",
+    "required": [
+      "callId"
+    ],
+    "properties": {
+      "callId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "contacts",
+            "companies",
+            "deals",
+            "tickets"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "calls_update",
+    "description": "Update an existing call record",
+    "required": [
+      "callId",
+      "properties"
+    ],
+    "properties": {
+      "callId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "object",
+        "properties": {
+          "hs_call_body": {
+            "type": "string"
+          },
+          "hs_call_direction": {
+            "type": "string",
+            "enum": [
+              "INBOUND",
+              "OUTBOUND"
+            ]
+          },
+          "hs_call_disposition": {
+            "type": "string"
+          },
+          "hs_call_duration": {
+            "type": "number"
+          },
+          "hs_call_recording_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "hs_call_status": {
+            "type": "string",
+            "enum": [
+              "SCHEDULED",
+              "COMPLETED",
+              "CANCELED",
+              "NO_ANSWER"
+            ]
+          },
+          "hs_call_title": {
+            "type": "string"
+          },
+          "hs_timestamp": {
+            "type": "string"
+          },
+          "hubspot_owner_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hs_call_body",
+          "hs_call_title"
+        ],
+        "additionalProperties": {}
+      }
+    }
+  },
+  {
+    "name": "calls_archive",
+    "description": "Archive (delete) a call record",
+    "required": [
+      "callId"
+    ],
+    "properties": {
+      "callId": {
+        "type": "string"
+      }
+    }
+  },
+  {
+    "name": "calls_list",
+    "description": "List all calls with optional filtering",
+    "required": [],
+    "properties": {
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "after": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "contacts",
+            "companies",
+            "deals",
+            "tickets"
+          ]
+        }
+      },
+      "archived": {
+        "type": "boolean"
+      }
+    }
+  },
+  {
+    "name": "calls_search",
+    "description": "Search calls with specific filters",
+    "required": [
+      "filterGroups"
+    ],
+    "properties": {
+      "filterGroups": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "filters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "propertyName": {
+                    "type": "string"
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": [
+                      "EQ",
+                      "NEQ",
+                      "LT",
+                      "LTE",
+                      "GT",
+                      "GTE",
+                      "BETWEEN",
+                      "IN",
+                      "NOT_IN",
+                      "HAS_PROPERTY",
+                      "NOT_HAS_PROPERTY",
+                      "CONTAINS_TOKEN",
+                      "NOT_CONTAINS_TOKEN"
+                    ]
+                  },
+                  "value": {}
+                },
+                "required": [
+                  "propertyName",
+                  "operator"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "filters"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "after": {
+        "type": "string"
+      },
+      "sorts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "propertyName": {
+              "type": "string"
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "ASCENDING",
+                "DESCENDING"
+              ]
+            }
+          },
+          "required": [
+            "propertyName",
+            "direction"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "calls_batch_create",
+    "description": "Create multiple call records in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "properties": {
+              "type": "object",
+              "properties": {
+                "hs_call_body": {
+                  "type": "string"
+                },
+                "hs_call_direction": {
+                  "type": "string",
+                  "enum": [
+                    "INBOUND",
+                    "OUTBOUND"
+                  ]
+                },
+                "hs_call_disposition": {
+                  "type": "string"
+                },
+                "hs_call_duration": {
+                  "type": "number"
+                },
+                "hs_call_recording_url": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "hs_call_status": {
+                  "type": "string",
+                  "enum": [
+                    "SCHEDULED",
+                    "COMPLETED",
+                    "CANCELED",
+                    "NO_ANSWER"
+                  ]
+                },
+                "hs_call_title": {
+                  "type": "string"
+                },
+                "hs_timestamp": {
+                  "type": "string"
+                },
+                "hubspot_owner_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "hs_call_body",
+                "hs_call_title"
+              ],
+              "additionalProperties": {}
+            },
+            "associations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "associationCategory": {
+                          "type": "string"
+                        },
+                        "associationTypeId": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "associationCategory",
+                        "associationTypeId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "to",
+                  "types"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "calls_batch_read",
+    "description": "Read multiple call records in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "associations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "contacts",
+                  "companies",
+                  "deals",
+                  "tickets"
+                ]
+              }
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "calls_batch_update",
+    "description": "Update multiple call records in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "object",
+              "properties": {
+                "hs_call_body": {
+                  "type": "string"
+                },
+                "hs_call_direction": {
+                  "type": "string",
+                  "enum": [
+                    "INBOUND",
+                    "OUTBOUND"
+                  ]
+                },
+                "hs_call_disposition": {
+                  "type": "string"
+                },
+                "hs_call_duration": {
+                  "type": "number"
+                },
+                "hs_call_recording_url": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "hs_call_status": {
+                  "type": "string",
+                  "enum": [
+                    "SCHEDULED",
+                    "COMPLETED",
+                    "CANCELED",
+                    "NO_ANSWER"
+                  ]
+                },
+                "hs_call_title": {
+                  "type": "string"
+                },
+                "hs_timestamp": {
+                  "type": "string"
+                },
+                "hubspot_owner_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "hs_call_body",
+                "hs_call_title"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "id",
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "calls_batch_archive",
+    "description": "Archive (delete) multiple call records in a single request",
+    "required": [
+      "callIds"
+    ],
+    "properties": {
+      "callIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "emails_create",
+    "description": "Create a new email record",
+    "required": [
+      "properties"
+    ],
+    "properties": {
+      "properties": {
+        "type": "object",
+        "properties": {
+          "hs_email_subject": {
+            "type": "string"
+          },
+          "hs_email_text": {
+            "type": "string"
+          },
+          "hs_email_html": {
+            "type": "string"
+          },
+          "hs_email_status": {
+            "type": "string",
+            "enum": [
+              "SENT",
+              "DRAFT",
+              "SCHEDULED"
+            ]
+          },
+          "hs_email_direction": {
+            "type": "string",
+            "enum": [
+              "INBOUND",
+              "OUTBOUND"
+            ]
+          },
+          "hs_timestamp": {
+            "type": "string"
+          },
+          "hs_email_headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "hs_email_from_email": {
+            "type": "string",
+            "format": "email"
+          },
+          "hs_email_from_firstname": {
+            "type": "string"
+          },
+          "hs_email_from_lastname": {
+            "type": "string"
+          },
+          "hs_email_to_email": {
+            "type": "string",
+            "format": "email"
+          },
+          "hs_email_to_firstname": {
+            "type": "string"
+          },
+          "hs_email_to_lastname": {
+            "type": "string"
+          },
+          "hs_email_cc": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "email"
+            }
+          },
+          "hs_email_bcc": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "email"
+            }
+          },
+          "hubspot_owner_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hs_email_subject",
+          "hs_email_text",
+          "hs_email_from_email",
+          "hs_email_to_email"
+        ],
+        "additionalProperties": {}
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "associationCategory": {
+                    "type": "string"
+                  },
+                  "associationTypeId": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "associationCategory",
+                  "associationTypeId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "to",
+            "types"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "emails_get",
+    "description": "Get details of a specific email",
+    "required": [
+      "emailId"
+    ],
+    "properties": {
+      "emailId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "contacts",
+            "companies",
+            "deals",
+            "tickets"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "emails_update",
+    "description": "Update an existing email record",
+    "required": [
+      "emailId",
+      "properties"
+    ],
+    "properties": {
+      "emailId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "object",
+        "properties": {
+          "hs_email_subject": {
+            "type": "string"
+          },
+          "hs_email_text": {
+            "type": "string"
+          },
+          "hs_email_html": {
+            "type": "string"
+          },
+          "hs_email_status": {
+            "type": "string",
+            "enum": [
+              "SENT",
+              "DRAFT",
+              "SCHEDULED"
+            ]
+          },
+          "hs_email_direction": {
+            "type": "string",
+            "enum": [
+              "INBOUND",
+              "OUTBOUND"
+            ]
+          },
+          "hs_timestamp": {
+            "type": "string"
+          },
+          "hs_email_headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "hs_email_from_email": {
+            "type": "string",
+            "format": "email"
+          },
+          "hs_email_from_firstname": {
+            "type": "string"
+          },
+          "hs_email_from_lastname": {
+            "type": "string"
+          },
+          "hs_email_to_email": {
+            "type": "string",
+            "format": "email"
+          },
+          "hs_email_to_firstname": {
+            "type": "string"
+          },
+          "hs_email_to_lastname": {
+            "type": "string"
+          },
+          "hs_email_cc": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "email"
+            }
+          },
+          "hs_email_bcc": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "email"
+            }
+          },
+          "hubspot_owner_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hs_email_subject",
+          "hs_email_text",
+          "hs_email_from_email",
+          "hs_email_to_email"
+        ],
+        "additionalProperties": {}
+      }
+    }
+  },
+  {
+    "name": "emails_archive",
+    "description": "Archive (delete) an email record",
+    "required": [
+      "emailId"
+    ],
+    "properties": {
+      "emailId": {
+        "type": "string"
+      }
+    }
+  },
+  {
+    "name": "emails_list",
+    "description": "List all emails with optional filtering",
+    "required": [],
+    "properties": {
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "after": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "contacts",
+            "companies",
+            "deals",
+            "tickets"
+          ]
+        }
+      },
+      "archived": {
+        "type": "boolean"
+      }
+    }
+  },
+  {
+    "name": "emails_search",
+    "description": "Search emails with specific filters",
+    "required": [
+      "filterGroups"
+    ],
+    "properties": {
+      "filterGroups": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "filters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "propertyName": {
+                    "type": "string"
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": [
+                      "EQ",
+                      "NEQ",
+                      "LT",
+                      "LTE",
+                      "GT",
+                      "GTE",
+                      "BETWEEN",
+                      "IN",
+                      "NOT_IN",
+                      "HAS_PROPERTY",
+                      "NOT_HAS_PROPERTY",
+                      "CONTAINS_TOKEN",
+                      "NOT_CONTAINS_TOKEN"
+                    ]
+                  },
+                  "value": {}
+                },
+                "required": [
+                  "propertyName",
+                  "operator"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "filters"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "limit": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "after": {
+        "type": "string"
+      },
+      "sorts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "propertyName": {
+              "type": "string"
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "ASCENDING",
+                "DESCENDING"
+              ]
+            }
+          },
+          "required": [
+            "propertyName",
+            "direction"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "emails_batch_create",
+    "description": "Create multiple email records in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "properties": {
+              "type": "object",
+              "properties": {
+                "hs_email_subject": {
+                  "type": "string"
+                },
+                "hs_email_text": {
+                  "type": "string"
+                },
+                "hs_email_html": {
+                  "type": "string"
+                },
+                "hs_email_status": {
+                  "type": "string",
+                  "enum": [
+                    "SENT",
+                    "DRAFT",
+                    "SCHEDULED"
+                  ]
+                },
+                "hs_email_direction": {
+                  "type": "string",
+                  "enum": [
+                    "INBOUND",
+                    "OUTBOUND"
+                  ]
+                },
+                "hs_timestamp": {
+                  "type": "string"
+                },
+                "hs_email_headers": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "hs_email_from_email": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "hs_email_from_firstname": {
+                  "type": "string"
+                },
+                "hs_email_from_lastname": {
+                  "type": "string"
+                },
+                "hs_email_to_email": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "hs_email_to_firstname": {
+                  "type": "string"
+                },
+                "hs_email_to_lastname": {
+                  "type": "string"
+                },
+                "hs_email_cc": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                },
+                "hs_email_bcc": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                },
+                "hubspot_owner_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "hs_email_subject",
+                "hs_email_text",
+                "hs_email_from_email",
+                "hs_email_to_email"
+              ],
+              "additionalProperties": {}
+            },
+            "associations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "associationCategory": {
+                          "type": "string"
+                        },
+                        "associationTypeId": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "associationCategory",
+                        "associationTypeId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "to",
+                  "types"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "emails_batch_read",
+    "description": "Read multiple email records in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "associations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "contacts",
+                  "companies",
+                  "deals",
+                  "tickets"
+                ]
+              }
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "emails_batch_update",
+    "description": "Update multiple email records in a single request",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "object",
+              "properties": {
+                "hs_email_subject": {
+                  "type": "string"
+                },
+                "hs_email_text": {
+                  "type": "string"
+                },
+                "hs_email_html": {
+                  "type": "string"
+                },
+                "hs_email_status": {
+                  "type": "string",
+                  "enum": [
+                    "SENT",
+                    "DRAFT",
+                    "SCHEDULED"
+                  ]
+                },
+                "hs_email_direction": {
+                  "type": "string",
+                  "enum": [
+                    "INBOUND",
+                    "OUTBOUND"
+                  ]
+                },
+                "hs_timestamp": {
+                  "type": "string"
+                },
+                "hs_email_headers": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "hs_email_from_email": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "hs_email_from_firstname": {
+                  "type": "string"
+                },
+                "hs_email_from_lastname": {
+                  "type": "string"
+                },
+                "hs_email_to_email": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "hs_email_to_firstname": {
+                  "type": "string"
+                },
+                "hs_email_to_lastname": {
+                  "type": "string"
+                },
+                "hs_email_cc": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                },
+                "hs_email_bcc": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                },
+                "hubspot_owner_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "hs_email_subject",
+                "hs_email_text",
+                "hs_email_from_email",
+                "hs_email_to_email"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "id",
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "emails_batch_archive",
+    "description": "Archive (delete) multiple email records in a single request",
+    "required": [
+      "emailIds"
+    ],
+    "properties": {
+      "emailIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "communications_get_preferences",
+    "description": "Get communication preferences for a contact",
+    "required": [
+      "contactId"
+    ],
+    "properties": {
+      "contactId": {
+        "type": "string"
+      },
+      "subscriptionId": {
+        "type": "string"
+      }
+    }
+  },
+  {
+    "name": "communications_update_preferences",
+    "description": "Update communication preferences for a contact",
+    "required": [
+      "contactId",
+      "subscriptionId",
+      "preferences"
+    ],
+    "properties": {
+      "contactId": {
+        "type": "string"
+      },
+      "subscriptionId": {
+        "type": "string"
+      },
+      "preferences": {
+        "type": "object",
+        "properties": {
+          "subscriptionId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "SUBSCRIBED",
+              "UNSUBSCRIBED",
+              "NOT_OPTED"
+            ]
+          },
+          "legalBasis": {
+            "type": "string",
+            "enum": [
+              "LEGITIMATE_INTEREST_CLIENT",
+              "LEGITIMATE_INTEREST_PUB",
+              "PERFORMANCE_OF_CONTRACT",
+              "CONSENT_WITH_NOTICE",
+              "CONSENT_WITH_NOTICE_AND_OPT_OUT"
+            ]
+          },
+          "legalBasisExplanation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "subscriptionId",
+          "status"
+        ],
+        "additionalProperties": {}
+      }
+    }
+  },
+  {
+    "name": "communications_unsubscribe_contact",
+    "description": "Unsubscribe a contact from all email communications",
+    "required": [
+      "contactId"
+    ],
+    "properties": {
+      "contactId": {
+        "type": "string"
+      },
+      "portalSubscriptionLegalBasis": {
+        "type": "string",
+        "enum": [
+          "LEGITIMATE_INTEREST_CLIENT",
+          "LEGITIMATE_INTEREST_PUB",
+          "PERFORMANCE_OF_CONTRACT",
+          "CONSENT_WITH_NOTICE",
+          "CONSENT_WITH_NOTICE_AND_OPT_OUT"
+        ]
+      },
+      "portalSubscriptionLegalBasisExplanation": {
+        "type": "string"
+      }
+    }
+  },
+  {
+    "name": "communications_subscribe_contact",
+    "description": "Subscribe a contact to all email communications",
+    "required": [
+      "contactId"
+    ],
+    "properties": {
+      "contactId": {
+        "type": "string"
+      },
+      "portalSubscriptionLegalBasis": {
+        "type": "string",
+        "enum": [
+          "LEGITIMATE_INTEREST_CLIENT",
+          "LEGITIMATE_INTEREST_PUB",
+          "PERFORMANCE_OF_CONTRACT",
+          "CONSENT_WITH_NOTICE",
+          "CONSENT_WITH_NOTICE_AND_OPT_OUT"
+        ]
+      },
+      "portalSubscriptionLegalBasisExplanation": {
+        "type": "string"
+      }
+    }
+  },
+  {
+    "name": "communications_get_subscription_definitions",
+    "description": "Get all subscription definitions for the portal",
+    "required": [],
+    "properties": {
+      "archived": {
+        "type": "boolean"
+      }
+    }
+  },
+  {
+    "name": "communications_get_subscription_status",
+    "description": "Get subscription status for multiple contacts",
+    "required": [
+      "subscriptionId",
+      "contactIds"
+    ],
+    "properties": {
+      "subscriptionId": {
+        "type": "string"
+      },
+      "contactIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "communications_update_subscription_status",
+    "description": "Update subscription status for multiple contacts",
+    "required": [
+      "subscriptionId",
+      "updates"
+    ],
+    "properties": {
+      "subscriptionId": {
+        "type": "string"
+      },
+      "updates": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "contactId": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "SUBSCRIBED",
+                "UNSUBSCRIBED",
+                "NOT_OPTED"
+              ]
+            },
+            "legalBasis": {
+              "type": "string",
+              "enum": [
+                "LEGITIMATE_INTEREST_CLIENT",
+                "LEGITIMATE_INTEREST_PUB",
+                "PERFORMANCE_OF_CONTRACT",
+                "CONSENT_WITH_NOTICE",
+                "CONSENT_WITH_NOTICE_AND_OPT_OUT"
+              ]
+            },
+            "legalBasisExplanation": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "contactId",
+            "status"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "products_list",
+    "description": "Read a page of products. Control what is returned via the `properties` query param. `after` is the paging cursor token of the last successfully read resource will be returned as the `paging.next.after` JSON property of a paged response containing more results.",
+    "required": [],
+    "properties": {
+      "limit": {
+        "type": "number",
+        "minimum": 1
+      },
+      "after": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "products_read",
+    "description": "Read an Object identified by ID",
+    "required": [
+      "productId"
+    ],
+    "properties": {
+      "productId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "associations": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "products_create",
+    "description": "Create a product with the given properties and return a copy of the object, including the ID.",
+    "required": [
+      "properties"
+    ],
+    "properties": {
+      "properties": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "hs_product_type": {
+            "type": "string"
+          },
+          "hs_recurring_billing_period": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": {}
+      }
+    }
+  },
+  {
+    "name": "products_update",
+    "description": "Perform a partial update of an Object identified by ID. Read-only and non-existent properties will result in an error. Properties values can be cleared by passing an empty string.",
+    "required": [
+      "productId",
+      "properties"
+    ],
+    "properties": {
+      "productId": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "hs_product_type": {
+            "type": "string"
+          },
+          "hs_recurring_billing_period": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": {}
+      }
+    }
+  },
+  {
+    "name": "products_archive",
+    "description": "Move an Object identified by ID to the recycling bin.",
+    "required": [
+      "productId"
+    ],
+    "properties": {
+      "productId": {
+        "type": "string"
+      }
+    }
+  },
+  {
+    "name": "products_search",
+    "description": "Search products",
+    "required": [
+      "filterGroups"
+    ],
+    "properties": {
+      "query": {
+        "type": "string"
+      },
+      "limit": {
+        "type": "number",
+        "minimum": 1
+      },
+      "after": {
+        "type": "string"
+      },
+      "sorts": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "filterGroups": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "filters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "propertyName": {
+                    "type": "string"
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": [
+                      "EQ",
+                      "NEQ",
+                      "LT",
+                      "LTE",
+                      "GT",
+                      "GTE",
+                      "BETWEEN",
+                      "IN",
+                      "NOT_IN",
+                      "HAS_PROPERTY",
+                      "NOT_HAS_PROPERTY",
+                      "CONTAINS_TOKEN",
+                      "NOT_CONTAINS_TOKEN"
+                    ]
+                  },
+                  "value": {},
+                  "values": {
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "propertyName",
+                  "operator"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "filters"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "products_batch_archive",
+    "description": "Archive (delete) a batch of products by ID",
+    "required": [
+      "productIds"
+    ],
+    "properties": {
+      "productIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "products_batch_create",
+    "description": "Create a batch of products",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "properties": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "price": {
+                  "type": "number"
+                },
+                "sku": {
+                  "type": "string"
+                },
+                "hs_product_type": {
+                  "type": "string"
+                },
+                "hs_recurring_billing_period": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "products_batch_read",
+    "description": "Read a batch of products by internal ID, or unique property values. Retrieve records by the `idProperty` parameter to retrieve records by a custom unique value property.",
+    "required": [
+      "propertiesWithHistory",
+      "productIds",
+      "properties"
+    ],
+    "properties": {
+      "propertiesWithHistory": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "idProperty": {
+        "type": "string"
+      },
+      "productIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "products_batch_update",
+    "description": "Update a batch of products by internal ID, or unique values specified by the `idProperty` query param.",
+    "required": [
+      "inputs"
+    ],
+    "properties": {
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "idProperty": {
+              "type": "string"
+            },
+            "objectWriteTraceId": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "price": {
+                  "type": "number"
+                },
+                "sku": {
+                  "type": "string"
+                },
+                "hs_product_type": {
+                  "type": "string"
+                },
+                "hs_recurring_billing_period": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "id",
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  }
+]
