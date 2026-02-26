@@ -37,3 +37,14 @@ class NoMatchingRouteError(Exception):
         if routes_info:
             message += f"\n{routes_info}"
         super().__init__(message)
+
+
+class CategorizationError(Exception):
+    """Raised when categorization fails due to invalid LLM response."""
+
+    def __init__(self, detail: str, llm_output: dict):
+        self.detail = detail
+        self.llm_output = llm_output
+        message = f"Categorization failed: {detail}"
+        message += f"\nLLM output was: {llm_output}"
+        super().__init__(message)
