@@ -15,6 +15,11 @@ class KPISResponse(BaseModel):
     kpis: List[KPI]
 
 
+class CostKPI(BaseModel):
+    cost_per_call: Union[int, float]
+    cost_per_conversation: Union[int, float]
+
+
 class TraceKPIS(BaseModel):
     tokens_count: Union[int, float]
     token_comparison_percentage: Optional[float] = None
