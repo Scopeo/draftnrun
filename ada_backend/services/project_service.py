@@ -14,6 +14,7 @@ from ada_backend.repositories.graph_runner_repository import (
 )
 from ada_backend.repositories.project_repository import (
     delete_project,
+    get_project,
     get_project_with_details,
     get_projects_by_organization_with_details,
     get_workflows_by_organization,
@@ -38,6 +39,13 @@ from ada_backend.services.graph.deploy_graph_service import clone_graph_runner
 from ada_backend.services.tag_service import compose_tag_name
 
 LOGGER = getLogger(__name__)
+
+
+def get_project_by_id(session: Session, project_id: UUID):
+    project = get_project(session, project_id=project_id)
+    if not project:
+        raise ProjectNotFound(project_id)
+    return project
 
 
 def get_project_service(session: Session, project_id: UUID) -> ProjectWithGraphRunnersSchema:

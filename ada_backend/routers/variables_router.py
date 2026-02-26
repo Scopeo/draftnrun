@@ -18,6 +18,7 @@ from ada_backend.routers.auth_router import (
     UserRights,
     user_has_access_to_organization_xor_verify_api_key,
 )
+from ada_backend.schemas.auth_schema import AuthenticatedEntity
 from ada_backend.schemas.variable_schemas import (
     VariableDefinitionResponse,
     VariableDefinitionUpsertRequest,
@@ -54,7 +55,7 @@ org_router = APIRouter(prefix="/org", tags=["Variables"])
 def list_org_variable_definitions(
     organization_id: UUID,
     auth: Annotated[
-        tuple[UUID | None, UUID | None],
+        AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
@@ -77,7 +78,7 @@ def upsert_org_variable_definition(
     name: str,
     body: VariableDefinitionUpsertRequest,
     auth: Annotated[
-        tuple[UUID | None, UUID | None],
+        AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.ADMIN.value)),
     ],
     session: Session = Depends(get_db),
@@ -106,7 +107,7 @@ def delete_org_variable_definition(
     organization_id: UUID,
     name: str,
     auth: Annotated[
-        tuple[UUID | None, UUID | None],
+        AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.ADMIN.value)),
     ],
     session: Session = Depends(get_db),
@@ -129,7 +130,7 @@ def delete_org_variable_definition(
 def list_org_variable_sets(
     organization_id: UUID,
     auth: Annotated[
-        tuple[UUID | None, UUID | None],
+        AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
@@ -150,7 +151,7 @@ def get_org_variable_set(
     organization_id: UUID,
     set_id: str,
     auth: Annotated[
-        tuple[UUID | None, UUID | None],
+        AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
@@ -174,7 +175,7 @@ def upsert_org_variable_set(
     set_id: str,
     body: VariableSetUpsertRequest,
     auth: Annotated[
-        tuple[UUID | None, UUID | None],
+        AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.ADMIN.value)),
     ],
     session: Session = Depends(get_db),
@@ -197,7 +198,7 @@ def delete_org_variable_set(
     organization_id: UUID,
     set_id: str,
     auth: Annotated[
-        tuple[UUID | None, UUID | None],
+        AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.ADMIN.value)),
     ],
     session: Session = Depends(get_db),

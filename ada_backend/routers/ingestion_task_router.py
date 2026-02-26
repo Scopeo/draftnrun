@@ -12,7 +12,7 @@ from ada_backend.routers.auth_router import (
     user_has_access_to_organization_xor_verify_api_key,
     verify_ingestion_api_key_dependency,
 )
-from ada_backend.schemas.auth_schema import SupabaseUser
+from ada_backend.schemas.auth_schema import AuthenticatedEntity, SupabaseUser
 from ada_backend.schemas.ingestion_task_schema import (
     IngestionTaskQueue,
     IngestionTaskResponse,
@@ -57,8 +57,8 @@ def get_organization_sources(
 def create_ingestion_task(
     organization_id: UUID,
     ingestion_task_data: IngestionTaskQueue,
-    auth_ids: Annotated[
-        tuple[UUID | None, UUID | None],
+    auth: Annotated[
+        AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
@@ -66,21 +66,20 @@ def create_ingestion_task(
     """
     Create ingestion task with flexible authentication.
     """
-    user_id, api_key_id = auth_ids
     try:
-        if user_id:
+        if auth.user_id:
             task_id = create_ingestion_task_by_organization(
                 session,
                 organization_id=organization_id,
                 ingestion_task_data=ingestion_task_data,
-                user_id=user_id,
+                user_id=auth.user_id,
             )
         else:
             task_id = create_ingestion_task_by_organization(
                 session,
                 organization_id=organization_id,
                 ingestion_task_data=ingestion_task_data,
-                api_key_id=api_key_id,
+                api_key_id=auth.api_key_id,
             )
         return task_id
     except Exception as e:

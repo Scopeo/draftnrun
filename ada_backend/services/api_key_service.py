@@ -20,6 +20,8 @@ from ada_backend.schemas.auth_schema import (
     ApiKeyGetResponse,
     VerifiedApiKey,
 )
+from ada_backend.services.errors import ApiKeyAccessDenied, InvalidApiKey
+from ada_backend.services.project_service import get_project_by_id
 from settings import settings
 
 API_KEY_PREFIX = "taylor_"
@@ -157,3 +159,19 @@ def verify_ingestion_api_key(
     except ValueError as e:
         raise ValueError("Invalid API key") from e
     return hashed_key
+
+
+def verify_project_access(
+    session: Session,
+    verified_api_key: VerifiedApiKey,
+    project_id: UUID,
+) -> None:
+    if verified_api_key.project_id:
+        if verified_api_key.project_id != project_id:
+            raise ApiKeyAccessDenied("project")
+    elif verified_api_key.organization_id:
+        project = get_project_by_id(session, project_id)
+        if project.organization_id != verified_api_key.organization_id:
+            raise ApiKeyAccessDenied("organization")
+    else:
+        raise InvalidApiKey()

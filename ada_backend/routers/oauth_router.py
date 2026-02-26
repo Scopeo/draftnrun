@@ -15,9 +15,9 @@ from sqlalchemy.orm import Session
 from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import (
     UserRights,
-    user_has_access_to_organization_dependency,
+    user_has_access_to_organization_xor_verify_api_key,
 )
-from ada_backend.schemas.auth_schema import SupabaseUser
+from ada_backend.schemas.auth_schema import AuthenticatedEntity
 from ada_backend.schemas.oauth_schemas import (
     CreateOAuthConnectionRequest,
     OAuthConnectionListItem,
@@ -52,9 +52,9 @@ async def oauth_health() -> dict:
 )
 async def list_oauth_connections(
     organization_id: UUID,
-    user: Annotated[
-        SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
     provider_config_key: Annotated[OAuthProvider | None, Query()] = None,
@@ -75,9 +75,9 @@ async def list_oauth_connections(
 async def start_oauth_authorization(
     organization_id: UUID,
     request: CreateOAuthConnectionRequest,
-    user: Annotated[
-        SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
 ) -> OAuthURLResponse:
     """
@@ -114,9 +114,9 @@ async def start_oauth_authorization(
 async def create_oauth_connection(
     organization_id: UUID,
     request: CreateOAuthConnectionRequest,
-    user: Annotated[
-        SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> OAuthConnectionResponse:
@@ -137,7 +137,7 @@ async def create_oauth_connection(
             organization_id=organization_id,
             pending_connection_id=request.pending_connection_id,
             provider_config_key=request.provider_config_key.value,
-            created_by_user_id=user.id,
+            created_by_user_id=auth.user_id,
             name=request.name,
         )
 
@@ -165,9 +165,9 @@ async def get_oauth_connection_status(
     organization_id: UUID,
     provider_config_key: OAuthProvider,
     connection_id: Annotated[UUID, Query(description="OAuth connection ID to check")],
-    user: Annotated[
-        SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> OAuthConnectionStatusResponse:
@@ -196,9 +196,9 @@ async def update_oauth_connection_name(
     organization_id: UUID,
     connection_id: UUID,
     data: UpdateOAuthConnectionRequest,
-    user: Annotated[
-        SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> OAuthConnectionResponse:
@@ -229,9 +229,9 @@ async def delete_oauth_connection(
     organization_id: UUID,
     connection_id: UUID,
     provider_config_key: OAuthProvider,
-    user: Annotated[
-        SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> dict:

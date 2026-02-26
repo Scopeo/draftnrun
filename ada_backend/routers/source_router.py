@@ -12,7 +12,7 @@ from ada_backend.routers.auth_router import (
     user_has_access_to_organization_xor_verify_api_key,
     verify_ingestion_api_key_dependency,
 )
-from ada_backend.schemas.auth_schema import SupabaseUser
+from ada_backend.schemas.auth_schema import AuthenticatedEntity, SupabaseUser
 from ada_backend.schemas.source_schema import (
     DataSourceSchema,
     DataSourceSchemaResponse,
@@ -76,8 +76,8 @@ def create_organization_source(
 def update_organization_source(
     organization_id: UUID,
     source_id: UUID,
-    auth_ids: Annotated[
-        tuple[UUID | None, UUID | None],
+    auth: Annotated[
+        AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
@@ -85,12 +85,11 @@ def update_organization_source(
     """
     Update organization source with flexible authentication.
     """
-    user_id, api_key_id = auth_ids
     try:
-        if user_id:
-            return update_source_by_source_id(session, organization_id, source_id, user_id=user_id)
+        if auth.user_id:
+            return update_source_by_source_id(session, organization_id, source_id, user_id=auth.user_id)
         else:
-            return update_source_by_source_id(session, organization_id, source_id, api_key_id=api_key_id)
+            return update_source_by_source_id(session, organization_id, source_id, api_key_id=auth.api_key_id)
     except Exception as e:
         LOGGER.exception(
             "Failed to update source %s for organization %s",
@@ -109,8 +108,8 @@ def update_organization_source(
 def update_organization_source_api_key(
     organization_id: UUID,
     source_id: UUID,
-    auth_ids: Annotated[
-        tuple[UUID | None, UUID | None],
+    auth: Annotated[
+        AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
@@ -118,12 +117,11 @@ def update_organization_source_api_key(
     """
     Update organization source with flexible authentication.
     """
-    user_id, api_key_id = auth_ids
     try:
-        if user_id:
-            return update_source_by_source_id(session, organization_id, source_id, user_id=user_id)
+        if auth.user_id:
+            return update_source_by_source_id(session, organization_id, source_id, user_id=auth.user_id)
         else:
-            return update_source_by_source_id(session, organization_id, source_id, api_key_id=api_key_id)
+            return update_source_by_source_id(session, organization_id, source_id, api_key_id=auth.api_key_id)
     except Exception as e:
         LOGGER.exception(
             "Failed to update source %s for organization %s",

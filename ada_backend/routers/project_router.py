@@ -16,7 +16,7 @@ from ada_backend.routers.auth_router import (
     user_has_access_to_project_dependency,
     verify_api_key_dependency,
 )
-from ada_backend.schemas.auth_schema import SupabaseUser
+from ada_backend.schemas.auth_schema import AuthenticatedEntity, SupabaseUser
 from ada_backend.schemas.chart_schema import ChartsResponse
 from ada_backend.schemas.monitor_schema import KPISResponse
 from ada_backend.schemas.project_schema import (
@@ -28,9 +28,12 @@ from ada_backend.schemas.project_schema import (
     ProjectWithGraphRunnersSchema,
 )
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent
+from ada_backend.services.api_key_service import verify_project_access
 from ada_backend.services.charts_service import get_charts_by_projects
 from ada_backend.services.errors import (
+    ApiKeyAccessDenied,
     EnvironmentNotFound,
+    InvalidApiKey,
     MissingDataSourceError,
     MissingIntegrationError,
     OrganizationLimitExceededError,
@@ -60,7 +63,7 @@ router = APIRouter(prefix="/projects")
 def get_projects_by_organization_endpoint(
     organization_id: UUID,
     auth: Annotated[
-        tuple[UUID | None, UUID | None],
+        AuthenticatedEntity,
         Depends(
             user_has_access_to_organization_xor_verify_api_key(
                 allowed_roles=UserRights.MEMBER.value,
@@ -71,20 +74,19 @@ def get_projects_by_organization_endpoint(
     type: Optional[ProjectType] = ProjectType.WORKFLOW,
     include_templates: Optional[bool] = False,
 ):
-    user_id, _ = auth
     try:
         return get_projects_by_organization_with_details_service(
-            session, organization_id, user_id, type, include_templates
+            session, organization_id, auth.user_id, type, include_templates
         )
     except ValueError as e:
         LOGGER.error(
-            f"Failed to list workflows for organization {organization_id} user_id={user_id}: {str(e)}",
+            f"Failed to list workflows for organization {organization_id} user_id={auth.user_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
         LOGGER.error(
-            f"Failed to list workflows for organization {organization_id} user_id={user_id}: {str(e)}",
+            f"Failed to list workflows for organization {organization_id} user_id={auth.user_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -203,9 +205,6 @@ async def run_env_agent_endpoint(
     sqlaclhemy_db_session: Session = Depends(get_db),
     verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
 ) -> ChatResponse:
-    if verified_api_key.project_id != project_id:
-        raise HTTPException(status_code=403, detail="You don't have access to this project")
-
     if response_format == ResponseFormat.S3_KEY:
         raise HTTPException(
             status_code=400,
@@ -213,6 +212,8 @@ async def run_env_agent_endpoint(
         )
 
     try:
+        verify_project_access(sqlaclhemy_db_session, verified_api_key, project_id)
+
         return await run_env_agent(
             session=sqlaclhemy_db_session,
             project_id=project_id,
@@ -221,6 +222,15 @@ async def run_env_agent_endpoint(
             call_type=CallType.API,
             response_format=response_format,
         )
+    except ApiKeyAccessDenied as e:
+        LOGGER.error(f"API key access denied: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    except InvalidApiKey as e:
+        LOGGER.error(f"Invalid API key: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    except ProjectNotFound as e:
+        LOGGER.error(f"Project not found: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except EnvironmentNotFound as e:
         LOGGER.error(f"Environment not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=404, detail=str(e)) from e

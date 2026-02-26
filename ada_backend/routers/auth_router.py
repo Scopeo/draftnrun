@@ -18,6 +18,7 @@ from ada_backend.schemas.auth_schema import (
     ApiKeyDeleteRequest,
     ApiKeyDeleteResponse,
     ApiKeyGetResponse,
+    AuthenticatedEntity,
     OrgApiKeyCreateRequest,
     SupabaseUser,
     VerifiedApiKey,
@@ -492,7 +493,7 @@ def user_has_access_to_organization_xor_verify_api_key(allowed_roles: set[str]):
         authorization: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
         x_api_key: str | None = Header(None, alias="X-API-Key"),
         session: Session = Depends(get_db),
-    ) -> tuple[UUID | None, UUID | None]:
+    ) -> AuthenticatedEntity:
         """Flexible authentication: tries user auth first, falls back to API key auth."""
 
         if authorization and authorization.credentials and x_api_key:
@@ -512,7 +513,7 @@ def user_has_access_to_organization_xor_verify_api_key(allowed_roles: set[str]):
                 user = await user_has_access_to_organization_dependency(allowed_roles=allowed_roles)(
                     organization_id=organization_id, user=user
                 )
-                return (user.id, None)
+                return AuthenticatedEntity(user_id=user.id, api_key_id=None)
             except HTTPException as e:
                 LOGGER.exception(f"User token (JWT) is not valid {e.detail}")
                 raise HTTPException(
@@ -530,7 +531,7 @@ def user_has_access_to_organization_xor_verify_api_key(allowed_roles: set[str]):
                         organization_id,
                     )
                     raise HTTPException(status_code=403, detail="You don't have access to this organization")
-                return (None, verified_api_key.api_key_id)
+                return AuthenticatedEntity(user_id=None, api_key_id=verified_api_key.api_key_id)
             except HTTPException as e:
                 LOGGER.exception(f"API Key is not valid : {e.detail}")
                 raise HTTPException(
