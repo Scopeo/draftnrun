@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import UserRights, user_has_access_to_organization_xor_verify_api_key
+from ada_backend.schemas.auth_schema import AuthenticatedEntity
 from ada_backend.schemas.organization_schema import OrganizationGetSecretKeysResponse, OrganizationSecretResponse
 from ada_backend.services.organization_service import (
     delete_secret_to_org_service,
@@ -29,7 +30,7 @@ LOGGER = logging.getLogger(__name__)
 def get_secret_keys(
     organization_id: UUID,
     auth: Annotated[
-        tuple[UUID | None, UUID | None],
+        AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.MEMBER.value)),
     ],
     sqlaclhemy_db_session: Session = Depends(get_db),
@@ -55,7 +56,7 @@ async def add_or_update_secret_to_organization(
     secret_key: str,
     secret: str,
     auth: Annotated[
-        tuple[UUID | None, UUID | None],
+        AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.ADMIN.value)),
     ],
     sqlaclhemy_db_session: Session = Depends(get_db),
@@ -84,7 +85,7 @@ def delete_secret_from_organization(
     organization_id: UUID,
     secret_key: str,
     auth: Annotated[
-        tuple[UUID | None, UUID | None],
+        AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.ADMIN.value)),
     ],
     sqlaclhemy_db_session: Session = Depends(get_db),

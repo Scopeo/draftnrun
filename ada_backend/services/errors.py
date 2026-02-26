@@ -60,6 +60,17 @@ class ProjectNotFound(Exception):
         super().__init__(f"Project not found: {project_id}")
 
 
+class ApiKeyAccessDenied(Exception):
+    def __init__(self, resource_type: str = "resource"):
+        self.resource_type = resource_type
+        super().__init__(f"You don't have access to this {resource_type}")
+
+
+class InvalidApiKey(Exception):
+    def __init__(self):
+        super().__init__("Invalid API key")
+
+
 class GraphNotFound(Exception):
     def __init__(self, graph_id: UUID):
         self.graph_id = graph_id

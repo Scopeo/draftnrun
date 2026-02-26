@@ -9,7 +9,7 @@ from ada_backend.routers.auth_router import (
     user_has_access_to_organization_dependency,
     user_has_access_to_organization_xor_verify_api_key,
 )
-from ada_backend.schemas.auth_schema import SupabaseUser
+from ada_backend.schemas.auth_schema import AuthenticatedEntity, SupabaseUser
 from ada_backend.schemas.ingestion_task_schema import S3UploadedInformation
 from ada_backend.schemas.s3_file_schema import S3UploadURL, UploadFileRequest
 from ada_backend.services.s3_files_service import (
@@ -30,15 +30,14 @@ LOGGER = logging.getLogger(__name__)
 async def generate_s3_upload_presigned_urls(
     organization_id: UUID,
     upload_file_requests: list[UploadFileRequest],
-    auth_ids: Annotated[
-        tuple[UUID | None, UUID | None],
+    auth: Annotated[
+        AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
 ) -> list[S3UploadURL]:
     """
     Generate S3 upload presigned URLs with flexible authentication.
     """
-    user_id, api_key_id = auth_ids  # One is always None
     try:
         return generate_s3_upload_presigned_urls_service(organization_id, upload_file_requests)
     except Exception as e:

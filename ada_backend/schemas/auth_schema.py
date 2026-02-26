@@ -55,3 +55,8 @@ class VerifiedApiKey(BaseModel):
     scope_type: str
     project_id: Optional[UUID]
     organization_id: Optional[UUID]
+
+
+class AuthenticatedEntity(BaseModel):
+    user_id: Optional[UUID] = None
+    api_key_id: Optional[UUID] = None
