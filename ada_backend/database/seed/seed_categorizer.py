@@ -26,9 +26,8 @@ from ada_backend.database.seed.utils import (
     build_parameters_group,
     build_parameters_group_definitions,
 )
-from engine.components.types import ToolDescription
+from engine.components.categorizer import DEFAULT_CATEGORIZER_TOOL_DESCRIPTION
 
-# Parameter IDs for Categorizer
 CATEGORIZER_PARAMETER_IDS = {
     "categories": UUID("732e8650-793a-4fa1-94a9-c8d0143a5592"),
     "additional_context": UUID("e9c90431-c7f0-4e45-8cc1-a0d0158580e7"),
@@ -39,33 +38,17 @@ CATEGORIZER_PARAMETER_IDS = {
     "api_key": UUID("e75801be-df57-40b5-a077-2c8b0a65c80e"),
 }
 
-# Parameter Group UUIDs for Categorizer
 CATEGORIZER_PARAMETER_GROUP_UUIDS = {
     "advanced_llm_parameters": UUID("dc7c98b3-db0e-401b-a5a8-57af085c133d"),
 }
 
-# Tool Description UUID for Categorizer
 CATEGORIZER_TOOL_DESCRIPTION_ID = UUID("8f9d4c3e-7a2b-4e1d-9c8f-5b6a3d2e1f0a")
-
-# Categorizer Tool Description
-CATEGORIZER_TOOL_DESCRIPTION = ToolDescription(
-    name="Categorizer",
-    description="Categorizes content into predefined categories",
-    tool_properties={
-        "input": {
-            "type": "string",
-            "description": "The content to categorize",
-        }
-    },
-    required_tool_properties=["input"],
-)
 
 
 def seed_categorizer_components(session: Session):
-    # Create custom tool description for categorizer
     categorizer_tool_description = db.ToolDescription(
         id=CATEGORIZER_TOOL_DESCRIPTION_ID,
-        **CATEGORIZER_TOOL_DESCRIPTION.model_dump(),
+        **DEFAULT_CATEGORIZER_TOOL_DESCRIPTION.model_dump(),
     )
     session.merge(categorizer_tool_description)
     session.commit()
@@ -126,7 +109,6 @@ def seed_categorizer_components(session: Session):
         ],
     )
 
-    # Create release stage mapping
     upsert_release_stage_to_current_version_mapping(
         session=session,
         component_id=categorizer_version.component_id,
@@ -142,7 +124,6 @@ def seed_categorizer_components(session: Session):
 
 
 def seed_categorizer_parameter_groups(session: Session):
-    """Seed parameter groups for Categorizer component."""
 
     parameter_groups = [
         db.ParameterGroup(

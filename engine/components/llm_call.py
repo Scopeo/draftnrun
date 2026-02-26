@@ -197,9 +197,7 @@ class LLMCallAgent(Component):
                 images_content.extend(payload_images_content)
 
         input_dict = inputs.model_dump(exclude_none=True)
-        # Only use input_from_messages if no input was provided directly (e.g., from tool call)
-        if "input" not in input_dict or not input_dict.get("input"):
-            input_dict["input"] = input_from_messages
+        input_dict["input"] = input_from_messages
 
         merged_dict = {**(ctx or {}), **input_dict}
 
