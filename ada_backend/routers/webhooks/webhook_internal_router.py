@@ -76,6 +76,7 @@ async def get_webhook_triggers_endpoint(
 
 
 async def _run_project_background(project_id: UUID, env: EnvType, input_data: Dict[str, Any]) -> None:
+    # TODO: add to redis queue. currently will hold all sessions open until end of runs
     with get_db_session() as session:
         try:
             await run_env_agent(

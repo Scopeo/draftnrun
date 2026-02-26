@@ -121,7 +121,9 @@ async def _run_direct_trigger(
     webhook_api_key: str,
 ) -> None:
     """Call the internal direct-trigger run endpoint for a specific project and env."""
-    env = payload.pop("env", "production")
+    env = payload.pop("env", None)
+    if not env:
+        raise ValueError("Missing 'env' in direct trigger payload")
     LOGGER.info(f"[WEBHOOK_MAIN] Direct trigger: project_id={project_id}, env={env}, event_id={event_id}")
 
     await _post(
