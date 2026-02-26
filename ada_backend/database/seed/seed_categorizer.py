@@ -10,7 +10,6 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
-from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
     REASONING_IN_DB,
