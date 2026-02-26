@@ -6,9 +6,18 @@ import pytest
 import pytest_asyncio
 from httpx import HTTPError
 
-from engine.components.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION, APICallTool
-from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes
+from engine.components.tools.api_call_tool import (
+    API_CALL_TOOL_DESCRIPTION,
+    APICallTool,
+    APICallToolInputs,
+    APICallToolOutputs,
+)
+from engine.components.types import ComponentAttributes
 from engine.trace.trace_manager import TraceManager
+
+ENDPOINT = "https://api.example.com/test"
+HEADERS = {"Content-Type": "application/json", "Authorization": "Bearer test_token"}
+FIXED_PARAMS = {"api_version": "v2", "format": "json", "language": "en"}
 
 
 @pytest.fixture
@@ -18,19 +27,13 @@ def mock_trace_manager():
 
 @pytest_asyncio.fixture
 async def api_tool(mock_trace_manager):
-    """Create an API call tool instance with proper async cleanup."""
     tool = APICallTool(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(component_instance_name="test_api_tool"),
-        endpoint="https://api.example.com/test",
         method="GET",
-        headers={"Content-Type": "application/json", "Authorization": "Bearer test_token"},
         timeout=30,
-        fixed_parameters={"api_version": "v2", "format": "json", "language": "en"},
     )
     yield tool
-    # Cleanup: ensure any lingering HTTP connections are closed
-
     await asyncio.sleep(0.1)
 
 
@@ -45,41 +48,37 @@ def mock_response():
 
 
 def test_api_tool_initialization(api_tool):
-    assert api_tool.endpoint == "https://api.example.com/test"
     assert api_tool.method == "GET"
-    assert api_tool.headers == {"Content-Type": "application/json", "Authorization": "Bearer test_token"}
     assert api_tool.timeout == 30
-    assert api_tool.fixed_parameters == {"api_version": "v2", "format": "json", "language": "en"}
     assert api_tool.tool_description == API_CALL_TOOL_DESCRIPTION
 
 
 @patch("httpx.AsyncClient")
 def test_make_api_call_with_fixed_and_dynamic_params(mock_client_class, api_tool, mock_response):
-    # Dynamic parameters provided by LLM
-    dynamic_params = {"query": "test", "page": 1, "limit": 10, "filter": "active", "sort": "date"}
+    dynamic_params = {"query": "test", "page": 1, "limit": 10, "sort": "date"}
 
     mock_client = AsyncMock()
     mock_client.request.return_value = mock_response
     mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    result = asyncio.run(api_tool.make_api_call(**dynamic_params))
+    result = asyncio.run(
+        api_tool.make_api_call(headers=HEADERS, fixed_parameters=FIXED_PARAMS, endpoint=ENDPOINT, **dynamic_params)
+    )
 
-    # Verify all parameters are included
     expected_params = {
-        "api_version": "v2",  # Fixed
-        "format": "json",  # Fixed
-        "language": "en",  # Fixed
-        "query": "test",  # Dynamic
-        "page": 1,  # Dynamic
-        "limit": 10,  # Dynamic
-        "filter": "active",  # Dynamic
-        "sort": "date",  # Dynamic
+        "api_version": "v2",
+        "format": "json",
+        "language": "en",
+        "query": "test",
+        "page": 1,
+        "limit": 10,
+        "sort": "date",
     }
 
     mock_client.request.assert_called_once_with(
-        url="https://api.example.com/test",
+        url=ENDPOINT,
         method="GET",
-        headers={"Content-Type": "application/json", "Authorization": "Bearer test_token"},
+        headers=HEADERS,
         timeout=30,
         params=expected_params,
     )
@@ -91,30 +90,28 @@ def test_make_api_call_with_fixed_and_dynamic_params(mock_client_class, api_tool
 
 @patch("httpx.AsyncClient")
 def test_make_api_call_post_with_fixed_and_dynamic_params(mock_client_class, api_tool, mock_response):
-    # Change method to POST
     api_tool.method = "POST"
-
-    # Dynamic parameters provided by LLM
     dynamic_params = {"data": {"name": "test", "value": 123}}
 
     mock_client = AsyncMock()
     mock_client.request.return_value = mock_response
     mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    result = asyncio.run(api_tool.make_api_call(**dynamic_params))
+    result = asyncio.run(
+        api_tool.make_api_call(headers=HEADERS, fixed_parameters=FIXED_PARAMS, endpoint=ENDPOINT, **dynamic_params)
+    )
 
-    # Verify all parameters are included
     expected_params = {
-        "api_version": "v2",  # Fixed
-        "format": "json",  # Fixed
-        "language": "en",  # Fixed
-        "data": {"name": "test", "value": 123},  # Dynamic
+        "api_version": "v2",
+        "format": "json",
+        "language": "en",
+        "data": {"name": "test", "value": 123},
     }
 
     mock_client.request.assert_called_once_with(
-        url="https://api.example.com/test",
+        url=ENDPOINT,
         method="POST",
-        headers={"Content-Type": "application/json", "Authorization": "Bearer test_token"},
+        headers=HEADERS,
         timeout=30,
         json=expected_params,
     )
@@ -126,20 +123,20 @@ def test_make_api_call_post_with_fixed_and_dynamic_params(mock_client_class, api
 
 @patch("httpx.AsyncClient")
 def test_make_api_call_with_only_fixed_params(mock_client_class, api_tool, mock_response):
-    # Test with only fixed parameters
-
     mock_client = AsyncMock()
     mock_client.request.return_value = mock_response
     mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    result = asyncio.run(api_tool.make_api_call())
+    result = asyncio.run(
+        api_tool.make_api_call(headers=HEADERS, fixed_parameters=FIXED_PARAMS, endpoint=ENDPOINT)
+    )
 
     expected_params = {"api_version": "v2", "format": "json", "language": "en"}
 
     mock_client.request.assert_called_once_with(
-        url="https://api.example.com/test",
+        url=ENDPOINT,
         method="GET",
-        headers={"Content-Type": "application/json", "Authorization": "Bearer test_token"},
+        headers=HEADERS,
         timeout=30,
         params=expected_params,
     )
@@ -151,29 +148,31 @@ def test_make_api_call_with_only_fixed_params(mock_client_class, api_tool, mock_
 
 @patch("httpx.AsyncClient")
 def test_make_api_call_post_with_empty_params(mock_client_class, mock_trace_manager, mock_response):
-    # Test POST with no parameters (should still send empty JSON)
     api_tool = APICallTool(
         trace_manager=mock_trace_manager,
-        component_attributes=ComponentAttributes(
-            component_instance_name="test_api_tool",
-        ),
-        endpoint="https://api.example.com/test",
+        component_attributes=ComponentAttributes(component_instance_name="test_api_tool"),
         method="POST",
-        headers={"Content-Type": "application/json"},
+        timeout=30,
     )
 
     mock_client = AsyncMock()
     mock_client.request.return_value = mock_response
     mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    result = asyncio.run(api_tool.make_api_call())
+    result = asyncio.run(
+        api_tool.make_api_call(
+            headers={"Content-Type": "application/json"},
+            fixed_parameters={},
+            endpoint=ENDPOINT,
+        )
+    )
 
     mock_client.request.assert_called_once_with(
-        url="https://api.example.com/test",
+        url=ENDPOINT,
         method="POST",
         headers={"Content-Type": "application/json"},
         timeout=30,
-        json={},  # Empty JSON should still be sent for POST
+        json={},
     )
 
     assert result["status_code"] == 200
@@ -182,29 +181,31 @@ def test_make_api_call_post_with_empty_params(mock_client_class, mock_trace_mana
 
 @patch("httpx.AsyncClient")
 def test_make_api_call_get_with_empty_params(mock_client_class, mock_trace_manager, mock_response):
-    # Test GET with no parameters (should not send params)
     api_tool = APICallTool(
         trace_manager=mock_trace_manager,
-        component_attributes=ComponentAttributes(
-            component_instance_name="test_api_tool",
-        ),
-        endpoint="https://api.example.com/test",
+        component_attributes=ComponentAttributes(component_instance_name="test_api_tool"),
         method="GET",
-        headers={"Content-Type": "application/json"},
+        timeout=30,
     )
 
     mock_client = AsyncMock()
     mock_client.request.return_value = mock_response
     mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    result = asyncio.run(api_tool.make_api_call())
+    result = asyncio.run(
+        api_tool.make_api_call(
+            headers={"Content-Type": "application/json"},
+            fixed_parameters={},
+            endpoint=ENDPOINT,
+        )
+    )
 
+    # No params for GET with empty parameters
     mock_client.request.assert_called_once_with(
-        url="https://api.example.com/test",
+        url=ENDPOINT,
         method="GET",
         headers={"Content-Type": "application/json"},
         timeout=30,
-        # No params should be included for GET with empty parameters
     )
 
     assert result["status_code"] == 200
@@ -217,7 +218,7 @@ def test_make_api_call_error_handling(mock_client_class, api_tool):
     mock_client.request.side_effect = HTTPError("API Error")
     mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    result = asyncio.run(api_tool.make_api_call())
+    result = asyncio.run(api_tool.make_api_call(headers={}, fixed_parameters={}, endpoint=ENDPOINT))
 
     assert result["success"] is False
     assert result["error"] == "API Error"
@@ -236,7 +237,7 @@ def test_make_api_call_non_json_response(mock_client_class, api_tool):
     mock_client.request.return_value = mock_response
     mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    result = asyncio.run(api_tool.make_api_call())
+    result = asyncio.run(api_tool.make_api_call(headers={}, fixed_parameters={}, endpoint=ENDPOINT))
 
     assert result["status_code"] == 200
     assert result["data"] == {"text": "plain text response"}
@@ -244,10 +245,15 @@ def test_make_api_call_non_json_response(mock_client_class, api_tool):
 
 
 def test_run_without_io_trace_with_dynamic_params(api_tool):
-    agent_input = AgentPayload(messages=[ChatMessage(role="user", content="test")])
-    dynamic_params = {"query": "test", "page": 1, "filter": "active"}
+    inputs = APICallToolInputs(
+        endpoint=ENDPOINT,
+        headers=HEADERS,
+        fixed_parameters=FIXED_PARAMS,
+        query="test",
+        page=1,
+    )
 
-    with patch.object(api_tool, "make_api_call") as mock_make_api_call:
+    with patch.object(api_tool, "make_api_call", new_callable=AsyncMock) as mock_make_api_call:
         mock_make_api_call.return_value = {
             "status_code": 200,
             "data": {"result": "success"},
@@ -255,59 +261,76 @@ def test_run_without_io_trace_with_dynamic_params(api_tool):
             "success": True,
         }
 
-        result = asyncio.run(api_tool._run_without_io_trace(agent_input, **dynamic_params))
+        result = asyncio.run(api_tool._run_without_io_trace(inputs))
 
-        assert isinstance(result, AgentPayload)
-        assert len(result.messages) == 1
-        assert result.messages[0].role == "assistant"
-        assert "result" in result.messages[0].content
-        assert result.artifacts["api_response"]["success"] is True
-        mock_make_api_call.assert_called_once_with(**dynamic_params)
+        assert isinstance(result, APICallToolOutputs)
+        assert result.success is True
+        assert result.status_code == 200
+        assert "result" in result.output
+        mock_make_api_call.assert_called_once_with(
+            headers=HEADERS,
+            fixed_parameters=FIXED_PARAMS,
+            endpoint=ENDPOINT,
+            query="test",
+            page=1,
+        )
 
 
 def test_run_without_io_trace_error(api_tool):
-    agent_input = AgentPayload(messages=[ChatMessage(role="user", content="test")])
+    inputs = APICallToolInputs(
+        endpoint=ENDPOINT,
+        headers=HEADERS,
+        fixed_parameters=FIXED_PARAMS,
+    )
 
-    with patch.object(api_tool, "make_api_call") as mock_make_api_call:
-        mock_make_api_call.return_value = {"status_code": 500, "error": "Internal Server Error", "success": False}
+    with patch.object(api_tool, "make_api_call", new_callable=AsyncMock) as mock_make_api_call:
+        mock_make_api_call.return_value = {
+            "status_code": 500,
+            "error": "Internal Server Error",
+            "success": False,
+        }
 
-        result = asyncio.run(api_tool._run_without_io_trace(agent_input))
+        result = asyncio.run(api_tool._run_without_io_trace(inputs))
 
-        assert isinstance(result, AgentPayload)
-        assert len(result.messages) == 1
-        assert result.messages[0].role == "assistant"
-        assert "API call failed" in result.messages[0].content
-        assert result.artifacts["api_response"]["success"] is False
+        assert isinstance(result, APICallToolOutputs)
+        assert result.success is False
+        assert result.status_code == 500
+        assert "API call failed" in result.output
 
 
 @patch("httpx.AsyncClient")
 def test_api_call_tool_with_string_headers_and_fixed_params(mock_client_class, mock_trace_manager, mock_response):
+    """String headers and fixed_parameters are parsed in _run_without_io_trace."""
     tool = APICallTool(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(component_instance_name="test_api_tool"),
-        endpoint="https://api.example.com/test",
         method="GET",
+        timeout=30,
+    )
+    inputs = APICallToolInputs(
+        endpoint=ENDPOINT,
         headers='{"Content-Type": "application/json", "Authorization": "Bearer test_token"}',
         fixed_parameters='{"api_version": "v2", "format": "json"}',
+        query="test",
     )
 
     mock_client = AsyncMock()
     mock_client.request.return_value = mock_response
     mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    result = asyncio.run(tool.make_api_call(query="test"))
+    result = asyncio.run(tool._run_without_io_trace(inputs))
 
     mock_client.request.assert_called_once_with(
-        url="https://api.example.com/test",
+        url=ENDPOINT,
         method="GET",
         headers={"Content-Type": "application/json", "Authorization": "Bearer test_token"},
         timeout=30,
         params={"api_version": "v2", "format": "json", "query": "test"},
     )
 
-    assert result["status_code"] == 200
-    assert result["data"] == {"data": "test_data"}
-    assert result["success"] is True
+    assert isinstance(result, APICallToolOutputs)
+    assert result.status_code == 200
+    assert result.success is True
 
 
 @patch("httpx.AsyncClient")
@@ -315,26 +338,30 @@ def test_api_call_tool_with_dict_headers_and_fixed_params(mock_client_class, moc
     tool = APICallTool(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(component_instance_name="api_call_tool"),
-        endpoint="https://api.example.com/test",
         method="POST",
+        timeout=30,
+    )
+    inputs = APICallToolInputs(
+        endpoint=ENDPOINT,
         headers={"Content-Type": "application/json"},
         fixed_parameters={"api_version": "v2"},
+        data={"name": "foo"},
     )
 
     mock_client = AsyncMock()
     mock_client.request.return_value = mock_response
     mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    result = asyncio.run(tool.make_api_call(data={"name": "foo"}))
+    result = asyncio.run(tool._run_without_io_trace(inputs))
 
     mock_client.request.assert_called_once_with(
-        url="https://api.example.com/test",
+        url=ENDPOINT,
         method="POST",
         headers={"Content-Type": "application/json"},
         timeout=30,
         json={"api_version": "v2", "data": {"name": "foo"}},
     )
 
-    assert result["status_code"] == 200
-    assert result["data"] == {"data": "test_data"}
-    assert result["success"] is True
+    assert isinstance(result, APICallToolOutputs)
+    assert result.status_code == 200
+    assert result.success is True

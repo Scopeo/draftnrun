@@ -1,15 +1,15 @@
 import json
 import logging
 import string
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Type
 
 import httpx
 from openinference.semconv.trace import OpenInferenceSpanKindValues
+from pydantic import BaseModel, Field
 
+from ada_backend.database.models import UIComponent, UIComponentProperties
 from engine.components.component import Component
 from engine.components.types import (
-    AgentPayload,
-    ChatMessage,
     ComponentAttributes,
     ToolDescription,
 )
@@ -35,18 +35,75 @@ API_CALL_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
+class APICallToolInputs(BaseModel):
+    endpoint: str = Field(
+        description="The URL of the API endpoint to call.",
+        json_schema_extra={
+            "is_tool_input": False,
+            "ui_component": UIComponent.TEXTFIELD,
+            "ui_component_properties": UIComponentProperties(
+                label="API Endpoint",
+                placeholder="https://api.example.com/endpoint",
+                description="The API endpoint URL to send requests to.",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        },
+    )
+    headers: Optional[dict[str, str] | str] = Field(
+        default_factory=dict,
+        description="The headers to send with the request.",
+        json_schema_extra={
+            "is_tool_input": False,
+            "ui_component": UIComponent.TEXTAREA,
+            "ui_component_properties": UIComponentProperties(
+                label="Headers",
+                placeholder='{"Content-Type": "application/json"}',
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        },
+    )
+    fixed_parameters: Optional[dict[str, Any] | str] = Field(
+        default_factory=dict,
+        description="The parameters to send with the request.",
+        json_schema_extra={
+            "is_tool_input": False,
+            "ui_component": UIComponent.TEXTAREA,
+            "ui_component_properties": UIComponentProperties(
+                label="Parameters",
+                placeholder='{"api_version": "v2", "format": "json"}',
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        },
+    )
+    model_config = {"extra": "allow"}
+
+
+class APICallToolOutputs(BaseModel):
+    output: str = Field(description="The output message to be returned to the user.")
+    status_code: int = Field(description="The status code of the API response.")
+    data: dict[str, Any] = Field(description="The data of the API response.")
+    success: bool = Field(description="Whether the API call was successful.")
+
+
 class APICallTool(Component):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
+    migrated = True
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return APICallToolInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return APICallToolOutputs
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "endpoint", "output": "output"}
 
     def __init__(
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        endpoint: str,
         method: str = "GET",
-        headers: Optional[Union[Dict[str, Any], str]] = None,
         timeout: int = 30,
-        fixed_parameters: Optional[Union[Dict[str, Any], str]] = None,
         tool_description: ToolDescription = API_CALL_TOOL_DESCRIPTION,
     ) -> None:
         super().__init__(
@@ -55,28 +112,21 @@ class APICallTool(Component):
             component_attributes=component_attributes,
         )
         self.trace_manager = trace_manager
-        self.endpoint = endpoint
         self.method = method.upper()
-        if isinstance(headers, str):
-            self.headers = load_str_to_json(headers) if headers else {}
-        else:
-            self.headers = headers or {}
         self.timeout = timeout
-        if isinstance(fixed_parameters, str):
-            self.fixed_parameters = load_str_to_json(fixed_parameters) if fixed_parameters else {}
-        else:
-            self.fixed_parameters = fixed_parameters or {}
 
-    async def make_api_call(self, **kwargs) -> Dict[str, Any]:
+    async def make_api_call(
+        self, headers: dict[str, str], fixed_parameters: dict[str, Any], endpoint: str, **kwargs: Any
+    ) -> Dict[str, Any]:
         """Make an HTTP request to the configured API endpoint."""
 
-        request_headers = self.headers.copy()
+        request_headers = headers.copy()
 
-        all_parameters = self.fixed_parameters.copy()
+        all_parameters = fixed_parameters.copy()
         all_parameters.update(kwargs)
-        endpoint = self.endpoint.format(**all_parameters)
+        endpoint = endpoint.format(**all_parameters)
         formatter = string.Formatter()
-        used_keys = {field_name for _, field_name, _, _ in formatter.parse(self.endpoint) if field_name}
+        used_keys = {field_name for _, field_name, _, _ in formatter.parse(endpoint) if field_name}
         filtered_parameters = {key: value for key, value in all_parameters.items() if key not in used_keys}
 
         request_kwargs = {
@@ -128,12 +178,24 @@ class APICallTool(Component):
 
     async def _run_without_io_trace(
         self,
-        *inputs: AgentPayload,
+        inputs: APICallToolInputs,
         ctx: Optional[dict] = None,
-        **kwargs: Any,
-    ) -> AgentPayload:
+    ) -> APICallToolOutputs:
+        if inputs.headers is not None and isinstance(inputs.headers, str):
+            headers = load_str_to_json(inputs.headers)
+        else:
+            headers = inputs.headers or {}
+        if inputs.fixed_parameters is not None and isinstance(inputs.fixed_parameters, str):
+            fixed_parameters = load_str_to_json(inputs.fixed_parameters)
+        else:
+            fixed_parameters = inputs.fixed_parameters or {}
         # Make the API call
-        api_response = await self.make_api_call(**kwargs)
+        api_response = await self.make_api_call(
+            headers=headers,
+            fixed_parameters=fixed_parameters,
+            endpoint=inputs.endpoint,
+            **(inputs.model_extra or {}),
+        )
 
         # Format the API response as a readable message
         if api_response.get("success", False):
@@ -141,8 +203,9 @@ class APICallTool(Component):
         else:
             content = f"API call failed: {api_response.get('error', 'Unknown error')}"
 
-        return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=content)],
-            artifacts={"api_response": api_response},
-            is_final=False,
+        return APICallToolOutputs(
+            output=content,
+            status_code=api_response["status_code"],
+            data=api_response.get("data", {}),
+            success=api_response["success"],
         )
