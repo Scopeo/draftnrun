@@ -12,6 +12,7 @@ from ada_backend.repositories.graph_runner_repository import (
     get_component_instances_for_graph_runner,
     is_start_node,
 )
+from ada_backend.repositories.output_port_instance_repository import get_output_port_instances_for_component_instance
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.variable_definitions_repository import list_org_definitions
 from ada_backend.schemas.pipeline.field_expression_schema import (
@@ -197,6 +198,22 @@ def _build_port_suggestions_with_start_fields(
     ports = get_output_ports_for_component_version(session, instance.component_version_id)
     for port in ports:
         port_name = port.name or ""
+        if not port_name:
+            continue
+        if search_term and search_term not in port_name.lower():
+            continue
+        suggestions.append(
+            FieldExpressionSuggestion(
+                id=f"{instance_uuid}.{port_name}",
+                label=port_name,
+                insert_text=f"{port_name}}}}}",
+                kind=SuggestionKind.PROPERTY,
+            )
+        )
+
+    dynamic_ports = get_output_port_instances_for_component_instance(session, instance_uuid)
+    for dynamic_port in dynamic_ports:
+        port_name = dynamic_port.name or ""
         if not port_name:
             continue
         if search_term and search_term not in port_name.lower():

@@ -20,7 +20,7 @@ from ada_backend.repositories.graph_runner_repository import (
 )
 from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
 from ada_backend.repositories.organization_repository import get_organization_secrets
-from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
+from ada_backend.repositories.port_mapping_repository import get_source_port_name, list_port_mappings_for_graph
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
@@ -111,17 +111,23 @@ async def build_graph_runner(
     edges = get_edges(session, graph_runner_id)
     start_nodes = [str(node.id) for node in get_start_components(session, graph_runner_id)]
     # Fetch port mappings for this graph
-    pms = list_port_mappings_for_graph(session, graph_runner_id)
-    port_mappings = [
-        {
-            "source_instance_id": str(pm.source_instance_id),
-            "source_port_name": pm.source_port_definition.name,
-            "target_instance_id": str(pm.target_instance_id),
-            "target_port_name": pm.target_port_definition.name,
-            "dispatch_strategy": pm.dispatch_strategy,
-        }
-        for pm in pms
-    ]
+    port_mappings = list_port_mappings_for_graph(session, graph_runner_id)
+    port_mappings_graph = []
+    for port_mapping in port_mappings:
+        source_port_name = get_source_port_name(port_mapping)
+        if source_port_name is None:
+            LOGGER.warning(
+                f"PortMapping {port_mapping.id} has neither source_port_definition_id nor "
+                "source_output_port_instance_id set; skipping"
+            )
+            continue
+        port_mappings_graph.append({
+            "source_instance_id": str(port_mapping.source_instance_id),
+            "source_port_name": source_port_name,
+            "target_instance_id": str(port_mapping.target_instance_id),
+            "target_port_name": port_mapping.target_port_definition.name,
+            "dispatch_strategy": port_mapping.dispatch_strategy,
+        })
 
     component_instance_ids = [node.id for node in component_nodes]
     expressions: list[GraphRunner.ExpressionSpec] = []
@@ -163,7 +169,7 @@ async def build_graph_runner(
         runnables,
         start_nodes,
         trace_manager=trace_manager,
-        port_mappings=port_mappings,
+        port_mappings=port_mappings_graph,
         expressions=expressions,
         variables=variables,
     )

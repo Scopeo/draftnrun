@@ -31,3 +31,12 @@ class InputPortInstanceCreateSchema(BaseModel):
     port_definition_id: Optional[UUID] = None
     expression_json: Optional[dict] = None
     description: Optional[str] = None
+
+
+class OutputPortInstanceSchema(BaseModel):
+    """Schema for output port instance (dynamic output ports)."""
+
+    id: Optional[UUID] = None
+    name: str
+    component_instance_id: UUID
+    port_definition_id: Optional[UUID] = None

@@ -12,7 +12,7 @@ from ada_backend.repositories.graph_runner_repository import (
     get_latest_modification_history,
 )
 from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
-from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
+from ada_backend.repositories.port_mapping_repository import get_source_port_name, list_port_mappings_for_graph
 from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterReadSchema
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionReadSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphGetResponse
@@ -81,10 +81,14 @@ def get_graph_service(
     # Include port mappings at top-level so GET->PUT roundtrips
     pms = list_port_mappings_for_graph(session, graph_runner_id)
     for pm in pms:
+        source_port_name = get_source_port_name(pm)
+        if source_port_name is None:
+            LOGGER.warning(f"PortMapping {pm.id} has no source port; skipping in graph response")
+            continue
         port_mappings.append(
             PortMappingSchema(
                 source_instance_id=pm.source_instance_id,
-                source_port_name=pm.source_port_definition.name,
+                source_port_name=source_port_name,
                 target_instance_id=pm.target_instance_id,
                 target_port_name=pm.target_port_definition.name,
                 dispatch_strategy=pm.dispatch_strategy,

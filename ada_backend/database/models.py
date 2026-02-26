@@ -779,10 +779,20 @@ class ComponentInstance(Base):
         back_populates="component_instance",
         cascade="all, delete-orphan",
     )
-    input_port_instances = relationship(
-        "InputPortInstance",
+    port_instances = relationship(
+        "PortInstance",
         back_populates="component_instance",
         cascade="all, delete-orphan",
+    )
+    input_port_instances = relationship(
+        "InputPortInstance",
+        viewonly=True,
+        overlaps="port_instances,component_instance",
+    )
+    output_port_instances = relationship(
+        "OutputPortInstance",
+        viewonly=True,
+        overlaps="port_instances,component_instance",
     )
 
     def __str__(self):
@@ -1102,7 +1112,13 @@ class PortMapping(Base):
     source_port_definition_id = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("port_definitions.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+    )
+    source_output_port_instance_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("port_instances.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     target_instance_id = mapped_column(
         UUID(as_uuid=True),
@@ -1130,6 +1146,10 @@ class PortMapping(Base):
     source_port_definition = relationship(
         "PortDefinition",
         foreign_keys=[source_port_definition_id],
+    )
+    source_output_port_instance = relationship(
+        "OutputPortInstance",
+        foreign_keys=[source_output_port_instance_id],
     )
     target_port_definition = relationship(
         "PortDefinition",
@@ -1167,21 +1187,30 @@ class FieldExpression(Base):
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
-class InputPortInstance(Base):
-    """Instance-level input port definition for dynamic ports.
+class PortInstance(Base):
+    """Base table for instance-level port definitions (both input and output).
 
-    Allows API components to have ports that vary based on instance configuration.
+    Uses joined-table polymorphism: shared fields live here, type-specific fields
+    live in input_port_instances and output_port_instances child tables.
 
-    Invariants:
-    - port_definition_id == NULL: Dynamic input port instance not part of the
-      official component catalogue (e.g., API-specific field)
-    - field_expression_id == NULL (with port_definition_id == NULL): Dynamic port
-      exists but doesn't have a value yet. The frontend can display it for configuration.
-    - Both NULL: Port is defined but not configured
-    - Both set: Port references a definition and has a configured value
+    Port sources appear asymmetric because InputPortInstance plays a double role,
+    but the underlying design is consistent:
+
+            | Catalogue ports              | Dynamic ports                          | Value
+    --------|------------------------------|----------------------------------------|-------------------------------
+    Input   | PortDefinition (type=INPUT)  | InputPortInstance (port_def_id=NULL)   | InputPortInstance.field_expr_id
+    Output  | PortDefinition (type=OUTPUT) | OutputPortInstance                     | n/a
+
+    InputPortInstance serves two purposes: it materialises dynamic input ports AND
+    stores the configured value (field_expression_id) for every input regardless of
+    whether it is catalogue-defined or dynamic. OutputPortInstance only materialises
+    dynamic output ports; outputs carry no value.
+
+    PortMapping reflects the output split explicitly via two mutually exclusive FKs:
+    source_port_definition_id (catalogue) vs. source_output_port_instance_id (dynamic).
     """
 
-    __tablename__ = "input_port_instances"
+    __tablename__ = "port_instances"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     component_instance_id = mapped_column(
@@ -1197,6 +1226,39 @@ class InputPortInstance(Base):
         nullable=True,
         index=True,
     )
+    type = mapped_column(make_pg_enum(PortType), nullable=False)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    component_instance = relationship(
+        "ComponentInstance",
+        back_populates="port_instances",
+        overlaps="input_port_instances,output_port_instances",
+    )
+    port_definition = relationship("PortDefinition")
+
+    __table_args__ = (UniqueConstraint("component_instance_id", "name", name="uq_port_instance_name"),)
+
+    __mapper_args__ = {
+        "polymorphic_on": type,
+        "polymorphic_identity": "base",
+    }
+
+
+class InputPortInstance(PortInstance):
+    """Instance-level input port definition for dynamic ports.
+
+    Allows API components to have ports that vary based on instance configuration.
+
+    Invariants (2x2 matrix of port_definition_id / field_expression_id):
+    - port_definition_id=NULL,  field_expression_id=NULL:  Dynamic port exists but has no value yet
+    - port_definition_id=NULL,  field_expression_id=SET:   Dynamic port exists and has a value
+    - port_definition_id=SET,   field_expression_id=NULL:  Catalogue-defined port exists but has no value yet
+    - port_definition_id=SET,   field_expression_id=SET:   Catalogue-defined port exists and has a value
+    """
+
+    __tablename__ = "input_port_instances"
+
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("port_instances.id", ondelete="CASCADE"), primary_key=True)
     field_expression_id = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("field_expressions.id", ondelete="SET NULL"),
@@ -1204,14 +1266,26 @@ class InputPortInstance(Base):
         index=True,
     )
     description = mapped_column(Text, nullable=True)
-    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationships
-    component_instance = relationship("ComponentInstance", back_populates="input_port_instances")
-    port_definition = relationship("PortDefinition")
     field_expression = relationship("FieldExpression")
 
-    __table_args__ = (UniqueConstraint("component_instance_id", "name", name="uq_input_port_instance_name"),)
+    __mapper_args__ = {"polymorphic_identity": PortType.INPUT}
+
+
+class OutputPortInstance(PortInstance):
+    """Instance-level output port for dynamic ports driven by a drives_output_schema input.
+
+    One row is created per top-level JSON schema property key when an input port
+    with drives_output_schema=True (e.g. output_format) is configured on a component
+    instance. These rows allow downstream nodes to reference the dynamic output keys
+    via port mappings.
+    """
+
+    __tablename__ = "output_port_instances"
+
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("port_instances.id", ondelete="CASCADE"), primary_key=True)
+
+    __mapper_args__ = {"polymorphic_identity": PortType.OUTPUT}
 
 
 class Project(Base):

@@ -1,12 +1,34 @@
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ada_backend.database import models as db
 
 
+def get_source_port_name(port_mapping: db.PortMapping) -> str | None:
+    """Resolve the source port name from a PortMapping.
+
+    Returns the name from source_port_definition (catalogue port) or
+    source_output_port_instance (dynamic port), or None if neither is set.
+    """
+    if port_mapping.source_port_definition_id is not None:
+        return port_mapping.source_port_definition.name
+    if port_mapping.source_output_port_instance_id is not None:
+        return port_mapping.source_output_port_instance.name
+    return None
+
+
 def list_port_mappings_for_graph(session: Session, graph_runner_id: UUID) -> list[db.PortMapping]:
-    return session.query(db.PortMapping).filter(db.PortMapping.graph_runner_id == graph_runner_id).all()
+    return (
+        session.query(db.PortMapping)
+        .filter(db.PortMapping.graph_runner_id == graph_runner_id)
+        .options(
+            joinedload(db.PortMapping.source_port_definition),
+            joinedload(db.PortMapping.source_output_port_instance),
+            joinedload(db.PortMapping.target_port_definition),
+        )
+        .all()
+    )
 
 
 def delete_port_mappings_for_graph(session: Session, graph_runner_id: UUID) -> int:
@@ -64,6 +86,23 @@ def get_input_port_definition_id(session: Session, component_version_id: UUID, p
     return result[0] if result else None
 
 
+def is_drives_output_schema_port(
+    session: Session, component_version_id: UUID, port_name: str
+) -> bool:
+    """Return True if the named INPUT port exists and has drives_output_schema=True."""
+    result = (
+        session.query(db.PortDefinition.id)
+        .filter_by(
+            component_version_id=component_version_id,
+            name=port_name,
+            port_type=db.PortType.INPUT,
+            drives_output_schema=True,
+        )
+        .first()
+    )
+    return result is not None
+
+
 def get_port_definition_by_id(session: Session, port_def_id: UUID) -> db.PortDefinition | None:
     """Get port definition by ID, returns None if not found"""
     return session.query(db.PortDefinition).filter(db.PortDefinition.id == port_def_id).first()
@@ -82,6 +121,29 @@ def insert_port_mapping(
         graph_runner_id=graph_runner_id,
         source_instance_id=source_instance_id,
         source_port_definition_id=source_port_definition_id,
+        target_instance_id=target_instance_id,
+        target_port_definition_id=target_port_definition_id,
+        dispatch_strategy=dispatch_strategy or "direct",
+    )
+    session.add(mapping)
+    session.commit()
+    return mapping
+
+
+def insert_port_mapping_with_output_instance(
+    session: Session,
+    graph_runner_id: UUID,
+    source_instance_id: UUID,
+    source_output_port_instance_id: UUID,
+    target_instance_id: UUID,
+    target_port_definition_id: UUID,
+    dispatch_strategy: str,
+) -> db.PortMapping:
+    mapping = db.PortMapping(
+        graph_runner_id=graph_runner_id,
+        source_instance_id=source_instance_id,
+        source_port_definition_id=None,
+        source_output_port_instance_id=source_output_port_instance_id,
         target_instance_id=target_instance_id,
         target_port_definition_id=target_port_definition_id,
         dispatch_strategy=dispatch_strategy or "direct",
