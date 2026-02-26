@@ -99,39 +99,6 @@ def seed_categorizer_components(session: Session):
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[
-            db.ComponentParameterDefinition(
-                id=CATEGORIZER_PARAMETER_IDS["categories"],
-                component_version_id=categorizer_version.id,
-                name="categories",
-                type=ParameterType.JSON,
-                nullable=False,
-                default="[]",
-                ui_component=UIComponent.JSON_BUILDER,
-                ui_component_properties=UIComponentProperties(
-                    label="Categories",
-                    placeholder=(
-                        "[\n"
-                        '  {"name": "Positive", "description": "Content expressing positive sentiment"},\n'
-                        '  {"name": "Negative", "description": "Content expressing negative sentiment"},\n'
-                        '  {"name": "Neutral", "description": "Content with neutral sentiment"}\n'
-                        "]"
-                    ),
-                    description=("List of categories. Each category should have 'name' and 'description' fields."),
-                ).model_dump(exclude_unset=True, exclude_none=False),
-            ),
-            db.ComponentParameterDefinition(
-                id=CATEGORIZER_PARAMETER_IDS["additional_context"],
-                component_version_id=categorizer_version.id,
-                name="additional_context",
-                type=ParameterType.STRING,
-                nullable=True,
-                ui_component=UIComponent.TEXTAREA,
-                ui_component_properties=UIComponentProperties(
-                    label="Additional Context",
-                    placeholder="Add any additional context or instructions for categorization",
-                    description="Optional context that will be appended to the prompt.",
-                ).model_dump(exclude_unset=True, exclude_none=True),
-            ),
             *build_completion_service_config_definitions(
                 component_version_id=categorizer_version.id,
                 params_to_seed=[
@@ -210,55 +177,5 @@ def seed_categorizer_parameter_groups(session: Session):
         },
     }
     build_components_parameters_assignments_to_parameter_groups(session, parameter_group_assignments)
-
-    session.commit()
-
-
-def add_categorizer_output_ports(session: Session):
-    """
-    Fix categorizer ports:
-    2. Add explicit output ports for category, score, reason
-    This must run AFTER seed_port_definitions.
-    """
-    output_ports = [
-        {
-            "name": "category",
-            "description": "The selected category",
-            "parameter_type": ParameterType.STRING,
-        },
-        {
-            "name": "score",
-            "description": "Confidence score (0-1)",
-            "parameter_type": ParameterType.FLOAT,
-        },
-        {
-            "name": "reason",
-            "description": "Explanation for the categorization",
-            "parameter_type": ParameterType.STRING,
-        },
-    ]
-
-    for port_def in output_ports:
-        existing_port = (
-            session.query(db.PortDefinition)
-            .filter_by(
-                component_version_id=COMPONENT_VERSION_UUIDS["categorizer"],
-                name=port_def["name"],
-                port_type=db.PortType.OUTPUT,
-            )
-            .first()
-        )
-
-        if not existing_port:
-            new_port = db.PortDefinition(
-                component_version_id=COMPONENT_VERSION_UUIDS["categorizer"],
-                name=port_def["name"],
-                port_type=db.PortType.OUTPUT,
-                is_canonical=False,
-                description=port_def["description"],
-                parameter_type=port_def["parameter_type"],
-                nullable=True,
-            )
-            session.add(new_port)
 
     session.commit()

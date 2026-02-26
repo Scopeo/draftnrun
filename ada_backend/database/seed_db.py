@@ -18,11 +18,7 @@ from ada_backend.database.seed.integrations.seed_slack import seed_slack_compone
 from ada_backend.database.seed.seed_ai_agent import seed_ai_agent_components, seed_ai_agent_parameter_groups
 from ada_backend.database.seed.seed_api_call_tool import seed_api_call_components
 from ada_backend.database.seed.seed_categories import seed_categories
-from ada_backend.database.seed.seed_categorizer import (
-    add_categorizer_output_ports,
-    seed_categorizer_components,
-    seed_categorizer_parameter_groups,
-)
+from ada_backend.database.seed.seed_categorizer import seed_categorizer_components, seed_categorizer_parameter_groups
 from ada_backend.database.seed.seed_chunk_processor import seed_chunk_processor_components
 from ada_backend.database.seed.seed_db_service import seed_db_service_components
 from ada_backend.database.seed.seed_docx_generation import seed_docx_generation_components
@@ -102,7 +98,6 @@ def seed_db(session: Session):
         seed_port_definitions(session)
         seed_custom_llm_models(session)
         seed_anthropic_models(session)
-        add_categorizer_output_ports(session)
 
         # Verify components exist
         for name, uuid_value in COMPONENT_UUIDS.items():
