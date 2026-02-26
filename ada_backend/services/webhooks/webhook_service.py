@@ -24,6 +24,7 @@ from ada_backend.services.webhooks.errors import (
     WebhookEventIdNotFoundError,
     WebhookProcessingError,
     WebhookQueueError,
+    WebhookServiceError,
 )
 from ada_backend.services.webhooks.resend_service import (
     get_resend_event_id,
@@ -128,6 +129,41 @@ async def process_webhook_event(
     except Exception as e:
         LOGGER.error(f"Error processing {provider.value} webhook: {str(e)}", exc_info=True)
         raise WebhookProcessingError(webhook=webhook, error=e)
+
+
+async def process_direct_trigger_event(
+    project_id: UUID,
+    organization_id: UUID,
+    env: str,
+    payload: Dict[str, Any],
+    event_id: str,
+) -> WebhookProcessingResponseSchema:
+    is_new = check_and_set_webhook_event("direct_trigger", event_id, ttl=settings.REDIS_WEBHOOK_DEDUP_TTL)
+    if not is_new:
+        LOGGER.info(f"Duplicate direct trigger detected: event_id={event_id}, project_id={project_id}")
+        return WebhookProcessingResponseSchema(
+            status=WebhookProcessingStatus.DUPLICATE, processed=False, event_id=event_id
+        )
+
+    LOGGER.info(f"Direct trigger validated: event_id={event_id}, project_id={project_id}")
+
+    queued = push_webhook_event(
+        webhook_id=project_id,
+        provider="direct_trigger",
+        payload={**payload, "env": env},
+        event_id=event_id,
+        organization_id=organization_id,
+    )
+
+    if not queued:
+        LOGGER.error(f"Failed to queue direct trigger: event_id={event_id}, project_id={project_id}")
+        raise WebhookServiceError(f"Failed to queue direct trigger event {event_id} for project {project_id}")
+
+    LOGGER.info(f"Direct trigger queued: event_id={event_id}, project_id={project_id}, env={env}")
+
+    return WebhookProcessingResponseSchema(
+        status=WebhookProcessingStatus.RECEIVED, processed=False, event_id=event_id
+    )
 
 
 def prepare_workflow_input(payload: Dict[str, Any], provider: str) -> Dict[str, Any]:

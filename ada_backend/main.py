@@ -37,6 +37,7 @@ from ada_backend.routers.trace_router import router as trace_router
 from ada_backend.routers.variables_router import org_router as variables_router
 from ada_backend.routers.webhooks.provider_webhooks_router import router as provider_webhooks_router
 from ada_backend.routers.webhooks.webhook_internal_router import router as webhook_internal_router
+from ada_backend.routers.webhooks.webhook_trigger_router import router as webhook_trigger_router
 from ada_backend.routers.widget_router import router as widget_router
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
@@ -190,6 +191,7 @@ app.include_router(credits_router)
 app.include_router(widget_router)
 app.include_router(provider_webhooks_router)
 app.include_router(webhook_internal_router)
+app.include_router(webhook_trigger_router)
 
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
