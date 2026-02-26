@@ -209,13 +209,10 @@ class Categorizer(Component):
 
         llm_outputs = await self._llm_agent._run_without_io_trace(llm_inputs, ctx)
 
-        # Parse JSON string output from LLM
         try:
             result = json.loads(llm_outputs.output)
         except json.JSONDecodeError as e:
-            raise CategorizationError(
-                detail=f"Failed to parse LLM output as JSON: {e}", llm_output=llm_outputs.output
-            )
+            raise CategorizationError(detail=f"Failed to parse LLM output as JSON: {e}", llm_output=llm_outputs.output)
 
         try:
             category = result.get("category")
