@@ -102,6 +102,7 @@ class CategorizerInputs(BaseModel):
         description="Available categories with their descriptions to choose from.",
         json_schema_extra={
             "ui_component": UIComponent.JSON_BUILDER,
+            "is_tool_input": False,
             "ui_component_properties": UIComponentProperties(
                 label="Categories",
                 placeholder=(
@@ -120,6 +121,7 @@ class CategorizerInputs(BaseModel):
         description="Additional information to help with categorization",
         json_schema_extra={
             "ui_component": UIComponent.TEXTAREA,
+            "is_tool_input": False,
             "ui_component_properties": UIComponentProperties(
                 label="Additional Context",
                 placeholder="Add any additional context or instructions for categorization",
