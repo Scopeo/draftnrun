@@ -139,7 +139,7 @@ def push_webhook_event(
     provider: str,
     payload: Dict[str, Any],
     event_id: str,
-    organization_id: UUID,
+    organization_id: Optional[UUID] = None,
 ) -> bool:
     """
     Push a webhook event to the Redis queue for async processing.
@@ -158,7 +158,7 @@ def push_webhook_event(
             "webhook_id": str(webhook_id),
             "provider": provider,
             "event_id": event_id,
-            "organization_id": str(organization_id),
+            "organization_id": str(organization_id) if organization_id else None,
             "payload": payload,
         }
 

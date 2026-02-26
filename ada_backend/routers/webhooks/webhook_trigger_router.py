@@ -35,13 +35,9 @@ async def trigger_workflow_webhook(
     if verified_api_key.project_id != project_id:
         raise HTTPException(status_code=403, detail="You don't have access to this project")
 
-    if verified_api_key.organization_id is None:
-        raise HTTPException(status_code=403, detail="API key is not associated with an organization")
-
     try:
         return await process_direct_trigger_event(
             project_id=project_id,
-            organization_id=verified_api_key.organization_id,
             env=env.value,
             payload=payload,
             event_id=event_id or str(uuid4()),

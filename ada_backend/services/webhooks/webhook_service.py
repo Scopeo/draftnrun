@@ -133,7 +133,6 @@ async def process_webhook_event(
 
 async def process_direct_trigger_event(
     project_id: UUID,
-    organization_id: UUID,
     env: str,
     payload: Dict[str, Any],
     event_id: str,
@@ -152,7 +151,6 @@ async def process_direct_trigger_event(
         provider="direct_trigger",
         payload={**payload, "env": env},
         event_id=event_id,
-        organization_id=organization_id,
     )
 
     if not queued:
@@ -161,9 +159,7 @@ async def process_direct_trigger_event(
 
     LOGGER.info(f"Direct trigger queued: event_id={event_id}, project_id={project_id}, env={env}")
 
-    return WebhookProcessingResponseSchema(
-        status=WebhookProcessingStatus.RECEIVED, processed=False, event_id=event_id
-    )
+    return WebhookProcessingResponseSchema(status=WebhookProcessingStatus.RECEIVED, processed=False, event_id=event_id)
 
 
 def prepare_workflow_input(payload: Dict[str, Any], provider: str) -> Dict[str, Any]:

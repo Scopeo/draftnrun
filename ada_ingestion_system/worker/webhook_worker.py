@@ -61,7 +61,7 @@ class WebhookWorker(BaseWorker):
                     f"webhook_id='{webhook_id}', "
                     f"provider={repr(provider)}, "
                     f"event_id={repr(event_id)}, "
-                    f"organization_id='{organization_id}', "
+                    f"organization_id={repr(organization_id)}, "
                     f"payload={repr(webhook_payload)}"
                     f")"
                 ),

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 import httpx
@@ -64,12 +64,13 @@ async def webhook_main_async(
     webhook_id: UUID,
     provider: str,
     event_id: str,
-    organization_id: UUID,
     payload: Dict[str, Any],
+    organization_id: Optional[UUID] = None,
 ):
     LOGGER.info(
         f"[WEBHOOK_MAIN] Starting webhook processing - "
-        f"Webhook: {webhook_id}, Provider: {provider}, Event: {event_id}, Org: {organization_id}"
+        f"Webhook: {webhook_id}, Provider: {provider}, Event: {event_id}, "
+        f"Org: {organization_id if organization_id else 'None'}"
     )
 
     api_base_url = settings.ADA_URL
@@ -94,7 +95,7 @@ async def webhook_main_async(
     body = {
         "provider": provider,
         "event_id": event_id,
-        "organization_id": str(organization_id),
+        "organization_id": str(organization_id) if organization_id else None,
         "payload": payload,
     }
 
@@ -121,20 +122,15 @@ async def _run_direct_trigger(
 ) -> None:
     """Call the internal direct-trigger run endpoint for a specific project and env."""
     env = payload.pop("env", "production")
-    LOGGER.info(
-        f"[WEBHOOK_MAIN] Direct trigger: project_id={project_id}, env={env}, event_id={event_id}"
-    )
+    LOGGER.info(f"[WEBHOOK_MAIN] Direct trigger: project_id={project_id}, env={env}, event_id={event_id}")
 
     await _post(
-        url=f"{api_base_url}/internal/projects/{project_id}/envs/{env}/run",
+        url=f"{api_base_url}/internal/webhooks/projects/{project_id}/envs/{env}/run",
         body=payload,
         webhook_api_key=webhook_api_key,
         context="direct trigger",
     )
-    LOGGER.info(
-        f"[WEBHOOK_MAIN] Direct trigger completed: project_id={project_id}, "
-        f"env={env}, event_id={event_id}"
-    )
+    LOGGER.info(f"[WEBHOOK_MAIN] Direct trigger completed: project_id={project_id}, env={env}, event_id={event_id}")
 
 
 def webhook_main(
@@ -162,7 +158,7 @@ def webhook_main(
                 webhook_id=UUID(webhook_id),
                 provider=provider,
                 event_id=event_id,
-                organization_id=UUID(organization_id),
+                organization_id=UUID(organization_id) if organization_id else None,
                 payload=payload,
             )
         )
