@@ -1,3 +1,4 @@
+import json
 import re
 from typing import Union
 
@@ -80,13 +81,15 @@ def parse_expression_flexible(value: Union[str, dict]) -> ExpressionNode:
         FieldExpressionParseError: If parsing fails
     """
     if isinstance(value, dict):
-        # Import here to avoid circular dependency
-        from engine.field_expressions.serializer import from_json
+        if "type" in value:
+            from engine.field_expressions.serializer import from_json
 
-        try:
-            return from_json(value)
-        except Exception as e:
-            raise FieldExpressionParseError(f"Invalid JSON expression structure: {e}") from e
+            try:
+                return from_json(value)
+            except Exception as e:
+                raise FieldExpressionParseError(f"Invalid JSON expression structure: {e}") from e
+        else:
+            return LiteralNode(value=json.dumps(value))
     elif isinstance(value, str):
         return parse_expression(value)
     else:
