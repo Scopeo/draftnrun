@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ada_backend.database.models import JsonSchemaType, PortSetupMode
 from ada_backend.schemas.integration_schema import GraphIntegrationSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionUpdateSchema
@@ -13,8 +14,31 @@ class ToolDescriptionSchema(BaseModel):
     id: Optional[UUID] = None
     name: str
     description: str
-    tool_properties: dict
-    required_tool_properties: list[str]
+
+
+class PortConfigurationSchema(BaseModel):
+    id: Optional[UUID] = None
+    component_instance_id: Optional[UUID] = None
+    parameter_id: Optional[UUID] = None
+    setup_mode: PortSetupMode
+    field_expression_id: Optional[UUID] = None
+    expression_json: Optional[dict] = None  # For creating new field expressions
+    ai_name_override: Optional[str] = None
+    ai_description_override: Optional[str] = None
+    is_required_override: Optional[bool] = Field(
+        None,
+        description="Override port's required status: True=make optional port mandatory, False/None=use default",
+    )
+    custom_port_name: Optional[str] = None
+    custom_port_description: Optional[str] = None
+    custom_parameter_type: Optional[JsonSchemaType] = None
+    custom_ui_component_properties: Optional[dict] = None
+    json_schema_override: Optional[dict] = Field(
+        None,
+        description=(
+            "Full JSON Schema for complex types (arrays, nested objects, etc.). Overrides simple type mapping."
+        ),
+    )
 
 
 class ComponentInstanceSchema(BaseModel):
