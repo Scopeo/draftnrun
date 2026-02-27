@@ -14,6 +14,7 @@ from engine.components.llm_call import DEFAULT_LLM_CALL_TOOL_DESCRIPTION
 from engine.components.pdf_generation_tool import DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION
 from engine.components.rag.rag import format_rag_tool_description
 from engine.components.rag.retriever import RETRIEVER_TOOL_DESCRIPTION
+from engine.components.scorer import DEFAULT_SCORER_TOOL_DESCRIPTION
 from engine.components.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_DESCRIPTION
 from engine.components.sql.run_sql_query_tool import DEFAULT_RUN_SQL_QUERY_TOOL_DESCRIPTION
 from engine.components.sql.sql_tool import DEFAULT_SQL_TOOL_DESCRIPTION
@@ -29,7 +30,6 @@ from engine.components.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_T
 from engine.integrations.gmail.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
 from engine.integrations.outlook.outlook_sender import OUTLOOK_SENDER_TOOL_DESCRIPTION
 from engine.integrations.slack.slack_sender import SLACK_SENDER_TOOL_DESCRIPTION
-from engine.components.scorer import DEFAULT_SCORER_TOOL_DESCRIPTION
 
 TOOL_DESCRIPTION_UUIDS = {
     "default_ai_agent_description": UUID("1a4d4098-c2b4-4078-96a6-0a8f9c7d018c"),

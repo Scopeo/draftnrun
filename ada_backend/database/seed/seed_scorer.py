@@ -115,7 +115,7 @@ def seed_scorer_components(session: Session):
 def seed_scorer_parameter_groups(session: Session):
     parameter_groups = [
         db.ParameterGroup(
-            id=SCORER_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"], 
+            id=SCORER_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
             name="Advanced LLM Parameters"
         ),
     ]
