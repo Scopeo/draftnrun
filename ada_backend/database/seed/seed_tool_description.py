@@ -14,6 +14,7 @@ from engine.components.llm_call import DEFAULT_LLM_CALL_TOOL_DESCRIPTION
 from engine.components.pdf_generation_tool import DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION
 from engine.components.rag.rag import format_rag_tool_description
 from engine.components.rag.retriever import RETRIEVER_TOOL_DESCRIPTION
+from engine.components.scorer import DEFAULT_SCORER_TOOL_DESCRIPTION
 from engine.components.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_DESCRIPTION
 from engine.components.sql.run_sql_query_tool import DEFAULT_RUN_SQL_QUERY_TOOL_DESCRIPTION
 from engine.components.table_lookup import DEFAULT_TABLE_LOOKUP_TOOL_DESCRIPTION
@@ -25,7 +26,6 @@ from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_D
 from engine.components.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.components.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
-from engine.components.scorer import DEFAULT_SCORER_TOOL_DESCRIPTION
 from engine.integrations.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
 from engine.integrations.slack.slack_sender import SLACK_SENDER_TOOL_DESCRIPTION
 
