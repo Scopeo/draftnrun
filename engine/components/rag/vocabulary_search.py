@@ -4,6 +4,7 @@ import pandas as pd
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
 
+from engine.components.close_mixin import CloseMixin
 from engine.components.types import ComponentAttributes, TermDefinition
 from engine.components.utils import fuzzy_matching
 from engine.trace.trace_manager import TraceManager
@@ -16,7 +17,7 @@ FUZZY_THRESHOLD = 90
 FUZZY_MATCHING_CANDIDATES = 10
 
 
-class VocabularySearch:
+class VocabularySearch(CloseMixin):
     def __init__(
         self,
         trace_manager: TraceManager,

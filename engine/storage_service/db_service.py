@@ -4,13 +4,14 @@ from typing import Optional
 
 import pandas as pd
 
+from engine.components.close_mixin import CloseMixin
 from engine.components.component import ComponentAttributes
 from engine.storage_service.db_utils import CHUNK_ID_COLUMN, DBDefinition, convert_to_correct_pandas_type
 
 LOGGER = logging.getLogger(__name__)
 
 
-class DBService(ABC):
+class DBService(CloseMixin, ABC):
     def __init__(self, dialect: Optional[str] = None, component_attributes: Optional[ComponentAttributes] = None):
         self.dialect = dialect
         self.component_attributes = component_attributes or ComponentAttributes(

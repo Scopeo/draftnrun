@@ -3,6 +3,7 @@ import logging
 import re
 from typing import Optional
 
+from engine.components.close_mixin import CloseMixin
 from engine.components.types import ComponentAttributes, SourceChunk, SourcedResponse
 
 LOGGER = logging.getLogger(__name__)
@@ -14,7 +15,7 @@ BOUNDING_BOXES_FIELD = "bounding_boxes"
 DOCUMENT_ID_FIELD = "document_title"
 
 
-class Formatter:
+class Formatter(CloseMixin):
     def __init__(
         self,
         add_sources: bool = True,

@@ -5,6 +5,7 @@ from opentelemetry import trace as trace_api
 from pydantic import BaseModel
 
 from engine.components.build_context import build_context_from_source_chunks
+from engine.components.close_mixin import CloseMixin
 from engine.components.synthesizer_prompts import get_base_synthetizer_prompt_template
 from engine.components.types import ComponentAttributes, SourceChunk, SourcedResponse
 from engine.components.utils_prompt import fill_prompt_template
@@ -17,7 +18,7 @@ class SynthesizerResponse(BaseModel):
     is_successful: bool
 
 
-class Synthesizer:
+class Synthesizer(CloseMixin):
     def __init__(
         self,
         completion_service: CompletionService,
