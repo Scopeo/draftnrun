@@ -139,6 +139,7 @@ class WebhookProvider(StrEnum):
     RESEND = "resend"
     AIRCALL = "aircall"
     SLACK = "slack"
+    DIRECT_TRIGGER = "direct_trigger"
 
 
 class UIComponent(StrEnum):

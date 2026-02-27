@@ -3,11 +3,11 @@ import logging
 from typing import Annotated, Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType, EnvType
-from ada_backend.database.setup_db import get_db
+from ada_backend.database.setup_db import get_db, get_db_session
 from ada_backend.routers.auth_router import verify_webhook_api_key_dependency
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.webhook_schema import (
@@ -68,14 +68,50 @@ async def get_webhook_triggers_endpoint(
         event_data = json.loads(webhook_event_data)
 
         return get_webhook_triggers_service(
-            session=session,
-            webhook_id=webhook_id,
-            provider=provider,
-            event_data=event_data
+            session=session, webhook_id=webhook_id, provider=provider, event_data=event_data
         )
     except Exception as e:
         LOGGER.error(f"Failed to get triggers for webhook {webhook_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+async def _run_project_background(project_id: UUID, env: EnvType, input_data: Dict[str, Any]) -> None:
+    # TODO: add to redis queue. currently will hold all sessions open until end of runs
+    with get_db_session() as session:
+        try:
+            await run_env_agent(
+                session=session,
+                project_id=project_id,
+                input_data=input_data,
+                env=env,
+                call_type=CallType.API,
+            )
+        except EnvironmentNotFound as e:
+            LOGGER.error(f"Environment not found for project {project_id} env={env}: {str(e)}", exc_info=True)
+        except MissingDataSourceError as e:
+            LOGGER.error(f"Data source not found for project {project_id} env={env}: {str(e)}", exc_info=True)
+        except MissingIntegrationError as e:
+            LOGGER.error(f"Missing integration for project {project_id} env={env}: {str(e)}", exc_info=True)
+        except Exception as e:
+            LOGGER.error(f"Failed to run workflow for project {project_id} env={env}: {str(e)}", exc_info=True)
+
+
+@router.post("/projects/{project_id}/envs/{env}/run", status_code=202)
+async def run_project_internal(
+    project_id: UUID,
+    env: EnvType,
+    background_tasks: BackgroundTasks,
+    input_data: Dict[str, Any] = Body(...),
+    verified_webhook_api_key: Annotated[None, Depends(verify_webhook_api_key_dependency)] = None,
+) -> dict:
+    """
+    Enqueue a workflow/agent run for a project at a given environment.
+    Returns 202 immediately and executes the run as a background task.
+    Internal endpoint called by the webhook worker for direct trigger events.
+    Requires X-Webhook-API-Key.
+    """
+    background_tasks.add_task(_run_project_background, project_id=project_id, env=env, input_data=input_data)
+    return {"status": "accepted"}
 
 
 @router.post(
