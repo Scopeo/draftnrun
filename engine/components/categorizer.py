@@ -4,7 +4,7 @@ from typing import Any, Callable, Optional, Type
 
 from pydantic import BaseModel, Field, field_validator
 
-from ada_backend.database.models import UIComponent, UIComponentProperties
+from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from engine.components.component import Component
 from engine.components.errors import CategorizationError
 from engine.components.llm_call import LLMCallAgent, LLMCallInputs
@@ -71,8 +71,6 @@ def _build_output_format(categories: dict[str, str]) -> dict[str, Any]:
                 "score": {
                     "type": "number",
                     "description": "Confidence score between 0 and 1",
-                    "minimum": 0,
-                    "maximum": 1,
                 },
                 "reason": {
                     "type": "string",
@@ -103,6 +101,7 @@ class CategorizerInputs(BaseModel):
         json_schema_extra={
             "ui_component": UIComponent.JSON_BUILDER,
             "is_tool_input": False,
+            "parameter_type": ParameterType.JSON,
             "ui_component_properties": UIComponentProperties(
                 label="Categories",
                 placeholder=(
@@ -141,11 +140,16 @@ class CategorizerInputs(BaseModel):
             return v
         if isinstance(v, str):
             if not v or v.strip() == "":
-                return {}
+                raise ValueError("Categories cannot be empty. Provide at least one category with a description.")
             try:
-                return json.loads(v)
-            except json.JSONDecodeError:
-                return {}
+                parsed = json.loads(v)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Categories must be valid JSON: {e}") from e
+            if not isinstance(parsed, dict):
+                raise ValueError("Categories must be a JSON object mapping category names to descriptions.")
+            if not parsed:
+                raise ValueError("Categories cannot be empty. Provide at least one category with a description.")
+            return parsed
         return v
 
 
