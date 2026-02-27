@@ -29,6 +29,7 @@ from engine.components.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_T
 from engine.integrations.gmail.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
 from engine.integrations.outlook.outlook_sender import OUTLOOK_SENDER_TOOL_DESCRIPTION
 from engine.integrations.slack.slack_sender import SLACK_SENDER_TOOL_DESCRIPTION
+from engine.components.scorer import DEFAULT_SCORER_TOOL_DESCRIPTION
 
 TOOL_DESCRIPTION_UUIDS = {
     "default_ai_agent_description": UUID("1a4d4098-c2b4-4078-96a6-0a8f9c7d018c"),
@@ -58,6 +59,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "hubspot_neverdrop_mcp_tool_description": UUID("a1e7f624-6c98-4546-b769-3607819ebad2"),
     "outlook_sender_tool_description": UUID("31344b0e-4949-42b6-98a8-6b1dcec98f3c"),
     "default_sql_tool_description": UUID("7a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d"),
+    "scorer_tool_description": UUID("8f9d4c3e-7a2b-4e1d-9c8f-5b6a3d2e1f0b"),
 }
 
 
@@ -164,6 +166,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["default_sql_tool_description"],
         **DEFAULT_SQL_TOOL_DESCRIPTION.model_dump(),
     )
+    scorer_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["scorer_tool_description"],
+        **DEFAULT_SCORER_TOOL_DESCRIPTION.model_dump(),
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -194,5 +200,6 @@ def seed_tool_description(session: Session):
             hubspot_neverdrop_mcp_tool_description,
             outlook_sender_tool_description,
             default_sql_tool_description,
+            scorer_tool_description,
         ],
     )
