@@ -25,6 +25,7 @@ from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_D
 from engine.components.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.components.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
+from engine.components.scorer import DEFAULT_SCORER_TOOL_DESCRIPTION
 from engine.integrations.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
 from engine.integrations.slack.slack_sender import SLACK_SENDER_TOOL_DESCRIPTION
 
@@ -53,6 +54,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_table_lookup_tool_description": UUID("5c6d7e8f-9012-3456-789a-bcdef0123456"),
     "default_retriever_tool_description": UUID("b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e"),
     "hubspot_mcp_tool_description": UUID("1d6ce8b3-44ae-4c3d-a14b-2837a3a5717e"),
+    "scorer_tool_description": UUID("8f9d4c3e-7a2b-4e1d-9c8f-5b6a3d2e1f0b"),
 }
 
 
@@ -147,6 +149,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["hubspot_mcp_tool_description"],
         **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
     )
+    scorer_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["scorer_tool_description"],
+        **DEFAULT_SCORER_TOOL_DESCRIPTION.model_dump(),
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -174,5 +180,6 @@ def seed_tool_description(session: Session):
             remote_mcp_tool_description,
             default_table_lookup_tool_description,
             hubspot_mcp_tool_description,
+            scorer_tool_description,
         ],
     )

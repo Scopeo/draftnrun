@@ -45,6 +45,7 @@ from engine.components.hybrid_synthesizer import HybridSynthesizer
 from engine.components.if_else import IfElse
 from engine.components.inputs_outputs.start import Start
 from engine.components.llm_call import LLMCallAgent
+from engine.components.scorer import Scorer
 from engine.components.ocr_call import OCRCall
 from engine.components.pdf_generation_tool import PDFGenerationTool
 from engine.components.rag.chunk_selection import RelevantChunkSelector
@@ -306,6 +307,16 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["llm_call"],
         factory=AgentFactory(
             entity_class=LLMCallAgent,
+            parameter_processors=[
+                completion_service_processor,
+                llm_capability_resolver_processor,
+            ],
+        ),
+    )
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["scorer"],
+        factory=AgentFactory(
+            entity_class=Scorer,
             parameter_processors=[
                 completion_service_processor,
                 llm_capability_resolver_processor,

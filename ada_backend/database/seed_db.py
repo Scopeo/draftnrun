@@ -27,6 +27,7 @@ from ada_backend.database.seed.seed_if_else import seed_if_else_components
 from ada_backend.database.seed.seed_linkup_tool import seed_linkup_tool_components
 from ada_backend.database.seed.seed_llm_call import seed_llm_call_components, seed_llm_call_parameter_groups
 from ada_backend.database.seed.seed_ocr_call import seed_ocr_call_components
+from ada_backend.database.seed.seed_scorer import seed_scorer_components, seed_scorer_parameter_groups
 from ada_backend.database.seed.seed_pdf_generation import seed_pdf_generation_components
 from ada_backend.database.seed.seed_ports import seed_port_definitions
 from ada_backend.database.seed.seed_project_reference import seed_project_reference_components
@@ -71,6 +72,8 @@ def seed_db(session: Session):
         seed_docx_template_components(session)
         seed_llm_call_components(session)
         seed_llm_call_parameter_groups(session)
+        seed_scorer_components(session)
+        seed_scorer_parameter_groups(session)
         seed_sql_tool_components(session)
         seed_react_sql_components(session)
         seed_smart_rag_components(session)
