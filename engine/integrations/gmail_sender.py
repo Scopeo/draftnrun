@@ -170,9 +170,9 @@ class GmailSender(Component):
             component_attributes=component_attributes,
         )
         if not google_client_id:
-            google_client_id = settings.GOOGLE_CLIENT_ID
+            google_client_id = settings.GOOGLE_GMAIL_CLIENT_ID or settings.GOOGLE_CLIENT_ID  # Fallback to legacy
         if not google_client_secret:
-            google_client_secret = settings.GOOGLE_CLIENT_SECRET
+            google_client_secret = settings.GOOGLE_GMAIL_CLIENT_SECRET or settings.GOOGLE_CLIENT_SECRET  # Fallback to legacy
 
         # TODO: move the logic to fetch the access token to outside the agent
         session = next(get_db())
