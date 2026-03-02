@@ -60,6 +60,12 @@ class ProjectNotFound(Exception):
         super().__init__(f"Project not found: {project_id}")
 
 
+class RunNotFound(Exception):
+    def __init__(self, run_id: UUID):
+        self.run_id = run_id
+        super().__init__(f"Run not found: {run_id}")
+
+
 class ApiKeyAccessDenied(Exception):
     def __init__(self, resource_type: str = "resource"):
         self.resource_type = resource_type

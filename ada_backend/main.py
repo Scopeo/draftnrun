@@ -30,6 +30,7 @@ from ada_backend.routers.organization_router import router as org_router
 from ada_backend.routers.project_router import router as project_router
 from ada_backend.routers.qa_evaluation_router import router as qa_evaluation_router
 from ada_backend.routers.quality_assurance_router import router as quality_assurance_router
+from ada_backend.routers.run_router import router as run_router
 from ada_backend.routers.s3_files_router import router as s3_files_router
 from ada_backend.routers.source_router import router as source_router
 from ada_backend.routers.template_router import router as template_router
@@ -163,6 +164,7 @@ setup_admin(app)
 app.include_router(auth_router)
 app.include_router(org_router)
 app.include_router(project_router)
+app.include_router(run_router)
 app.include_router(variables_router)
 app.include_router(agent_router)
 app.include_router(integration_router)
