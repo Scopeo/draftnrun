@@ -73,7 +73,8 @@ class InvalidRunStatusTransition(Exception):
         self.current_status = current_status
         self.new_status = new_status
         super().__init__(
-            f"Invalid run status transition: cannot go from {current_status} to {new_status} (status cannot go backwards)"
+            f"Invalid run status transition: cannot go from {current_status} to "
+            f"{new_status} (status cannot go backwards)"
         )
 
 
