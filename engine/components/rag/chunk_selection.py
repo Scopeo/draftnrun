@@ -3,6 +3,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from engine.components.build_context import build_context_from_source_chunks
+from engine.components.close_mixin import CloseMixin
 from engine.components.types import ComponentAttributes, SourceChunk, SourcedResponse
 from engine.llm_services.llm_service import LLMService
 
@@ -19,7 +20,7 @@ class RelevantChunk(BaseModel):
     relavent_text_source_numbers: list[int]
 
 
-class RelevantChunkSelector:
+class RelevantChunkSelector(CloseMixin):
     def __init__(
         self,
         llm_service: LLMService,

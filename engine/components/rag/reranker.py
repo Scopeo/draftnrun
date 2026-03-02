@@ -5,12 +5,13 @@ from typing import Optional
 from openinference.semconv.trace import OpenInferenceSpanKindValues, RerankerAttributes, SpanAttributes
 from opentelemetry import trace as trace_api
 
+from engine.components.close_mixin import CloseMixin
 from engine.components.types import ComponentAttributes, SourceChunk
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
 
-class Reranker(ABC):
+class Reranker(CloseMixin, ABC):
     def __init__(
         self,
         trace_manager: TraceManager,

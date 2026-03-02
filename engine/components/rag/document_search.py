@@ -4,6 +4,7 @@ from typing import Optional
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
 
+from engine.components.close_mixin import CloseMixin
 from engine.components.types import ComponentAttributes, SourceChunk
 from engine.components.utils import fuzzy_matching
 from engine.storage_service.db_service import DBService
@@ -16,7 +17,7 @@ QUERY_DOCUMENT_CONTENT = "SELECT * FROM {schema_name}.{table_name} WHERE {docume
 LOGGER = logging.getLogger(__name__)
 
 
-class DocumentSearch:
+class DocumentSearch(CloseMixin):
     def __init__(
         self,
         trace_manager: TraceManager,
