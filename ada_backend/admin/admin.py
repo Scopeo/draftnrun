@@ -136,6 +136,8 @@ class RunAdmin(EnhancedModelView, model=db.Run):
         "status",
         "trigger",
         "trace_id",
+        "started_at",
+        "finished_at",
         "created_at",
         "updated_at",
         "error",

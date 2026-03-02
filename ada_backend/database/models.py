@@ -1367,8 +1367,9 @@ class Run(Base):
     status = mapped_column(make_pg_enum(RunStatus), nullable=False, default=RunStatus.PENDING)
     trigger = mapped_column(make_pg_enum(CallType), nullable=False, default=CallType.API)
     trace_id = mapped_column(String, nullable=True, index=True)
-    input_payload = mapped_column(JSONB, nullable=True, default=dict)
-    error = mapped_column(Text, nullable=True)
+    error = mapped_column(JSONB, nullable=True)
+    started_at = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at = mapped_column(DateTime(timezone=True), nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

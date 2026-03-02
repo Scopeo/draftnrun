@@ -2,19 +2,59 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import UserRights, user_has_access_to_project_dependency
 from ada_backend.schemas.auth_schema import SupabaseUser
-from ada_backend.schemas.run_schema import RunCreateSchema, RunResponseSchema, RunUpdateStatusSchema
-from ada_backend.services.errors import ProjectNotFound, RunNotFound
-from ada_backend.services.run_service import create_run, get_run, update_run_status
+from ada_backend.schemas.run_schema import (
+    RunCreateSchema,
+    RunListPagination,
+    RunListResponse,
+    RunResponseSchema,
+    RunUpdateStatusSchema,
+)
+from ada_backend.services.errors import InvalidRunStatusTransition, ProjectNotFound, RunNotFound
+from ada_backend.services.run_service import create_run, get_run, get_runs, update_run_status
 
 LOGGER = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/projects", tags=["Runs"])
+
+
+@router.get(
+    "/{project_id}/runs",
+    response_model=RunListResponse,
+)
+def list_runs_endpoint(
+    project_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(50, ge=1, le=100, description="Number of runs per page"),
+) -> RunListResponse:
+    """List runs for a project, newest first, with pagination."""
+    try:
+        runs, total = get_runs(session, project_id=project_id, page=page, page_size=page_size)
+        total_pages = (total + page_size - 1) // page_size if page_size else 0
+        return RunListResponse(
+            runs=runs,
+            pagination=RunListPagination(
+                page=page,
+                page_size=page_size,
+                total_items=total,
+                total_pages=total_pages,
+            ),
+        )
+    except ProjectNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.exception("Failed to list runs for project %s", project_id)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post(
@@ -33,12 +73,7 @@ def create_run_endpoint(
 ) -> RunResponseSchema:
     """Create a new run for the project. Run starts with status pending."""
     try:
-        return create_run(
-            session,
-            project_id=project_id,
-            input_payload=body.input_payload,
-            trigger=body.trigger,
-        )
+        return create_run(session, project_id=project_id, trigger=body.trigger)
     except ProjectNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
@@ -94,6 +129,8 @@ def update_run_status_endpoint(
         )
     except RunNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except InvalidRunStatusTransition as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.exception("Failed to update run %s", run_id)
         raise HTTPException(status_code=500, detail="Internal server error") from e

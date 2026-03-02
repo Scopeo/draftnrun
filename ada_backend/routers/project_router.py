@@ -219,7 +219,6 @@ async def run_env_agent_endpoint(
             session=sqlaclhemy_db_session,
             project_id=project_id,
             trigger=CallType.API,
-            input_payload=input_data,
             runner_coro=run_env_agent(
                 session=sqlaclhemy_db_session,
                 project_id=project_id,
@@ -361,7 +360,6 @@ async def chat(
             session=session,
             project_id=project_id,
             trigger=CallType.SANDBOX,
-            input_payload=input_data,
             runner_coro=run_agent(
                 session=session,
                 project_id=project_id,
@@ -456,7 +454,6 @@ async def chat_env(
             session=session,
             project_id=project_id,
             trigger=CallType.SANDBOX,
-            input_payload=input_data,
             runner_coro=run_env_agent(
                 session=session,
                 project_id=project_id,
