@@ -30,9 +30,13 @@ jobs:
     outputs:
       environment: ${{ steps.env.outputs.environment }}
       breaking: ${{ steps.breaking.outputs.breaking }}
+      has_migration: ${{ steps.migration.outputs.has_migration }}
+      migration_files: ${{ steps.migration.outputs.migration_files }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Set environment
         id: env
@@ -77,6 +81,23 @@ jobs:
           echo "✅ No breaking migration detected"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check for alembic migrations
+        id: migration
+        run: |
+          # NOTE: this checks only the last commit in the push (HEAD~1..HEAD).
+          # If multiple commits are pushed together, earlier migration files may be missed.
+          CHANGED=$(git diff HEAD~1 HEAD --name-only -- \
+            'ada_backend/database/alembic/versions/*.py' \
+            'engine/trace/alembic/versions/*.py')
+          if [ -n "$CHANGED" ]; then
+            echo "has_migration=true" >> $GITHUB_OUTPUT
+            echo "migration_files<<EOF" >> $GITHUB_OUTPUT
+            echo "$CHANGED" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "has_migration=false" >> $GITHUB_OUTPUT
+          fi
 
   # --- PARALLEL BUILD JOBS (ARM64 only) ---
   build-api:
@@ -335,6 +356,28 @@ jobs:
 
             echo "✅ Deploy complete!"
             kubectl get pods -n ${NS}
+
+      - name: Notify QA of migration in staging
+        if: >
+          needs.setup.outputs.environment == 'staging' &&
+          needs.setup.outputs.has_migration == 'true'
+        uses: slackapi/slack-github-action@v2
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: ${{ secrets.SLACK_QA_CHANNEL_ID }}
+            text: "⚠️ *Alembic migration deployed to staging*"
+            blocks:
+              - type: section
+                text:
+                  type: mrkdwn
+                  text: |
+                    ⚠️ *Alembic migration deployed to staging*
+                    *Commit:* `${{ github.sha }}`
+                    *By:* ${{ github.actor }}
+                    *Files:*
+                    ```${{ needs.setup.outputs.migration_files }}```
 
       - name: Scale up (breaking migration only)
         if: ${{ needs.setup.outputs.breaking == 'true' }}
