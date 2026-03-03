@@ -63,3 +63,15 @@ def delete_edge(session: Session, id: UUID):
         session.commit()
     else:
         raise ValueError(f"Edge with id {id} not found")
+
+
+def get_edges_for_instance_node(session: Session, instance_id: UUID) -> list[db.GraphRunnerEdge]:
+    """Get all edges where this instance is either the source or target node."""
+    return (
+        session.query(db.GraphRunnerEdge)
+        .filter(
+            (db.GraphRunnerEdge.source_node_id == instance_id)
+            | (db.GraphRunnerEdge.target_node_id == instance_id)
+        )
+        .all()
+    )

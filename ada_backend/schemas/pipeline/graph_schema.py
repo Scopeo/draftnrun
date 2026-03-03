@@ -114,3 +114,10 @@ class GraphModificationHistoryResponse(BaseModel):
     """Response model for graph modification history"""
 
     history: list[ModificationHistoryItem]
+
+
+class SaveComponentInstanceResult(BaseModel):
+    """Result returned by save_component_instance_service."""
+
+    component_instance_id: UUID
+    component_instance: ComponentInstanceReadSchema

@@ -17,7 +17,7 @@ from ada_backend.repositories.component_repository import (
     get_output_ports_for_component_version,
     upsert_sub_component_input,
 )
-from ada_backend.repositories.edge_repository import delete_edge, get_edges, upsert_edge
+from ada_backend.repositories.edge_repository import delete_edge, get_edges, get_edges_for_instance_node, upsert_edge
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.field_expression_repository import (
     create_field_expression,
@@ -51,7 +51,11 @@ from ada_backend.repositories.port_mapping_repository import (
     insert_port_mapping_with_output_instance,
 )
 from ada_backend.schemas.parameter_schema import ParameterKind
-from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
+from ada_backend.schemas.pipeline.graph_schema import (
+    GraphUpdateResponse,
+    GraphUpdateSchema,
+    SaveComponentInstanceResult,
+)
 from ada_backend.segment_analytics import track_project_saved
 from ada_backend.services.agent_runner_service import get_agent_for_project
 from ada_backend.services.errors import GraphNotBoundToProjectError
@@ -92,6 +96,68 @@ def _calculate_graph_hash(graph_project: GraphUpdateSchema) -> str:
     json_str = json.dumps(sorted_dict, sort_keys=True, separators=(",", ":"))
     hash_obj = hashlib.sha256(json_str.encode("utf-8"))
     return hash_obj.hexdigest()
+
+
+def _calculate_graph_hash_from_db(session: Session, graph_runner_id: UUID) -> str:
+    """Compute a stable hash of the full graph state from DB.
+
+    Used as the canonical fingerprint across all save paths (full graph update,
+    single instance save, delete) so that modification_hash values are always
+    comparable and deduplication in update_graph_with_history_service works
+    correctly regardless of which path last wrote a history entry.
+
+    # TODO: This is a temporary fix. We will have modification history at the
+    # component instance level.
+    """
+    results = (
+        session.query(db.ComponentInstance, db.GraphRunnerNode)
+        .join(db.GraphRunnerNode, db.ComponentInstance.id == db.GraphRunnerNode.node_id)
+        .filter(db.GraphRunnerNode.graph_runner_id == graph_runner_id)
+        .all()
+    )
+
+    nodes_repr = []
+    for component_instance, graph_runner_node in results:
+        params_repr = sorted(
+            [
+                {
+                    "param_def_id": str(bp.parameter_definition_id),
+                    "value": bp.value,
+                    "secret_id": str(bp.organization_secret_id) if bp.organization_secret_id else None,
+                    "order": bp.order,
+                }
+                for bp in component_instance.basic_parameters
+            ],
+            key=lambda x: x["param_def_id"],
+        )
+        nodes_repr.append(
+            {
+                "id": str(component_instance.id),
+                "component_version_id": str(component_instance.component_version_id),
+                "name": component_instance.name,
+                "is_start_node": graph_runner_node.is_start_node,
+                "parameters": params_repr,
+            }
+        )
+    nodes_repr.sort(key=lambda x: x["id"])
+
+    edges = get_edges(session, graph_runner_id)
+    edges_repr = sorted(
+        [
+            {
+                "id": str(e.id),
+                "origin": str(e.source_node_id),
+                "destination": str(e.target_node_id),
+                "order": e.order,
+            }
+            for e in edges
+        ],
+        key=lambda x: x["id"],
+    )
+
+    graph_repr = {"nodes": nodes_repr, "edges": edges_repr}
+    json_str = json.dumps(_sort_dict_keys_recursively(graph_repr), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
 
 
 def resolve_component_version_id_from_instance_id(session: Session, instance_id: UUID) -> UUID:
@@ -330,122 +396,16 @@ async def update_graph_service(
     # Port mappings: ensure explicit wiring for all edges (save-time defaults)
     _ensure_port_mappings_for_edges(session, graph_runner_id, graph_project)
 
-    db_port_instances_by_instance: dict[UUID, dict[str, UUID]] = defaultdict(dict)
-    for instance_id in instance_ids:
-        port_instances = get_input_port_instances_for_component_instance(session, instance_id)
-        for port in port_instances:
-            if port.field_expression_id:
-                db_port_instances_by_instance[instance_id][port.name] = port.id
-
-    incoming_field_expressions_by_instance: dict[UUID, set[str]] = defaultdict(set)
+    # Apply field expressions / input port instances for each instance
     for instance in graph_project.component_instances:
-        incoming_field_expressions_by_instance[instance.id] = set()
-
-        if instance.input_port_instances:
-            for port_instance in instance.input_port_instances:
-                if port_instance.field_expression and port_instance.field_expression.expression_json:
-                    field_name = port_instance.name
-                    incoming_field_expressions_by_instance[instance.id].add(field_name)
-
-                    expr = create_field_expression(session, port_instance.field_expression.expression_json)
-                    existing_port_id = db_port_instances_by_instance[instance.id].get(field_name)
-                    if existing_port_id:
-                        update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
-                    else:
-                        create_input_port_instance(
-                            session=session,
-                            component_instance_id=instance.id,
-                            name=field_name,
-                            field_expression_id=expr.id,
-                        )
-
-        # Convert Inputs from parameters[kind="input"] to field expressions.
-        # TODO: this mixes API-level `kind="input"` with service-level types; needs decoupling.
-        for param in input_params_by_instance.get(instance.id, []):
-            if not instance.id:
-                raise ValueError(
-                    f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
-                )
-            if instance.id not in instance_ids:
-                raise ValueError(f"Invalid field expression target: component instance {instance.id} not in update")
-
-            field_name = param.name
-
-            if param.value is None or param.value == "":
-                LOGGER.warning(
-                    f"No expression value for input parameter {field_name} on instance {instance.id}, skipping"
-                )
-                sync_output_port_instances_from_schema(
-                    session=session,
-                    component_instance_id=instance.id,
-                    component_version_id=instance.component_version_id,
-                    field_name=field_name,
-                    value=None,
-                )
-                continue
-
-            if field_name in incoming_field_expressions_by_instance[instance.id]:
-                LOGGER.warning(
-                    f"Field expression {field_name} already exists for instance {instance.id}, skipping update"
-                )
-                continue
-
-            incoming_field_expressions_by_instance[instance.id].add(field_name)
-
-            # Parse expression (handles both text and JSON formats)
-            try:
-                ast = parse_expression_flexible(param.value)
-                LOGGER.debug(f"Parsed expression for {field_name}: {param.value}")
-            except FieldExpressionParseError:
-                LOGGER.error(f"Failed to parse field expression from parameter input: {param.value}")
-                raise
-
-            _validate_expression_references(session, graph_runner_id, ast)
-
-            expression_json = expr_to_json(ast)
-
-            existing_port_id = db_port_instances_by_instance[instance.id].get(field_name)
-            if existing_port_id:
-                port = get_input_port_instance(session, existing_port_id)
-                if port and port.field_expression_id:
-                    update_field_expression(session, port.field_expression_id, expression_json)
-                else:
-                    # Create new field expression and link it
-                    expr = create_field_expression(session, expression_json)
-                    update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
-            else:
-                expr = create_field_expression(session, expression_json)
-                create_input_port_instance(
-                    session=session,
-                    component_instance_id=instance.id,
-                    name=field_name,
-                    field_expression_id=expr.id,
-                )
-            sync_output_port_instances_from_schema(
-                session=session,
-                component_instance_id=instance.id,
-                component_version_id=instance.component_version_id,
-                field_name=field_name,
-                value=param.value,
-            )
-
-            ref_node = get_pure_ref(ast)
-            if ref_node is not None:
-                _create_port_mappings_for_pure_ref_expressions(
-                    session=session,
-                    graph_runner_id=graph_runner_id,
-                    component_instance_id=instance.id,
-                    field_name=field_name,
-                    ref_node=ref_node,
-                )
-
-    for instance_id, incoming_fields in incoming_field_expressions_by_instance.items():
-        if instance_id in db_port_instances_by_instance:
-            existing_fields = set(db_port_instances_by_instance[instance_id].keys())
-            fields_to_delete = existing_fields - incoming_fields
-            for field_name in fields_to_delete:
-                port_id = db_port_instances_by_instance[instance_id][field_name]
-                delete_input_port_instance(session, port_id)
+        _apply_instance_ports_and_expressions(
+            session=session,
+            graph_runner_id=graph_runner_id,
+            instance=instance,
+            instance_id=instance.id,
+            input_params=input_params_by_instance.get(instance.id, []),
+            all_instance_ids=instance_ids,
+        )
 
     nodes_to_delete = previous_graph_nodes - instance_ids
     if len(nodes_to_delete) > 0:
@@ -472,6 +432,249 @@ async def update_graph_service(
         playground_input_schema=playground_input_schema,
         playground_field_types=playground_field_types,
     )
+
+
+def _apply_instance_ports_and_expressions(
+    session: Session,
+    graph_runner_id: UUID,
+    instance,
+    instance_id: UUID,
+    input_params: list,
+    all_instance_ids: Optional[set] = None,
+) -> None:
+    """Apply input_port_instances and INPUT params (as field expressions) for a single instance.
+
+    This is the per-instance portion of the field-expression wiring logic. It:
+    - Creates/updates input port instances from instance.input_port_instances.
+    - Converts parameters with kind=INPUT into field expressions.
+    - Deletes input port instances that are no longer referenced.
+    """
+    db_port_instances: dict[str, UUID] = {}
+    port_instances = get_input_port_instances_for_component_instance(session, instance_id)
+    for port in port_instances:
+        if port.field_expression_id:
+            db_port_instances[port.name] = port.id
+
+    incoming_fields: set[str] = set()
+
+    if instance.input_port_instances:
+        for port_instance in instance.input_port_instances:
+            if port_instance.field_expression and port_instance.field_expression.expression_json:
+                field_name = port_instance.name
+                incoming_fields.add(field_name)
+
+                expr = create_field_expression(session, port_instance.field_expression.expression_json)
+                existing_port_id = db_port_instances.get(field_name)
+                if existing_port_id:
+                    update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
+                else:
+                    create_input_port_instance(
+                        session=session,
+                        component_instance_id=instance.id,
+                        name=field_name,
+                        field_expression_id=expr.id,
+                    )
+
+    # Convert parameters with kind=INPUT into field expressions.
+    # TODO: this mixes API-level `kind="input"` with service-level types; needs decoupling.
+    for param in input_params:
+        if not instance.id:
+            raise ValueError(
+                f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
+            )
+        if all_instance_ids is not None and instance.id not in all_instance_ids:
+            raise ValueError(f"Invalid field expression target: component instance {instance.id} not in update")
+
+        field_name = param.name
+
+        if param.value is None or param.value == "":
+            LOGGER.warning(
+                f"No expression value for input parameter {field_name} on instance {instance.id}, skipping"
+            )
+            sync_output_port_instances_from_schema(
+                session=session,
+                component_instance_id=instance.id,
+                component_version_id=instance.component_version_id,
+                field_name=field_name,
+                value=None,
+            )
+            continue
+
+        if field_name in incoming_fields:
+            LOGGER.warning(
+                f"Field expression {field_name} already exists for instance {instance.id}, skipping update"
+            )
+            continue
+
+        incoming_fields.add(field_name)
+
+        try:
+            ast = parse_expression_flexible(param.value)
+            LOGGER.debug(f"Parsed expression for {field_name}: {param.value}")
+        except FieldExpressionParseError:
+            LOGGER.error(f"Failed to parse field expression from parameter input: {param.value}")
+            raise
+
+        _validate_expression_references(session, graph_runner_id, ast)
+
+        expression_json = expr_to_json(ast)
+
+        existing_port_id = db_port_instances.get(field_name)
+        if existing_port_id:
+            port = get_input_port_instance(session, existing_port_id)
+            if port and port.field_expression_id:
+                update_field_expression(session, port.field_expression_id, expression_json)
+            else:
+                expr = create_field_expression(session, expression_json)
+                update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
+        else:
+            expr = create_field_expression(session, expression_json)
+            create_input_port_instance(
+                session=session,
+                component_instance_id=instance.id,
+                name=field_name,
+                field_expression_id=expr.id,
+            )
+
+        sync_output_port_instances_from_schema(
+            session=session,
+            component_instance_id=instance.id,
+            component_version_id=instance.component_version_id,
+            field_name=field_name,
+            value=param.value,
+        )
+
+        ref_node = get_pure_ref(ast)
+        if ref_node is not None:
+            _create_port_mappings_for_pure_ref_expressions(
+                session=session,
+                graph_runner_id=graph_runner_id,
+                component_instance_id=instance.id,
+                field_name=field_name,
+                ref_node=ref_node,
+            )
+
+    # Delete input port instances that are no longer referenced
+    existing_fields = set(db_port_instances.keys())
+    fields_to_delete = existing_fields - incoming_fields
+    for field_name in fields_to_delete:
+        port_id = db_port_instances[field_name]
+        delete_input_port_instance(session, port_id)
+
+
+async def save_component_instance_service(
+    session: Session,
+    project_id: UUID,
+    graph_runner_id: UUID,
+    instance,
+    user_id: UUID,
+) -> SaveComponentInstanceResult:
+    """Update a single component instance and its field expressions / input ports.
+
+    Edges are never touched here — edge management is done via addEdge / deleteEdge.
+    Returns the saved instance ID and the full read representation of the instance.
+    """
+    _ensure_graph_exists_and_validate(session, graph_runner_id, project_id)
+
+    # Split parameters into regular vs kind=INPUT
+    input_params: list = []
+    regular_params: list = []
+    for param in instance.parameters:
+        kind = getattr(param, "kind", ParameterKind.PARAMETER)
+        if kind == ParameterKind.INPUT:
+            if not instance.id:
+                raise ValueError(
+                    f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
+                )
+            input_params.append(param)
+        else:
+            regular_params.append(param)
+    instance.parameters = regular_params
+
+    instance_id = create_or_update_component_instance(session, instance, project_id)
+    upsert_component_node(
+        session,
+        graph_runner_id=graph_runner_id,
+        component_instance_id=instance.id,
+        is_start_node=instance.is_start_node,
+    )
+
+    _apply_instance_ports_and_expressions(
+        session=session,
+        graph_runner_id=graph_runner_id,
+        instance=instance,
+        instance_id=instance_id,
+        input_params=input_params,
+    )
+
+    modification_hash = _calculate_graph_hash_from_db(session, graph_runner_id)
+    insert_modification_history(session, graph_runner_id, user_id, modification_hash)
+    LOGGER.info(f"Saved component instance {instance_id} in graph {graph_runner_id}")
+
+    component_instance_read = get_component_instance(session, instance_id, is_start_node=instance.is_start_node)
+
+    return SaveComponentInstanceResult(
+        component_instance_id=instance_id,
+        component_instance=component_instance_read,
+    )
+
+
+def delete_component_instance_service(
+    session: Session,
+    graph_runner_id: UUID,
+    instance_id: UUID,
+    user_id: UUID,
+) -> dict:
+    """Remove a component instance from a graph runner.
+
+    Deletes all edges connected to the instance first, then removes the node
+    from the graph runner and deletes the component instance itself.
+
+    Returns a dict with ``instance_id`` and ``deleted_edge_ids`` so the
+    caller can update the canvas without a full graph refetch.
+    """
+    validate_graph_is_draft(session, graph_runner_id)
+
+    # Collect and delete all edges touching this instance before removing the node
+    connected_edges = get_edges_for_instance_node(session, instance_id)
+    deleted_edge_ids: list[UUID] = []
+    for edge in connected_edges:
+        delete_edge(session, edge.id)
+        deleted_edge_ids.append(edge.id)
+
+    delete_node(session, instance_id)
+    delete_component_instances_from_nodes(session, {instance_id})
+
+    modification_hash = _calculate_graph_hash_from_db(session, graph_runner_id)
+    insert_modification_history(session, graph_runner_id, user_id, modification_hash)
+    LOGGER.info(
+        f"Deleted component instance {instance_id} from graph {graph_runner_id}; "
+        f"deleted {len(deleted_edge_ids)} edge(s)"
+    )
+
+    return {"instance_id": instance_id, "deleted_edge_ids": deleted_edge_ids}
+
+
+def add_edge_service(
+    session: Session,
+    graph_runner_id: UUID,
+    edge_id: UUID,
+    source_node_id: UUID,
+    target_node_id: UUID,
+    order: Optional[int] = None,
+) -> UUID:
+    """Create or update an edge between two component instance nodes."""
+    if graph_runner_exists(session, source_node_id) or graph_runner_exists(session, target_node_id):
+        raise ValueError("Nested graphs are not supported")
+    upsert_edge(
+        session,
+        id=edge_id,
+        source_node_id=source_node_id,
+        target_node_id=target_node_id,
+        graph_runner_id=graph_runner_id,
+        order=order,
+    )
+    return edge_id
 
 
 def _ensure_port_mappings_for_edges(
