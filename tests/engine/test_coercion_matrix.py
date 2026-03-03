@@ -5,6 +5,7 @@ This test suite covers all coercion combinations to ensure the coercion logic
 is stable and handles all the critical type mismatches found during QA.
 """
 
+import json
 from datetime import date
 from typing import Optional
 
@@ -376,9 +377,8 @@ def test_legacy_dict_to_string():
     data = {"data": {"content": "Nested content"}}
     assert coercion_matrix.coerce(data, str) == "Nested content"
 
-    # Fallback to string conversion
     data = {"some_field": "value"}
-    assert coercion_matrix.coerce(data, str) == str(data)
+    assert coercion_matrix.coerce(data, str) == json.dumps(data, ensure_ascii=False)
 
 
 def test_source_chunk_to_string():

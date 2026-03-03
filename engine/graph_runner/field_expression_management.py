@@ -105,6 +105,11 @@ def evaluate_expression(
             LOGGER.debug(f"Evaluated variable expression for {target_field_name}: {result}")
             return result
 
+        case RefNode() as ref:
+            result = evaluate_ref_as_object(ref)
+            LOGGER.debug(f"Evaluated ref expression for {target_field_name}: {result}")
+            return result
+
         case JsonBuildNode(template=template, refs=ref_nodes):
             evaluated_refs = {}
             for placeholder, ref_node in ref_nodes.items():
