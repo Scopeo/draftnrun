@@ -80,11 +80,12 @@ class PythonCodeRunnerToolInputs(BaseModel):
     python_code: str = Field(
         default="",
         description="The code python to run",
-        json_schema_extra={"ui_component": UIComponent.CODE},
+        json_schema_extra={"ui_component": UIComponent.CODE, "is_tool_input": True},
     )
     input_filepaths: Optional[list[str]] = Field(
         default=None,
         description="The filepaths to load into the sandbox",
+        json_schema_extra={"is_tool_input": True},
     )
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 

@@ -415,10 +415,12 @@ class DocxTemplateInputs(BaseModel):
     )
     template_information_brief: str = Field(
         description="Instructions describing what content to inject in the template placeholders.",
+        json_schema_extra={"is_tool_input": True},
     )
     output_filename: str = Field(
         default="filled_template.docx",
         description="Filename for the filled DOCX file.",
+        json_schema_extra={"is_tool_input": True},
     )
     model_config = {"extra": "allow"}
 

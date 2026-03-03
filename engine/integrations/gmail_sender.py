@@ -61,17 +61,30 @@ GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
 
 
 class GmailSenderInputs(BaseModel):
-    mail_subject: str = Field(description="The subject of the email to be sent.")
-    mail_body: str = Field(description="The body of the email to be sent.")
+    mail_subject: str = Field(
+        description="The subject of the email to be sent.", json_schema_extra={"is_tool_input": True}
+    )
+    mail_body: str = Field(description="The body of the email to be sent.", json_schema_extra={"is_tool_input": True})
     email_recipients: Optional[list[str]] = Field(
         default=None,
         description="""List of email addresses to send the email to.
             If not provided, the email will be saved as a draft.""",
+        json_schema_extra={"is_tool_input": True},
     )
-    cc: Optional[list[str]] = Field(default=None, description="List of CC email addresses to send the email to.")
-    bcc: Optional[list[str]] = Field(default=None, description="List of BCC email addresses to send the email to.")
+    cc: Optional[list[str]] = Field(
+        default=None,
+        description="List of CC email addresses to send the email to.",
+        json_schema_extra={"is_tool_input": True},
+    )
+    bcc: Optional[list[str]] = Field(
+        default=None,
+        description="List of BCC email addresses to send the email to.",
+        json_schema_extra={"is_tool_input": True},
+    )
     email_attachments: Optional[list[str]] = Field(
-        default=None, description="List of file paths to attach to the email."
+        default=None,
+        description="List of file paths to attach to the email.",
+        json_schema_extra={"is_tool_input": True},
     )
 
     @validator("email_recipients", pre=True)

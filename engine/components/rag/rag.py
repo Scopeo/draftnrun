@@ -25,8 +25,12 @@ FILTERING_CONDITION_WITH_METADATA_QDRANT = "AND"
 
 
 class RAGInputs(BaseModel):
-    query_text: str = Field(description="The search query for the knowledge base.")
-    filters: Optional[dict] = Field(default=None, description="Qdrant filter object.")
+    query_text: str = Field(
+        description="The search query for the knowledge base.", json_schema_extra={"is_tool_input": True}
+    )
+    filters: Optional[dict] = Field(
+        default=None, description="Qdrant filter object.", json_schema_extra={"is_tool_input": True}
+    )
 
 
 class RAGOutputs(BaseModel):

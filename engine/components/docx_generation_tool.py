@@ -40,9 +40,15 @@ class DOCXGenerationToolInputs(BaseModel):
         description="The markdown text to convert to DOCX.",
         json_schema_extra={
             "ui_component": UIComponent.TEXTAREA,
+            "is_tool_input": True,
         },
     )
-    filename: Optional[str] = Field(description="The desired filename for the generated DOCX file.")
+    filename: Optional[str] = Field(
+        description="The desired filename for the generated DOCX file.",
+        json_schema_extra={
+            "is_tool_input": True,
+        },
+    )
 
 
 class DOCXGenerationToolOutputs(BaseModel):

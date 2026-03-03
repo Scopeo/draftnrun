@@ -36,8 +36,11 @@ SLACK_SENDER_TOOL_DESCRIPTION = ToolDescription(
 
 
 class SlackSenderInputs(BaseModel):
-    channel: str = Field(description="Channel name or ID to send message to (e.g., #general or C1234567890).")
-    message: str = Field(description="Message text to send to the channel")
+    channel: str = Field(
+        description="Channel name or ID to send message to (e.g., #general or C1234567890).",
+        json_schema_extra={"is_tool_input": True},
+    )
+    message: str = Field(description="Message text to send to the channel", json_schema_extra={"is_tool_input": True})
     thread_ts: Optional[str] = Field(
         default=None,
         description=(
@@ -46,6 +49,7 @@ class SlackSenderInputs(BaseModel):
             "Example: from URL 'https://workspace.slack.com/archives/C123/p1234567890123456' use '1234567890.123456'. "
             "If not provided, sends as a new message."
         ),
+        json_schema_extra={"is_tool_input": True},
     )
 
 

@@ -112,12 +112,14 @@ DEFAULT_CSS_FORMATTING = """
 
 
 class PDFGenerationToolInputs(BaseModel):
-
     markdown_content: str = Field(
         description="The markdown text to convert to PDF.",
-        json_schema_extra={"ui_component": UIComponent.TEXTAREA},
+        json_schema_extra={"ui_component": UIComponent.TEXTAREA, "is_tool_input": True},
     )
-    filename: Optional[str] = Field(description="The desired filename for the generated PDF file.")
+    filename: Optional[str] = Field(
+        description="The desired filename for the generated PDF file.",
+        json_schema_extra={"is_tool_input": True},
+    )
 
 
 class PDFGenerationToolOutputs(BaseModel):

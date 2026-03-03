@@ -50,10 +50,12 @@ def cast_string_to_list(string: Optional[str]) -> list[str]:
 class RetrieverInputs(BaseModel):
     query: str = Field(
         description="The search query to retrieve relevant chunks from the knowledge base.",
+        json_schema_extra={"is_tool_input": True},
     )
     filters: Optional[dict] = Field(
         default=None,
         description="Optional filters to apply to the retrieval (e.g., metadata filters).",
+        json_schema_extra={"is_tool_input": True},
     )
     model_config = {"extra": "allow"}
 
