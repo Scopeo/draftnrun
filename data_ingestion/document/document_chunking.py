@@ -79,8 +79,6 @@ def document_chunking_mapping(
             create_chunks_from_excel_file_with_llamaparse,
             get_file_content_func=get_file_content_func,
             llamaparse_api_key=llamaparse_api_key,
-            chunk_size=chunk_size,
-            chunk_overlap=overlapping_size,
         )
         LOGGER.info("Using LlamaParse for PDF and DOCX processing")
 
@@ -164,8 +162,12 @@ async def get_chunks_dataframe_from_doc(
     #         raise ValueError("No summary function / put summary function provided for documents")
     #     description_doc = documents_summary_func(document)
 
-    chunk_size_doc = default_chunk_size
-    LOGGER.info(f"[DOCUMENT_PROCESSING] Using chunk size: {chunk_size_doc} for '{document.file_name}'")
+    if document.type.value in [FileDocumentType.EXCEL.value, FileDocumentType.XLS.value, FileDocumentType.XLSM.value]:
+        chunk_size_doc = None
+        LOGGER.info(f"[DOCUMENT_PROCESSING] Using Excel-specific chunk size for '{document.file_name}'")
+    else:
+        chunk_size_doc = default_chunk_size
+        LOGGER.info(f"[DOCUMENT_PROCESSING] Using chunk size: {chunk_size_doc} for '{document.file_name}'")
 
     # if description_doc is not None:
     #     summary_token_size = llm_service.get_token_size(

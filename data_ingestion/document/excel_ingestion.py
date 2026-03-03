@@ -17,7 +17,7 @@ async def create_chunks_from_excel_file_with_llamaparse(
     document: FileDocument,
     get_file_content_func: Callable[[str], bytes],
     llamaparse_api_key: str,
-    chunk_size: Optional[int] = EXCEL_CHUNK_SIZE,
+    chunk_size: Optional[int] = None,
     chunk_overlap: int = EXCEL_CHUNK_OVERLAP,
     **kwargs,
 ) -> list[FileChunk]:
@@ -34,7 +34,7 @@ async def create_chunks_from_excel_file_with_llamaparse(
                     page_chunks = chunk_markdown(
                         document_to_process=document,
                         content=markdown_content,
-                        chunk_size=chunk_size,
+                        chunk_size=chunk_size if chunk_size is not None else EXCEL_CHUNK_SIZE,
                         chunk_overlap=chunk_overlap,
                     )
                     result_chunks.extend(page_chunks)
