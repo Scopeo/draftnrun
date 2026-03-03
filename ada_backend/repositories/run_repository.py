@@ -1,0 +1,77 @@
+from datetime import datetime
+from typing import List, Optional
+from uuid import UUID
+
+from sqlalchemy.orm import Session
+
+from ada_backend.database import models as db
+
+
+def create_run(
+    session: Session,
+    project_id: UUID,
+    trigger: db.CallType = db.CallType.API,
+) -> db.Run:
+    """Create a new run with status pending. Caller manages transaction."""
+    run = db.Run(
+        project_id=project_id,
+        status=db.RunStatus.PENDING,
+        trigger=trigger,
+    )
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    return run
+
+
+def get_run(session: Session, run_id: UUID) -> Optional[db.Run]:
+    return session.query(db.Run).filter(db.Run.id == run_id).first()
+
+
+def count_runs_by_project(session: Session, project_id: UUID) -> int:
+    """Return total number of runs for a project."""
+    return session.query(db.Run).filter(db.Run.project_id == project_id).count()
+
+
+def get_runs_by_project(
+    session: Session,
+    project_id: UUID,
+    limit: int = 50,
+    offset: int = 0,
+) -> List[db.Run]:
+    """Return runs for a project, newest first."""
+    return (
+        session.query(db.Run)
+        .filter(db.Run.project_id == project_id)
+        .order_by(db.Run.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+
+
+def update_run_status(
+    session: Session,
+    run_id: UUID,
+    status: db.RunStatus,
+    error: Optional[str] = None,
+    trace_id: Optional[str] = None,
+    started_at: Optional[datetime] = None,
+    finished_at: Optional[datetime] = None,
+) -> Optional[db.Run]:
+    """Update run status and optionally error/trace_id/started_at/finished_at."""
+    run = get_run(session, run_id)
+    if run is None:
+        return None
+    run.status = status
+    if error is not None:
+        run.error = error
+    if trace_id is not None:
+        run.trace_id = trace_id
+    if started_at is not None:
+        run.started_at = started_at
+    if finished_at is not None:
+        run.finished_at = finished_at
+    session.commit()
+    session.refresh(run)
+    return run

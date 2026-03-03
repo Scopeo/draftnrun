@@ -60,6 +60,24 @@ class ProjectNotFound(Exception):
         super().__init__(f"Project not found: {project_id}")
 
 
+class RunNotFound(Exception):
+    def __init__(self, run_id: UUID):
+        self.run_id = run_id
+        super().__init__(f"Run not found: {run_id}")
+
+
+class InvalidRunStatusTransition(Exception):
+    """Raised when updating a run to a status that would go backwards (e.g. RUNNING -> PENDING)."""
+
+    def __init__(self, current_status: str, new_status: str):
+        self.current_status = current_status
+        self.new_status = new_status
+        super().__init__(
+            f"Invalid run status transition: cannot go from {current_status} to "
+            f"{new_status} (status cannot go backwards)"
+        )
+
+
 class ApiKeyAccessDenied(Exception):
     def __init__(self, resource_type: str = "resource"):
         self.resource_type = resource_type

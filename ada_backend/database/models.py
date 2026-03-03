@@ -122,6 +122,7 @@ class CallType(StrEnum):
     API = "api"
     SANDBOX = "sandbox"
     QA = "qa"
+    WEBHOOK = "webhook"
 
 
 class ResponseFormat(StrEnum):
@@ -203,6 +204,15 @@ class CronStatus(StrEnum):
     COMPLETED = "completed"
     ERROR = "error"
     RUNNING = "running"
+
+
+class RunStatus(StrEnum):
+    """Status of a tracked run."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class EvaluationType(StrEnum):
@@ -1318,6 +1328,8 @@ class Project(Base):
 
     usage = relationship("Usage", back_populates="project", cascade="all, delete-orphan")
 
+    runs = relationship("Run", back_populates="project", cascade="all, delete-orphan")
+
     __mapper_args__ = {"polymorphic_on": type, "polymorphic_identity": "base"}
 
     def __str__(self):
@@ -1336,6 +1348,35 @@ class AgentProject(Project):
     id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"), primary_key=True)
 
     __mapper_args__ = {"polymorphic_identity": ProjectType.AGENT.value}
+
+
+class Run(Base):
+    """
+    Durable record of every run (workflow/agent execution) for a project.
+    """
+
+    __tablename__ = "runs"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    project_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    status = mapped_column(make_pg_enum(RunStatus), nullable=False, default=RunStatus.PENDING)
+    trigger = mapped_column(make_pg_enum(CallType), nullable=False, default=CallType.API)
+    trace_id = mapped_column(String, nullable=True, index=True)
+    error = mapped_column(JSONB, nullable=True)
+    started_at = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    project = relationship("Project", back_populates="runs")
+
+    def __str__(self):
+        return f"Run(id={self.id}, project_id={self.project_id}, status={self.status})"
 
 
 class ProjectEnvironmentBinding(Base):

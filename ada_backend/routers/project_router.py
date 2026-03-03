@@ -47,6 +47,7 @@ from ada_backend.services.project_service import (
     get_projects_by_organization_with_details_service,
     update_project_service,
 )
+from ada_backend.services.run_service import run_with_tracking
 from ada_backend.services.tag_service import compose_tag_name
 from engine.components.errors import (
     KeyTypePromptTemplateError,
@@ -214,13 +215,18 @@ async def run_env_agent_endpoint(
     try:
         verify_project_access(sqlaclhemy_db_session, verified_api_key, project_id)
 
-        return await run_env_agent(
+        return await run_with_tracking(
             session=sqlaclhemy_db_session,
             project_id=project_id,
-            input_data=input_data,
-            env=env,
-            call_type=CallType.API,
-            response_format=response_format,
+            trigger=CallType.API,
+            runner_coro=run_env_agent(
+                session=sqlaclhemy_db_session,
+                project_id=project_id,
+                input_data=input_data,
+                env=env,
+                call_type=CallType.API,
+                response_format=response_format,
+            ),
         )
     except ApiKeyAccessDenied as e:
         LOGGER.error(f"API key access denied: {str(e)}", exc_info=True)
@@ -350,18 +356,23 @@ async def chat(
             raise HTTPException(status_code=404, detail=f"Graph runner {graph_runner_id} is not bound to any project")
         environment = project_env_binding.environment
         LOGGER.info(f"Determined environment {environment} for graph_runner_id {graph_runner_id}")
-        return await run_agent(
+        return await run_with_tracking(
             session=session,
             project_id=project_id,
-            graph_runner_id=graph_runner_id,
-            input_data=input_data,
-            environment=environment,
-            call_type=CallType.SANDBOX,
-            tag_name=compose_tag_name(
-                project_env_binding.graph_runner.tag_version,
-                project_env_binding.graph_runner.version_name,
+            trigger=CallType.SANDBOX,
+            runner_coro=run_agent(
+                session=session,
+                project_id=project_id,
+                graph_runner_id=graph_runner_id,
+                input_data=input_data,
+                environment=environment,
+                call_type=CallType.SANDBOX,
+                tag_name=compose_tag_name(
+                    project_env_binding.graph_runner.tag_version,
+                    project_env_binding.graph_runner.version_name,
+                ),
+                response_format=ResponseFormat.S3_KEY,
             ),
-            response_format=ResponseFormat.S3_KEY,
         )
     except OrganizationLimitExceededError as e:
         LOGGER.warning(
@@ -439,13 +450,18 @@ async def chat_env(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return await run_env_agent(
+        return await run_with_tracking(
             session=session,
             project_id=project_id,
-            input_data=input_data,
-            env=env,
-            call_type=CallType.SANDBOX,
-            response_format=ResponseFormat.S3_KEY,
+            trigger=CallType.SANDBOX,
+            runner_coro=run_env_agent(
+                session=session,
+                project_id=project_id,
+                input_data=input_data,
+                env=env,
+                call_type=CallType.SANDBOX,
+                response_format=ResponseFormat.S3_KEY,
+            ),
         )
     except OrganizationLimitExceededError as e:
         LOGGER.warning(

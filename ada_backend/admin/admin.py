@@ -127,6 +127,28 @@ class ProjectEnvironmentBinding(EnhancedModelView, model=db.ProjectEnvironmentBi
     form_excluded_columns = ["created_at", "updated_at"]
 
 
+class RunAdmin(EnhancedModelView, model=db.Run):
+    category = AdminCategory.PROJECTS
+    icon = "fas fa-play-circle"
+    column_list = [
+        "id",
+        "project",
+        "status",
+        "trigger",
+        "trace_id",
+        "started_at",
+        "finished_at",
+        "created_at",
+        "updated_at",
+        "error",
+    ]
+    column_searchable_list = ["project_id", "trace_id"]
+    column_filters = ["status", "trigger", "project_id"]
+    can_create = False
+    can_edit = False
+    column_default_sort = ("created_at", True)
+
+
 class IntegrationAdmin(EnhancedModelView, model=db.Integration):
     category = AdminCategory.PROJECTS
     icon = "fas fa-plug"
@@ -739,6 +761,7 @@ def setup_admin(app: FastAPI):
     # Add views to the admin interface
     admin.add_view(ProjectAdmin)
     admin.add_view(ProjectEnvironmentBinding)
+    admin.add_view(RunAdmin)
     admin.add_view(OrganizationSecretAdmin)
     admin.add_view(ApiKeyAdmin)
     admin.add_view(SecretIntegrationAdmin)
