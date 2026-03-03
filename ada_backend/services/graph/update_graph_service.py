@@ -653,11 +653,21 @@ def _create_port_mappings_for_pure_ref_expressions(
         # Static output port not found; check for a dynamic OutputPortInstance
         output_port_instance = get_output_port_instance_by_name(session, source_instance_uuid, ref_node.port)
         if not output_port_instance:
+            # No static or dynamic output port exists for this ref (e.g. start-node
+            # ctx fields like additional_info).  Delete any conflicting canonical
+            # port mapping so the expression can be resolved at runtime via ctx.
+            delete_port_mapping_for_target_input(
+                session=session,
+                graph_runner_id=graph_runner_id,
+                target_instance_id=component_instance_id,
+                target_port_definition_id=target_port_def_id,
+            )
             available = get_output_ports_for_component_version(session, source_component_version_id)
             available_names = [p.name for p in available]
             LOGGER.warning(
                 "[save] pure ref port mapping skipped: output port '%s' not found for component %s "
-                "(ref %s.%s -> %s.%s). Available static output ports: %s",
+                "(ref %s.%s -> %s.%s). Available static output ports: %s. "
+                "Deleted conflicting canonical mapping for target input.",
                 ref_node.port,
                 source_component_version_id,
                 ref_node.instance,

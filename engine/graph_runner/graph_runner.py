@@ -290,7 +290,29 @@ class GraphRunner:
         direct_port_mappings = [
             port_mapping for port_mapping in port_mappings_for_target if port_mapping.dispatch_strategy == "direct"
         ]
+
+        # Detect target fields where a pure ref expression references a different
+        # source than the auto-generated port mapping (e.g. start-node ctx fields
+        # like additional_info overriding the canonical messages mapping).
+        # These fields should be resolved by the expression, not the port mapping.
+        expression_overridden_fields: set[str] = set()
+        for pm in direct_port_mappings:
+            expr = self._expressions_by_target_ast.get((node_id, pm.target_port_name))
+            if isinstance(expr, RefNode) and (
+                expr.instance != pm.source_instance_id or expr.port != pm.source_port_name
+            ):
+                expression_overridden_fields.add(pm.target_port_name)
+
         for port_mapping in direct_port_mappings:
+            if port_mapping.target_port_name in expression_overridden_fields:
+                LOGGER.debug(
+                    "Skipping port mapping %s.%s -> %s.%s: overridden by field expression",
+                    port_mapping.source_instance_id,
+                    port_mapping.source_port_name,
+                    node_id,
+                    port_mapping.target_port_name,
+                )
+                continue
             if (
                 port_mapping.source_instance_id in self.tasks
                 and self.tasks[port_mapping.source_instance_id].state == TaskState.COMPLETED

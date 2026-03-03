@@ -296,7 +296,11 @@ class TestGraphRunnerExpressions:
         result = asyncio.run(gr.run({"input": "seed"}))
         assert result.messages[0].content == "echo[x:va]"
 
-    def test_pure_ref_expression_is_ignored_in_presence_of_mapping(self):
+    def test_pure_ref_expression_overrides_mapping_when_source_differs(self):
+        """When a pure ref expression references a different source than the port
+        mapping for the same target field, the expression takes priority.  This is
+        the core fix for start-node additional_info fields that live in ctx and
+        cannot produce a formal port mapping."""
         tm = TraceManager(project_name="test")
         set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])  # metrics
 
@@ -317,7 +321,7 @@ class TestGraphRunnerExpressions:
                 "dispatch_strategy": "direct",
             }
         ]
-        # Pure ref expression to a different source; should be ignored at runtime, mapping wins
+        # Pure ref expression to a different source; expression wins over mapping
         expressions = [
             {
                 "target_instance_id": "B",
@@ -330,6 +334,48 @@ class TestGraphRunnerExpressions:
             graph=g,
             runnables=runnables,
             start_nodes=["A", "C"],
+            trace_manager=tm,
+            port_mappings=mappings,
+            expressions=expressions,
+        )
+        result = asyncio.run(gr.run({"input": "seed"}))
+        assert result.messages[0].content == "echo[CVAL]"
+
+    def test_pure_ref_expression_same_source_uses_port_mapping(self):
+        """When the pure ref expression and port mapping agree on the source,
+        the port mapping is used (with its coercion path)."""
+        tm = TraceManager(project_name="test")
+        set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])
+
+        a = FixedStringSource(tm, value="AVAL", name="A")
+        b = StrEcho(tm, name="B")
+        runnables = {"A": a, "B": b}
+
+        g = nx.DiGraph()
+        g.add_nodes_from(["A", "B"])
+
+        mappings = [
+            {
+                "source_instance_id": "A",
+                "source_port_name": "output",
+                "target_instance_id": "B",
+                "target_port_name": "input",
+                "dispatch_strategy": "direct",
+            }
+        ]
+        # Pure ref expression to the SAME source as mapping; mapping is used
+        expressions = [
+            {
+                "target_instance_id": "B",
+                "field_name": "input",
+                "expression_ast": expr_from_json({"type": "ref", "instance": "A", "port": "output"}),
+            }
+        ]
+
+        gr = GraphRunner(
+            graph=g,
+            runnables=runnables,
+            start_nodes=["A"],
             trace_manager=tm,
             port_mappings=mappings,
             expressions=expressions,
@@ -965,3 +1011,172 @@ class TestGraphRunnerComplexFormulas:
         )
         with pytest.raises(ValueError, match="not a dict"):
             asyncio.run(gr.run({"input": "seed"}))
+
+
+class TestStartBlockAdditionalInfoExpressions:
+    """Verifies that field expressions referencing start-node payload_schema
+    fields (additional_info, etc.) correctly override canonical port mappings."""
+
+    def test_start_additional_info_overrides_canonical_messages_mapping(self):
+        """When a Start block has additional_info in payload_schema and a
+        downstream block's canonical input has both a canonical port mapping
+        (Start.messages) and a field expression (@{{start.additional_info}}),
+        the expression should win and the downstream block should receive
+        additional_info, not messages."""
+        from unittest.mock import MagicMock
+
+        from engine.components.inputs_outputs.start import Start
+        from engine.components.types import ToolDescription as TD
+
+        tm = TraceManager(project_name="test")
+        set_tracing_span(
+            project_id="test_proj",
+            organization_id="org",
+            organization_llm_providers=["mock"],
+        )
+
+        mock_tm = MagicMock(spec=TraceManager)
+        mock_tm.start_span = MagicMock(return_value=MagicMock(
+            __enter__=MagicMock(return_value=MagicMock()),
+            __exit__=MagicMock(return_value=False),
+        ))
+
+        start = Start(
+            trace_manager=mock_tm,
+            tool_description=TD(
+                name="Start",
+                description="start",
+                tool_properties={},
+                required_tool_properties=[],
+            ),
+            component_attributes=ComponentAttributes(
+                component_instance_name="Start",
+            ),
+            payload_schema='{"messages": [], "additional_info": "default_info"}',
+        )
+        downstream = StrEcho(tm, name="B")
+
+        runnables = {"START": start, "B": downstream}
+
+        g = nx.DiGraph()
+        g.add_nodes_from(["START", "B"])
+        g.add_edge("START", "B")
+
+        # Canonical port mapping: Start.messages -> B.input
+        mappings = [
+            {
+                "source_instance_id": "START",
+                "source_port_name": "messages",
+                "target_instance_id": "B",
+                "target_port_name": "input",
+                "dispatch_strategy": "direct",
+            }
+        ]
+
+        # Field expression: @{{START.additional_info}} -> B.input
+        expressions = [
+            {
+                "target_instance_id": "B",
+                "field_name": "input",
+                "expression_ast": expr_from_json({
+                    "type": "ref",
+                    "instance": "START",
+                    "port": "additional_info",
+                }),
+            }
+        ]
+
+        gr = GraphRunner(
+            graph=g,
+            runnables=runnables,
+            start_nodes=["START"],
+            trace_manager=tm,
+            port_mappings=mappings,
+            expressions=expressions,
+        )
+
+        result = asyncio.run(gr.run({
+            "messages": [{"role": "user", "content": "hello"}],
+            "additional_info": "user_provided_info",
+        }))
+        assert result.messages[0].content == "echo[user_provided_info]"
+
+    def test_start_additional_info_uses_default_when_not_provided(self):
+        """When the caller doesn't provide additional_info, the Start block
+        uses the payload_schema default, and the downstream block should
+        receive that default via the field expression."""
+        from unittest.mock import MagicMock
+
+        from engine.components.inputs_outputs.start import Start
+        from engine.components.types import ToolDescription as TD
+
+        tm = TraceManager(project_name="test")
+        set_tracing_span(
+            project_id="test_proj",
+            organization_id="org",
+            organization_llm_providers=["mock"],
+        )
+
+        mock_tm = MagicMock(spec=TraceManager)
+        mock_tm.start_span = MagicMock(return_value=MagicMock(
+            __enter__=MagicMock(return_value=MagicMock()),
+            __exit__=MagicMock(return_value=False),
+        ))
+
+        start = Start(
+            trace_manager=mock_tm,
+            tool_description=TD(
+                name="Start",
+                description="start",
+                tool_properties={},
+                required_tool_properties=[],
+            ),
+            component_attributes=ComponentAttributes(
+                component_instance_name="Start",
+            ),
+            payload_schema='{"messages": [], "additional_info": "default_info"}',
+        )
+        downstream = StrEcho(tm, name="B")
+
+        runnables = {"START": start, "B": downstream}
+
+        g = nx.DiGraph()
+        g.add_nodes_from(["START", "B"])
+        g.add_edge("START", "B")
+
+        mappings = [
+            {
+                "source_instance_id": "START",
+                "source_port_name": "messages",
+                "target_instance_id": "B",
+                "target_port_name": "input",
+                "dispatch_strategy": "direct",
+            }
+        ]
+
+        expressions = [
+            {
+                "target_instance_id": "B",
+                "field_name": "input",
+                "expression_ast": expr_from_json({
+                    "type": "ref",
+                    "instance": "START",
+                    "port": "additional_info",
+                }),
+            }
+        ]
+
+        gr = GraphRunner(
+            graph=g,
+            runnables=runnables,
+            start_nodes=["START"],
+            trace_manager=tm,
+            port_mappings=mappings,
+            expressions=expressions,
+        )
+
+        # Only pass messages, not additional_info — should use default
+        result = asyncio.run(gr.run({
+            "messages": [{"role": "user", "content": "hello"}],
+        }))
+        assert result.messages[0].content == "echo[default_info]"
