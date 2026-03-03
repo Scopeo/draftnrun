@@ -165,6 +165,7 @@ class UIComponent(StrEnum):
     OAUTH_CONNECTION = "OAuthConnection"
     CODE = "Code"
     ROUTE_BUILDER = "RouteBuilder"
+    CATEGORIES_BUILDER = "CategoriesBuilder"
 
 
 class SourceType(StrEnum):

@@ -18,6 +18,7 @@ from ada_backend.database.seed.integrations.seed_slack import seed_slack_compone
 from ada_backend.database.seed.seed_ai_agent import seed_ai_agent_components, seed_ai_agent_parameter_groups
 from ada_backend.database.seed.seed_api_call_tool import seed_api_call_components
 from ada_backend.database.seed.seed_categories import seed_categories
+from ada_backend.database.seed.seed_categorizer import seed_categorizer_components, seed_categorizer_parameter_groups
 from ada_backend.database.seed.seed_chunk_processor import seed_chunk_processor_components
 from ada_backend.database.seed.seed_db_service import seed_db_service_components
 from ada_backend.database.seed.seed_docx_generation import seed_docx_generation_components
@@ -71,6 +72,8 @@ def seed_db(session: Session):
         seed_docx_template_components(session)
         seed_llm_call_components(session)
         seed_llm_call_parameter_groups(session)
+        seed_categorizer_components(session)
+        seed_categorizer_parameter_groups(session)
         seed_sql_tool_components(session)
         seed_react_sql_components(session)
         seed_smart_rag_components(session)
