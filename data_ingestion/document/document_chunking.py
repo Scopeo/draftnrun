@@ -79,6 +79,8 @@ def document_chunking_mapping(
             create_chunks_from_excel_file_with_llamaparse,
             get_file_content_func=get_file_content_func,
             llamaparse_api_key=llamaparse_api_key,
+            chunk_size=chunk_size,
+            chunk_overlap=overlapping_size,
         )
         LOGGER.info("Using LlamaParse for PDF and DOCX processing")
 
@@ -108,6 +110,8 @@ def document_chunking_mapping(
             chunk_overlap=overlapping_size,
         ),
         FileDocumentType.EXCEL.value: excel_processor,
+        FileDocumentType.XLS.value: excel_processor,
+        FileDocumentType.XLSM.value: excel_processor,
         FileDocumentType.GOOGLE_SHEET.value: excel_processor,
         FileDocumentType.CSV.value: partial(
             ingest_csv_file,
