@@ -96,6 +96,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "start_v2": UUID("7a6e2c9b-5b1b-4a9b-9f2f-9b7f0540d4b0"),
     "filter": UUID("02468c0b-bc99-44ce-a435-995acc5e2545"),
     "gmail_sender": UUID("af96bb40-c9ea-4851-a663-f0e64363fcb2"),
+    "gmail_sender_v2": UUID("c6d0006f-dbff-472b-bdff-e64cec48f289"),
     "python_code_runner": UUID("e2b00000-0000-1111-2222-333333333333"),
     "terminal_command_runner": UUID("e2b10000-1111-2222-3333-444444444444"),
     "linkup_search_tool": UUID("f3e45678-9abc-def0-1234-56789abcdef0"),
