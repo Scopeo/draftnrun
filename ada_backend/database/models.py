@@ -167,6 +167,7 @@ class UIComponent(StrEnum):
     ROUTE_BUILDER = "RouteBuilder"
     CATEGORIES_BUILDER = "CategoriesBuilder"
 
+
 class SourceType(StrEnum):
     """Enumeration of source types."""
 
