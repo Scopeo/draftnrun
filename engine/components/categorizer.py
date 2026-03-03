@@ -1,15 +1,17 @@
 import json
 import logging
-from typing import Any, Callable, Optional, Type
+from typing import Any, Optional, Type
 
+from openinference.semconv.trace import SpanAttributes
+from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field, field_validator
 
 from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from engine.components.component import Component
 from engine.components.errors import CategorizationError
-from engine.components.llm_call import LLMCallAgent, LLMCallInputs
-from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
+from engine.components.types import ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService
+from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -28,24 +30,21 @@ DEFAULT_CATEGORIZER_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
-def _build_prompt_template(categories: dict[str, str], additional_context: Optional[str] = None) -> str:
-
+def _build_system_prompt(categories: dict[str, str], additional_context: Optional[str] = None) -> str:
     prompt = (
-        "You are a categorization assistant. Your task is to categorize the following content "
+        "You are a categorization assistant. Your task is to categorize the provided content "
         "into one of the predefined categories.\n\n"
     )
 
     if additional_context:
         prompt += f"Additional context: {additional_context}\n\n"
 
-    prompt += "Content: {{input}}\n\nCategories:\n"
-
+    prompt += "Categories:\n"
     for name, description in categories.items():
         prompt += f"- {name}: {description}\n"
 
-    prompt += "\n"
     prompt += (
-        "Analyze the content and provide:\n"
+        "\nAnalyze the content and provide:\n"
         "1. The most appropriate category\n"
         "2. A confidence score (0-1) indicating how well the content matches the category\n"
         "3. A brief reason explaining why this category was selected"
@@ -57,7 +56,7 @@ def _build_prompt_template(categories: dict[str, str], additional_context: Optio
 def _build_output_format(categories: dict[str, str]) -> dict[str, Any]:
     category_names = list(categories.keys())
 
-    output_format = {
+    return {
         "name": "categorization_result",
         "strict": True,
         "schema": {
@@ -82,13 +81,13 @@ def _build_output_format(categories: dict[str, str]) -> dict[str, Any]:
         },
     }
 
-    return output_format
-
 
 class CategorizerInputs(BaseModel):
-    input: str = Field(
+    content_to_categorize: str = Field(
+        default="",
         description="The content to categorize",
         json_schema_extra={
+            "parameter_type": ParameterType.STRING,
             "ui_component": UIComponent.TEXTAREA,
             "ui_component_properties": UIComponentProperties(
                 label="Input",
@@ -99,7 +98,7 @@ class CategorizerInputs(BaseModel):
     categories: dict[str, str] = Field(
         description="Available categories with their descriptions to choose from.",
         json_schema_extra={
-            "ui_component": UIComponent.JSON_BUILDER,
+            "ui_component": UIComponent.CATEGORIES_BUILDER,
             "is_tool_input": False,
             "parameter_type": ParameterType.JSON,
             "ui_component_properties": UIComponentProperties(
@@ -173,7 +172,7 @@ class Categorizer(Component):
 
     @classmethod
     def get_canonical_ports(cls) -> dict[str, str | None]:
-        return {"input": "input", "output": "output"}
+        return {"input": "content_to_categorize", "output": "output"}
 
     def __init__(
         self,
@@ -181,7 +180,6 @@ class Categorizer(Component):
         trace_manager: TraceManager,
         tool_description: ToolDescription = DEFAULT_CATEGORIZER_TOOL_DESCRIPTION,
         component_attributes: Optional[ComponentAttributes] = None,
-        capability_resolver: Optional[Callable[[list[str]], set[str]]] = None,
     ):
         if component_attributes is None:
             component_attributes = ComponentAttributes(component_instance_name=self.__class__.__name__)
@@ -191,32 +189,39 @@ class Categorizer(Component):
             component_attributes=component_attributes,
         )
         self._completion_service = completion_service
-        self._capability_resolver = capability_resolver
-        self._llm_agent = LLMCallAgent(
-            trace_manager=trace_manager,
-            completion_service=completion_service,
-            tool_description=tool_description,
-            component_attributes=component_attributes,
-            capability_resolver=capability_resolver,
-        )
 
-    async def _run_without_io_trace(self, inputs: CategorizerInputs, ctx: Optional[dict] = None) -> CategorizerOutputs:
-
-        prompt_template = _build_prompt_template(inputs.categories, inputs.additional_context)
+    async def _run_without_io_trace(
+        self,
+        inputs: CategorizerInputs,
+        ctx: dict,
+    ) -> CategorizerOutputs:
+        content = inputs.content_to_categorize
+        system_prompt = _build_system_prompt(inputs.categories, inputs.additional_context)
         output_format = _build_output_format(inputs.categories)
 
-        llm_inputs = LLMCallInputs(
-            messages=[ChatMessage(role="user", content=inputs.input)],
-            prompt_template=prompt_template,
-            output_format=json.dumps(output_format),
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": content},
+        ]
+
+        span = get_current_span()
+        span.set_attributes({
+            SpanAttributes.INPUT_VALUE: serialize_to_json(messages, shorten_string=True),
+            SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
+            "model_id": (
+                str(self._completion_service._model_id) if self._completion_service._model_id is not None else None
+            ),
+        })
+
+        response = await self._completion_service.constrained_complete_with_json_schema_async(
+            messages=messages,
+            response_format=json.dumps(output_format),
         )
 
-        llm_outputs = await self._llm_agent._run_without_io_trace(llm_inputs, ctx)
-
         try:
-            result = json.loads(llm_outputs.output)
+            result = json.loads(response)
         except json.JSONDecodeError as e:
-            raise CategorizationError(detail=f"Failed to parse LLM output as JSON: {e}", llm_output=llm_outputs.output)
+            raise CategorizationError(detail=f"Failed to parse LLM output as JSON: {e}", llm_output=response)
 
         try:
             category = result.get("category")
@@ -241,5 +246,7 @@ class Categorizer(Component):
             reason=reason,
             output={"category": category, "score": score, "reason": reason},
         )
+
+        span.set_attribute(SpanAttributes.OUTPUT_VALUE, serialize_to_json(result, shorten_string=True))
 
         return outputs
