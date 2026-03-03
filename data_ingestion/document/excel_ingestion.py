@@ -9,8 +9,8 @@ from data_ingestion.utils import content_as_temporary_file_path
 
 LOGGER = logging.getLogger(__name__)
 
-EXCEL_CHUNK_SIZE = 1024
-EXCEL_CHUNK_OVERLAP = 50
+EXCEL_CHUNK_SIZE = 8000
+EXCEL_CHUNK_OVERLAP = 800
 
 
 async def create_chunks_from_excel_file_with_llamaparse(
@@ -29,13 +29,15 @@ async def create_chunks_from_excel_file_with_llamaparse(
                 markdown_documents = await _parse_document_with_llamaparse(
                     file_path, llamaparse_api_key, split_by_page=True
                 )
-                all_markdown = "\n\n".join(content for content, _ in markdown_documents)
-                result_chunks = chunk_markdown(
-                    document_to_process=document,
-                    content=all_markdown,
-                    chunk_size=chunk_size or EXCEL_CHUNK_SIZE,
-                    chunk_overlap=chunk_overlap,
-                )
+                result_chunks = []
+                for markdown_content, _ in markdown_documents:
+                    page_chunks = chunk_markdown(
+                        document_to_process=document,
+                        content=markdown_content,
+                        chunk_size=chunk_size,
+                        chunk_overlap=chunk_overlap,
+                    )
+                    result_chunks.extend(page_chunks)
             except Exception as e:
                 LOGGER.error(f"Error parsing Excel file {document.file_name}: {e}", exc_info=True)
                 raise Exception(f"Error parsing Excel file {document.file_name}") from e
