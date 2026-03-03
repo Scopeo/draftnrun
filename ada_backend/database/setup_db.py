@@ -14,7 +14,7 @@ def get_db_url() -> str:
     return settings.ADA_DB_URL
 
 
-engine = create_engine(get_db_url(), echo=False)
+engine = create_engine(get_db_url(), echo=False, pool_pre_ping=True, pool_recycle=1800)
 
 
 # Enable SQLite foreign key support

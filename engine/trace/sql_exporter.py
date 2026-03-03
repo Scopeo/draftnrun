@@ -18,14 +18,13 @@ from engine.trace.nested_utils import split_nested_keys
 
 LOGGER = logging.getLogger(__name__)
 
+_trace_engine = create_engine(get_db_url(), echo=False, pool_size=3, pool_pre_ping=True, pool_recycle=1800)
+_TraceSession = sessionmaker(bind=_trace_engine)
+
 
 def get_session_trace():
-    """Get a database session for traces using the ada_backend database."""
-    db_url = get_db_url()
-    engine = create_engine(db_url, echo=False)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    return session
+    """Get a database session for traces using a dedicated engine (isolated from the main app pool)."""
+    return _TraceSession()
 
 
 def event_to_dict(event: Event) -> dict:
@@ -263,6 +262,7 @@ class SQLSpanExporter(SpanExporter):
                 )
             )
         self.session.commit()
+        self.session.expunge_all()
         return SpanExportResult.SUCCESS
 
     def shutdown(self):
