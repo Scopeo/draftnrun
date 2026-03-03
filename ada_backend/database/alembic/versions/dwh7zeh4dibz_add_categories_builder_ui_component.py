@@ -1,7 +1,7 @@
 """add categories builder ui component
 
 Revision ID: dwh7zeh4dibz
-Revises: b2c3d4e5f6a7
+Revises: f7e8d9c0b1a2
 Create Date: 2026-03-02 12:00:00.000000
 
 """
@@ -12,7 +12,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "dwh7zeh4dibz"
-down_revision: Union[str, None] = "b2c3d4e5f6a7"
+down_revision: Union[str, None] = "f7e8d9c0b1a2"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
