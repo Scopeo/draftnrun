@@ -33,6 +33,12 @@ def _upload_result_to_s3(
     Serialize the ChatResponse to JSON and upload it to the results S3 bucket.
     Returns the S3 key on success, or None if the bucket is not configured or upload fails.
     """
+    if not bucket_name:
+        LOGGER.warning(
+            "RESULTS_S3_BUCKET_NAME is not configured — skipping result upload. "
+            "Set it in your credentials.env to persist run results."
+        )
+        return None
     try:
         s3_key = f"results/{project_id}/{run_id}.json"
         payload = result.model_dump_json().encode("utf-8")
