@@ -122,6 +122,8 @@ class APICallTool(Component):
 
         request_headers = headers.copy()
 
+        endpoint = endpoint.strip()
+
         all_parameters = fixed_parameters.copy()
         all_parameters.update(kwargs)
         endpoint = endpoint.format(**all_parameters)
@@ -169,10 +171,18 @@ class APICallTool(Component):
                 }
 
         except httpx.HTTPError as e:
-            LOGGER.error(f"API request failed: {str(e)}")
+            status_code = getattr(e.response, "status_code", None) if hasattr(e, "response") else None
+            response_body = None
+            if hasattr(e, "response") and e.response is not None:
+                try:
+                    response_body = e.response.json()
+                except Exception:
+                    response_body = e.response.text
+            LOGGER.error(f"API request failed: {str(e)} | status={status_code} | response_body={response_body}")
             return {
-                "status_code": (getattr(e.response, "status_code", None) if hasattr(e, "response") else None),
+                "status_code": status_code,
                 "error": str(e),
+                "response_body": response_body,
                 "success": False,
             }
 

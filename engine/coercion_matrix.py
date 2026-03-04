@@ -8,6 +8,7 @@ The system is designed to be simple and intuitive - just register coercers
 for the type pairs you need, and the system handles the rest.
 """
 
+import json
 import logging
 from typing import Any, Callable, Optional, Type, Union, get_args, get_origin
 
@@ -93,8 +94,12 @@ def extract_string_from_dict(data: dict) -> str:
     if "data" in data and isinstance(data["data"], dict):
         return extract_string_from_dict(data["data"])
 
-    # Fallback to string conversion
-    return str(data)
+    # Fallback: serialize as JSON so the result is valid JSON.
+    # Falls back to str() if the dict contains non-JSON-serializable objects.
+    try:
+        return json.dumps(data, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(data)
 
 
 class CoercionError(Exception):
