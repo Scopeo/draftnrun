@@ -26,6 +26,7 @@ class OAuthConnectionResponse(BaseModel):
     connection_id: UUID
     provider_config_key: str
     name: str
+    definition_name: str | None = None
 
 
 class OAuthConnectionStatusResponse(BaseModel):

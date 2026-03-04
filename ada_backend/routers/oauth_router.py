@@ -141,10 +141,13 @@ async def create_oauth_connection(
             name=request.name,
         )
 
+        definition_name = f"{connection.provider_config_key}-{connection.name}".replace(" ", "-").lower()
+
         return OAuthConnectionResponse(
             connection_id=connection.id,
             provider_config_key=connection.provider_config_key,
             name=connection.name,
+            definition_name=definition_name,
         )
     except NangoConnectionNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

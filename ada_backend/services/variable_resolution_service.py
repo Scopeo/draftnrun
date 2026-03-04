@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ada_backend.database.models import SetType
 from ada_backend.repositories.variable_definitions_repository import list_org_definitions
 from ada_backend.repositories.variable_sets_repository import get_org_variable_set
 
@@ -34,8 +35,16 @@ def resolve_variables(
     for set_id in set_ids:
         org_set = get_org_variable_set(session, organization_id, set_id)
         if org_set:
-            for name, value in org_set.values.items():
-                if name in defined_names:
+            if org_set.set_type == SetType.INTEGRATION:
+                # Integration sets pass through all values unfiltered
+                for name, value in org_set.values.items():
                     resolved[name] = value
+                # Inject oauth_connection_id from FK column (single source of truth)
+                if org_set.oauth_connection_id:
+                    resolved["oauth_connection_id"] = str(org_set.oauth_connection_id)
+            else:
+                for name, value in org_set.values.items():
+                    if name in defined_names:
+                        resolved[name] = value
 
     return resolved
