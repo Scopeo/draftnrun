@@ -35,7 +35,7 @@ class TerminalCommandRunnerToolInputs(BaseModel):
     command: str = Field(
         default="",
         description="The command to run on the terminal",
-        json_schema_extra={"ui_component": UIComponent.TEXTAREA},
+        json_schema_extra={"ui_component": UIComponent.TEXTAREA, "is_tool_input": True},
     )
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 

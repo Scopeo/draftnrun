@@ -47,9 +47,21 @@ class SearchFilters(BaseModel):
 
 
 class WebSearchOpenAIToolInputs(BaseModel):
-    query: Optional[str] = Field(default=None, description="The standalone question to be answered using web search.")
+    query: Optional[str] = Field(
+        default=None,
+        description="The standalone question to be answered using web search.",
+        json_schema_extra={
+            "is_tool_input": True,
+        },
+    )
     messages: Optional[list[ChatMessage]] = Field(default=None, description="Optional legacy message context.")
-    filters: Optional[SearchFilters] = Field(default=None, description="Optional filters to restrict search results")
+    filters: Optional[SearchFilters] = Field(
+        default=None,
+        description="Optional filters to restrict search results",
+        json_schema_extra={
+            "is_tool_input": True,
+        },
+    )
     model_config = {"extra": "allow"}
 
 

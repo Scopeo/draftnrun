@@ -61,6 +61,7 @@ class LinkupDepth(str, Enum):
 class LinkupSearchToolInputs(BaseModel):
     query: str = Field(
         description="The standalone question to be answered using web search.",
+        json_schema_extra={"is_tool_input": True},
     )
     depth: LinkupDepth = Field(
         default=LinkupDepth.STANDARD,
@@ -76,23 +77,28 @@ class LinkupSearchToolInputs(BaseModel):
                     {"label": "Deep", "value": LinkupDepth.DEEP},
                 ],
             },
+            "is_tool_input": True,
         },
     )
     from_date: Optional[date] = Field(
         default=None,
         description="The date from which the search results should be considered.",
+        json_schema_extra={"is_tool_input": True},
     )
     to_date: Optional[date] = Field(
         default=None,
         description="The date until which the search results should be considered.",
+        json_schema_extra={"is_tool_input": True},
     )
     include_domains: Optional[list[str]] = Field(
         default=None,
         description="The domains you want to search on.",
+        json_schema_extra={"is_tool_input": True},
     )
     exclude_domains: Optional[list[str]] = Field(
         default=None,
         description="The domains you want to exclude from the search.",
+        json_schema_extra={"is_tool_input": True},
     )
     model_config = {"extra": "allow"}  # For backward compatibility
 
