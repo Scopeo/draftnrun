@@ -10,7 +10,7 @@ This script validates that:
 Usage:
     uv run python -m scripts.test_oauth_token_usage \
         --connection-id <uuid> \
-        --provider slack
+        --provider slack|hubspot|google-mail
 """
 
 import argparse
@@ -104,6 +104,34 @@ async def test_hubspot_token(access_token: str) -> bool:
         return False
 
 
+async def test_gmail_token(access_token: str) -> bool:
+    """Test Gmail token with users.profile API."""
+    print_header("Testing Gmail API Connectivity")
+    print_info("Calling Gmail users.profile endpoint...")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            print_success("Gmail authentication successful!")
+            print_info(f"  Email: {data.get('emailAddress')}")
+            print_info(f"  Messages total: {data.get('messagesTotal')}")
+            print_info(f"  Threads total: {data.get('threadsTotal')}")
+            return True
+
+    except httpx.HTTPError as e:
+        print_error(f"HTTP error: {e}")
+        return False
+    except Exception as e:
+        print_error(f"Unexpected error: {e}")
+        return False
+
+
 async def test_token_usage(oauth_connection_id: str, provider: str):
     """Test OAuth token retrieval and usage."""
 
@@ -133,6 +161,8 @@ async def test_token_usage(oauth_connection_id: str, provider: str):
         success = await test_slack_token(access_token)
     elif provider == "hubspot":
         success = await test_hubspot_token(access_token)
+    elif provider == "google-mail":
+        success = await test_gmail_token(access_token)
     else:
         print_error(f"Provider '{provider}' not supported for testing yet")
         print_info("Token was retrieved successfully, but cannot validate against API")
@@ -161,7 +191,12 @@ def main():
 
     parser = argparse.ArgumentParser(description="Test OAuth token retrieval and usage")
     parser.add_argument("--connection-id", required=True, help="OAuth Connection UUID")
-    parser.add_argument("--provider", required=True, choices=["slack", "hubspot"], help="Provider key")
+    parser.add_argument(
+        "--provider",
+        required=True,
+        choices=["slack", "hubspot", "google-mail"],
+        help="Provider key",
+    )
 
     args = parser.parse_args()
 

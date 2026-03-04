@@ -13,6 +13,7 @@ from ada_backend.repositories.integration_repository import get_integration_secr
 LOGGER = logging.getLogger(__name__)
 
 
+# TODO: Delete after full migration to Nango
 def needs_new_token(integration_secret: db.SecretIntegration) -> bool:
     if integration_secret.token_last_updated is None or integration_secret.expires_in is None:
         # If we don't know the current token or expiration, assume we need a new one

@@ -21,6 +21,7 @@ from ada_backend.database.seed.integrations.seed_integration import INTEGRATION_
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
+from engine.integrations.providers import OAuthProvider
 
 
 def seed_gmail_components(session: Session):
@@ -68,6 +69,56 @@ def seed_gmail_components(session: Session):
         component_id=gmail_sender_version.component_id,
         release_stage=gmail_sender_version.release_stage,
         component_version_id=gmail_sender_version.id,
+    )
+
+    gmail_sender_v2_version = db.ComponentVersion(
+        id=COMPONENT_VERSION_UUIDS["gmail_sender_v2"],
+        component_id=COMPONENT_UUIDS["gmail_sender"],
+        version_tag="0.0.2",
+        release_stage=db.ReleaseStage.INTERNAL,
+        description="A component to send emails using Gmail API.",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["gmail_sender_tool_description"],
+    )
+    upsert_component_versions(session, [gmail_sender_v2_version])
+
+    gmail_sender_v2_parameter_definitions = [
+        ComponentParameterDefinition(
+            id=UUID("c205b8b5-61aa-485b-af33-c9e7e67792db"),
+            component_version_id=gmail_sender_v2_version.id,
+            name="oauth_connection_id",
+            type=ParameterType.STRING,
+            nullable=False,
+            order=0,
+            parameter_order_within_group=0,
+            ui_component=UIComponent.OAUTH_CONNECTION,
+            ui_component_properties=UIComponentProperties(
+                label="Gmail Connection",
+                description="Select your authorized Gmail account connection",
+                provider=OAuthProvider.GMAIL.value,
+                icon="logos-google-gmail",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        ),
+        ComponentParameterDefinition(
+            id=UUID("9cbc77a8-cfd7-4f06-99f7-bf4d64849f6a"),
+            component_version_id=gmail_sender_v2_version.id,
+            name="save_as_draft",
+            type=ParameterType.BOOLEAN,
+            nullable=False,
+            default=True,
+            ui_component=UIComponent.CHECKBOX,
+            ui_component_properties=UIComponentProperties(
+                label="Save as Draft",
+                description="If checked, the email will be saved as a draft instead of being sent immediately.",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        ),
+    ]
+    upsert_components_parameter_definitions(session, gmail_sender_v2_parameter_definitions)
+
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=gmail_sender_v2_version.component_id,
+        release_stage=gmail_sender_v2_version.release_stage,
+        component_version_id=gmail_sender_v2_version.id,
     )
 
     upsert_component_categories(

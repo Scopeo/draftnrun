@@ -25,7 +25,7 @@ from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_D
 from engine.components.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.components.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
-from engine.integrations.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
+from engine.integrations.gmail.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
 from engine.integrations.slack.slack_sender import SLACK_SENDER_TOOL_DESCRIPTION
 
 TOOL_DESCRIPTION_UUIDS = {
