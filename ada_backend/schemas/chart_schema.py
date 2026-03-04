@@ -20,7 +20,6 @@ class ChartData(BaseModel):
 class ChartType(Enum):
     LINE = "line"
     BAR = "bar"
-    HISTOGRAM = "histogram"
     DOUGHNUT = "doughnut"
     RADAR = "radar"
     POLAR_AREA = "polarArea"
@@ -39,6 +38,8 @@ class Chart(BaseModel):
     data: ChartData
     x_axis_type: str | None = None
     y_axis_type: str | None = None
+    x_axis_label: str | None = None
+    y_axis_label: str | None = None
     progress_percentage: float | None = None
 
 

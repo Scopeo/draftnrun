@@ -487,13 +487,18 @@ class AIAgent(Component):
                     response_content = filtered_response.response
 
                     if filtered_response.sources:
-                        original_retrieval_ranks, original_reranker_ranks = extract_source_ranks(
-                            filtered_response.sources
+                        original_retrieval_ranks, original_reranker_ranks, total_retrieved, total_reranked = (
+                            extract_source_ranks(filtered_response.sources)
                         )
-                        span.set_attributes({
+                        trace_attrs = {
                             "original_retrieval_rank": json.dumps(original_retrieval_ranks),
                             "original_reranker_rank": json.dumps(original_reranker_ranks),
-                        })
+                        }
+                        if total_retrieved is not None:
+                            trace_attrs["total_retrieved_chunks"] = total_retrieved
+                        if total_reranked is not None:
+                            trace_attrs["total_reranked_chunks"] = total_reranked
+                        span.set_attributes(trace_attrs)
 
                 if imgs:
                     artifacts["images"] = imgs

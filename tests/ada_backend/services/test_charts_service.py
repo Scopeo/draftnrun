@@ -6,9 +6,9 @@ import pandas as pd
 
 from ada_backend.schemas.chart_schema import Chart, ChartData, ChartType, Dataset
 from ada_backend.services.charts_service import (
-    RANKS_DISTRIBUTION_BINS,
     TOKENS_DISTRIBUTION_BINS,
-    get_ranks_distribution_chart,
+    compute_rank_bins,
+    get_ranks_distribution_charts,
     get_tokens_distribution_chart,
 )
 
@@ -43,46 +43,143 @@ def test_get_tokens_chart(mock_query_trace_duration):
     assert chart.data.datasets[1].data == expected_output_n.tolist()
 
 
+def test_compute_rank_bins_small():
+    edges, labels = compute_rank_bins(1)
+    assert edges == [1, 2]
+    assert labels == ["1"]
+
+    edges, labels = compute_rank_bins(5)
+    assert edges == [1, 2, 3, 4, 5, 6]
+    assert labels == ["1", "2", "3", "4", "5"]
+
+    edges, labels = compute_rank_bins(10)
+    assert edges == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    assert labels == ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+
+
+def test_compute_rank_bins_large():
+    edges, labels = compute_rank_bins(100)
+    assert len(labels) == 10
+    assert edges[0] == 1
+    assert edges[-1] == 101
+    assert labels[0] == "1-10"
+    assert labels[-1] == "91-100"
+
+    edges, labels = compute_rank_bins(50)
+    assert len(labels) == 10
+    assert edges[0] == 1
+    assert edges[-1] == 51
+    assert labels[0] == "1-5"
+    assert labels[-1] == "46-50"
+
+    edges, labels = compute_rank_bins(33)
+    assert len(labels) == 10
+    assert edges[0] == 1
+    assert edges[-1] == 34
+    assert labels[-1] == "31-33"
+
+
 @patch("ada_backend.services.charts_service.query_trace_duration")
-def test_get_ranks_distribution_chart(mock_query_trace_duration):
+def test_get_ranks_distribution_charts_with_totals(mock_query_trace_duration):
+    total_retrieved = 50
+    total_reranked = 10
     retrieval_ranks = [1, 2, 3, 1, 5, 7, 10]
     reranker_ranks = [1, 1, 2, 4, 6, 9]
 
     mock_df = pd.DataFrame({
         "attributes": [
-            {"original_retrieval_rank": [1, 2, 3], "original_reranker_rank": [1, 1, 2]},
-            {"original_retrieval_rank": [1, 5], "original_reranker_rank": [4, 6]},
-            {"original_retrieval_rank": [7, 10], "original_reranker_rank": [9]},
+            {
+                "original_retrieval_rank": [1, 2, 3],
+                "original_reranker_rank": [1, 1, 2],
+                "total_retrieved_chunks": total_retrieved,
+                "total_reranked_chunks": total_reranked,
+            },
+            {
+                "original_retrieval_rank": [1, 5],
+                "original_reranker_rank": [4, 6],
+                "total_retrieved_chunks": total_retrieved,
+                "total_reranked_chunks": total_reranked,
+            },
+            {
+                "original_retrieval_rank": [7, 10],
+                "original_reranker_rank": [9],
+                "total_retrieved_chunks": total_retrieved,
+                "total_reranked_chunks": total_reranked,
+            },
         ]
     })
     mock_query_trace_duration.return_value = mock_df
 
-    expected_bins = RANKS_DISTRIBUTION_BINS
-    expected_labels = ["1", "2-5", "6-10"]
-    expected_retrieval_hist = np.histogram(retrieval_ranks, bins=expected_bins)[0]
-    expected_reranker_hist = np.histogram(reranker_ranks, bins=expected_bins)[0]
+    num_queries = 3
 
-    retrieval_total = expected_retrieval_hist.sum()
-    reranker_total = expected_reranker_hist.sum()
+    retrieval_bins, retrieval_labels = compute_rank_bins(total_retrieved)
+    reranker_bins, reranker_labels = compute_rank_bins(total_reranked)
 
-    expected_retrieval_percentages = [round(x, 1) for x in (expected_retrieval_hist / retrieval_total * 100).tolist()]
-    expected_reranker_percentages = [round(x, 1) for x in (expected_reranker_hist / reranker_total * 100).tolist()]
+    expected_retrieval_hist = np.histogram(retrieval_ranks, bins=retrieval_bins)[0]
+    expected_reranker_hist = np.histogram(reranker_ranks, bins=reranker_bins)[0]
+
+    retrieval_bin_widths = [retrieval_bins[i + 1] - retrieval_bins[i] for i in range(len(retrieval_bins) - 1)]
+    reranker_bin_widths = [reranker_bins[i + 1] - reranker_bins[i] for i in range(len(reranker_bins) - 1)]
+
+    expected_retrieval_pct = [
+        round(count / (width * num_queries) * 100, 1)
+        for count, width in zip(expected_retrieval_hist, retrieval_bin_widths)
+    ]
+    expected_reranker_pct = [
+        round(count / (width * num_queries) * 100, 1)
+        for count, width in zip(expected_reranker_hist, reranker_bin_widths)
+    ]
 
     project_id = UUID("12345678123456781234567812345678")
-    duration_days = 7
-    chart = get_ranks_distribution_chart([project_id], duration_days)
+    charts = get_ranks_distribution_charts([project_id], 7)
 
-    assert isinstance(chart, Chart)
-    assert chart.type == ChartType.HISTOGRAM
-    assert chart.title == "Ranks Distribution"
-    assert isinstance(chart.data, ChartData)
-    assert chart.data.labels == expected_labels
-    assert len(chart.data.datasets) == 2
-    assert isinstance(chart.data.datasets[0], Dataset)
-    assert chart.data.datasets[0].label == "Retrieval Rank Distribution"
-    assert chart.data.datasets[0].data == expected_retrieval_percentages
-    assert chart.data.datasets[0].backgroundColor == "rgba(54, 162, 235, 0.6)"
-    assert isinstance(chart.data.datasets[1], Dataset)
-    assert chart.data.datasets[1].label == "Reranker Rank Distribution"
-    assert chart.data.datasets[1].data == expected_reranker_percentages
-    assert chart.data.datasets[1].backgroundColor == "rgba(255, 99, 132, 0.6)"
+    assert len(charts) == 2
+
+    retrieval_chart = charts[0]
+    assert isinstance(retrieval_chart, Chart)
+    assert retrieval_chart.type == ChartType.BAR
+    assert retrieval_chart.title == "Retrieved Chunk Usage Rate by Rank (n = 3 queries)"
+    assert isinstance(retrieval_chart.data, ChartData)
+    assert retrieval_chart.data.labels == retrieval_labels
+    assert len(retrieval_chart.data.datasets) == 1
+    assert retrieval_chart.data.datasets[0].label == "Usage Rate (%)"
+    assert retrieval_chart.data.datasets[0].data == expected_retrieval_pct
+
+    reranker_chart = charts[1]
+    assert isinstance(reranker_chart, Chart)
+    assert reranker_chart.type == ChartType.BAR
+    assert reranker_chart.title == "Reranked Chunk Usage Rate by Rank (n = 3 queries)"
+    assert isinstance(reranker_chart.data, ChartData)
+    assert reranker_chart.data.labels == reranker_labels
+    assert len(reranker_chart.data.datasets) == 1
+    assert reranker_chart.data.datasets[0].label == "Usage Rate (%)"
+    assert reranker_chart.data.datasets[0].data == expected_reranker_pct
+
+
+@patch("ada_backend.services.charts_service.query_trace_duration")
+def test_get_ranks_distribution_charts_fallback_to_max_rank(mock_query_trace_duration):
+    """When total_*_chunks attributes are missing, fall back to max(ranks)."""
+    mock_df = pd.DataFrame({
+        "attributes": [
+            {"original_retrieval_rank": [1, 3, 7]},
+        ]
+    })
+    mock_query_trace_duration.return_value = mock_df
+
+    project_id = UUID("12345678123456781234567812345678")
+    charts = get_ranks_distribution_charts([project_id], 7)
+
+    assert len(charts) == 1
+    retrieval_chart = charts[0]
+    _, expected_labels = compute_rank_bins(7)
+    assert retrieval_chart.data.labels == expected_labels
+
+
+@patch("ada_backend.services.charts_service.query_trace_duration")
+def test_get_ranks_distribution_charts_empty(mock_query_trace_duration):
+    mock_df = pd.DataFrame({"attributes": [{}]})
+    mock_query_trace_duration.return_value = mock_df
+
+    project_id = UUID("12345678123456781234567812345678")
+    charts = get_ranks_distribution_charts([project_id], 7)
+    assert charts == []

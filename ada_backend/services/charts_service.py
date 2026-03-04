@@ -1,3 +1,4 @@
+import math
 from calendar import monthrange
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
@@ -20,7 +21,21 @@ from ada_backend.services.metrics.utils import (
 from settings import settings
 
 TOKENS_DISTRIBUTION_BINS = [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
-RANKS_DISTRIBUTION_BINS = [1, 2, 6, 11]
+
+
+def compute_rank_bins(total: int) -> tuple[list[int], list[str]]:
+    if total <= 10:
+        edges = list(range(1, total + 2))
+        labels = [str(i) for i in range(1, total + 1)]
+        return edges, labels
+
+    raw_width = total / 10
+    edges = [math.ceil(1 + i * raw_width) for i in range(10)] + [total + 1]
+    labels = []
+    for i in range(len(edges) - 1):
+        lo, hi = edges[i], edges[i + 1] - 1
+        labels.append(str(lo) if lo == hi else f"{lo}-{hi}")
+    return edges, labels
 
 
 def calculate_prometheus_step(duration_days: int, target_points: int = 200) -> str:
@@ -226,82 +241,100 @@ def get_tokens_distribution_chart(
     )
 
 
-def get_ranks_distribution_chart(
-    project_ids: List[UUID], duration_days: int, call_type: CallType | None = None
+def _build_rank_chart(
+    ranks: list, total_chunks: int, num_queries: int, title: str, dataset_label: str
 ) -> Chart | None:
+    if not ranks:
+        return None
+    ranks_array = np.array(ranks)
+    bins, labels = compute_rank_bins(total_chunks)
+    hist, _ = np.histogram(ranks_array, bins=bins)
+    bin_widths = [bins[i + 1] - bins[i] for i in range(len(bins) - 1)]
+    percentages = (
+        [round(count / (width * num_queries) * 100, 1) for count, width in zip(hist, bin_widths)]
+        if num_queries > 0
+        else [0] * len(hist)
+    )
+    chart_id = str(uuid4())
+    return Chart(
+        id=f"ranks_distribution_{chart_id}",
+        type=ChartType.BAR,
+        title=title,
+        data=ChartData(
+            labels=labels,
+            datasets=[Dataset(label=dataset_label, data=percentages)],
+        ),
+        x_axis_label="Rank",
+        y_axis_label="Usage Rate (%)",
+    )
+
+
+def _parse_ranks_attribute(attributes: dict, key: str) -> list:
+    try:
+        ranks = attributes[key]
+        if isinstance(ranks, str):
+            ranks = eval(ranks)
+        if isinstance(ranks, list) and ranks:
+            return [r for r in ranks if r is not None]
+    except Exception:
+        pass
+    return []
+
+
+def get_ranks_distribution_charts(
+    project_ids: List[UUID], duration_days: int, call_type: CallType | None = None
+) -> list[Chart]:
     df = query_trace_duration(project_ids, duration_days, call_type)
 
     retrieval_ranks = []
     reranker_ranks = []
+    max_total_retrieved = 0
+    max_total_reranked = 0
+    num_retrieval_queries = 0
+    num_reranker_queries = 0
 
     for _, row in df.iterrows():
         attributes = row.get("attributes", {})
-        if attributes:
-            if "original_retrieval_rank" in attributes:
-                try:
-                    ranks = attributes["original_retrieval_rank"]
-                    if isinstance(ranks, str):
-                        ranks = eval(ranks)
-                    if isinstance(ranks, list) and ranks:
-                        retrieval_ranks.extend([r for r in ranks if r is not None])
-                except Exception:
-                    pass
+        if not attributes:
+            continue
 
-            if "original_reranker_rank" in attributes:
-                try:
-                    ranks = attributes["original_reranker_rank"]
-                    if isinstance(ranks, str):
-                        ranks = eval(ranks)
-                    if isinstance(ranks, list) and ranks:
-                        reranker_ranks.extend([r for r in ranks if r is not None])
-                except Exception:
-                    pass
+        if "original_retrieval_rank" in attributes:
+            parsed = _parse_ranks_attribute(attributes, "original_retrieval_rank")
+            if parsed:
+                retrieval_ranks.extend(parsed)
+                num_retrieval_queries += 1
+        if "original_reranker_rank" in attributes:
+            parsed = _parse_ranks_attribute(attributes, "original_reranker_rank")
+            if parsed:
+                reranker_ranks.extend(parsed)
+                num_reranker_queries += 1
 
-    retrieval_ranks_array = np.array(retrieval_ranks) if retrieval_ranks else np.array([])
-    reranker_ranks_array = np.array(reranker_ranks) if reranker_ranks else np.array([])
+        total_retrieved = attributes.get("total_retrieved_chunks")
+        if total_retrieved is not None:
+            max_total_retrieved = max(max_total_retrieved, int(total_retrieved))
+        total_reranked = attributes.get("total_reranked_chunks")
+        if total_reranked is not None:
+            max_total_reranked = max(max_total_reranked, int(total_reranked))
 
-    if len(retrieval_ranks_array) == 0 and len(reranker_ranks_array) == 0:
-        return None
+    if not max_total_retrieved and retrieval_ranks:
+        max_total_retrieved = int(np.array(retrieval_ranks).max())
+    if not max_total_reranked and reranker_ranks:
+        max_total_reranked = int(np.array(reranker_ranks).max())
 
-    retrieval_hist, _ = np.histogram(retrieval_ranks_array, bins=RANKS_DISTRIBUTION_BINS)
-    reranker_hist, _ = np.histogram(reranker_ranks_array, bins=RANKS_DISTRIBUTION_BINS)
-
-    retrieval_total = retrieval_hist.sum()
-    reranker_total = reranker_hist.sum()
-
-    retrieval_percentages = (
-        [round(x, 1) for x in (retrieval_hist / retrieval_total * 100).tolist()]
-        if retrieval_total > 0
-        else [0] * len(retrieval_hist)
+    charts = []
+    retrieval_chart = _build_rank_chart(
+        retrieval_ranks, max_total_retrieved, num_retrieval_queries,
+        f"Retrieved Chunk Usage Rate by Rank ({num_retrieval_queries} queries)", "Usage Rate (%)",
     )
-    reranker_percentages = (
-        [round(x, 1) for x in (reranker_hist / reranker_total * 100).tolist()]
-        if reranker_total > 0
-        else [0] * len(reranker_hist)
+    if retrieval_chart:
+        charts.append(retrieval_chart)
+    reranker_chart = _build_rank_chart(
+        reranker_ranks, max_total_reranked, num_reranker_queries,
+        f"Reranked Chunk Usage Rate by Rank ({num_reranker_queries} queries)", "Usage Rate (%)",
     )
-
-    labels = ["1", "2-5", "6-10"]
-
-    chart_id = str(uuid4())
-
-    return Chart(
-        id=f"ranks_distribution_{chart_id}",
-        type=ChartType.HISTOGRAM,
-        title="Ranks Distribution",
-        data=ChartData(
-            labels=labels,
-            datasets=[
-                Dataset(
-                    label="Retrieval Rank Distribution",
-                    data=retrieval_percentages,
-                ),
-                Dataset(
-                    label="Reranker Rank Distribution",
-                    data=reranker_percentages,
-                ),
-            ],
-        ),
-    )
+    if reranker_chart:
+        charts.append(reranker_chart)
+    return charts
 
 
 async def get_credit_usage_table_chart(session: Session, organization_id: UUID) -> Chart:
@@ -359,9 +392,7 @@ async def get_charts_by_projects(
         get_tokens_distribution_chart(project_ids, duration_days, call_type),
     ]
 
-    ranks_chart = get_ranks_distribution_chart(project_ids, duration_days, call_type)
-    if ranks_chart is not None:
-        charts.append(ranks_chart)
+    charts.extend(get_ranks_distribution_charts(project_ids, duration_days, call_type))
 
     response = ChartsResponse(charts=charts)
     if len(response.charts) == 0:

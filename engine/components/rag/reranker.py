@@ -59,6 +59,7 @@ class Reranker(CloseMixin, ABC):
 
             for i, reranker_chunk in enumerate(reranker_chunks):
                 reranker_chunk.metadata["_reranker_rank"] = i + 1
+                reranker_chunk.metadata["_total_reranked_chunks"] = len(reranker_chunks)
 
                 metadata_str = json.dumps(reranker_chunk.metadata)
                 retrieval_rank = reranker_chunk.metadata.get("_retrieval_rank")
