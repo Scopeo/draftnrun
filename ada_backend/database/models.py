@@ -125,6 +125,7 @@ class CallType(StrEnum):
     SANDBOX = "sandbox"
     QA = "qa"
     WEBHOOK = "webhook"
+    CRON = "cron"
 
 
 class ResponseFormat(StrEnum):

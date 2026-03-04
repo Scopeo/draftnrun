@@ -8,20 +8,13 @@ and identifies new values (endpoint_values - stored_values).
 
 import json
 import logging
-import re
 from typing import Any, Optional
 from uuid import UUID
 
 import httpx
 from pydantic import Field, HttpUrl
 
-from ada_backend.database.models import CallType
-from ada_backend.repositories.tracker_history_repository import (
-    create_tracked_values_bulk,
-    get_tracked_values_history,
-    seed_initial_endpoint_history,
-)
-from ada_backend.services.agent_runner_service import run_env_agent
+from ada_backend.repositories.tracker_history_repository import seed_initial_endpoint_history
 from ada_backend.services.cron.core import BaseExecutionPayload, BaseUserPayload, CronEntrySpec, get_cron_context
 from ada_backend.services.cron.entries.agent_inference import AgentInferenceExecutionPayload, AgentInferenceUserPayload
 from ada_backend.services.cron.entries.agent_inference import (
@@ -31,54 +24,9 @@ from ada_backend.services.cron.entries.agent_inference import (
     validate_registration as validate_registration_agent_inference,
 )
 from ada_backend.services.cron.errors import CronValidationError
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
-
-
-def format_workflow_template(template: str, item: dict[str, Any]) -> str:
-    """
-    Format workflow input template with support for:
-    - {item} - the full item as JSON string
-    - {item.key} - access nested fields from the item (e.g., {item.name}, {item.step})
-
-    Args:
-        template: Template string with placeholders
-        item: The complete item dictionary
-
-    Returns:
-        Formatted template string
-    """
-    result = template
-
-    # Replace {item.key} patterns FIRST (before replacing {item})
-    # Pattern matches {item.any_field_name} or {item.nested.field}
-    item_pattern = r"\{item\.([^}]+)\}"
-
-    def replace_item_field(match):
-        field_path = match.group(1)
-        try:
-            # Navigate through nested fields
-            value = item
-            for key in field_path.split("."):
-                if isinstance(value, dict):
-                    value = value.get(key)
-                elif hasattr(value, key):
-                    value = getattr(value, key)
-                else:
-                    return ""  # Field not found, return empty string
-                if value is None:
-                    return ""
-            return str(value)
-        except (AttributeError, KeyError, TypeError):
-            return ""  # Return empty string if field doesn't exist
-
-    result = re.sub(item_pattern, replace_item_field, result)
-
-    # Replace {item} with JSON string (after {item.key} patterns are replaced)
-    item_json = json.dumps(item, default=str) if item else "{}"
-    result = result.replace("{item}", item_json)
-
-    return result
 
 
 class EndpointPollingUserPayload(BaseUserPayload):
@@ -321,10 +269,56 @@ def post_registration(execution_payload: EndpointPollingExecutionPayload, **kwar
 
     inserted = seed_initial_endpoint_history(db, cron_id, seed_values)
     if inserted:
-        LOGGER.info(
-            f"Seeded {inserted} existing endpoint values into history for cron {cron_id}",
-            extra=log_extra
+        LOGGER.info(f"Seeded {inserted} existing endpoint values into history for cron {cron_id}", extra=log_extra)
+
+
+async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) -> dict[str, Any]:
+    cron_id, log_extra = get_cron_context(**kwargs)
+
+    if not settings.ADA_URL:
+        raise ValueError("ADA_URL is not configured")
+    if not settings.SCHEDULER_API_KEY:
+        raise ValueError("SCHEDULER_API_KEY is not configured")
+
+    url = f"{settings.ADA_URL}/internal/scheduler/endpoint-polling/run"
+
+    LOGGER.info(
+        f"Dispatching endpoint polling for cron_id={cron_id} to {url}",
+        extra=log_extra,
+    )
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            url,
+            json={"cron_id": str(cron_id), "payload": execution_payload.model_dump(mode="json")},
+            headers={
+                "X-Scheduler-API-Key": settings.SCHEDULER_API_KEY,
+                "Content-Type": "application/json",
+            },
         )
+        response.raise_for_status()
+
+    LOGGER.info(
+        f"Endpoint polling dispatched for cron_id={cron_id}",
+        extra=log_extra,
+    )
+
+    return {"status": "accepted", "cron_id": str(cron_id)}
+
+
+spec = CronEntrySpec(
+    user_payload_model=EndpointPollingUserPayload,
+    execution_payload_model=EndpointPollingExecutionPayload,
+    registration_validator=validate_registration,
+    execution_validator=validate_execution,
+    executor=execute,
+    post_registration_hook=post_registration,
+)
+
+
+# ---------------------------------------------------------------------------
+# Response extraction helpers (kept for validate_registration usage)
+# ---------------------------------------------------------------------------
 
 
 def _extract_nested_path(data: Any, path: str) -> Any:
@@ -645,137 +639,3 @@ def _filter_matching_items(
         if matches_all:
             matching_ids.add(item_id)
     return matching_ids
-
-
-async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) -> dict[str, Any]:
-    db = kwargs.get("db")
-    if not db:
-        raise ValueError("db missing from context")
-
-    cron_id, log_extra = get_cron_context(**kwargs)
-
-    LOGGER.info(f"Starting endpoint polling for endpoint {execution_payload.endpoint_url}", extra=log_extra)
-
-    LOGGER.info(f"Querying endpoint: {execution_payload.endpoint_url}", extra=log_extra)
-    async with httpx.AsyncClient(timeout=execution_payload.timeout) as client:
-        response = await client.get(
-            execution_payload.endpoint_url,
-            headers=execution_payload.headers,
-        )
-        response.raise_for_status()
-        endpoint_data = response.json()
-
-    items_by_id = _extract_items_with_ids(endpoint_data, execution_payload.tracking_field_path)
-
-    filter_fields = execution_payload.filter_fields
-    if filter_fields:
-        effective_tracking_path, effective_filter_fields, filter_field_paths = _normalize_filter_paths(
-            endpoint_data, execution_payload.tracking_field_path, filter_fields
-        )
-
-        items_with_filter_values = _extract_ids_and_filter_values_from_response(
-            endpoint_data, effective_tracking_path, filter_field_paths
-        )
-
-        polled_values = _filter_matching_items(items_with_filter_values, effective_filter_fields)
-
-        LOGGER.info(
-            f"Found {len(polled_values)} values matching filter "
-            f"conditions out of {len(items_with_filter_values)} total values",
-            extra=log_extra
-        )
-    else:
-        polled_values = _extract_ids_from_response(endpoint_data, execution_payload.tracking_field_path)
-        LOGGER.info(f"Found {len(polled_values)} values from endpoint", extra=log_extra)
-
-    if execution_payload.track_history:
-        stored_history = get_tracked_values_history(db, cron_id)
-        stored_ids = {str(record.tracked_value) for record in stored_history}
-        LOGGER.info(f"Found {len(stored_ids)} already processed values", extra=log_extra)
-
-        new_values = polled_values - stored_ids
-        LOGGER.info(f"Identified {len(new_values)} new values", extra=log_extra)
-    else:
-        stored_ids = set()
-        new_values = polled_values
-        LOGGER.info(f"History tracking disabled - processing all {len(new_values)} polled values", extra=log_extra)
-
-    workflow_results = []
-    successful_values = []
-    agent_inference_execution_payload = execution_payload.workflow_input
-    if agent_inference_execution_payload.project_id and new_values:
-        LOGGER.info(
-            f"Triggering workflows for {len(new_values)} new values"
-            f" in project {agent_inference_execution_payload.project_id}",
-            extra=log_extra
-        )
-        for new_value in new_values:
-            try:
-                item = items_by_id.get(new_value, {})
-                if execution_payload.workflow_input_template:
-                    input_message = format_workflow_template(execution_payload.workflow_input_template, item)
-                else:
-                    if item:
-                        input_message = json.dumps(item, default=str)
-                    else:
-                        input_message = str(new_value)
-
-                input_data = {
-                    "messages": [
-                        {"role": "user", "content": input_message},
-                    ],
-                    **(item if isinstance(item, dict) else {"item": item}),
-                }
-                workflow_result = await run_env_agent(
-                    project_id=agent_inference_execution_payload.project_id,
-                    env=agent_inference_execution_payload.env,
-                    input_data=input_data,
-                    call_type=CallType.API,
-                    cron_id=cron_id,
-                )
-                workflow_results.append({
-                    "id": new_value,
-                    "status": "success",
-                    "trace_id": str(workflow_result.trace_id),
-                })
-                successful_values.append(new_value)
-                LOGGER.info(f"Successfully triggered workflow for value {new_value}", extra=log_extra)
-            except Exception as e:
-                LOGGER.error(f"Failed to trigger workflow for value {new_value}: {e}", extra=log_extra)
-                workflow_results.append({
-                    "id": new_value,
-                    "status": "error",
-                    "error": str(e),
-                })
-
-    if successful_values and execution_payload.track_history:
-        create_tracked_values_bulk(
-            session=db,
-            cron_id=cron_id,
-            tracked_values=successful_values,
-        )
-        LOGGER.info(f"Added {len(successful_values)} successfully processed values to history", extra=log_extra)
-    elif successful_values and not execution_payload.track_history:
-        LOGGER.info(
-            f"Processed {len(successful_values)} values (not saved to history - track_history is False)",
-            extra=log_extra
-        )
-
-    return {
-        "endpoint_url": execution_payload.endpoint_url,
-        "total_polled_values": len(polled_values),
-        "total_stored_ids": len(stored_ids),
-        "new_values_count": len(new_values),
-        "new_values": sorted(list(new_values)) if new_values else [],
-        "workflows_triggered": workflow_results,
-    }
-
-
-spec = CronEntrySpec(
-    user_payload_model=EndpointPollingUserPayload,
-    execution_payload_model=EndpointPollingExecutionPayload,
-    registration_validator=validate_registration,
-    execution_validator=validate_execution,
-    executor=execute,
-    post_registration_hook=post_registration,
-)

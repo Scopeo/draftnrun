@@ -456,6 +456,29 @@ verify_webhook_api_key_dependency = _create_api_key_dependency(
     error_detail="Invalid webhook API key",
 )
 
+verify_scheduler_api_key_dependency = _create_api_key_dependency(
+    header_name="X-Scheduler-API-Key",
+    expected_hash=settings.SCHEDULER_API_KEY_HASHED,
+    error_detail="Invalid scheduler API key",
+)
+
+
+async def verify_webhook_or_scheduler_api_key_dependency(
+    webhook_api_key: str | None = Header(None, alias="X-Webhook-API-Key"),
+    scheduler_api_key: str | None = Header(None, alias="X-Scheduler-API-Key"),
+) -> str:
+    """
+    Accept either a webhook or a scheduler API key and
+    return which one was successfully validated ("webhook" or "scheduler").
+    """
+    if webhook_api_key and settings.WEBHOOK_API_KEY_HASHED:
+        if verify_ingestion_api_key(private_key=webhook_api_key) == settings.WEBHOOK_API_KEY_HASHED:
+            return "webhook"
+    if scheduler_api_key and settings.SCHEDULER_API_KEY_HASHED:
+        if verify_ingestion_api_key(private_key=scheduler_api_key) == settings.SCHEDULER_API_KEY_HASHED:
+            return "scheduler"
+    raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
 
 async def super_admin_or_admin_api_key_dependency(
     authorization: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
