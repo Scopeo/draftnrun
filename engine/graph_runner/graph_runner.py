@@ -265,15 +265,6 @@ class GraphRunner:
         ):
             LOGGER.warning(f"Coercing expression result to {target_type} for field {field_name}")
             evaluated_value = self.coercion_matrix.coerce(evaluated_value, target_type, str)
-        elif (
-            not isinstance(evaluated_value, str)
-            and target_type is str
-            and self.coercion_matrix.can_coerce(type(evaluated_value), str)
-        ):
-            LOGGER.debug(
-                f"Coercing {type(evaluated_value).__name__} expression result to str for field {field_name}"
-            )
-            evaluated_value = self.coercion_matrix.coerce(evaluated_value, str, type(evaluated_value))
         input_data[field_name] = evaluated_value
         LOGGER.debug(f"Set {node_id}.{field_name} from {log_prefix}: {evaluated_value}")
 
