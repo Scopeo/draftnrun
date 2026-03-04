@@ -113,6 +113,8 @@ class BaseConfig(BaseSettings):
     INGESTION_API_KEY_HASHED: Optional[str] = None
     WEBHOOK_API_KEY: Optional[str] = None
     WEBHOOK_API_KEY_HASHED: Optional[str] = None
+    SCHEDULER_API_KEY: Optional[str] = None
+    SCHEDULER_API_KEY_HASHED: Optional[str] = None
     ADA_URL: Optional[str] = None
 
     # Redis configuration

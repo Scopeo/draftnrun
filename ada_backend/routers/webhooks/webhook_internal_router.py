@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType, EnvType
 from ada_backend.database.setup_db import get_db, get_db_session
-from ada_backend.routers.auth_router import verify_webhook_api_key_dependency
+from ada_backend.routers.auth_router import (
+    verify_webhook_api_key_dependency,
+    verify_webhook_or_scheduler_api_key_dependency,
+)
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.webhook_schema import (
     IntegrationTriggerResponse,
@@ -81,6 +84,7 @@ async def _run_project_background(
     project_id: UUID,
     env: EnvType,
     input_data: Dict[str, Any],
+    trigger: CallType,
 ) -> None:
     # TODO: add to redis queue. currently will hold all sessions open until end of runs
     """
@@ -92,13 +96,13 @@ async def _run_project_background(
             await run_with_tracking(
                 session=session,
                 project_id=project_id,
-                trigger=CallType.WEBHOOK,
+                trigger=trigger,
                 runner_coro=run_env_agent(
                     session=session,
                     project_id=project_id,
                     input_data=input_data,
                     env=env,
-                    call_type=CallType.WEBHOOK,
+                    call_type=trigger,
                 ),
                 run_id=run_id,
             )
@@ -119,18 +123,20 @@ async def run_project_internal(
     background_tasks: BackgroundTasks,
     input_data: Dict[str, Any] = Body(...),
     session: Session = Depends(get_db),
-    verified_webhook_api_key: Annotated[None, Depends(verify_webhook_api_key_dependency)] = None,
+    verified_key: Annotated[str, Depends(verify_webhook_or_scheduler_api_key_dependency)] = None,
 ) -> dict:
     """
     Enqueue a workflow/agent run for a project at a given environment.
     Returns 202 immediately with run_id so the client can poll run status; execution runs in background.
-    Internal endpoint called by the webhook worker for direct trigger events.
-    Requires X-Webhook-API-Key.
+    Internal endpoint called by the webhook worker or the scheduler for direct trigger events.
+    Requires X-Webhook-API-Key or X-Scheduler-API-Key.
     """
+    trigger = CallType.WEBHOOK if verified_key == "webhook" else CallType.CRON
+
     run = create_run(
         session=session,
         project_id=project_id,
-        trigger=CallType.WEBHOOK,
+        trigger=trigger,
     )
     background_tasks.add_task(
         _run_project_background,
@@ -138,6 +144,7 @@ async def run_project_internal(
         project_id=project_id,
         env=env,
         input_data=input_data,
+        trigger=trigger,
     )
     return {"status": "accepted", "run_id": str(run.id)}
 
