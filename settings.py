@@ -126,6 +126,7 @@ class BaseConfig(BaseSettings):
     S3_SECRET_ACCESS_KEY: Optional[str] = None
     S3_BUCKET_NAME: Optional[str] = None
     PLAYGROUND_S3_BUCKET_NAME: Optional[str] = None
+    RESULTS_S3_BUCKET_NAME: str = "draftnrun-result-runs"
     S3_REGION_NAME: Optional[str] = None
 
     # Ingestion parameters

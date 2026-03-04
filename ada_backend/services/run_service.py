@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from typing import Awaitable, List, Optional
 from uuid import UUID
@@ -10,6 +11,11 @@ from ada_backend.repositories.project_repository import get_project
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.run_schema import RunResponseSchema
 from ada_backend.services.errors import InvalidRunStatusTransition, ProjectNotFound, RunNotFound
+from ada_backend.services.s3_files_service import get_s3_client_and_ensure_bucket
+from data_ingestion.boto3_client import upload_file_to_bucket
+from settings import settings
+
+LOGGER = logging.getLogger(__name__)
 
 # Allowed run status transitions: status cannot go backwards (PENDING -> RUNNING -> COMPLETED/FAILED).
 _VALID_RUN_STATUS_TRANSITIONS: dict[RunStatus, frozenset[RunStatus]] = {
@@ -18,6 +24,30 @@ _VALID_RUN_STATUS_TRANSITIONS: dict[RunStatus, frozenset[RunStatus]] = {
     RunStatus.COMPLETED: frozenset(),  # terminal
     RunStatus.FAILED: frozenset(),  # terminal
 }
+
+
+def _upload_result_to_s3(
+    result: ChatResponse, project_id: UUID, run_id: UUID, bucket_name: str = settings.RESULTS_S3_BUCKET_NAME
+) -> Optional[str]:
+    """
+    Serialize the ChatResponse to JSON and upload it to the results S3 bucket.
+    Returns the S3 key on success, or None if the bucket is not configured or upload fails.
+    """
+    try:
+        s3_key = f"results/{project_id}/{run_id}.json"
+        payload = result.model_dump_json().encode("utf-8")
+        s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
+        upload_file_to_bucket(
+            s3_client=s3_client,
+            bucket_name=bucket_name,
+            key=s3_key,
+            byte_content=payload,
+        )
+        LOGGER.info(f"Uploaded run result to S3: {s3_key}")
+        return s3_key
+    except Exception:
+        LOGGER.exception(f"Failed to upload run result to S3 for run {run_id}")
+        return None
 
 
 async def run_with_tracking(
@@ -41,12 +71,14 @@ async def run_with_tracking(
     )
     try:
         result = await runner_coro
+        result_id = _upload_result_to_s3(result, project_id=project_id, run_id=run.id)
         update_run_status(
             session,
             run_id=run.id,
             project_id=project_id,
             status=RunStatus.COMPLETED,
             trace_id=result.trace_id,
+            result_id=result_id,
             finished_at=datetime.now(timezone.utc),
         )
         return result
@@ -94,9 +126,7 @@ def get_runs(
         raise ProjectNotFound(project_id)
     total = run_repository.count_runs_by_project(session, project_id=project_id)
     offset = (page - 1) * page_size
-    runs = run_repository.get_runs_by_project(
-        session, project_id=project_id, limit=page_size, offset=offset
-    )
+    runs = run_repository.get_runs_by_project(session, project_id=project_id, limit=page_size, offset=offset)
     items = [RunResponseSchema.model_validate(r, from_attributes=True) for r in runs]
     return items, total
 
@@ -108,6 +138,7 @@ def update_run_status(
     status: RunStatus,
     error: Optional[str] = None,
     trace_id: Optional[str] = None,
+    result_id: Optional[str] = None,
     started_at: Optional[datetime] = None,
     finished_at: Optional[datetime] = None,
 ) -> RunResponseSchema:
@@ -131,6 +162,7 @@ def update_run_status(
         status=status,
         error=error,
         trace_id=trace_id,
+        result_id=result_id,
         started_at=started_at,
         finished_at=finished_at,
     )

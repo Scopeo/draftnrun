@@ -1367,6 +1367,7 @@ class Run(Base):
     status = mapped_column(make_pg_enum(RunStatus), nullable=False, default=RunStatus.PENDING)
     trigger = mapped_column(make_pg_enum(CallType), nullable=False, default=CallType.API)
     trace_id = mapped_column(String, nullable=True, index=True)
+    result_id = mapped_column(String, nullable=True)
     error = mapped_column(JSONB, nullable=True)
     started_at = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at = mapped_column(DateTime(timezone=True), nullable=True)

@@ -27,6 +27,7 @@ class RunResponseSchema(BaseModel):
     status: RunStatus
     trigger: CallType
     trace_id: Optional[str] = None
+    result_id: Optional[str] = None
     error: Optional[str] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None

@@ -56,10 +56,11 @@ def update_run_status(
     status: db.RunStatus,
     error: Optional[str] = None,
     trace_id: Optional[str] = None,
+    result_id: Optional[str] = None,
     started_at: Optional[datetime] = None,
     finished_at: Optional[datetime] = None,
 ) -> Optional[db.Run]:
-    """Update run status and optionally error/trace_id/started_at/finished_at."""
+    """Update run status and optionally error/trace_id/result_id/started_at/finished_at."""
     run = get_run(session, run_id)
     if run is None:
         return None
@@ -68,6 +69,8 @@ def update_run_status(
         run.error = error
     if trace_id is not None:
         run.trace_id = trace_id
+    if result_id is not None:
+        run.result_id = result_id
     if started_at is not None:
         run.started_at = started_at
     if finished_at is not None:
