@@ -6,12 +6,13 @@ import logging
 from typing import Any
 from uuid import UUID
 
+import httpx
 from pydantic import Field
 
-from ada_backend.database.models import CallType, EnvType
+from ada_backend.database.models import EnvType
 from ada_backend.repositories.project_repository import get_project
-from ada_backend.services.agent_runner_service import run_env_agent
 from ada_backend.services.cron.core import BaseExecutionPayload, BaseUserPayload, CronEntrySpec, get_cron_context
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -108,34 +109,41 @@ def validate_execution(execution_payload: AgentInferenceExecutionPayload, **kwar
 
 
 async def execute(execution_payload: AgentInferenceExecutionPayload, **kwargs) -> dict[str, Any]:
-    db = kwargs.get("db")
-    if not db:
-        raise ValueError("db missing from context")
-
     cron_id, log_extra = get_cron_context(**kwargs)
+
+    if not settings.ADA_URL:
+        raise ValueError("ADA_URL is not configured")
+    if not settings.SCHEDULER_API_KEY:
+        raise ValueError("SCHEDULER_API_KEY is not configured")
+
+    url = (
+        f"{settings.ADA_URL}/internal/webhooks/projects"
+        f"/{execution_payload.project_id}/envs/{execution_payload.env}/run"
+    )
 
     LOGGER.info(
         f"Starting agent inference for project {execution_payload.project_id} in {execution_payload.env} environment",
-        extra=log_extra
+        extra=log_extra,
     )
 
-    result = await run_env_agent(
-        session=db,
-        project_id=execution_payload.project_id,
-        env=execution_payload.env,
-        input_data=execution_payload.input_data,
-        # TODO: Create a new call type for cron jobs
-        call_type=CallType.API,
-        cron_id=cron_id,
-    )
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            url,
+            json=execution_payload.input_data,
+            headers={
+                "X-Scheduler-API-Key": settings.SCHEDULER_API_KEY,
+                "Content-Type": "application/json",
+            },
+        )
+        response.raise_for_status()
 
     LOGGER.info(
-        f"Agent inference completed successfully with trace_id {result.trace_id}",
-        extra=log_extra
+        f"Agent inference accepted for project {execution_payload.project_id} (cron_id={cron_id})",
+        extra=log_extra,
     )
 
     return {
-        "trace_id": str(result.trace_id),
+        "status": "accepted",
         "project_id": str(execution_payload.project_id),
         "env": execution_payload.env,
     }

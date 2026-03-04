@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType, EnvType
 from ada_backend.database.setup_db import get_db, get_db_session
-from ada_backend.routers.auth_router import verify_webhook_api_key_dependency
+from ada_backend.routers.auth_router import (
+    verify_webhook_api_key_dependency,
+    verify_webhook_or_scheduler_api_key_dependency,
+)
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.webhook_schema import (
     IntegrationTriggerResponse,
@@ -102,7 +105,7 @@ async def run_project_internal(
     env: EnvType,
     background_tasks: BackgroundTasks,
     input_data: Dict[str, Any] = Body(...),
-    verified_webhook_api_key: Annotated[None, Depends(verify_webhook_api_key_dependency)] = None,
+    verified_key: Annotated[None, Depends(verify_webhook_or_scheduler_api_key_dependency)] = None,
 ) -> dict:
     """
     Enqueue a workflow/agent run for a project at a given environment.
