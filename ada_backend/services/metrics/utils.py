@@ -208,7 +208,8 @@ def count_conversations_per_day(df: pd.DataFrame, all_dates_df: pd.DataFrame) ->
             lambda x: x.get("conversation_id")
         )
         conversation_id_usage_with_id = (
-            df_with_conversation_id.groupby("date")["conversation_id"]
+            df_with_conversation_id
+            .groupby("date")["conversation_id"]
             .nunique()
             .reset_index(name="unique_conversation_ids")
         )
@@ -218,7 +219,8 @@ def count_conversations_per_day(df: pd.DataFrame, all_dates_df: pd.DataFrame) ->
 
         if not df_without_conversation_id.empty:
             conversation_id_usage_without_id = (
-                df_without_conversation_id.groupby("date")["trace_rowid"]
+                df_without_conversation_id
+                .groupby("date")["trace_rowid"]
                 .nunique()
                 .reset_index(name="unique_conversation_ids")
             )

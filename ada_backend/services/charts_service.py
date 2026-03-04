@@ -20,6 +20,7 @@ from ada_backend.services.metrics.utils import (
 from settings import settings
 
 TOKENS_DISTRIBUTION_BINS = [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
+RANKS_DISTRIBUTION_BINS = [1, 2, 6, 11]
 
 
 def calculate_prometheus_step(duration_days: int, target_points: int = 200) -> str:
@@ -121,7 +122,8 @@ def get_agent_usage_chart(
         ["llm_token_count_prompt", "llm_token_count_completion"]
     ].fillna(0)
     token_usage = (
-        df.groupby("date")[["llm_token_count_prompt", "llm_token_count_completion"]]
+        df
+        .groupby("date")[["llm_token_count_prompt", "llm_token_count_completion"]]
         .sum()
         .reset_index()
         .rename(columns={"llm_token_count_prompt": "input_tokens", "llm_token_count_completion": "output_tokens"})
@@ -224,6 +226,84 @@ def get_tokens_distribution_chart(
     )
 
 
+def get_ranks_distribution_chart(
+    project_ids: List[UUID], duration_days: int, call_type: CallType | None = None
+) -> Chart | None:
+    df = query_trace_duration(project_ids, duration_days, call_type)
+
+    retrieval_ranks = []
+    reranker_ranks = []
+
+    for _, row in df.iterrows():
+        attributes = row.get("attributes", {})
+        if attributes:
+            if "original_retrieval_rank" in attributes:
+                try:
+                    ranks = attributes["original_retrieval_rank"]
+                    if isinstance(ranks, str):
+                        ranks = eval(ranks)
+                    if isinstance(ranks, list) and ranks:
+                        retrieval_ranks.extend([r for r in ranks if r is not None])
+                except Exception:
+                    pass
+
+            if "original_reranker_rank" in attributes:
+                try:
+                    ranks = attributes["original_reranker_rank"]
+                    if isinstance(ranks, str):
+                        ranks = eval(ranks)
+                    if isinstance(ranks, list) and ranks:
+                        reranker_ranks.extend([r for r in ranks if r is not None])
+                except Exception:
+                    pass
+
+    retrieval_ranks_array = np.array(retrieval_ranks) if retrieval_ranks else np.array([])
+    reranker_ranks_array = np.array(reranker_ranks) if reranker_ranks else np.array([])
+
+    if len(retrieval_ranks_array) == 0 and len(reranker_ranks_array) == 0:
+        return None
+
+    retrieval_hist, _ = np.histogram(retrieval_ranks_array, bins=RANKS_DISTRIBUTION_BINS)
+    reranker_hist, _ = np.histogram(reranker_ranks_array, bins=RANKS_DISTRIBUTION_BINS)
+
+    retrieval_total = retrieval_hist.sum()
+    reranker_total = reranker_hist.sum()
+
+    retrieval_percentages = (
+        [round(x, 1) for x in (retrieval_hist / retrieval_total * 100).tolist()]
+        if retrieval_total > 0
+        else [0] * len(retrieval_hist)
+    )
+    reranker_percentages = (
+        [round(x, 1) for x in (reranker_hist / reranker_total * 100).tolist()]
+        if reranker_total > 0
+        else [0] * len(reranker_hist)
+    )
+
+    labels = ["1", "2-5", "6-10"]
+
+    chart_id = str(uuid4())
+
+    return Chart(
+        id=f"ranks_distribution_{chart_id}",
+        type=ChartType.HISTOGRAM,
+        title="Ranks Distribution",
+        data=ChartData(
+            labels=labels,
+            datasets=[
+                Dataset(
+                    label="Retrieval Rank Distribution",
+                    data=retrieval_percentages,
+                ),
+                Dataset(
+                    label="Reranker Rank Distribution",
+                    data=reranker_percentages,
+                ),
+            ],
+        ),
+    )
+
+
 async def get_credit_usage_table_chart(session: Session, organization_id: UUID) -> Chart:
     """Get organization credit usage as a table chart."""
     today = datetime.now()
@@ -273,16 +353,17 @@ async def get_charts_by_projects(
     duration_days: int,
     call_type: CallType | None = None,
 ) -> ChartsResponse:
-    response = ChartsResponse(
-        charts=(
-            get_agent_usage_chart(project_ids, duration_days, call_type)
-            + [
-                get_latence_chart(project_ids, duration_days, call_type),
-                # get_prometheus_agent_calls_chart(project_id, duration_days),
-                get_tokens_distribution_chart(project_ids, duration_days, call_type),
-            ]
-        )
-    )
+    charts = get_agent_usage_chart(project_ids, duration_days, call_type) + [
+        get_latence_chart(project_ids, duration_days, call_type),
+        # get_prometheus_agent_calls_chart(project_id, duration_days),
+        get_tokens_distribution_chart(project_ids, duration_days, call_type),
+    ]
+
+    ranks_chart = get_ranks_distribution_chart(project_ids, duration_days, call_type)
+    if ranks_chart is not None:
+        charts.append(ranks_chart)
+
+    response = ChartsResponse(charts=charts)
     if len(response.charts) == 0:
         raise ValueError("No charts found for this project")
     return response

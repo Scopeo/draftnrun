@@ -20,6 +20,7 @@ class ChartData(BaseModel):
 class ChartType(Enum):
     LINE = "line"
     BAR = "bar"
+    HISTOGRAM = "histogram"
     DOUGHNUT = "doughnut"
     RADAR = "radar"
     POLAR_AREA = "polarArea"
