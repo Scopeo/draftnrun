@@ -88,7 +88,7 @@ async def run_with_tracking(
             run_id=run.id,
             project_id=project_id,
             status=RunStatus.FAILED,
-            error=str(e),
+            error={"message": str(e), "type": type(e).__name__},
             finished_at=datetime.now(timezone.utc),
         )
         raise
@@ -136,7 +136,7 @@ def update_run_status(
     run_id: UUID,
     project_id: UUID,
     status: RunStatus,
-    error: Optional[str] = None,
+    error: Optional[dict] = None,
     trace_id: Optional[str] = None,
     result_id: Optional[str] = None,
     started_at: Optional[datetime] = None,

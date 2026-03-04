@@ -54,7 +54,7 @@ def update_run_status(
     session: Session,
     run_id: UUID,
     status: db.RunStatus,
-    error: Optional[str] = None,
+    error: Optional[dict] = None,
     trace_id: Optional[str] = None,
     result_id: Optional[str] = None,
     started_at: Optional[datetime] = None,

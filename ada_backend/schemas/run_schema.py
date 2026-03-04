@@ -15,7 +15,7 @@ class RunUpdateStatusSchema(BaseModel):
     """Schema for updating run status, error, and/or trace_id."""
 
     status: RunStatus
-    error: Optional[str] = None
+    error: Optional[dict] = None
     trace_id: Optional[str] = None
 
 
@@ -28,7 +28,7 @@ class RunResponseSchema(BaseModel):
     trigger: CallType
     trace_id: Optional[str] = None
     result_id: Optional[str] = None
-    error: Optional[str] = None
+    error: Optional[dict] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     created_at: datetime
