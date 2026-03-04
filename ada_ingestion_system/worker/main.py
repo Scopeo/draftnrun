@@ -11,7 +11,7 @@ from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, Resul
 from ada_ingestion_system.worker.base_worker import BaseWorker, logger, redis_client
 
 # Redis configuration
-QUEUE_NAME = "ada_ingestion_queue"
+STREAM_NAME = os.getenv("REDIS_INGESTION_STREAM", "ada_ingestion_stream")
 MAX_CONCURRENT_INGESTIONS = int(os.getenv("MAX_CONCURRENT_INGESTIONS", 2))
 
 # Default API base URL - use HTTP for localhost
@@ -20,7 +20,7 @@ DEFAULT_API_BASE_URL = "http://localhost:8000"
 
 class Worker(BaseWorker):
     def __init__(self):
-        super().__init__(queue_name=QUEUE_NAME, max_concurrent=MAX_CONCURRENT_INGESTIONS)
+        super().__init__(stream_name=STREAM_NAME, max_concurrent=MAX_CONCURRENT_INGESTIONS)
 
     def get_required_fields(self) -> list[str]:
         """Get required fields for ingestion task payload."""
@@ -381,11 +381,11 @@ class Worker(BaseWorker):
             logger.info("Redis connectivity test: {}".format(ping_result))
 
             # Get queue length
-            queue_length = redis_client.llen(self.queue_name)
+            queue_length = redis_client.llen(self.stream_name)
             logger.info("Current queue length: {}".format(queue_length))
 
             # Get queue contents (up to 10 items)
-            queue_items = redis_client.lrange(self.queue_name, 0, 9)
+            queue_items = redis_client.lrange(self.stream_name, 0, 9)
             logger.info("Queue items retrieved: {}".format(len(queue_items)))
 
             if queue_items:

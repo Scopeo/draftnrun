@@ -117,9 +117,10 @@ class BaseConfig(BaseSettings):
     REDIS_HOST: Optional[str] = None
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: Optional[str] = None
-    REDIS_QUEUE_NAME: str = "ada_ingestion_queue"
-    REDIS_WEBHOOK_QUEUE_NAME: str = "ada_webhook_queue"
+    REDIS_INGESTION_STREAM: str = "ada_ingestion_stream"
+    REDIS_WEBHOOK_STREAM: str = "ada_webhook_stream"
     REDIS_WEBHOOK_DEDUP_TTL: int = 86400  # 24 hours in seconds
+    REDIS_CONSUMER_GROUP: str = "ada_workers"
 
     # Rate limiting configuration
     RATE_LIMIT_ENABLED: bool = True

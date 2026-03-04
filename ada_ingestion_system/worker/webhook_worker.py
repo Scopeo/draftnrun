@@ -8,13 +8,13 @@ from typing import Any, Dict
 from ada_ingestion_system.worker.base_worker import BaseWorker, logger
 
 # Redis configuration
-WEBHOOK_QUEUE_NAME = os.getenv("REDIS_WEBHOOK_QUEUE_NAME", "ada_webhook_queue")
+WEBHOOK_STREAM_NAME = os.getenv("REDIS_WEBHOOK_STREAM", "ada_webhook_stream")
 MAX_CONCURRENT_WEBHOOKS = int(os.getenv("MAX_CONCURRENT_WEBHOOKS", 2))
 
 
 class WebhookWorker(BaseWorker):
     def __init__(self):
-        super().__init__(queue_name=WEBHOOK_QUEUE_NAME, max_concurrent=MAX_CONCURRENT_WEBHOOKS)
+        super().__init__(stream_name=WEBHOOK_STREAM_NAME, max_concurrent=MAX_CONCURRENT_WEBHOOKS)
 
     def get_required_fields(self) -> list[str]:
         """Get required fields for webhook payload."""
