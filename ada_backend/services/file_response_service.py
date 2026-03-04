@@ -28,6 +28,8 @@ WHITELISTED_FILE_EXTENSIONS = [
     ".pdf",
     ".docx",
     ".xlsx",
+    ".xls",
+    ".xlsm",
     ".csv",
     ".txt",
     ".md",

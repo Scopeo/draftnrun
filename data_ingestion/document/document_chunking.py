@@ -108,6 +108,8 @@ def document_chunking_mapping(
             chunk_overlap=overlapping_size,
         ),
         FileDocumentType.EXCEL.value: excel_processor,
+        FileDocumentType.XLS.value: excel_processor,
+        FileDocumentType.XLSM.value: excel_processor,
         FileDocumentType.GOOGLE_SHEET.value: excel_processor,
         FileDocumentType.CSV.value: partial(
             ingest_csv_file,
@@ -160,8 +162,12 @@ async def get_chunks_dataframe_from_doc(
     #         raise ValueError("No summary function / put summary function provided for documents")
     #     description_doc = documents_summary_func(document)
 
-    chunk_size_doc = default_chunk_size
-    LOGGER.info(f"[DOCUMENT_PROCESSING] Using chunk size: {chunk_size_doc} for '{document.file_name}'")
+    if document.type.value in [FileDocumentType.EXCEL.value, FileDocumentType.XLS.value, FileDocumentType.XLSM.value]:
+        chunk_size_doc = None
+        LOGGER.info(f"[DOCUMENT_PROCESSING] Using Excel-specific chunk size for '{document.file_name}'")
+    else:
+        chunk_size_doc = default_chunk_size
+        LOGGER.info(f"[DOCUMENT_PROCESSING] Using chunk size: {chunk_size_doc} for '{document.file_name}'")
 
     # if description_doc is not None:
     #     summary_token_size = llm_service.get_token_size(

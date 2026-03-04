@@ -14,6 +14,8 @@ MIME_MAPPING = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
     "text/markdown": "MARKDOWN",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "EXCEL",
+    "application/vnd.ms-excel": "XLS",
+    "application/vnd.ms-excel.sheet.macroEnabled.12": "XLSM",
     "application/vnd.google-apps.spreadsheet": "GOOGLE_SHEET",
     "text/csv": "CSV",
 }
@@ -24,6 +26,8 @@ class FileDocumentType(Enum):
     DOCX = ".docx"
     MARKDOWN = ".md"
     EXCEL = ".xlsx"
+    XLS = ".xls"
+    XLSM = ".xlsm"
     CSV = ".csv"
     GOOGLE_SHEET = ".gsheet"
 

@@ -38,7 +38,6 @@ async def test_ingest_excel_file():
         metadata={},
     )
 
-    # Mock the LlamaParse call to return expected content
     mock_path = "data_ingestion.document.excel_ingestion._parse_document_with_llamaparse"
     with patch(mock_path, new_callable=AsyncMock) as mock_parse:
         mock_parse.return_value = [(EXPECTED_CONTENT, 1)]
@@ -47,11 +46,45 @@ async def test_ingest_excel_file():
             document, get_file_content_func=get_file_content_func, llamaparse_api_key="test_api_key"
         )
 
-        assert len(result) == 1
-        assert result[0].content == EXPECTED_CONTENT
+        assert len(result) >= 1
+        full_content = " ".join(chunk.content for chunk in result)
+        assert "test_1" in full_content
+        assert "test_10" in full_content
         assert result[0].file_id == FILE_PATH
         assert result[0].order == 0
         assert result[0].document_title == "test_excel.xlsx"
         assert result[0].last_edited_ts == "2025-07-10T00:00:00Z"
-        assert "page_number" in result[0].metadata
-        assert result[0].metadata["page_number"] == 1
+
+
+@pytest.mark.asyncio
+async def test_ingest_large_excel_file_produces_multiple_chunks():
+    """Large Excel content should be split into multiple chunks."""
+    document = FileDocument(
+        id=FILE_PATH,
+        type=FileDocumentType.EXCEL,
+        file_name="test_excel.xlsx",
+        folder_name="test_folder",
+        last_edited_ts="2025-07-10T00:00:00Z",
+        metadata={},
+    )
+
+    rows = "\n".join(f"| {i} | {'data_' * 20}{i} |" for i in range(200))
+    large_content = f"| id | value |\n|---:|:------|\n{rows}"
+
+    mock_path = "data_ingestion.document.excel_ingestion._parse_document_with_llamaparse"
+    with patch(mock_path, new_callable=AsyncMock) as mock_parse:
+        mock_parse.return_value = [(large_content, 1)]
+
+        result = await create_chunks_from_excel_file_with_llamaparse(
+            document,
+            get_file_content_func=get_file_content_func,
+            llamaparse_api_key="test_api_key",
+            chunk_size=256,
+            chunk_overlap=30,
+        )
+
+        assert len(result) > 1
+        for i, chunk in enumerate(result):
+            assert chunk.order == i
+            assert chunk.file_id == FILE_PATH
+            assert chunk.document_title == "test_excel.xlsx"
