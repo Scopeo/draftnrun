@@ -140,6 +140,7 @@ class RunAdmin(EnhancedModelView, model=db.Run):
         "finished_at",
         "created_at",
         "updated_at",
+        "result_id",
         "error",
     ]
     column_searchable_list = ["project_id", "trace_id"]

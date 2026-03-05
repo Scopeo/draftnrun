@@ -25,6 +25,27 @@ from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
+
+def _serialize_result(result) -> dict:
+    """Convert an e2b Result dataclass to a plain dict safe for JSON serialization."""
+    return {
+        "text": result.text,
+        "html": result.html,
+        "markdown": result.markdown,
+        "svg": result.svg,
+        "png": result.png,
+        "jpeg": result.jpeg,
+        "pdf": result.pdf,
+        "latex": result.latex,
+        "json": result.json,
+        "javascript": result.javascript,
+        "data": result.data,
+        "chart": result.chart.to_dict() if result.chart is not None else None,
+        "is_main_result": result.is_main_result,
+        "extra": result.extra,
+    }
+
+
 PYTHON_CODE_RUNNER_TOOL_DESCRIPTION = ToolDescription(
     name="python_code_runner",
     description=(
@@ -167,7 +188,9 @@ class PythonCodeRunner(Component):
 
         for result in results:
             for image_format in BASIC_IMAGE_SUFFIXES:
-                image_data = getattr(result, image_format, None)
+                image_data = (
+                    result.get(image_format) if isinstance(result, dict) else getattr(result, image_format, None)
+                )
                 if image_data:
                     fp = fp_pixel_from_base64(image_data)
                     if fp in file_fp:
@@ -297,7 +320,7 @@ class PythonCodeRunner(Component):
             LOGGER.info("Executing Python code in E2B sandbox")
             execution = await sandbox.run_code(code=python_code, timeout=self.sandbox_timeout)
             result = {
-                "results": execution.results if hasattr(execution, "results") else [],
+                "results": [_serialize_result(r) for r in execution.results] if hasattr(execution, "results") else [],
                 "stdout": (
                     execution.logs.stdout if hasattr(execution, "logs") and hasattr(execution.logs, "stdout") else []
                 ),
