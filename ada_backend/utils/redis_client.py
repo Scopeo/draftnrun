@@ -187,3 +187,67 @@ def push_webhook_event(
     except Exception as e:
         LOGGER.error(f"Failed to push webhook event {event_id} to Redis queue: {str(e)}")
         return False
+
+
+def push_run_task(
+    run_id: UUID,
+    project_id: UUID,
+    env: str,
+    input_data: Dict[str, Any],
+    trigger: str = "api",
+    response_format: Optional[str] = None,
+) -> bool:
+    """
+    Push an async run task to the Redis runs queue.
+    Returns True if successful, False otherwise.
+    """
+    client = get_redis_client()
+    if not client:
+        LOGGER.error("Redis client unavailable. Cannot push run task %s", run_id)
+        return False
+
+    try:
+        payload = {
+            "run_id": str(run_id),
+            "project_id": str(project_id),
+            "env": env,
+            "input_data": input_data,
+            "trigger": trigger,
+            "response_format": response_format,
+        }
+        json_payload = json.dumps(payload)
+        result = client.lpush(settings.REDIS_RUNS_QUEUE_NAME, json_payload)
+        if result:
+            LOGGER.info(
+                "Pushed run %s to Redis queue %s (queue length: %s)",
+                run_id,
+                settings.REDIS_RUNS_QUEUE_NAME,
+                result,
+            )
+            return True
+        LOGGER.warning("Redis returned %s when pushing to queue %s", result, settings.REDIS_RUNS_QUEUE_NAME)
+        return False
+    except Exception as e:
+        LOGGER.error("Failed to push run %s to Redis queue: %s", run_id, e)
+        return False
+
+
+def publish_run_event(run_id: UUID, event: Dict[str, Any]) -> bool:
+    """
+    Publish a run event to Redis Pub/Sub channel run:{run_id}.
+    Used by the worker to stream events to WebSocket subscribers.
+    Returns True if at least one subscriber received the message, False on error.
+    """
+    client = get_redis_client()
+    if not client:
+        LOGGER.debug("Redis client unavailable. Cannot publish run event for %s", run_id)
+        return False
+    try:
+        channel = f"run:{run_id}"
+        message = json.dumps(event)
+        count = client.publish(channel, message)
+        LOGGER.debug("Published event to %s (%s subscribers)", channel, count)
+        return True
+    except Exception as e:
+        LOGGER.error("Failed to publish run event for %s: %s", run_id, e)
+        return False
