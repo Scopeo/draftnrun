@@ -344,7 +344,7 @@ def get_ranks_distribution_charts(
             title="Chunk usage by retriever ranking",
             subtitle=(
                 f"{num_retrieval_queries} retrieval queries"
-                f" - {avg_chunks_per_query} average chunks used per query"
+                f" - {avg_chunks_per_query} chunks used in average per query"
             ),
             details=(
                 "When someone asks a question, the retriever searches through your knowledge base "
@@ -367,7 +367,7 @@ def get_ranks_distribution_charts(
             title="Chunk usage by reranker ranking",
             subtitle=(
                 f"{num_reranker_queries} reranker queries"
-                f" - {avg_chunks_per_query} average chunks used per query"
+                f" - {avg_chunks_per_query} chunks used in average per query"
             ),
             details=(
                 "After the retriever finds chunks, the reranker takes a second look and reorders them "
