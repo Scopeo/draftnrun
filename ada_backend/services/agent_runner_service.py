@@ -104,6 +104,7 @@ async def build_graph_runner(
     graph_runner_id: UUID,
     project_id: UUID,
     variables: dict[str, Any] | None = None,
+    event_callback=None,
 ) -> GraphRunner:
     trace_manager = get_trace_manager()
     # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
@@ -172,6 +173,7 @@ async def build_graph_runner(
         port_mappings=port_mappings_graph,
         expressions=expressions,
         variables=variables,
+        event_callback=event_callback,
     )
 
 
@@ -180,6 +182,7 @@ async def get_agent_for_project(
     graph_runner_id: UUID,
     project_id: UUID,
     variables: dict[str, Any] | None = None,
+    event_callback=None,
 ) -> GraphRunner:
     project = get_project(session, project_id=project_id)
     if not project:
@@ -191,6 +194,7 @@ async def get_agent_for_project(
             graph_runner_id,
             project_id,
             variables=variables,
+            event_callback=event_callback,
         )
     else:
         raise GraphNotFound(graph_runner_id)
@@ -204,6 +208,7 @@ async def run_env_agent(
     call_type: CallType,
     response_format: Optional[ResponseFormat] = None,
     cron_id: Optional[UUID] = None,
+    event_callback=None,
 ) -> ChatResponse:
     set_ids = _extract_set_ids(input_data)
     graph_runner = get_graph_runner_for_env(session=session, project_id=project_id, env=env)
@@ -220,6 +225,7 @@ async def run_env_agent(
         response_format=response_format,
         cron_id=cron_id,
         set_ids=set_ids,
+        event_callback=event_callback,
     )
 
 
@@ -235,6 +241,7 @@ async def run_agent(
     response_format: Optional[ResponseFormat] = None,
     cron_id: Optional[UUID] = None,
     set_ids: list[str] | None = None,
+    event_callback=None,
 ) -> ChatResponse:
     if set_ids is None:
         set_ids = _extract_set_ids(input_data)
@@ -294,6 +301,7 @@ async def run_agent(
         project_id=project_id,
         graph_runner_id=graph_runner_id,
         variables=variables,
+        event_callback=event_callback,
     )
 
     try:
