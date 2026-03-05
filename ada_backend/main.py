@@ -159,6 +159,12 @@ app = FastAPI(
 
 PrometheusFastApiInstrumentator().instrument(app).expose(app, endpoint="/metrics")
 
+# Exempt /metrics from rate limiting (route is auto-generated, can't use decorator)
+for route in app.routes:
+    if getattr(route, "path", None) == "/metrics":
+        limiter.exempt(route.endpoint)
+        break
+
 # Setup HTTP metrics and traces instrumentation
 if settings.ENABLE_OBSERVABILITY_STACK:
     setup_performance_instrumentation(app)
