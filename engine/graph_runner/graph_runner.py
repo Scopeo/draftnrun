@@ -1,5 +1,6 @@
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any, Iterator, Optional, TypedDict
 
 import networkx as nx
@@ -48,8 +49,10 @@ class GraphRunner:
         expressions: list[ExpressionSpec] | None = None,
         coercion_matrix: CoercionMatrix | None = None,
         variables: dict[str, Any] | None = None,
+        event_callback: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     ):
         self.trace_manager = trace_manager
+        self.event_callback = event_callback
         self.graph = graph
         self.runnables = runnables
         self.start_nodes = start_nodes
@@ -167,11 +170,24 @@ class GraphRunner:
             runnable = self.runnables[node_id]
             node_inputs_data = self._gather_inputs(node_id)
             input_packet = NodeData(data=node_inputs_data, ctx=self.run_context)
+            if self.event_callback:
+                try:
+                    await self.event_callback({"type": "node.started", "node_id": node_id})
+                except Exception:
+                    LOGGER.debug(f"event_callback error on node.started for '{node_id}'", exc_info=True)
+                # Inject the callback into the component so it can emit intermediate events.
+                if hasattr(runnable, "event_callback"):
+                    runnable.event_callback = self.event_callback
             result_any = await runnable.run(input_packet)
             result_packet = legacy_compatibility.normalize_output_to_node_data(result_any, self.run_context)
             task.complete(result_packet)
             self.run_context.update(result_packet.ctx or {})
             LOGGER.debug(f"Node '{node_id}' completed execution with result: {result_packet}")
+            if self.event_callback:
+                try:
+                    await self.event_callback({"type": "node.completed", "node_id": node_id})
+                except Exception:
+                    LOGGER.debug(f"event_callback error on node.completed for '{node_id}'", exc_info=True)
 
             # Extract execution directive (normalized to CONTINUE if None)
             # NOTE: If we add many more execution strategies in the future,
@@ -247,6 +263,7 @@ class GraphRunner:
         """Evaluate a field expression, coerce to target type if needed, set input_data[field_name].
         Raises FieldExpressionError on evaluation failure.
         """
+
         def _to_string(value: Any) -> str:
             return self.coercion_matrix.coerce(value, str, type(value))
 
@@ -385,9 +402,7 @@ class GraphRunner:
             pure_ref_expressions: list[tuple[str, ExpressionNode]] = [
                 (field_name, expr_ast)
                 for (target_id, field_name), expr_ast in self._expressions_by_target_ast.items()
-                if target_id == node_id
-                and isinstance(expr_ast, RefNode)
-                and field_name not in input_data
+                if target_id == node_id and isinstance(expr_ast, RefNode) and field_name not in input_data
             ]
             for field_name, expression_ast in pure_ref_expressions:
                 ref_node = expression_ast
