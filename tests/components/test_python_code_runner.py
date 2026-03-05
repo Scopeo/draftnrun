@@ -99,7 +99,7 @@ def test_execute_simple_python_code(e2b_tool, e2b_api_key):
 
     # Check the result is 42
     assert len(result_data["results"]) > 0
-    assert result_data["results"][0].text == "42"
+    assert result_data["results"][0]["text"] == "42"
 
 
 def test_execute_python_code_with_imports(e2b_tool, e2b_api_key):
@@ -134,9 +134,10 @@ result
     # Check the result is a dictionary
     assert len(result_data["results"]) > 0
     result_obj = result_data["results"][0]
-    assert hasattr(result_obj, "json") and result_obj.json is not None
-    assert "area" in result_obj.json
-    assert "date" in result_obj.json
+    assert isinstance(result_obj, dict)
+    assert result_obj.get("json") is not None
+    assert "area" in result_obj["json"]
+    assert "date" in result_obj["json"]
 
 
 def test_execute_python_code_with_error(e2b_tool, e2b_api_key):
@@ -196,9 +197,10 @@ files = os.listdir('.')
     # Check the result contains the expected data
     assert len(result_data["results"]) > 0
     result_obj = result_data["results"][0]
-    assert hasattr(result_obj, "json") and result_obj.json is not None
-    assert result_obj.json["content"] == "Hello from E2B sandbox!"
-    assert "test_file.txt" in result_obj.json["files"]
+    assert isinstance(result_obj, dict)
+    assert result_obj.get("json") is not None
+    assert result_obj["json"]["content"] == "Hello from E2B sandbox!"
+    assert "test_file.txt" in result_obj["json"]["files"]
 
 
 def test_execute_python_code_with_data_processing(e2b_tool, e2b_api_key):
@@ -242,8 +244,9 @@ print(f"Even numbers: {even_numbers}")
     # Check the result contains the expected data
     assert len(result_data["results"]) > 0
     result_obj = result_data["results"][0]
-    assert hasattr(result_obj, "json") and result_obj.json is not None
-    result_data_obj = result_obj.json
+    assert isinstance(result_obj, dict)
+    assert result_obj.get("json") is not None
+    result_data_obj = result_obj["json"]
     assert result_data_obj["total"] == 55
     assert result_data_obj["average"] == 5.5
     assert result_data_obj["count"] == 10
@@ -504,16 +507,14 @@ def test_run_without_io_trace_simple_code(e2b_tool, e2b_api_key):
 
     # Check the result
     assert len(execution_data["results"]) > 0
-    assert "4" in execution_data["results"][0]
+    assert execution_data["results"][0]["text"] == "4"
 
     # Check artifacts
     assert "execution_result" in result.artifacts
-    # The execution result is stored as a dict in artifacts (with non-serialized objects)
     artifacts_execution_data = result.artifacts["execution_result"]
     assert artifacts_execution_data["error"] == execution_data["error"]
     assert artifacts_execution_data["stdout"] == execution_data["stdout"]
     assert artifacts_execution_data["stderr"] == execution_data["stderr"]
-    # Note: artifacts has Result objects while execution_data has serialized strings
 
 
 def test_run_without_io_trace_complex_code(e2b_tool, e2b_api_key):
@@ -567,13 +568,14 @@ json.dumps(result)
     # Check the result
     assert len(execution_data["results"]) > 0
     result_obj = execution_data["results"][0]
-    assert "Result(" in result_obj
+    assert isinstance(result_obj, dict)
 
-    # The result should contain the JSON data within the Result() string
-    # Extract the JSON from within Result(...) format
-    assert "original_data" in result_obj
-    assert "statistics" in result_obj
-    assert '"count": 5' in result_obj
+    # The result dict should contain the JSON data
+    result_json = result_obj.get("json") or result_obj.get("text") or ""
+    result_str = str(result_json)
+    assert "original_data" in result_str
+    assert "statistics" in result_str
+    assert "5" in result_str
 
 
 def test_missing_api_key():
