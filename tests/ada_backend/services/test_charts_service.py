@@ -161,7 +161,7 @@ def test_get_ranks_distribution_charts_with_totals(mock_query_trace_duration):
     assert reranker_chart.title == "Chunk usage by reranker ranking"
     assert (
         reranker_chart.subtitle
-        == f"{num_queries} reranker queries - {avg_reranker_chunks} average chunks used per query"
+        == f"{num_queries} reranker queries - {avg_reranker_chunks} chunks used in average per query"
     )
     assert reranker_chart.category == ChartCategory.RETRIEVAL
     assert reranker_chart.y_axis_label == "Chunk usage rate (%)"
