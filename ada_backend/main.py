@@ -3,10 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import start_http_server
 from prometheus_fastapi_instrumentator import PrometheusFastApiInstrumentator
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from ada_backend.admin.admin import setup_admin
 from ada_backend.graphql.schema import graphql_router
 from ada_backend.instrumentation import setup_performance_instrumentation
+from ada_backend.middleware.rate_limit_middleware import rate_limit_exceeded_handler
 from ada_backend.middleware.request_context import RequestContextMiddleware
 from ada_backend.routers.admin_tools_router import router as admin_tools_router
 from ada_backend.routers.agent_router import router as agent_router
@@ -40,6 +43,7 @@ from ada_backend.routers.webhooks.provider_webhooks_router import router as prov
 from ada_backend.routers.webhooks.webhook_internal_router import router as webhook_internal_router
 from ada_backend.routers.webhooks.webhook_trigger_router import router as webhook_trigger_router
 from ada_backend.routers.widget_router import router as widget_router
+from ada_backend.services.rate_limit_service import limiter
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from logger import setup_logging
@@ -155,6 +159,12 @@ app = FastAPI(
 
 PrometheusFastApiInstrumentator().instrument(app).expose(app, endpoint="/metrics")
 
+# Exempt /metrics from rate limiting (route is auto-generated, can't use decorator)
+for route in app.routes:
+    if getattr(route, "path", None) == "/metrics":
+        limiter.exempt(route.endpoint)
+        break
+
 # Setup HTTP metrics and traces instrumentation
 if settings.ENABLE_OBSERVABILITY_STACK:
     setup_performance_instrumentation(app)
@@ -195,6 +205,9 @@ app.include_router(provider_webhooks_router)
 app.include_router(webhook_internal_router)
 app.include_router(webhook_trigger_router)
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -206,11 +219,13 @@ app.add_middleware(
 
 
 @app.get("/")
+@limiter.exempt
 def read_root():
     return {"message": "Welcome to the LLM Agent Admin Interface!"}
 
 
 @app.get("/health")
+@limiter.exempt
 def health_check():
     return JSONResponse(content={"status": "ok"}, status_code=200)
 
