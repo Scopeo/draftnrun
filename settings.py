@@ -125,7 +125,6 @@ class BaseConfig(BaseSettings):
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_REQUESTS: int = 50
     RATE_LIMIT_WINDOW: int = 60
-    RATE_LIMIT_EXEMPTED_PATHS: str = "/health,/metrics,/"
     RATE_LIMIT_PROGRESSIVE_COOLDOWN: bool = True
     RATE_LIMIT_COOLDOWN_MULTIPLIER: float = 2.0
     RATE_LIMIT_COOLDOWN_MAX: int = 3600  # Maximum 1 hour

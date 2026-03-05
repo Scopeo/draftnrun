@@ -1,276 +1,224 @@
-import time
-from unittest.mock import MagicMock, patch
+import hashlib
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+from fastapi import Request
 
-from ada_backend.services.rate_limit_service import RateLimitService, check_rate_limit
+from ada_backend.services.rate_limit_service import (
+    ProgressiveCooldownService,
+    key_func,
+)
+
+# ---------------------------------------------------------------------------
+# key_func tests
+# ---------------------------------------------------------------------------
 
 
-class TestRateLimitService:
+class TestKeyFunc:
+
+    def _make_request(self, headers=None, client_host="127.0.0.1"):
+        request = Mock(spec=Request)
+        request.headers = headers or {}
+        request.client = Mock()
+        request.client.host = client_host
+        return request
+
+    def test_bearer_token_produces_token_hash(self):
+        token = "some-jwt-token-value"
+        request = self._make_request(headers={"Authorization": f"Bearer {token}"})
+        expected_hash = hashlib.sha256(token.encode()).hexdigest()[:16]
+
+        result = key_func(request)
+        assert result == f"token:{expected_hash}"
+
+    def test_different_tokens_produce_different_keys(self):
+        r1 = self._make_request(headers={"Authorization": "Bearer token-aaa"})
+        r2 = self._make_request(headers={"Authorization": "Bearer token-bbb"})
+
+        assert key_func(r1) != key_func(r2)
+
+    def test_api_key_header(self):
+        api_key = "my-secret-api-key"
+        request = self._make_request(headers={"X-API-Key": api_key})
+        expected_hash = hashlib.sha256(api_key.encode()).hexdigest()[:16]
+
+        result = key_func(request)
+        assert result == f"apikey:{expected_hash}"
+
+    def test_ingestion_api_key_header(self):
+        request = self._make_request(headers={"X-Ingestion-API-Key": "ingestion-key"})
+        result = key_func(request)
+        assert result.startswith("apikey:")
+
+    def test_webhook_api_key_header(self):
+        request = self._make_request(headers={"X-Webhook-API-Key": "webhook-key"})
+        result = key_func(request)
+        assert result.startswith("apikey:")
+
+    def test_admin_api_key_header(self):
+        request = self._make_request(headers={"X-Admin-API-Key": "admin-key"})
+        result = key_func(request)
+        assert result.startswith("apikey:")
+
+    def test_bearer_takes_priority_over_api_key(self):
+        request = self._make_request(
+            headers={
+                "Authorization": "Bearer some-token",
+                "X-API-Key": "some-api-key",
+            }
+        )
+        result = key_func(request)
+        assert result.startswith("token:")
+
+    def test_falls_back_to_ip(self):
+        request = self._make_request(client_host="10.0.0.5")
+        result = key_func(request)
+        assert result == "ip:10.0.0.5"
+
+    def test_x_forwarded_for_used_for_ip(self):
+        request = self._make_request(
+            headers={"X-Forwarded-For": "203.0.113.1, 198.51.100.1"},
+            client_host="10.0.0.1",
+        )
+        result = key_func(request)
+        assert result == "ip:203.0.113.1"
+
+    def test_no_client_returns_unknown(self):
+        request = self._make_request()
+        request.client = None
+        result = key_func(request)
+        assert result == "ip:unknown"
+
+    def test_authorization_header_without_bearer_falls_back_to_ip(self):
+        request = self._make_request(
+            headers={"Authorization": "Basic abc123"},
+            client_host="1.2.3.4",
+        )
+        result = key_func(request)
+        assert result == "ip:1.2.3.4"
+
+
+# ---------------------------------------------------------------------------
+# ProgressiveCooldownService tests
+# ---------------------------------------------------------------------------
+
+
+class TestProgressiveCooldownService:
 
     @pytest.fixture
     def mock_redis(self):
-        redis_mock = MagicMock()
-        redis_mock.pipeline.return_value = redis_mock
-        redis_mock.execute.return_value = [None, 0]
-        redis_mock.zrange.return_value = []
-        return redis_mock
+        return MagicMock()
 
     @pytest.fixture
     def service(self):
-        return RateLimitService()
+        return ProgressiveCooldownService()
 
-    def test_allows_first_request(self, service, mock_redis):
-        with patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=mock_redis):
-            service._redis_client = None
-            is_allowed, retry_after, remaining = service.check_rate_limit("user:123", limit=10, window=60)
-
-            assert is_allowed is True
-            assert retry_after == 0
-            assert remaining == 9
-
-    def test_enforces_limit(self, service, mock_redis):
-        mock_redis.execute.return_value = [None, 10]
+    def test_first_violation_returns_base_window(self, service, mock_redis):
         mock_redis.get.return_value = None
 
-        with (
-            patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=mock_redis),
-            patch("ada_backend.services.rate_limit_service.settings") as mock_settings,
-        ):
-            mock_settings.RATE_LIMIT_PROGRESSIVE_COOLDOWN = True
-            mock_settings.RATE_LIMIT_COOLDOWN_MULTIPLIER = 2.0
-            mock_settings.RATE_LIMIT_COOLDOWN_MAX = 3600
-            service._redis_client = None
-            is_allowed, retry_after, remaining = service.check_rate_limit("user:123", limit=10, window=60)
-
-            assert is_allowed is False
-            assert retry_after == 60
-            assert remaining == 0
-
-    def test_under_limit(self, service, mock_redis):
-        mock_redis.execute.return_value = [None, 5]
-
-        with patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=mock_redis):
-            service._redis_client = None
-            is_allowed, retry_after, remaining = service.check_rate_limit("user:123", limit=10, window=60)
-
-            assert is_allowed is True
-            assert retry_after == 0
-            assert remaining == 4
-            mock_redis.zadd.assert_called_once()
-
-    def test_redis_unavailable_fails_open(self, service):
-        with patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=None):
-            service._redis_client = None
-            is_allowed, retry_after, remaining = service.check_rate_limit("user:123", limit=10, window=60)
-
-            assert is_allowed is True
-            assert retry_after == 0
-            assert remaining == 10
-
-    def test_redis_error_fails_open_and_invalidates_client(self, service, mock_redis):
-        mock_redis.pipeline.side_effect = Exception("Redis connection error")
-
-        with patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=mock_redis):
-            service._redis_client = None
-            is_allowed, retry_after, remaining = service.check_rate_limit("user:123", limit=10, window=60)
-
-            assert is_allowed is True
-            assert retry_after == 0
-            assert remaining == 10
-            # Client should be invalidated so next call triggers reconnect
-            assert service._redis_client is None
-
-    def test_uses_settings_defaults(self, service, mock_redis):
-        mock_redis.execute.return_value = [None, 0]
-
-        with (
-            patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=mock_redis),
-            patch("ada_backend.services.rate_limit_service.settings") as mock_settings,
-        ):
-            mock_settings.RATE_LIMIT_REQUESTS = 50
+        with patch.object(service, "_get_pool", return_value=MagicMock()), \
+             patch("ada_backend.services.rate_limit_service.redis.Redis", return_value=mock_redis), \
+             patch("ada_backend.services.rate_limit_service.settings") as mock_settings:
             mock_settings.RATE_LIMIT_WINDOW = 60
-            service._redis_client = None
-
-            is_allowed, _, _ = service.check_rate_limit("user:123")
-
-            assert is_allowed is True
-
-    def test_different_users_independent(self, service, mock_redis):
-        mock_redis.execute.return_value = [None, 0]
-
-        with patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=mock_redis):
-            service._redis_client = None
-
-            service.check_rate_limit("user:123", limit=10, window=60)
-            service.check_rate_limit("user:456", limit=10, window=60)
-
-            assert mock_redis.pipeline.call_count >= 2
-
-    def test_remaining_never_negative(self, service, mock_redis):
-        mock_redis.execute.return_value = [None, 15]
-        mock_redis.get.return_value = None
-
-        with (
-            patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=mock_redis),
-            patch("ada_backend.services.rate_limit_service.settings") as mock_settings,
-        ):
             mock_settings.RATE_LIMIT_PROGRESSIVE_COOLDOWN = True
             mock_settings.RATE_LIMIT_COOLDOWN_MULTIPLIER = 2.0
             mock_settings.RATE_LIMIT_COOLDOWN_MAX = 3600
-            service._redis_client = None
-            _, _, remaining = service.check_rate_limit("user:123", limit=10, window=60)
 
-            assert remaining == 0
+            retry_after = service.record_violation("user:123")
 
-    def test_removes_old_entries(self, service, mock_redis):
-        mock_redis.execute.return_value = [None, 5]
+        assert retry_after == 60
 
-        with patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=mock_redis):
-            service._redis_client = None
-            service.check_rate_limit("user:123", limit=10, window=60)
+    def test_second_violation_doubles(self, service, mock_redis):
+        mock_redis.get.return_value = "1"
 
-            pipeline_calls = mock_redis.method_calls
-            zremrangebyscore_called = any("zremrangebyscore" in str(call) for call in pipeline_calls)
-            assert zremrangebyscore_called
-
-    def test_sets_expiration(self, service, mock_redis):
-        mock_redis.execute.return_value = [None, 5]
-
-        with patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=mock_redis):
-            service._redis_client = None
-            service.check_rate_limit("user:123", limit=10, window=60)
-
-            mock_redis.expire.assert_called_once()
-            call_args = mock_redis.expire.call_args
-            assert "rate_limit:user:123" in call_args[0]
-
-
-def test_module_check_rate_limit():
-    with patch("ada_backend.services.rate_limit_service._rate_limit_service") as mock_service:
-        mock_service.check_rate_limit.return_value = (True, 0, 49)
-
-        is_allowed, retry_after, remaining = check_rate_limit("user:123", limit=10, window=60)
-
-        assert is_allowed is True
-        assert retry_after == 0
-        assert remaining == 49
-        mock_service.check_rate_limit.assert_called_once_with("user:123", 10, 60)
-
-
-class TestProgressiveCooldown:
-
-    @pytest.fixture
-    def mock_redis(self):
-        redis_mock = MagicMock()
-        redis_mock.pipeline.return_value = redis_mock
-        redis_mock.execute.return_value = [None, 10]
-        redis_mock.zrange.return_value = [(b"old", time.time() - 30)]
-        redis_mock.get.return_value = None
-        return redis_mock
-
-    @pytest.fixture
-    def service(self):
-        return RateLimitService()
-
-    def test_first_violation(self, service, mock_redis):
-        mock_redis.get.return_value = None
-
-        with (
-            patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=mock_redis),
-            patch("ada_backend.services.rate_limit_service.settings") as mock_settings,
-        ):
+        with patch.object(service, "_get_pool", return_value=MagicMock()), \
+             patch("ada_backend.services.rate_limit_service.redis.Redis", return_value=mock_redis), \
+             patch("ada_backend.services.rate_limit_service.settings") as mock_settings:
+            mock_settings.RATE_LIMIT_WINDOW = 60
             mock_settings.RATE_LIMIT_PROGRESSIVE_COOLDOWN = True
             mock_settings.RATE_LIMIT_COOLDOWN_MULTIPLIER = 2.0
             mock_settings.RATE_LIMIT_COOLDOWN_MAX = 3600
-            service._redis_client = None
 
-            is_allowed, retry_after, _ = service.check_rate_limit("user:123", limit=10, window=60)
+            retry_after = service.record_violation("user:123")
 
-            assert is_allowed is False
-            assert retry_after == 60
+        assert retry_after == 120
 
-    def test_second_violation(self, service, mock_redis):
-        mock_redis.get.return_value = b"1"
+    def test_third_violation_quadruples(self, service, mock_redis):
+        mock_redis.get.return_value = "2"
 
-        with (
-            patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=mock_redis),
-            patch("ada_backend.services.rate_limit_service.settings") as mock_settings,
-        ):
+        with patch.object(service, "_get_pool", return_value=MagicMock()), \
+             patch("ada_backend.services.rate_limit_service.redis.Redis", return_value=mock_redis), \
+             patch("ada_backend.services.rate_limit_service.settings") as mock_settings:
+            mock_settings.RATE_LIMIT_WINDOW = 60
             mock_settings.RATE_LIMIT_PROGRESSIVE_COOLDOWN = True
             mock_settings.RATE_LIMIT_COOLDOWN_MULTIPLIER = 2.0
             mock_settings.RATE_LIMIT_COOLDOWN_MAX = 3600
-            service._redis_client = None
 
-            is_allowed, retry_after, _ = service.check_rate_limit("user:123", limit=10, window=60)
+            retry_after = service.record_violation("user:123")
 
-            assert is_allowed is False
-            assert retry_after == 120
+        assert retry_after == 240
 
-    def test_third_violation(self, service, mock_redis):
-        mock_redis.get.return_value = b"2"
+    def test_respects_max_cooldown(self, service, mock_redis):
+        mock_redis.get.return_value = "10"
 
-        with (
-            patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=mock_redis),
-            patch("ada_backend.services.rate_limit_service.settings") as mock_settings,
-        ):
-            mock_settings.RATE_LIMIT_PROGRESSIVE_COOLDOWN = True
-            mock_settings.RATE_LIMIT_COOLDOWN_MULTIPLIER = 2.0
-            mock_settings.RATE_LIMIT_COOLDOWN_MAX = 3600
-            service._redis_client = None
-
-            is_allowed, retry_after, _ = service.check_rate_limit("user:123", limit=10, window=60)
-
-            assert is_allowed is False
-            assert retry_after == 240
-
-    def test_respects_max(self, service, mock_redis):
-        mock_redis.get.return_value = b"10"
-
-        with (
-            patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=mock_redis),
-            patch("ada_backend.services.rate_limit_service.settings") as mock_settings,
-        ):
+        with patch.object(service, "_get_pool", return_value=MagicMock()), \
+             patch("ada_backend.services.rate_limit_service.redis.Redis", return_value=mock_redis), \
+             patch("ada_backend.services.rate_limit_service.settings") as mock_settings:
+            mock_settings.RATE_LIMIT_WINDOW = 60
             mock_settings.RATE_LIMIT_PROGRESSIVE_COOLDOWN = True
             mock_settings.RATE_LIMIT_COOLDOWN_MULTIPLIER = 2.0
             mock_settings.RATE_LIMIT_COOLDOWN_MAX = 600
-            service._redis_client = None
 
-            is_allowed, retry_after, _ = service.check_rate_limit("user:123", limit=10, window=60)
+            retry_after = service.record_violation("user:123")
 
-            assert is_allowed is False
-            assert retry_after == 600
+        assert retry_after == 600
 
-    def test_disabled(self, service, mock_redis):
-        mock_redis.get.return_value = b"5"
+    def test_stores_violation_count_in_redis(self, service, mock_redis):
+        mock_redis.get.return_value = "2"
 
-        with (
-            patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=mock_redis),
-            patch("ada_backend.services.rate_limit_service.settings") as mock_settings,
-        ):
-            mock_settings.RATE_LIMIT_PROGRESSIVE_COOLDOWN = False
-            service._redis_client = None
-
-            is_allowed, retry_after, _ = service.check_rate_limit("user:123", limit=10, window=60)
-
-            assert is_allowed is False
-            assert retry_after <= 60
-
-    def test_stores_violation_count(self, service, mock_redis):
-        mock_redis.get.return_value = b"2"
-
-        with (
-            patch("ada_backend.services.rate_limit_service.get_redis_client", return_value=mock_redis),
-            patch("ada_backend.services.rate_limit_service.settings") as mock_settings,
-        ):
+        with patch.object(service, "_get_pool", return_value=MagicMock()), \
+             patch("ada_backend.services.rate_limit_service.redis.Redis", return_value=mock_redis), \
+             patch("ada_backend.services.rate_limit_service.settings") as mock_settings:
+            mock_settings.RATE_LIMIT_WINDOW = 60
             mock_settings.RATE_LIMIT_PROGRESSIVE_COOLDOWN = True
             mock_settings.RATE_LIMIT_COOLDOWN_MULTIPLIER = 2.0
             mock_settings.RATE_LIMIT_COOLDOWN_MAX = 3600
-            service._redis_client = None
 
-            service.check_rate_limit("user:123", limit=10, window=60)
+            service.record_violation("user:123")
 
-            mock_redis.setex.assert_called_once()
-            call_args = mock_redis.setex.call_args[0]
-            assert "rate_limit:violations:user:123" in call_args[0]
-            assert call_args[2] == 3
+        mock_redis.setex.assert_called_once()
+        key, ttl, count = mock_redis.setex.call_args[0]
+        assert key == "rate_limit:violations:user:123"
+        assert count == 3
+
+    def test_disabled_returns_base_window(self, service):
+        with patch("ada_backend.services.rate_limit_service.settings") as mock_settings:
+            mock_settings.RATE_LIMIT_WINDOW = 60
+            mock_settings.RATE_LIMIT_PROGRESSIVE_COOLDOWN = False
+
+            retry_after = service.record_violation("user:123")
+
+        assert retry_after == 60
+
+    def test_redis_unavailable_returns_base_window(self, service):
+        with patch.object(service, "_get_pool", return_value=None), \
+             patch("ada_backend.services.rate_limit_service.settings") as mock_settings:
+            mock_settings.RATE_LIMIT_WINDOW = 60
+            mock_settings.RATE_LIMIT_PROGRESSIVE_COOLDOWN = True
+
+            retry_after = service.record_violation("user:123")
+
+        assert retry_after == 60
+
+    def test_redis_error_returns_base_window(self, service, mock_redis):
+        mock_redis.get.side_effect = Exception("Redis error")
+
+        with patch.object(service, "_get_pool", return_value=MagicMock()), \
+             patch("ada_backend.services.rate_limit_service.redis.Redis", return_value=mock_redis), \
+             patch("ada_backend.services.rate_limit_service.settings") as mock_settings:
+            mock_settings.RATE_LIMIT_WINDOW = 60
+            mock_settings.RATE_LIMIT_PROGRESSIVE_COOLDOWN = True
+
+            retry_after = service.record_violation("user:123")
+
+        assert retry_after == 60

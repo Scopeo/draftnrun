@@ -1,150 +1,121 @@
+import hashlib
 import logging
-import time
 from typing import Optional
-from uuid import uuid4
 
-from ada_backend.utils.redis_client import get_redis_client
+import redis
+from fastapi import Request
+from slowapi import Limiter
+
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
 
-class RateLimitService:
+def _get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return "unknown"
+
+
+def key_func(request: Request) -> str:
+
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        token_hash = hashlib.sha256(token.encode()).hexdigest()[:16]
+        return f"token:{token_hash}"
+
+    for header_name in (
+        "X-API-Key",
+        "X-Ingestion-API-Key",
+        "X-Webhook-API-Key",
+        "X-Admin-API-Key",
+    ):
+        value = request.headers.get(header_name)
+        if value:
+            key_hash = hashlib.sha256(value.encode()).hexdigest()[:16]
+            return f"apikey:{key_hash}"
+
+    return f"ip:{_get_client_ip(request)}"
+
+
+def _build_storage_uri() -> str:
+    """Build a Redis URI from settings for slowapi/limits storage."""
+    host = settings.REDIS_HOST or "localhost"
+    port = settings.REDIS_PORT or 6379
+    password = settings.REDIS_PASSWORD
+    if password:
+        return f"redis://:{password}@{host}:{port}"
+    return f"redis://{host}:{port}"
+
+
+limiter = Limiter(
+    key_func=key_func,
+    default_limits=[f"{settings.RATE_LIMIT_REQUESTS}/{settings.RATE_LIMIT_WINDOW} second"],
+    storage_uri=_build_storage_uri(),
+    enabled=settings.RATE_LIMIT_ENABLED,
+)
+
+
+class ProgressiveCooldownService:
     def __init__(self):
-        self._redis_client: Optional[any] = None
-        self._last_connection_attempt: float = 0
-        self._connection_retry_delay: int = 5
+        self._pool: Optional[redis.ConnectionPool] = None
 
-    def _get_client(self):
-        current_time = time.time()
-
-        if self._redis_client is None:
-            if current_time - self._last_connection_attempt < self._connection_retry_delay:
+    def _get_pool(self) -> Optional[redis.ConnectionPool]:
+        if self._pool is None:
+            if not settings.REDIS_HOST:
                 return None
-
-            self._last_connection_attempt = current_time
             try:
-                self._redis_client = get_redis_client(decode_responses=False)
-                if self._redis_client:
-                    LOGGER.info("Rate limit service connected to Redis")
+                self._pool = redis.ConnectionPool(
+                    host=settings.REDIS_HOST,
+                    port=settings.REDIS_PORT or 6379,
+                    password=settings.REDIS_PASSWORD,
+                    decode_responses=True,
+                )
             except Exception as e:
-                LOGGER.error(f"Failed to connect to Redis for rate limiting: {str(e)}")
+                LOGGER.error(f"Failed to create Redis pool for cooldown: {e}")
                 return None
+        return self._pool
 
-        return self._redis_client
+    def record_violation(self, identifier: str) -> int:
 
-    def _invalidate_client(self):
-        """Reset the cached Redis client so the next call triggers a reconnect."""
-        self._redis_client = None
+        base_window = settings.RATE_LIMIT_WINDOW
 
-    def _calculate_retry_after(self, client, identifier: str, now: float, window: int) -> int:
         if not settings.RATE_LIMIT_PROGRESSIVE_COOLDOWN:
-            key = f"rate_limit:{identifier}"
-            oldest_timestamps = client.zrange(key, 0, 0, withscores=True)
-            if oldest_timestamps:
-                oldest_timestamp = oldest_timestamps[0][1]
-                return int(oldest_timestamp + window - now) + 1
-            return window
+            return base_window
 
-        violation_key = f"rate_limit:violations:{identifier}"
+        pool = self._get_pool()
+        if pool is None:
+            return base_window
 
         try:
+            client = redis.Redis(connection_pool=pool)
+            violation_key = f"rate_limit:violations:{identifier}"
+
             violation_count = client.get(violation_key)
-            if violation_count is None:
-                violation_count = 0
-            else:
-                violation_count = int(violation_count)
+            violation_count = int(violation_count) + 1 if violation_count else 1
 
-            violation_count += 1
-
-            base_retry = window
             multiplier = settings.RATE_LIMIT_COOLDOWN_MULTIPLIER
             max_cooldown = settings.RATE_LIMIT_COOLDOWN_MAX
 
-            progressive_retry = int(base_retry * (multiplier ** (violation_count - 1)))
-            retry_after = min(progressive_retry, max_cooldown)
+            retry_after = min(
+                int(base_window * (multiplier ** (violation_count - 1))),
+                max_cooldown,
+            )
 
             client.setex(violation_key, retry_after, violation_count)
 
             LOGGER.info(
-                f"Progressive cooldown for {identifier}: violation #{violation_count}, "
-                f"retry_after={retry_after}s (base={base_retry}s, multiplier={multiplier})"
+                f"Progressive cooldown for {identifier}: violation #{violation_count}, retry_after={retry_after}s"
             )
-
             return retry_after
 
         except Exception as e:
-            LOGGER.error(f"Error calculating progressive cooldown: {str(e)}")
-            return window
-
-    def check_rate_limit(
-        self,
-        identifier: str,
-        limit: Optional[int] = None,
-        window: Optional[int] = None,
-    ) -> tuple[bool, int, int]:
-        """
-        Check whether a request should be rate-limited.
-
-        Returns:
-            (is_allowed, retry_after_seconds, remaining_requests)
-        """
-        if limit is None:
-            limit = settings.RATE_LIMIT_REQUESTS
-        if window is None:
-            window = settings.RATE_LIMIT_WINDOW
-
-        client = self._get_client()
-
-        if client is None:
-            LOGGER.warning("Redis unavailable for rate limiting, allowing request (fail open)")
-            return (True, 0, limit)
-
-        try:
-            key = f"rate_limit:{identifier}"
-            now = time.time()
-            window_start = now - window
-
-            pipe = client.pipeline()
-            pipe.zremrangebyscore(key, 0, window_start)
-            pipe.zcount(key, window_start, now)
-            results = pipe.execute()
-            current_count = results[1]
-
-            if current_count >= limit:
-                retry_after = self._calculate_retry_after(client, identifier, now, window)
-
-                LOGGER.warning(
-                    f"Rate limit exceeded for {identifier}: {current_count}/{limit} "
-                    f"requests in {window}s window, retry after {retry_after}s"
-                )
-                return (False, retry_after, 0)
-
-            request_id = f"{now}:{uuid4()}"
-            client.zadd(key, {request_id: now})
-            client.expire(key, window + 60)
-
-            remaining = max(0, limit - current_count - 1)
-            return (True, 0, remaining)
-
-        except Exception as e:
-            self._invalidate_client()
-            LOGGER.error(f"Error checking rate limit for {identifier}: {str(e)}", exc_info=True)
-            return (True, 0, limit)
+            LOGGER.error(f"Error recording violation for {identifier}: {e}")
+            return base_window
 
 
-_rate_limit_service = RateLimitService()
-
-
-def check_rate_limit(
-    identifier: str,
-    limit: Optional[int] = None,
-    window: Optional[int] = None,
-) -> tuple[bool, int, int]:
-    """
-    Check whether a request should be rate-limited.
-
-    Returns:
-        (is_allowed, retry_after_seconds, remaining_requests)
-    """
-    return _rate_limit_service.check_rate_limit(identifier, limit, window)
+cooldown_service = ProgressiveCooldownService()
