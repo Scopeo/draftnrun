@@ -4,7 +4,7 @@ from uuid import UUID
 import numpy as np
 import pandas as pd
 
-from ada_backend.schemas.chart_schema import Chart, ChartData, ChartType, Dataset
+from ada_backend.schemas.chart_schema import Chart, ChartCategory, ChartData, ChartType, Dataset
 from ada_backend.services.charts_service import (
     TOKENS_DISTRIBUTION_BINS,
     compute_rank_bins,
@@ -135,24 +135,36 @@ def test_get_ranks_distribution_charts_with_totals(mock_query_trace_duration):
 
     assert len(charts) == 2
 
+    from collections import Counter
+    top_retrieval = ", ".join(str(r) for r, _ in Counter(retrieval_ranks).most_common(3))
+    top_reranker = ", ".join(str(r) for r, _ in Counter(reranker_ranks).most_common(3))
+
     retrieval_chart = charts[0]
     assert isinstance(retrieval_chart, Chart)
     assert retrieval_chart.type == ChartType.BAR
-    assert retrieval_chart.title == "Retrieved Chunk Usage Rate by Rank (n = 3 queries)"
+    assert retrieval_chart.title == "Chunk usage by retriever ranking"
+    assert retrieval_chart.subtitle == f"{num_queries} retrieval queries \u2013 most used ranks: {top_retrieval}"
+    assert retrieval_chart.category == ChartCategory.RETRIEVAL
+    assert retrieval_chart.y_axis_label == "Chunk usage rate (%)"
+    assert retrieval_chart.details is not None
     assert isinstance(retrieval_chart.data, ChartData)
     assert retrieval_chart.data.labels == retrieval_labels
     assert len(retrieval_chart.data.datasets) == 1
-    assert retrieval_chart.data.datasets[0].label == "Usage Rate (%)"
+    assert retrieval_chart.data.datasets[0].label == "Chunk usage rate"
     assert retrieval_chart.data.datasets[0].data == expected_retrieval_pct
 
     reranker_chart = charts[1]
     assert isinstance(reranker_chart, Chart)
     assert reranker_chart.type == ChartType.BAR
-    assert reranker_chart.title == "Reranked Chunk Usage Rate by Rank (n = 3 queries)"
+    assert reranker_chart.title == "Chunk usage by reranker ranking"
+    assert reranker_chart.subtitle == f"{num_queries} reranker queries \u2013 most used ranks: {top_reranker}"
+    assert reranker_chart.category == ChartCategory.RETRIEVAL
+    assert reranker_chart.y_axis_label == "Chunk usage rate (%)"
+    assert reranker_chart.details is not None
     assert isinstance(reranker_chart.data, ChartData)
     assert reranker_chart.data.labels == reranker_labels
     assert len(reranker_chart.data.datasets) == 1
-    assert reranker_chart.data.datasets[0].label == "Usage Rate (%)"
+    assert reranker_chart.data.datasets[0].label == "Chunk usage rate"
     assert reranker_chart.data.datasets[0].data == expected_reranker_pct
 
 

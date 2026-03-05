@@ -31,16 +31,24 @@ class ChartType(Enum):
     TABLE = "table"
 
 
+class ChartCategory(str, Enum):
+    GENERAL = "general"
+    RETRIEVAL = "retrieval"
+
+
 class Chart(BaseModel):
     id: str
     type: ChartType
     title: str
+    subtitle: str | None = None
     data: ChartData
     x_axis_type: str | None = None
     y_axis_type: str | None = None
     x_axis_label: str | None = None
     y_axis_label: str | None = None
     progress_percentage: float | None = None
+    category: ChartCategory | None = None
+    details: str | None = None
 
 
 class ChartsResponse(BaseModel):

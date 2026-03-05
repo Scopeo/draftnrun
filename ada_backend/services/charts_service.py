@@ -1,6 +1,6 @@
 import math
 from calendar import monthrange
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from datetime import datetime, timedelta, timezone
 from typing import List
 from uuid import UUID, uuid4
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType
 from ada_backend.repositories.credits_repository import get_organization_limit, get_organization_total_credits
-from ada_backend.schemas.chart_schema import Chart, ChartData, ChartsResponse, ChartType, Dataset
+from ada_backend.schemas.chart_schema import Chart, ChartCategory, ChartData, ChartsResponse, ChartType, Dataset
 from ada_backend.services.metrics.utils import (
     calculate_calls_per_day,
     count_conversations_per_day,
@@ -161,6 +161,7 @@ def get_agent_usage_chart(
                 datasets=datasets,
             ),
             x_axis_type="datetime",
+            category=ChartCategory.GENERAL,
         ),
         Chart(
             id=f"token_usage_{chart_id}",
@@ -182,6 +183,7 @@ def get_agent_usage_chart(
                 ],
             ),
             x_axis_type="datetime",
+            category=ChartCategory.GENERAL,
         ),
     ]
 
@@ -208,6 +210,7 @@ def get_latence_chart(project_ids: List[UUID], duration_days: int, call_type: Ca
                 Dataset(label="Latency Distribution", data=latency_hist.tolist()),
             ],
         ),
+        category=ChartCategory.GENERAL,
     )
 
 
@@ -238,11 +241,17 @@ def get_tokens_distribution_chart(
                 Dataset(label="Output Tokens Distribution", data=output_token_hist.tolist()),
             ],
         ),
+        category=ChartCategory.GENERAL,
     )
 
 
 def _build_rank_chart(
-    ranks: list, total_chunks: int, num_queries: int, title: str, dataset_label: str
+    ranks: list,
+    total_chunks: int,
+    num_queries: int,
+    title: str,
+    subtitle: str,
+    details: str,
 ) -> Chart | None:
     if not ranks:
         return None
@@ -260,12 +269,15 @@ def _build_rank_chart(
         id=f"ranks_distribution_{chart_id}",
         type=ChartType.BAR,
         title=title,
+        subtitle=subtitle,
         data=ChartData(
             labels=labels,
-            datasets=[Dataset(label=dataset_label, data=percentages)],
+            datasets=[Dataset(label="Chunk usage rate", data=percentages)],
         ),
         x_axis_label="Rank",
-        y_axis_label="Usage Rate (%)",
+        y_axis_label="Chunk usage rate (%)",
+        category=ChartCategory.RETRIEVAL,
+        details=details,
     )
 
 
@@ -322,18 +334,45 @@ def get_ranks_distribution_charts(
         max_total_reranked = int(np.array(reranker_ranks).max())
 
     charts = []
-    retrieval_chart = _build_rank_chart(
-        retrieval_ranks, max_total_retrieved, num_retrieval_queries,
-        f"Retrieved Chunk Usage Rate by Rank ({num_retrieval_queries} queries)", "Usage Rate (%)",
-    )
-    if retrieval_chart:
-        charts.append(retrieval_chart)
-    reranker_chart = _build_rank_chart(
-        reranker_ranks, max_total_reranked, num_reranker_queries,
-        f"Reranked Chunk Usage Rate by Rank ({num_reranker_queries} queries)", "Usage Rate (%)",
-    )
-    if reranker_chart:
-        charts.append(reranker_chart)
+
+    if retrieval_ranks and num_retrieval_queries > 0:
+        top_retrieval_ranks = [str(rank) for rank, _ in Counter(retrieval_ranks).most_common(3)]
+        retrieval_chart = _build_rank_chart(
+            retrieval_ranks,
+            max_total_retrieved,
+            num_retrieval_queries,
+            title="Chunk usage by retriever ranking",
+            subtitle=(
+                f"{num_retrieval_queries} retrieval queries - most used ranks: {', '.join(top_retrieval_ranks)}"
+            ),
+            details=(
+                "Distribution of the retriever rank positions for chunks used to answer queries. \n\n"
+                "- Ranks near 1 mean the retriever returned the chunk near the top. \n"
+                "- Usage concentrated in the first ranks indicates strong retrieval quality. \n"
+                "- Frequent usage of deeper ranks suggests relevant chunks are not surfaced early. "
+            ),
+        )
+        if retrieval_chart:
+            charts.append(retrieval_chart)
+
+    if reranker_ranks and num_reranker_queries > 0:
+        top_reranker_ranks = [str(rank) for rank, _ in Counter(reranker_ranks).most_common(3)]
+        reranker_chart = _build_rank_chart(
+            reranker_ranks,
+            max_total_reranked,
+            num_reranker_queries,
+            title="Chunk usage by reranker ranking",
+            subtitle=(f"{num_reranker_queries} reranker queries - most used ranks: {', '.join(top_reranker_ranks)}"),
+            details=(
+                "Distribution of reranker rank positions for chunks used to answer queries. \n\n"
+                "- Ranks near 1 are the chunks the reranker considers most relevant. \n"
+                "- If useful chunks appear mostly at the top, reranking is effective. \n"
+                "- If useful chunks appear lower in the ranking, the reranker may not be prioritizing them correctly. "
+            ),
+        )
+        if reranker_chart:
+            charts.append(reranker_chart)
+
     return charts
 
 
