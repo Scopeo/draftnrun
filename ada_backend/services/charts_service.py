@@ -1,4 +1,3 @@
-import math
 from calendar import monthrange
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
@@ -13,10 +12,10 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import CallType
 from ada_backend.repositories.credits_repository import get_organization_limit, get_organization_total_credits
 from ada_backend.schemas.chart_schema import Chart, ChartCategory, ChartData, ChartsResponse, ChartType, Dataset
+from ada_backend.services.metrics.rank_charts import get_ranks_distribution_charts
 from ada_backend.services.metrics.utils import (
     calculate_calls_per_day,
     count_conversations_per_day,
-    get_ranks_distribution_charts,
     query_trace_duration,
 )
 from settings import settings
