@@ -1,3 +1,4 @@
+import signal
 from contextlib import asynccontextmanager
 
 import sentry_sdk
@@ -37,6 +38,7 @@ from ada_backend.routers.project_router import router as project_router
 from ada_backend.routers.qa_evaluation_router import router as qa_evaluation_router
 from ada_backend.routers.quality_assurance_router import router as quality_assurance_router
 from ada_backend.routers.run_router import router as run_router
+from ada_backend.routers.run_stream_router import router as run_stream_router
 from ada_backend.routers.s3_files_router import router as s3_files_router
 from ada_backend.routers.source_router import router as source_router
 from ada_backend.routers.template_router import router as template_router
@@ -47,6 +49,7 @@ from ada_backend.routers.webhooks.webhook_internal_router import router as webho
 from ada_backend.routers.webhooks.webhook_trigger_router import router as webhook_trigger_router
 from ada_backend.routers.widget_router import router as widget_router
 from ada_backend.services.rate_limit_service import limiter
+from ada_backend.workers.run_queue_worker import _request_drain, start_run_queue_worker_thread
 from ada_backend.utils.redis_client import xgroup_create_if_not_exists
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
@@ -76,8 +79,22 @@ async def lifespan(app: FastAPI):
     yield
 
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start run queue worker thread and register SIGTERM for drain on shutdown."""
+    worker_thread = start_run_queue_worker_thread()
+    if worker_thread is not None:
+        signal.signal(signal.SIGTERM, lambda s, f: _request_drain())
+    yield
+    _request_drain()
+    if worker_thread is not None:
+        worker_thread.join(timeout=10)
+
+
 app = FastAPI(
     title="Ada Backend",
+    lifespan=lifespan,
     description="API for managing and running LLM agents",
     version="0.1.0",
     lifespan=lifespan,
@@ -199,6 +216,7 @@ app.include_router(auth_router)
 app.include_router(org_router)
 app.include_router(project_router)
 app.include_router(run_router)
+app.include_router(run_stream_router)
 app.include_router(variables_router)
 app.include_router(agent_router)
 app.include_router(integration_router)
