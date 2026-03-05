@@ -102,3 +102,26 @@ def test_resolve_empty_definitions():
         result = resolve_variables(session, org_id, ["set1"])
 
     assert result == {}
+
+
+def test_resolve_set_overrides_oauth_definition_default():
+    """Set value overrides the default_value on an oauth-type definition."""
+    org_id = uuid.uuid4()
+    default_conn_id = str(uuid.uuid4())
+    user_conn_id = str(uuid.uuid4())
+    with get_db_session() as session:
+        session.add(
+            db.OrgVariableDefinition(
+                id=uuid.uuid4(),
+                organization_id=org_id,
+                name="google-mail-oauth",
+                type="oauth",
+                default_value=default_conn_id,
+            )
+        )
+        session.add(_set(org_id, "user_set", {"google-mail-oauth": user_conn_id}))
+        session.flush()
+
+        result = resolve_variables(session, org_id, ["user_set"])
+
+    assert result["google-mail-oauth"] == user_conn_id

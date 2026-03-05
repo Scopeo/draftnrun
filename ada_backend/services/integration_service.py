@@ -393,7 +393,7 @@ async def get_oauth_access_token(
     Args:
         session: Database session
         oauth_connection_id: ID of the OAuthConnection
-        provider_config_key: Nango provider config key (e.g., "slack", "google")
+        provider_config_key: Nango provider config key (e.g., "slack", "google-mail")
 
     Returns:
         Valid access token from Nango

@@ -21,6 +21,7 @@ from ada_backend.database.seed.constants import (
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.source_repository import get_data_source_by_id
+from ada_backend.repositories.variable_definitions_repository import find_oauth_definition_by_name
 from ada_backend.services.errors import MissingDataSourceError
 from ada_backend.services.integration_service import get_oauth_access_token
 from ada_backend.services.llm_models_service import (
@@ -265,12 +266,6 @@ async def resolve_oauth_access_token(
             connection_uuid = _try_parse_uuid(str(variables[oauth_connection_id]))
 
         if not connection_uuid:
-            # Not a UUID — treat as an oauth variable definition name.
-            # Look up the definition to get the connection UUID from default_value.
-            from ada_backend.repositories.variable_definitions_repository import (
-                find_oauth_definition_by_name,
-            )
-
             LOGGER.info(f"Resolving definition name '{oauth_connection_id}' for {provider_config_key}")
 
             with get_db_session() as session:
