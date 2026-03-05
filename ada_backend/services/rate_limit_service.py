@@ -57,6 +57,8 @@ limiter = Limiter(
     default_limits=[f"{settings.RATE_LIMIT_REQUESTS}/{settings.RATE_LIMIT_WINDOW} second"],
     storage_uri=_build_storage_uri(),
     enabled=settings.RATE_LIMIT_ENABLED,
+    swallow_errors=True,
+    in_memory_fallback_enabled=True,
 )
 
 

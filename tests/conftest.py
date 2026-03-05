@@ -60,10 +60,3 @@ def disable_observability_in_tests():
     """Disable observability stack for all tests to avoid external dependencies."""
     with patch("settings.settings.ENABLE_OBSERVABILITY_STACK", False):
         yield
-
-
-@pytest.fixture(autouse=True)
-def disable_rate_limiting_in_tests():
-    """Disable rate limiting for all tests to avoid Redis dependency."""
-    with patch("settings.settings.RATE_LIMIT_ENABLED", False):
-        yield
