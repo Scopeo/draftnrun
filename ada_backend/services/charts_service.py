@@ -1,6 +1,6 @@
 import math
 from calendar import monthrange
-from collections import Counter, OrderedDict
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from typing import List
 from uuid import UUID, uuid4
@@ -336,38 +336,45 @@ def get_ranks_distribution_charts(
     charts = []
 
     if retrieval_ranks and num_retrieval_queries > 0:
-        top_retrieval_ranks = [str(rank) for rank, _ in Counter(retrieval_ranks).most_common(3)]
+        avg_chunks_per_query = round(len(retrieval_ranks) / num_retrieval_queries, 1)
         retrieval_chart = _build_rank_chart(
             retrieval_ranks,
             max_total_retrieved,
             num_retrieval_queries,
             title="Chunk usage by retriever ranking",
             subtitle=(
-                f"{num_retrieval_queries} retrieval queries - most used ranks: {', '.join(top_retrieval_ranks)}"
+                f"{num_retrieval_queries} retrieval queries"
+                f" - {avg_chunks_per_query} average chunks used per query"
             ),
             details=(
-                "Distribution of the retriever rank positions for chunks used to answer queries. \n\n"
-                "- Ranks near 1 mean the retriever returned the chunk near the top. \n"
-                "- Usage concentrated in the first ranks indicates strong retrieval quality. \n"
-                "- Frequent usage of deeper ranks suggests relevant chunks are not surfaced early. "
+                "When someone asks a question, the retriever searches through your knowledge base "
+                "and returns a list of chunks, ordered from what it thinks is most relevant (#1) "
+                "to least relevant. This chart shows which positions in that list actually ended up "
+                "being useful. If most of the useful chunks come from the top of the list, "
+                "your retriever is doing a great job. If useful chunks are often found further down, "
+                "it means the retriever is not putting the best answers first."
             ),
         )
         if retrieval_chart:
             charts.append(retrieval_chart)
 
     if reranker_ranks and num_reranker_queries > 0:
-        top_reranker_ranks = [str(rank) for rank, _ in Counter(reranker_ranks).most_common(3)]
+        avg_chunks_per_query = round(len(reranker_ranks) / num_reranker_queries, 1)
         reranker_chart = _build_rank_chart(
             reranker_ranks,
             max_total_reranked,
             num_reranker_queries,
             title="Chunk usage by reranker ranking",
-            subtitle=(f"{num_reranker_queries} reranker queries - most used ranks: {', '.join(top_reranker_ranks)}"),
+            subtitle=(
+                f"{num_reranker_queries} reranker queries"
+                f" - {avg_chunks_per_query} average chunks used per query"
+            ),
             details=(
-                "Distribution of reranker rank positions for chunks used to answer queries. \n\n"
-                "- Ranks near 1 are the chunks the reranker considers most relevant. \n"
-                "- If useful chunks appear mostly at the top, reranking is effective. \n"
-                "- If useful chunks appear lower in the ranking, the reranker may not be prioritizing them correctly. "
+                "After the retriever finds chunks, the reranker takes a second look and reorders them "
+                "to try to put the best answers at the top. This chart shows which positions in the "
+                "reranked list actually ended up being useful. If most useful chunks are near the top, "
+                "the reranker is helping. If they are spread out or stuck at the bottom, "
+                "the reranker is not improving the order much."
             ),
         )
         if reranker_chart:

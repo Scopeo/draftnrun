@@ -135,15 +135,14 @@ def test_get_ranks_distribution_charts_with_totals(mock_query_trace_duration):
 
     assert len(charts) == 2
 
-    from collections import Counter
-    top_retrieval = ", ".join(str(r) for r, _ in Counter(retrieval_ranks).most_common(3))
-    top_reranker = ", ".join(str(r) for r, _ in Counter(reranker_ranks).most_common(3))
+    avg_retrieval_chunks = round(len(retrieval_ranks) / num_queries, 1)
+    avg_reranker_chunks = round(len(reranker_ranks) / num_queries, 1)
 
     retrieval_chart = charts[0]
     assert isinstance(retrieval_chart, Chart)
     assert retrieval_chart.type == ChartType.BAR
     assert retrieval_chart.title == "Chunk usage by retriever ranking"
-    assert retrieval_chart.subtitle == f"{num_queries} retrieval queries \u2013 most used ranks: {top_retrieval}"
+    assert retrieval_chart.subtitle == f"{num_queries} retrieval queries - {avg_retrieval_chunks} average chunks used per query"
     assert retrieval_chart.category == ChartCategory.RETRIEVAL
     assert retrieval_chart.y_axis_label == "Chunk usage rate (%)"
     assert retrieval_chart.details is not None
@@ -157,7 +156,7 @@ def test_get_ranks_distribution_charts_with_totals(mock_query_trace_duration):
     assert isinstance(reranker_chart, Chart)
     assert reranker_chart.type == ChartType.BAR
     assert reranker_chart.title == "Chunk usage by reranker ranking"
-    assert reranker_chart.subtitle == f"{num_queries} reranker queries \u2013 most used ranks: {top_reranker}"
+    assert reranker_chart.subtitle == f"{num_queries} reranker queries - {avg_reranker_chunks} average chunks used per query"
     assert reranker_chart.category == ChartCategory.RETRIEVAL
     assert reranker_chart.y_axis_label == "Chunk usage rate (%)"
     assert reranker_chart.details is not None
