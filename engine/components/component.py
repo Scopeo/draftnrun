@@ -45,6 +45,9 @@ class Component(ABC):
         self.tool_description = tool_description
         self.component_attributes = component_attributes
         self.credit_calculator = credit_calculator or calculate_and_set_component_credits
+        # Injected by GraphRunner when running inside an async run with streaming enabled.
+        # Components can use this to emit intermediate events to the client.
+        self.event_callback: Optional[Callable[[dict[str, Any]], Any]] = None
 
         self._trace_attributes: dict[str, Any] = {}
         self._trace_events: list[str] = []
