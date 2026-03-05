@@ -236,6 +236,7 @@ def _try_parse_uuid(value: str) -> UUID | None:
 async def resolve_oauth_access_token(
     oauth_connection_id: str,
     provider_config_key: str,
+    variables: dict[str, Any] | None = None,
 ) -> str:
     """
     Resolve OAuth connection ID (or definition name) to access token via Nango.
@@ -259,21 +260,26 @@ async def resolve_oauth_access_token(
     connection_uuid = _try_parse_uuid(oauth_connection_id)
 
     if not connection_uuid:
-        # Not a UUID — treat as an oauth variable definition name.
-        # Look up the definition to get the connection UUID from default_value.
-        from ada_backend.repositories.variable_definitions_repository import (
-            find_oauth_definition_by_name,
-        )
+        # Check variables dict first (per-user set overrides for NeverDrop)
+        if variables and oauth_connection_id in variables:
+            connection_uuid = _try_parse_uuid(str(variables[oauth_connection_id]))
 
-        LOGGER.info(f"Resolving definition name '{oauth_connection_id}' for {provider_config_key}")
+        if not connection_uuid:
+            # Not a UUID — treat as an oauth variable definition name.
+            # Look up the definition to get the connection UUID from default_value.
+            from ada_backend.repositories.variable_definitions_repository import (
+                find_oauth_definition_by_name,
+            )
 
-        with get_db_session() as session:
-            definition = find_oauth_definition_by_name(session, oauth_connection_id)
-            if not definition or not definition.default_value:
-                raise ValueError(
-                    f"OAuth definition '{oauth_connection_id}' not found or has no default value"
-                )
-            connection_uuid = UUID(definition.default_value)
+            LOGGER.info(f"Resolving definition name '{oauth_connection_id}' for {provider_config_key}")
+
+            with get_db_session() as session:
+                definition = find_oauth_definition_by_name(session, oauth_connection_id)
+                if not definition or not definition.default_value:
+                    raise ValueError(
+                        f"OAuth definition '{oauth_connection_id}' not found or has no default value"
+                    )
+                connection_uuid = UUID(definition.default_value)
 
     LOGGER.info(f"Resolving OAuth access token for {provider_config_key} with connection ID {connection_uuid}")
 
@@ -342,7 +348,8 @@ class OAuthComponentFactory:
             ValueError: If oauth_connection_id is missing
         """
         oauth_connection_id = kwargs.pop("oauth_connection_id", None)
-        access_token = await resolve_oauth_access_token(oauth_connection_id, self.provider_config_key)
+        variables = kwargs.pop("_variables", None)
+        access_token = await resolve_oauth_access_token(oauth_connection_id, self.provider_config_key, variables=variables)
         kwargs[self.target_param_name] = access_token
 
         for processor in self.parameter_processors:

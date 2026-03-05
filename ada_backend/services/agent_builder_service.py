@@ -126,6 +126,7 @@ def instantiate_component(
     session: Session,
     component_instance_id: UUID,
     project_id: Optional[UUID] = None,
+    variables: dict[str, Any] | None = None,
 ) -> Any:
     """
     Instantiate a component, resolving its dependencies recursively.
@@ -189,6 +190,7 @@ def instantiate_component(
                 session,
                 sub_component.child_component_instance.id,
                 project_id=project_id,
+                variables=variables,
             )
             LOGGER.debug(f"Instantiated sub-component: {instantiated_sub_component}\n")
 
@@ -293,6 +295,8 @@ def instantiate_component(
     )
     if tool_pre_configured_inputs:
         input_params["tool_pre_configured_inputs"] = tool_pre_configured_inputs
+    if variables is not None:
+        input_params["_variables"] = variables
     # Instantiate the component using its factory
     LOGGER.debug(
         f"Trying to create component: {component_name} "

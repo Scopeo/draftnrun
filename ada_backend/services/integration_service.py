@@ -194,6 +194,7 @@ async def confirm_oauth_connection(
         required=False,
         display_order=0,
     )
+    session.commit()
 
     LOGGER.info(
         f"Created new OAuth connection {new_connection.id} "
