@@ -11,9 +11,13 @@ from settings import settings
 LOGGER = logging.getLogger(__name__)
 
 
-def get_redis_client() -> Optional[redis.Redis]:
+def get_redis_client(decode_responses: bool = True) -> Optional[redis.Redis]:
     """
     Get a Redis client instance configured with settings from environment variables.
+
+    Args:
+        decode_responses: If True, responses are decoded to strings. If False, returns bytes.
+                         Set to False for rate limiting (sorted sets with float scores).
 
     Returns:
         Optional[redis.Redis]: Redis client instance or None if configuration is missing
@@ -30,7 +34,7 @@ def get_redis_client() -> Optional[redis.Redis]:
             host=settings.REDIS_HOST,
             port=settings.REDIS_PORT,
             password=settings.REDIS_PASSWORD,
-            decode_responses=True,
+            decode_responses=decode_responses,
         )
         # Test connection
         client.ping()

@@ -121,6 +121,15 @@ class BaseConfig(BaseSettings):
     REDIS_WEBHOOK_QUEUE_NAME: str = "ada_webhook_queue"
     REDIS_WEBHOOK_DEDUP_TTL: int = 86400  # 24 hours in seconds
 
+    # Rate limiting configuration
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_REQUESTS: int = 50
+    RATE_LIMIT_WINDOW: int = 60
+    RATE_LIMIT_EXEMPTED_PATHS: str = "/health,/metrics,/"
+    RATE_LIMIT_PROGRESSIVE_COOLDOWN: bool = True
+    RATE_LIMIT_COOLDOWN_MULTIPLIER: float = 2.0
+    RATE_LIMIT_COOLDOWN_MAX: int = 3600  # Maximum 1 hour
+
     S3_ENDPOINT_URL: Optional[str] = None
     S3_ACCESS_KEY_ID: Optional[str] = None
     S3_SECRET_ACCESS_KEY: Optional[str] = None

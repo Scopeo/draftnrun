@@ -7,6 +7,7 @@ from prometheus_fastapi_instrumentator import PrometheusFastApiInstrumentator
 from ada_backend.admin.admin import setup_admin
 from ada_backend.graphql.schema import graphql_router
 from ada_backend.instrumentation import setup_performance_instrumentation
+from ada_backend.middleware.rate_limit_middleware import RateLimitMiddleware
 from ada_backend.middleware.request_context import RequestContextMiddleware
 from ada_backend.routers.admin_tools_router import router as admin_tools_router
 from ada_backend.routers.agent_router import router as agent_router
@@ -195,6 +196,7 @@ app.include_router(provider_webhooks_router)
 app.include_router(webhook_internal_router)
 app.include_router(webhook_trigger_router)
 
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
     CORSMiddleware,
