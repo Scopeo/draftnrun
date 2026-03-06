@@ -140,7 +140,7 @@ def test_get_ranks_distribution_charts_with_totals(mock_query_trace_duration):
     assert retrieval_chart.title == "Chunk usage by retriever ranking"
     assert (
         retrieval_chart.subtitle
-        == f"{num_queries} retrieval queries - {avg_retrieval_chunks} average chunks used per query"
+        == f"{num_queries} retrieval queries - {avg_retrieval_chunks} chunks used in average per query"
     )
     assert retrieval_chart.category == ChartCategory.RETRIEVAL
     assert retrieval_chart.y_axis_label == "Chunk usage rate (%)"
