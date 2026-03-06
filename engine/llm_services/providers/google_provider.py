@@ -12,7 +12,12 @@ from pydantic import BaseModel
 
 from engine.llm_services.constrained_output_models import convert_json_str_to_pydantic
 from engine.llm_services.providers.base_provider import BaseProvider
-from engine.llm_services.utils import validate_and_extract_json_response, wrap_str_content_into_chat_completion_message
+from engine.llm_services.utils import (
+    resolve_schema_refs,
+    resolve_tool_refs,
+    validate_and_extract_json_response,
+    wrap_str_content_into_chat_completion_message,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -92,17 +97,17 @@ class GoogleProvider(BaseProvider):
     ) -> tuple[BaseModel, int, int, int]:
         client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
 
+        schema = resolve_schema_refs(response_format.model_json_schema())
+        self._force_additional_properties_false(schema)
+
         response_format_schema = {
             "type": "json_schema",
             "json_schema": {
                 "name": response_format.__name__,
-                "schema": response_format.model_json_schema(),
+                "schema": schema,
                 "strict": True,
             },
         }
-
-        schema = response_format_schema.get("json_schema", {}).get("schema", {})
-        self._force_additional_properties_false(schema)
 
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
@@ -142,8 +147,9 @@ class GoogleProvider(BaseProvider):
         stream: bool,
         **kwargs,
     ) -> tuple[str, int, int, int]:
-        schema = response_format.get("schema", {})
+        schema = resolve_schema_refs(response_format.get("schema", {}))
         name = response_format.get("name", "response")
+        self._force_additional_properties_false(schema)
 
         response_format_schema = {
             "type": "json_schema",
@@ -153,8 +159,6 @@ class GoogleProvider(BaseProvider):
                 "strict": True,
             },
         }
-
-        self._force_additional_properties_false(schema)
 
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
@@ -199,6 +203,8 @@ class GoogleProvider(BaseProvider):
             )
             response = wrap_str_content_into_chat_completion_message(content, self._model_name)
             return response, prompt_tokens, completion_tokens, total_tokens
+
+        tools = resolve_tool_refs(tools)
 
         client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
         response = await client.chat.completions.create(

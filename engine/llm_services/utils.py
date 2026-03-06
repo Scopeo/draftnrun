@@ -1,8 +1,11 @@
+import copy
 import json
 import logging
 import time
 import uuid
 from typing import Any
+
+import jsonref
 
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from openai.types.chat.chat_completion import Choice
@@ -329,3 +332,23 @@ async def ensure_structured_output_response(response, structured_output_tool, co
             except Exception as e:
                 raise ValueError(f"Error parsing structured output tool response with error {e}")
     return response
+
+
+def resolve_schema_refs(schema: dict) -> dict:
+
+    resolved = jsonref.replace_refs(schema, proxies=False, merge_props=True)
+    result = copy.deepcopy(resolved)
+    result.pop("$defs", None)
+    return result
+
+
+def resolve_tool_refs(tools: list[dict]) -> list[dict]:
+    """Resolve ``$defs``/``$ref`` inside every tool's ``parameters`` schema."""
+    resolved = []
+    for tool in tools:
+        tool = copy.deepcopy(tool)
+        params = tool.get("function", {}).get("parameters")
+        if params:
+            tool["function"]["parameters"] = resolve_schema_refs(params)
+        resolved.append(tool)
+    return resolved
