@@ -12,9 +12,15 @@ from ada_backend.repositories import run_repository
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.run_schema import RunResponseSchema
-from ada_backend.services.errors import InvalidRunStatusTransition, ProjectNotFound, RunNotFound
+from ada_backend.services.errors import (
+    InvalidRunStatusTransition,
+    ProjectNotFound,
+    ResultsBucketNotConfigured,
+    RunNotFound,
+    RunResultNotFound,
+)
 from ada_backend.services.s3_files_service import get_s3_client_and_ensure_bucket
-from data_ingestion.boto3_client import upload_file_to_bucket
+from data_ingestion.boto3_client import get_content_from_file, upload_file_to_bucket
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -177,6 +183,25 @@ def get_run(session: Session, run_id: UUID, project_id: UUID) -> RunResponseSche
     if run.project_id != project_id:
         raise RunNotFound(run_id)
     return RunResponseSchema.model_validate(run, from_attributes=True)
+
+
+def get_run_result(session: Session, run_id: UUID, project_id: UUID) -> ChatResponse:
+    """
+    Fetch the run's result (ChatResponse) from S3. Run must exist and belong to project.
+    Raises RunNotFound if run missing or wrong project; RunResultNotFound if no result_id;
+    ResultsBucketNotConfigured if bucket not set; ValueError if S3 get fails.
+    """
+    run_schema = get_run(session, run_id=run_id, project_id=project_id)
+    result_id = run_schema.result_id
+    if not result_id:
+        raise RunResultNotFound(run_id)
+    bucket_name = settings.RESULTS_S3_BUCKET_NAME
+    if not bucket_name:
+        raise ResultsBucketNotConfigured()
+    s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
+    content = get_content_from_file(s3_client, bucket_name=bucket_name, key=result_id)
+    data = json.loads(content.decode("utf-8"))
+    return ChatResponse.model_validate(data)
 
 
 def get_runs(
