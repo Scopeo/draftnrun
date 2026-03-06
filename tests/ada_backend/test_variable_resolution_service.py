@@ -5,6 +5,7 @@ import uuid
 from ada_backend.database import models as db
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.services.variable_resolution_service import resolve_variables
+from ada_backend.services.variables_service import upsert_set_service
 
 
 def _def(org_id, name, default_value=None):
@@ -123,3 +124,105 @@ def test_resolve_set_overrides_oauth_definition_default():
         result = resolve_variables(session, org_id, ["user_set"])
 
     assert result["google-mail-oauth"] == user_conn_id
+
+
+def test_resolve_secret_values_from_encrypted_storage():
+    org_id = uuid.uuid4()
+    def_id = uuid.uuid4()
+    set_uuid = uuid.uuid4()
+
+    with get_db_session() as session:
+        session.add(
+            db.OrgVariableDefinition(
+                id=def_id,
+                organization_id=org_id,
+                name="api_key",
+                type=db.VariableType.SECRET,
+            )
+        )
+        session.add(_def(org_id, "var_a", default_value="default_a"))
+        session.add(
+            db.OrgVariableSet(
+                id=set_uuid,
+                organization_id=org_id,
+                set_id="set1",
+                values={"var_a": "override_a"},
+            )
+        )
+        session.flush()
+
+        org_secret = db.OrganizationSecret(
+            organization_id=org_id,
+            key="api_key",
+            secret_type=db.OrgSecretType.VARIABLE,
+            variable_definition_id=def_id,
+            variable_set_id=set_uuid,
+        )
+        org_secret.set_secret("super-secret")
+        session.add(org_secret)
+        session.flush()
+
+        result = resolve_variables(session, org_id, ["set1"])
+
+    assert result["var_a"] == "override_a"
+    assert result["api_key"] == "super-secret"
+
+
+def test_resolve_secret_end_to_end_via_upsert_service():
+    """upsert_set_service cifra → resolve_variables descifra. Ciclo completo con DB."""
+    org_id = uuid.uuid4()
+    with get_db_session() as session:
+        session.add(
+            db.OrgVariableDefinition(
+                id=uuid.uuid4(),
+                organization_id=org_id,
+                name="api_key",
+                type=db.VariableType.SECRET,
+            )
+        )
+        session.add(_def(org_id, "api_url"))
+        session.flush()
+
+        upsert_set_service(
+            session,
+            org_id,
+            "set1",
+            {
+                "api_url": "https://example.com",
+                "api_key": "my-secret-value",
+            },
+        )
+
+        result = resolve_variables(session, org_id, ["set1"])
+
+    assert result["api_url"] == "https://example.com"
+    assert result["api_key"] == "my-secret-value"
+
+
+def test_resolve_secret_not_set_excluded():
+    """Un secret sin valor en encrypted_values no aparece en el resultado."""
+    org_id = uuid.uuid4()
+    with get_db_session() as session:
+        session.add(
+            db.OrgVariableDefinition(
+                id=uuid.uuid4(),
+                organization_id=org_id,
+                name="api_key",
+                type=db.VariableType.SECRET,
+            )
+        )
+        session.add(_def(org_id, "var_a", default_value="default_a"))
+        session.add(
+            db.OrgVariableSet(
+                id=uuid.uuid4(),
+                organization_id=org_id,
+                set_id="set1",
+                values={"var_a": "override_a"},
+            )
+        )
+        session.flush()
+
+        result = resolve_variables(session, org_id, ["set1"])
+
+    assert result["var_a"] == "override_a"
+    assert "api_key" not in result

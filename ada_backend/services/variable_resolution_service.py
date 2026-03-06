@@ -4,6 +4,11 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ada_backend.database.models import VariableType
+from ada_backend.repositories.organization_repository import (
+    list_variable_secrets_for_definitions,
+    list_variable_secrets_for_set,
+)
 from ada_backend.repositories.variable_definitions_repository import list_org_definitions
 from ada_backend.repositories.variable_sets_repository import get_org_variable_set
 
@@ -22,20 +27,36 @@ def resolve_variables(
     Returns dict[str, Any] of fully resolved values (ready for engine layer).
     """
     variable_definitions = list_org_definitions(session, organization_id, project_id=project_id)
-    defined_names = {definition.name for definition in variable_definitions}
+    definition_ids = [d.id for d in variable_definitions]
 
     # 1. Start with defaults
     resolved: dict[str, Any] = {}
+    default_secrets = list_variable_secrets_for_definitions(session, definition_ids, variable_set_id=None)
+    secret_defaults = {s.variable_definition_id: s for s in default_secrets}
+
     for definition in variable_definitions:
-        if definition.default_value is not None:
+        if definition.type == VariableType.SECRET:
+            row = secret_defaults.get(definition.id)
+            if row:
+                resolved[definition.name] = row.get_secret()
+        elif definition.default_value is not None:
             resolved[definition.name] = definition.default_value
 
     # 2. Layer each set in order (later overrides earlier)
     for set_id in set_ids:
         org_set = get_org_variable_set(session, organization_id, set_id)
-        if org_set:
-            for name, value in org_set.values.items():
-                if name in defined_names:
-                    resolved[name] = value
+        if not org_set:
+            continue
+
+        for name, value in org_set.values.items():
+            resolved[name] = value
+
+        set_secrets = list_variable_secrets_for_set(session, org_set.id)
+        secrets_by_def = {s.variable_definition_id: s for s in set_secrets}
+        for definition in variable_definitions:
+            if definition.type == VariableType.SECRET:
+                row = secrets_by_def.get(definition.id)
+                if row:
+                    resolved[definition.name] = row.get_secret()
 
     return resolved
