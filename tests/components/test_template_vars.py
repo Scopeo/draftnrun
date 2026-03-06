@@ -1,6 +1,7 @@
 """Test template variable injection through NodeData context."""
 
 import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -39,7 +40,6 @@ def input_block(mock_trace_manager):
             name="input", description="input", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test Input"),
-        payload_schema='{"messages": [], "yes": "LOL", "name": "John"}',
     )
 
 
@@ -73,28 +73,70 @@ def react_agent(mock_trace_manager, mock_llm_service):
     )
 
 
-def test_input_block_extracts_template_vars(input_block):
-    """Test Input block returns NodeData with template vars directly in ctx."""
-    input_data = {"messages": [{"role": "user", "content": "hi"}]}
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.prometheus_metric.get_tracing_span")
+def test_input_block_extracts_template_vars(get_span_mock, agent_calls_mock, input_block):
+    """Test Input block returns NodeData with template vars directly in data."""
+    get_span_mock.return_value = MagicMock(project_id="test_project")
+    agent_calls_mock.labels.return_value = MagicMock()
+
+    input_data = NodeData(
+        data={
+            "messages": [{"role": "user", "content": "hi"}],
+            "payload_schema": {"messages": [], "yes": "LOL", "name": "John"},
+        }
+    )
     result = asyncio.run(input_block.run(input_data))
 
     assert isinstance(result, NodeData)
     assert "messages" in result.data
-    assert result.ctx.get("yes") == "LOL"
-    assert result.ctx.get("name") == "John"
+    assert result.data.get("yes") == "LOL"
+    assert result.data.get("name") == "John"
 
 
-def test_input_block_preserves_existing_ctx(input_block):
-    """Test Input block preserves existing ctx data."""
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.prometheus_metric.get_tracing_span")
+def test_input_block_preserves_existing_ctx(get_span_mock, agent_calls_mock, input_block):
+    """Test Input block preserves existing ctx data while returning extras in data."""
+    get_span_mock.return_value = MagicMock(project_id="test_project")
+    agent_calls_mock.labels.return_value = MagicMock()
+
     input_data = NodeData(
-        data={"messages": [{"role": "user", "content": "hi"}]}, ctx={"existing_key": "existing_value"}
+        data={
+            "messages": [{"role": "user", "content": "hi"}],
+            "payload_schema": {"messages": [], "yes": "LOL", "name": "John"},
+        },
+        ctx={"existing_key": "existing_value"},
     )
     result = asyncio.run(input_block.run(input_data))
 
     assert isinstance(result, NodeData)
     assert result.ctx["existing_key"] == "existing_value"
-    assert result.ctx["yes"] == "LOL"
-    assert result.ctx["name"] == "John"
+    assert result.data["yes"] == "LOL"
+    assert result.data["name"] == "John"
+
+
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.prometheus_metric.get_tracing_span")
+def test_input_block_payload_schema_as_json_string(get_span_mock, agent_calls_mock, input_block):
+    """payload_schema arriving as a JSON string (as the graph runner delivers it from a LiteralNode)
+    is correctly parsed and its defaults are applied to fields absent from the runtime payload."""
+    get_span_mock.return_value = MagicMock(project_id="test_project")
+    agent_calls_mock.labels.return_value = MagicMock()
+
+    schema = {"messages": [], "country": "France", "language": "fr"}
+    input_data = NodeData(
+        data={
+            "messages": [{"role": "user", "content": "bonjour"}],
+            "payload_schema": json.dumps(schema),
+        }
+    )
+    result = asyncio.run(input_block.run(input_data))
+
+    assert isinstance(result, NodeData)
+    assert "messages" in result.data
+    assert result.data.get("country") == "France"
+    assert result.data.get("language") == "fr"
 
 
 @patch("engine.prometheus_metric.agent_calls")
@@ -343,29 +385,35 @@ def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, mock_llm_s
     agent._completion_service.complete_async.assert_called_once()
 
 
-def test_input_block_with_flat_template_vars(mock_trace_manager):
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.prometheus_metric.get_tracing_span")
+def test_input_block_with_flat_template_vars(get_span_mock, agent_calls_mock, mock_trace_manager):
     """Test Input block handles flat template vars correctly."""
-    # Create a fresh input block without schema defaults
+    get_span_mock.return_value = MagicMock(project_id="test_project")
+    agent_calls_mock.labels.return_value = MagicMock()
+
     input_block = Start(
         trace_manager=mock_trace_manager,
         tool_description=ToolDescription(
             name="input", description="input", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test Input"),
-        payload_schema='{"messages": []}',  # No default template vars
     )
 
-    input_data = {
-        "messages": [{"role": "user", "content": "Hello"}],
-        "cs_book_url": "https://example.com/book.pdf",
-        "username": "John",
-    }
+    input_data = NodeData(
+        data={
+            "messages": [{"role": "user", "content": "Hello"}],
+            "payload_schema": {"messages": []},
+            "cs_book_url": "https://example.com/book.pdf",
+            "username": "John",
+        }
+    )
     result = asyncio.run(input_block.run(input_data))
 
     assert isinstance(result, NodeData)
     assert "messages" in result.data
-    assert result.ctx.get("username") == "John"
-    assert result.ctx.get("cs_book_url") == "https://example.com/book.pdf"
+    assert result.data.get("username") == "John"
+    assert result.data.get("cs_book_url") == "https://example.com/book.pdf"
 
 
 @patch("engine.prometheus_metric.agent_calls")

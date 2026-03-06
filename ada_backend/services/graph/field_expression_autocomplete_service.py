@@ -8,10 +8,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.repositories.component_repository import get_output_ports_for_component_version
 from ada_backend.repositories.edge_repository import get_edges
-from ada_backend.repositories.graph_runner_repository import (
-    get_component_instances_for_graph_runner,
-    is_start_node,
-)
+from ada_backend.repositories.graph_runner_repository import get_component_instances_for_graph_runner
 from ada_backend.repositories.output_port_instance_repository import get_output_port_instances_for_component_instance
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.variable_definitions_repository import list_org_definitions
@@ -22,8 +19,6 @@ from ada_backend.schemas.pipeline.field_expression_schema import (
     SuggestionKind,
 )
 from ada_backend.services.graph.graph_validation_utils import validate_graph_runner_belongs_to_project
-from ada_backend.services.graph.playground_utils import extract_playground_schema_from_component
-from ada_backend.services.pipeline.get_pipeline_service import get_component_instance
 
 LOGGER = logging.getLogger(__name__)
 
@@ -171,29 +166,6 @@ def _build_port_suggestions_with_start_fields(
 
     search_term = port_prefix.lower() if port_prefix else ""
     suggestions: list[FieldExpressionSuggestion] = []
-
-    is_start = is_start_node(session, graph_runner_id, instance_uuid)
-
-    if is_start:
-        component_instance_schema = get_component_instance(session, instance_uuid, is_start_node=True)
-        playground_schema = extract_playground_schema_from_component(component_instance_schema)
-
-        if playground_schema:
-            for field_name in playground_schema.keys():
-                if field_name == "messages":
-                    continue
-
-                if search_term and search_term not in field_name.lower():
-                    continue
-
-                suggestions.append(
-                    FieldExpressionSuggestion(
-                        id=f"{instance_uuid}.{field_name}",
-                        label=field_name,
-                        insert_text=f"{field_name}}}}}",
-                        kind=SuggestionKind.PROPERTY,
-                    )
-                )
 
     ports = get_output_ports_for_component_version(session, instance.component_version_id)
     for port in ports:

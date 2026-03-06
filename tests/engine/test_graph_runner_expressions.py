@@ -1,10 +1,12 @@
 import asyncio
+import json
 
 import networkx as nx
 import pytest
 from pydantic import BaseModel, Field
 
 from engine.components.component import Component
+from engine.components.inputs_outputs.start import Start
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
 from engine.field_expressions.serializer import from_json as expr_from_json
 from engine.graph_runner.graph_runner import GraphRunner
@@ -965,3 +967,62 @@ class TestGraphRunnerComplexFormulas:
         )
         with pytest.raises(ValueError, match="not a dict"):
             asyncio.run(gr.run({"input": "seed"}))
+
+
+class TestStartNodeIntegration:
+    """Integration tests for the Start node in a real graph runner context."""
+
+    def _make_start(self, tm: TraceManager, name: str = "start") -> Start:
+        return Start(
+            trace_manager=tm,
+            tool_description=ToolDescription(
+                name=f"Start_{name}",
+                description="Start node",
+                tool_properties={},
+                required_tool_properties=[],
+            ),
+            component_attributes=ComponentAttributes(component_instance_name=name),
+        )
+
+    def test_start_extra_fields_reachable_via_field_expression(self):
+        """DRA-1048 (Diana's bug): extra payload_schema fields (e.g. additional_info) used to land
+        only in NodeData.ctx, invisible to @{{start.additional_info}} ref expressions that look in
+        task_result.data. The downstream silently received no value and the expression was skipped.
+        With the new Start, all extra fields are in NodeData.data, so the ref resolves correctly."""
+        tm = TraceManager(project_name="test")
+        set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])
+
+        start = self._make_start(tm)
+        downstream = StrEcho(tm, name="downstream")
+        runnables = {"start": start, "downstream": downstream}
+
+        g = nx.DiGraph()
+        g.add_nodes_from(["start", "downstream"])
+
+        expressions = [
+            {
+                "target_instance_id": "downstream",
+                "field_name": "input",
+                "expression_ast": expr_from_json({
+                    "type": "ref",
+                    "instance": "start",
+                    "port": "additional_info",
+                }),
+            }
+        ]
+
+        gr = GraphRunner(
+            graph=g,
+            runnables=runnables,
+            start_nodes=["start"],
+            trace_manager=tm,
+            expressions=expressions,
+        )
+
+        result = asyncio.run(gr.run({
+            "messages": [{"role": "user", "content": "hi"}],
+            "additional_info": "runtime_value",
+            "payload_schema": json.dumps({"messages": [], "additional_info": "default_value"}),
+        }))
+
+        assert result.messages[0].content == "echo[runtime_value]"
