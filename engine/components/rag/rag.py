@@ -119,11 +119,18 @@ class RAG(Component):
         sourced_response = self._formatter.format(sourced_response)
 
         if sourced_response.sources:
-            original_retrieval_ranks, original_reranker_ranks = extract_source_ranks(sourced_response.sources)
-            self.log_trace({
+            original_retrieval_ranks, original_reranker_ranks, total_retrieved, total_reranked = (
+                extract_source_ranks(sourced_response.sources)
+            )
+            trace_attrs = {
                 "original_retrieval_rank": json.dumps(original_retrieval_ranks),
                 "original_reranker_rank": json.dumps(original_reranker_ranks),
-            })
+            }
+            if total_retrieved is not None:
+                trace_attrs["total_retrieved_chunks"] = total_retrieved
+            if total_reranked is not None:
+                trace_attrs["total_reranked_chunks"] = total_reranked
+            self.log_trace(trace_attrs)
 
         for i, source in enumerate(chunks):
             self.log_trace({
