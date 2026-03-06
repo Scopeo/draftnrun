@@ -58,10 +58,9 @@ from ada_backend.services.errors import GraphNotBoundToProjectError
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
 from ada_backend.services.graph.output_port_instance_sync import sync_output_port_instances_from_schema
 from ada_backend.services.graph.playground_utils import (
+    extract_payload_schema_from_instance,
     extract_playground_configuration,
-    extract_playground_schema_from_component,
 )
-from ada_backend.services.pipeline.get_pipeline_service import get_component_instance
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
 from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.errors import FieldExpressionError, FieldExpressionParseError
@@ -725,8 +724,7 @@ def _validate_expression_references(session: Session, graph_runner_id: UUID, ast
         # all existing graphs have been re-saved (which re-creates their OutputPortInstances).
         if is_start:
             try:
-                component_instance_schema = get_component_instance(session, source_instance_uuid, is_start_node=True)
-                playground_schema = extract_playground_schema_from_component(component_instance_schema)
+                playground_schema = extract_payload_schema_from_instance(session, source_instance_uuid)
                 if playground_schema and ref_node.port in playground_schema and ref_node.port != "messages":
                     continue  # Valid start node input field
             except Exception:

@@ -22,8 +22,7 @@ from ada_backend.schemas.pipeline.field_expression_schema import (
     SuggestionKind,
 )
 from ada_backend.services.graph.graph_validation_utils import validate_graph_runner_belongs_to_project
-from ada_backend.services.graph.playground_utils import extract_playground_schema_from_component
-from ada_backend.services.pipeline.get_pipeline_service import get_component_instance
+from ada_backend.services.graph.playground_utils import extract_payload_schema_from_instance
 
 LOGGER = logging.getLogger(__name__)
 
@@ -175,8 +174,7 @@ def _build_port_suggestions_with_start_fields(
     is_start = is_start_node(session, graph_runner_id, instance_uuid)
 
     if is_start:
-        component_instance_schema = get_component_instance(session, instance_uuid, is_start_node=True)
-        playground_schema = extract_playground_schema_from_component(component_instance_schema)
+        playground_schema = extract_payload_schema_from_instance(session, instance_uuid)
 
         if playground_schema:
             for field_name in playground_schema.keys():

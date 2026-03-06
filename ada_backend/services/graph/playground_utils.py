@@ -5,12 +5,13 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.seed.seed_start import START_PAYLOAD_PARAMETER_NAME
 from ada_backend.repositories.graph_runner_repository import get_start_components
+from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
 from ada_backend.schemas.pipeline.graph_schema import PlaygroundFieldType
-from ada_backend.services.pipeline.get_pipeline_service import get_component_instance
 
 LOGGER = logging.getLogger(__name__)
+
+START_PAYLOAD_SCHEMA_PORT_NAME = "payload_schema"
 
 
 def get_nesting_depth(obj, current_depth=0):
@@ -45,22 +46,18 @@ def classify_playground_field(key, value) -> PlaygroundFieldType:
     return PlaygroundFieldType.SIMPLE
 
 
-def extract_playground_schema_from_component(component_instance) -> Optional[dict]:
-    for param in component_instance.parameters:
-        if param.name == START_PAYLOAD_PARAMETER_NAME:
-            try:
-                if param.value and isinstance(param.value, dict):
-                    return param.value
-                elif param.value and isinstance(param.value, str):
-                    return json.loads(param.value)
-            except json.JSONDecodeError:
-                LOGGER.warning(
-                    f"Failed to parse payload_schema for component {component_instance.id}. "
-                    f"Invalid JSON in parameter value."
-                )
-            except Exception as e:
-                LOGGER.warning(f"Unexpected error parsing payload_schema for component {component_instance.id}: {e}")
-            break
+def extract_payload_schema_from_instance(session: Session, component_instance_id: UUID) -> Optional[dict]:
+    port_instances = get_input_port_instances_for_component_instance(
+        session, component_instance_id, eager_load_field_expression=True
+    )
+    for port_instance in port_instances:
+        if port_instance.name == START_PAYLOAD_SCHEMA_PORT_NAME and port_instance.field_expression:
+            expr = port_instance.field_expression.expression_json
+            if expr.get("type") == "literal":
+                try:
+                    return json.loads(expr["value"])
+                except (json.JSONDecodeError, KeyError):
+                    LOGGER.warning(f"Failed to parse payload_schema for instance {component_instance_id}")
     return None
 
 
@@ -77,13 +74,7 @@ def extract_playground_configuration(
         return None, None
 
     start_node = start_components[0]
-    component_instance = get_component_instance(
-        session,
-        start_node.id,
-        is_start_node=True,
-    )
-
-    playground_input_schema = extract_playground_schema_from_component(component_instance)
+    playground_input_schema = extract_payload_schema_from_instance(session, start_node.id)
     playground_field_types = None
     if playground_input_schema:
         playground_field_types = classify_schema_fields(playground_input_schema)
