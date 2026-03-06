@@ -10,7 +10,7 @@ import threading
 import urllib.parse
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,7 @@ from ada_backend.routers.auth_router import (
 )
 from ada_backend.services.api_key_service import verify_api_key, verify_project_access
 from ada_backend.services.errors import ApiKeyAccessDenied
+from ada_backend.services.run_service import stream_run_events
 from ada_backend.utils.redis_client import get_redis_client
 
 LOGGER = logging.getLogger(__name__)
@@ -102,6 +103,19 @@ async def _verify_ws_auth(
         await user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)(
             project_id=run.project_id, user=user, session=session
         )
+    except HTTPException as e:
+        if e.status_code == 403:
+            reason = (
+                (e.detail or "Forbidden") if isinstance(e.detail, str) else "You don't have access to this project"
+            )
+            await websocket.close(code=4403, reason=reason[:123])  # WS close reason length limit
+            return None
+        if e.status_code == 404:
+            await websocket.close(code=4404, reason="Project not found")
+            return None
+        LOGGER.debug("WebSocket JWT verification failed for run %s: %s", run_id, e)
+        await websocket.close(code=4401, reason="Invalid or expired token")
+        return None
     except Exception as e:
         LOGGER.debug("WebSocket JWT verification failed for run %s: %s", run_id, e)
         await websocket.close(code=4401, reason="Invalid or expired token")
@@ -118,6 +132,7 @@ def _redis_subscriber_loop(
     """Run in a thread: subscribe to run:{run_id} and put messages into the asyncio queue."""
     client = get_redis_client()
     if not client:
+        LOGGER.warning("Redis subscriber run_id=%s: no Redis client", run_id)
         loop.call_soon_threadsafe(
             queue.put_nowait,
             json.dumps({"type": "error", "message": "Redis unavailable"}),
@@ -164,6 +179,7 @@ async def websocket_run_stream(
     await websocket.accept()
 
     if not get_redis_client():
+        LOGGER.warning("WebSocket run_id=%s: Redis unavailable, closing", run_id)
         await websocket.send_text(json.dumps({"type": "error", "message": "Redis unavailable"}))
         await websocket.close(code=4510, reason="Redis unavailable")
         return
@@ -179,23 +195,12 @@ async def websocket_run_stream(
     thread.start()
 
     try:
-        while True:
-            try:
-                data = await asyncio.wait_for(queue.get(), timeout=300.0)
-            except asyncio.TimeoutError:
-                await websocket.send_text(json.dumps({"type": "ping"}))
-                continue
-            await websocket.send_text(data if isinstance(data, str) else json.dumps(data))
-            try:
-                evt = json.loads(data) if isinstance(data, str) else data
-                if evt.get("type") in ("run.completed", "run.failed"):
-                    break
-            except Exception:
-                pass
+        async for message in stream_run_events(session, run_id, queue):
+            await websocket.send_text(message)
     except WebSocketDisconnect:
-        LOGGER.debug("WebSocket disconnected for run %s", run_id)
+        pass
     except Exception as e:
-        LOGGER.exception("WebSocket error for run %s: %s", run_id, e)
+        LOGGER.exception("WebSocket run_id=%s error: %s", run_id, e)
     finally:
         stop_event.set()
         thread.join(timeout=2.0)
