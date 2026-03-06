@@ -181,7 +181,8 @@ def _assert_upgrade_succeeded(bind, rows_before: int) -> None:
         )
     if not pd_row[0]:
         raise RuntimeError(
-            f"[c4d5e6f7a8b9] upgrade: PortDefinition {PAYLOAD_SCHEMA_PORT_DEF_ID} has drives_output_schema=False — expected True."
+            f"[c4d5e6f7a8b9] upgrade: PortDefinition {PAYLOAD_SCHEMA_PORT_DEF_ID} has "
+            "drives_output_schema=False — expected True."
         )
 
     # The count of migrated input_port_instances must equal the original basic_parameters count.
