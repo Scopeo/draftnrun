@@ -30,7 +30,6 @@ from ada_backend.repositories.graph_runner_repository import (
     graph_runner_exists,
     insert_graph_runner_and_bind_to_project,
     insert_modification_history,
-    is_start_node,
     upsert_component_node,
 )
 from ada_backend.repositories.input_port_instance_repository import (
@@ -57,10 +56,7 @@ from ada_backend.services.agent_runner_service import get_agent_for_project
 from ada_backend.services.errors import GraphNotBoundToProjectError
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
 from ada_backend.services.graph.output_port_instance_sync import sync_output_port_instances_from_schema
-from ada_backend.services.graph.playground_utils import (
-    extract_payload_schema_from_instance,
-    extract_playground_configuration,
-)
+from ada_backend.services.graph.playground_utils import extract_playground_configuration
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
 from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.errors import FieldExpressionError, FieldExpressionParseError
@@ -695,7 +691,7 @@ def _validate_expression_references(session: Session, graph_runner_id: UUID, ast
 
     - Instance IDs must be valid UUIDs and exist in DB.
     - Referenced output ports must exist on the source component version.
-    - For start nodes, also accepts input fields from payload_schema.
+    - Dynamic output port instances are accepted for migrated components (including Start).
     """
 
     ref_nodes: Iterator[RefNode] = select_nodes(ast, lambda n: isinstance(n, RefNode))
@@ -713,45 +709,13 @@ def _validate_expression_references(session: Session, graph_runner_id: UUID, ast
 
         source_component_version_id = resolve_component_version_id_from_instance_id(session, source_instance_uuid)
 
-        is_start = is_start_node(session, graph_runner_id, source_instance_uuid)
-
-        # TODO: remove this block — it's now redundant for graphs saved after DRA-1049.
-        # Before DRA-1049, Start's extra payload fields (e.g. `username`) weren't real
-        # OutputPortInstances, so `@{{start.username}}` expressions would fail the port
-        # validation below. This block bypasses that check by reading the payload_schema directly.
-        # After DRA-1049, `sync_output_port_instances_from_schema` creates an OutputPortInstance
-        # for each top-level key, so the normal validation path handles it. Safe to delete once
-        # all existing graphs have been re-saved (which re-creates their OutputPortInstances).
-        if is_start:
-            try:
-                playground_schema = extract_payload_schema_from_instance(session, source_instance_uuid)
-                if playground_schema and ref_node.port in playground_schema and ref_node.port != "messages":
-                    continue  # Valid start node input field
-            except Exception:
-                LOGGER.warning(
-                    f"Could not retrieve playground schema for start node {source_instance_uuid}. "
-                    "Falling back to output port validation.",
-                    exc_info=True,
+        source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)
+        if not source_port_def_id:
+            # Also accept dynamic output port instances (e.g. keys from drives_output_schema).
+            output_port_instance = get_output_port_instance_by_name(session, source_instance_uuid, ref_node.port)
+            if not output_port_instance:
+                raise FieldExpressionError(
+                    f"Output port '{ref_node.port}' not found for component version "
+                    f"'{source_component_version_id}' (checked static output ports "
+                    "and dynamic output port instances)"
                 )
-                pass  # If we can't get the schema, fall through to check output ports
-
-            source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)
-            if not source_port_def_id:
-                # Also accept dynamic output port instances on the start node
-                output_port_instance = get_output_port_instance_by_name(session, source_instance_uuid, ref_node.port)
-                if not output_port_instance:
-                    raise FieldExpressionError(
-                        f"Port '{ref_node.port}' not found for start node '{source_component_version_id}' "
-                        f"(checked input fields, static output ports, and dynamic output port instances)"
-                    )
-        else:
-            source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)
-            if not source_port_def_id:
-                # Also accept dynamic output port instances (e.g. keys from drives_output_schema)
-                output_port_instance = get_output_port_instance_by_name(session, source_instance_uuid, ref_node.port)
-                if not output_port_instance:
-                    raise FieldExpressionError(
-                        f"Output port '{ref_node.port}' not found for component version "
-                        f"'{source_component_version_id}' (checked static output ports "
-                        "and dynamic output port instances)"
-                    )

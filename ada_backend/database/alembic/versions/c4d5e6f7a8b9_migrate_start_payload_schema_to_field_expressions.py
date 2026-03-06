@@ -143,7 +143,49 @@ def upgrade() -> None:
         {"default_val": PAYLOAD_SCHEMA_DEFAULT},
     )
 
-    # 2c. Drop the now-stale ComponentParameterDefinition.
+    # 2c. Backfill OutputPortInstances for top-level payload_schema keys.
+    # This avoids relying on a future graph re-save to materialize Start's dynamic outputs.
+    bind.execute(
+        sa.text(f"""
+            WITH source AS (
+                SELECT DISTINCT ON (bp.component_instance_id)
+                    bp.component_instance_id,
+                    COALESCE(bp.value, :default_val)::jsonb AS schema_json
+                FROM basic_parameters bp
+                WHERE bp.parameter_definition_id = '{PAYLOAD_SCHEMA_CPD_ID}'::uuid
+                ORDER BY bp.component_instance_id, bp.id
+            ),
+            keys AS (
+                SELECT
+                    component_instance_id,
+                    jsonb_object_keys(
+                        CASE
+                            WHEN jsonb_typeof(schema_json) = 'object' THEN schema_json
+                            ELSE '{{}}'::jsonb
+                        END
+                    ) AS key_name
+                FROM source
+            ),
+            insert_pi AS (
+                INSERT INTO port_instances (id, component_instance_id, name, port_definition_id, type, created_at)
+                SELECT
+                    gen_random_uuid(),
+                    component_instance_id,
+                    key_name,
+                    NULL,
+                    'OUTPUT'::port_type,
+                    now()
+                FROM keys
+                ON CONFLICT ON CONSTRAINT uq_port_instance_name DO NOTHING
+                RETURNING id
+            )
+            INSERT INTO output_port_instances (id)
+            SELECT id FROM insert_pi
+        """),
+        {"default_val": PAYLOAD_SCHEMA_DEFAULT},
+    )
+
+    # 2d. Drop the now-stale ComponentParameterDefinition.
     bind.execute(
         sa.text(f"""
             DELETE FROM component_parameter_definitions
@@ -236,7 +278,7 @@ def downgrade() -> None:
     )
 
     # Restore BasicParameter rows from InputPortInstance + FieldExpression (literal values only).
-    # Then delete the port_instances rows (cascades to input_port_instances).
+    # Then delete the Start-specific input/output port_instances rows created by upgrade.
     bind.execute(
         sa.text(f"""
             WITH source AS (
@@ -259,6 +301,10 @@ def downgrade() -> None:
             )
             DELETE FROM port_instances
             WHERE id IN (SELECT ipi_id FROM source)
+               OR (
+                    component_instance_id IN (SELECT component_instance_id FROM source)
+                    AND type = 'OUTPUT'::port_type
+               )
         """),
     )
 
