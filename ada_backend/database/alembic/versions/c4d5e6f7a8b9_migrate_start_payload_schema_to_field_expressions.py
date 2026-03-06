@@ -53,14 +53,15 @@ def upgrade() -> None:
 
     # 2a. Create the INPUT PortDefinition for payload_schema.
     # Alembic runs before seed, so seed_ports.py hasn't created this yet.
-    # ON CONFLICT DO NOTHING makes re-runs safe.
+    # WHERE EXISTS makes this a no-op on empty DBs (e.g. alembic tests) where the component_version doesn't exist yet.
     bind.execute(
         sa.text(f"""
             INSERT INTO port_definitions (
                 id, component_version_id, name, port_type, is_canonical,
                 description, parameter_type, ui_component, ui_component_properties,
                 nullable, "default", is_tool_input, is_advanced, drives_output_schema
-            ) VALUES (
+            )
+            SELECT
                 '{PAYLOAD_SCHEMA_PORT_DEF_ID}'::uuid,
                 '{START_V2_COMPONENT_VERSION_ID}'::uuid,
                 'payload_schema',
@@ -75,6 +76,8 @@ def upgrade() -> None:
                 false,
                 false,
                 true
+            WHERE EXISTS (
+                SELECT 1 FROM component_versions WHERE id = '{START_V2_COMPONENT_VERSION_ID}'::uuid
             )
             ON CONFLICT ON CONSTRAINT unique_component_version_port DO NOTHING
         """),
@@ -149,10 +152,13 @@ def upgrade() -> None:
     )
 
     # --- Post-migration assertions ---
-    _assert_upgrade_succeeded(bind, rows_before)
+    component_version_exists = bind.execute(
+        sa.text(f"SELECT 1 FROM component_versions WHERE id = '{START_V2_COMPONENT_VERSION_ID}'::uuid"),
+    ).fetchone() is not None
+    _assert_upgrade_succeeded(bind, rows_before, component_version_exists)
 
 
-def _assert_upgrade_succeeded(bind, rows_before: int) -> None:
+def _assert_upgrade_succeeded(bind, rows_before: int, component_version_exists: bool) -> None:
     """Raise if the upgrade left the DB in an inconsistent state."""
 
     # No basic_parameters rows should remain for payload_schema.
@@ -169,21 +175,23 @@ def _assert_upgrade_succeeded(bind, rows_before: int) -> None:
         )
 
     # The PortDefinition must exist and have drives_output_schema=True.
-    pd_row = bind.execute(
-        sa.text(f"""
-            SELECT drives_output_schema FROM port_definitions
-            WHERE id = '{PAYLOAD_SCHEMA_PORT_DEF_ID}'::uuid
-        """),
-    ).fetchone()
-    if pd_row is None:
-        raise RuntimeError(
-            f"[c4d5e6f7a8b9] upgrade: PortDefinition {PAYLOAD_SCHEMA_PORT_DEF_ID} not found after INSERT."
-        )
-    if not pd_row[0]:
-        raise RuntimeError(
-            f"[c4d5e6f7a8b9] upgrade: PortDefinition {PAYLOAD_SCHEMA_PORT_DEF_ID} has "
-            "drives_output_schema=False — expected True."
-        )
+    # Skipped when component_version doesn't exist (empty DB) — the INSERT was intentionally a no-op.
+    if component_version_exists:
+        pd_row = bind.execute(
+            sa.text(f"""
+                SELECT drives_output_schema FROM port_definitions
+                WHERE id = '{PAYLOAD_SCHEMA_PORT_DEF_ID}'::uuid
+            """),
+        ).fetchone()
+        if pd_row is None:
+            raise RuntimeError(
+                f"[c4d5e6f7a8b9] upgrade: PortDefinition {PAYLOAD_SCHEMA_PORT_DEF_ID} not found after INSERT."
+            )
+        if not pd_row[0]:
+            raise RuntimeError(
+                f"[c4d5e6f7a8b9] upgrade: PortDefinition {PAYLOAD_SCHEMA_PORT_DEF_ID} has "
+                "drives_output_schema=False — expected True."
+            )
 
     # The count of migrated input_port_instances must equal the original basic_parameters count.
     migrated_count = bind.execute(
@@ -208,17 +216,20 @@ def downgrade() -> None:
     bind = op.get_bind()
 
     # Re-create the ComponentParameterDefinition so the restore step can reference it.
+    # WHERE EXISTS makes this a no-op on empty DBs where the component_version doesn't exist.
     bind.execute(
         sa.text(f"""
             INSERT INTO component_parameter_definitions
                 (id, component_version_id, name, type, nullable, is_advanced)
-            VALUES (
+            SELECT
                 '{PAYLOAD_SCHEMA_CPD_ID}'::uuid,
                 '{START_V2_COMPONENT_VERSION_ID}'::uuid,
                 'payload_schema',
                 'json'::parameter_type,
                 false,
                 false
+            WHERE EXISTS (
+                SELECT 1 FROM component_versions WHERE id = '{START_V2_COMPONENT_VERSION_ID}'::uuid
             )
             ON CONFLICT (id) DO NOTHING
         """),
