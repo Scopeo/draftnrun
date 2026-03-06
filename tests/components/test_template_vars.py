@@ -39,7 +39,6 @@ def input_block(mock_trace_manager):
             name="input", description="input", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test Input"),
-        payload_schema='{"messages": [], "yes": "LOL", "name": "John"}',
     )
 
 
@@ -75,7 +74,10 @@ def react_agent(mock_trace_manager, mock_llm_service):
 
 def test_input_block_extracts_template_vars(input_block):
     """Test Input block returns NodeData with template vars directly in ctx."""
-    input_data = {"messages": [{"role": "user", "content": "hi"}]}
+    input_data = {
+        "messages": [{"role": "user", "content": "hi"}],
+        "payload_schema": {"messages": [], "yes": "LOL", "name": "John"},
+    }
     result = asyncio.run(input_block.run(input_data))
 
     assert isinstance(result, NodeData)
@@ -87,7 +89,11 @@ def test_input_block_extracts_template_vars(input_block):
 def test_input_block_preserves_existing_ctx(input_block):
     """Test Input block preserves existing ctx data."""
     input_data = NodeData(
-        data={"messages": [{"role": "user", "content": "hi"}]}, ctx={"existing_key": "existing_value"}
+        data={
+            "messages": [{"role": "user", "content": "hi"}],
+            "payload_schema": {"messages": [], "yes": "LOL", "name": "John"},
+        },
+        ctx={"existing_key": "existing_value"},
     )
     result = asyncio.run(input_block.run(input_data))
 
@@ -345,18 +351,17 @@ def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, mock_llm_s
 
 def test_input_block_with_flat_template_vars(mock_trace_manager):
     """Test Input block handles flat template vars correctly."""
-    # Create a fresh input block without schema defaults
     input_block = Start(
         trace_manager=mock_trace_manager,
         tool_description=ToolDescription(
             name="input", description="input", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test Input"),
-        payload_schema='{"messages": []}',  # No default template vars
     )
 
     input_data = {
         "messages": [{"role": "user", "content": "Hello"}],
+        "payload_schema": {"messages": []},
         "cs_book_url": "https://example.com/book.pdf",
         "username": "John",
     }
