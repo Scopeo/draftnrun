@@ -4,7 +4,6 @@ These functions convert between AST objects and their JSON (dict) representation
 They are pure and do not depend on engine or backend specifics.
 """
 
-import json
 from typing import Any, Dict, List, Union
 
 from engine.field_expressions.ast import (
@@ -41,6 +40,30 @@ def to_json(expression: ExpressionNode) -> Dict[str, Any]:
             return {"type": "literal", "value": ""}
 
 
+def is_serialized_expression_ast(value: Dict[str, Any]) -> bool:
+    """Return True when a dict matches a serialized ExpressionNode shape.
+
+    TODO: If we add a JsonLiteralNode (or typed literal nodes) we can stop overloading
+    LiteralNode(value: str) for raw JSON literals and make this distinction explicit.
+    """
+    match value:
+        case {"type": "literal", "value": _}:
+            return True
+        case {"type": "ref", "instance": _, "port": _, **rest}:
+            return "key" not in rest or rest["key"] is None or isinstance(rest["key"], str)
+        case {"type": "var", "name": _}:
+            return True
+        case {"type": "concat", "parts": list(parts)}:
+            return all(isinstance(part, dict) and is_serialized_expression_ast(part) for part in parts)
+        case {"type": "json_build", "template": _, "refs": dict(refs)}:
+            return all(
+                isinstance(ref_json, dict) and is_serialized_expression_ast(ref_json)
+                for ref_json in refs.values()
+            )
+        case _:
+            return False
+
+
 def from_json(ast_dict: Dict[str, Any]) -> ExpressionNode:
     """Deserialize an ExpressionNode from its JSON representation."""
     match ast_dict:
@@ -63,7 +86,8 @@ def from_json(ast_dict: Dict[str, Any]) -> ExpressionNode:
                 if isinstance(parsed_ref, (RefNode, VarNode)):
                     parsed_refs[key] = parsed_ref
             return JsonBuildNode(template=template, refs=parsed_refs)
-        case dict() if "type" not in ast_dict:
-            return LiteralNode(value=json.dumps(ast_dict))
         case _:
-            return LiteralNode(value="")
+            raise ValueError(
+                "Expected a serialized field expression AST dict, "
+                f"got unsupported structure: {ast_dict!r}"
+            )

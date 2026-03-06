@@ -1,8 +1,10 @@
+import json
 import re
 from typing import Union
 
 from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode, VarNode
 from engine.field_expressions.errors import FieldExpressionParseError
+from engine.field_expressions.serializer import from_json, is_serialized_expression_ast
 
 # Matches @{{instance.port}} (RefNode) or @{{var_name}} (VarNode).
 # group(1) = first identifier, group(2) = port (if dot present), group(3) = key (if :: present)
@@ -80,10 +82,9 @@ def parse_expression_flexible(value: Union[str, dict]) -> ExpressionNode:
         FieldExpressionParseError: If parsing fails
     """
     if isinstance(value, dict):
-        # Import here to avoid circular dependency
-        from engine.field_expressions.serializer import from_json
-
         try:
+            if not is_serialized_expression_ast(value):
+                return LiteralNode(value=json.dumps(value))
             return from_json(value)
         except Exception as e:
             raise FieldExpressionParseError(f"Invalid JSON expression structure: {e}") from e
