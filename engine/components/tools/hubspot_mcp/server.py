@@ -248,6 +248,7 @@ def get_tool_descriptions(allowed: set[str]) -> list[ToolDescription]:
     # TODO: switch to mcp.get_tools() (public async API) once OAuthComponentFactory
     # is made async — at that point from_access_token can be async too and calling
     # an async method here becomes trivial.
+    # TODO: switch to jsonref.replace_refs()
     def _resolve_local_refs(value: Any, defs: dict[str, Any]) -> Any:
         if isinstance(value, dict):
             ref = value.get("$ref")
