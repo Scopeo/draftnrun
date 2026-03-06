@@ -21,6 +21,7 @@ from ada_backend.database.seed.constants import (
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.source_repository import get_data_source_by_id
+from ada_backend.repositories.variable_definitions_repository import find_oauth_definition_by_name
 from ada_backend.services.errors import MissingDataSourceError
 from ada_backend.services.integration_service import get_oauth_access_token
 from ada_backend.services.llm_models_service import (
@@ -225,37 +226,66 @@ class RemoteMCPToolFactory:
         return _run_coroutine_sync(RemoteMCPTool.from_mcp_server(**kwargs))
 
 
+def _try_parse_uuid(value: str) -> UUID | None:
+    """Try to parse a string as UUID, return None if invalid."""
+    try:
+        return UUID(value)
+    except (ValueError, AttributeError):
+        return None
+
+
 async def resolve_oauth_access_token(
     oauth_connection_id: str,
     provider_config_key: str,
+    variables: dict[str, Any] | None = None,
 ) -> str:
     """
-    Resolve OAuth connection ID to access token via Nango.
+    Resolve OAuth connection ID (or definition name) to access token via Nango.
+
+    Accepts either a raw UUID (legacy) or a variable definition name.
+    If it's a definition name, looks up the definition's default_value to get the UUID.
 
     Args:
-        oauth_connection_id: The OAuth connection ID to resolve
+        oauth_connection_id: UUID string or variable definition name
         provider_config_key: The OAuth provider key (e.g., "slack", "gmail", "hubspot")
 
     Returns:
         The resolved access token
 
     Raises:
-        ValueError: If oauth_connection_id is missing
+        ValueError: If oauth_connection_id is missing or definition not found
     """
     if not oauth_connection_id:
         raise ValueError(f"oauth_connection_id required for {provider_config_key} OAuth integration")
 
-    LOGGER.info(f"Resolving OAuth access token for {provider_config_key} with connection ID {oauth_connection_id}")
+    connection_uuid = _try_parse_uuid(oauth_connection_id)
 
-    # TODO: Refactor to inject the session directly
+    if not connection_uuid:
+        # Check variables dict first (per-user set overrides for NeverDrop)
+        if variables and oauth_connection_id in variables:
+            connection_uuid = _try_parse_uuid(str(variables[oauth_connection_id]))
+
+        if not connection_uuid:
+            LOGGER.info(f"Resolving definition name '{oauth_connection_id}' for {provider_config_key}")
+
+            with get_db_session() as session:
+                definition = find_oauth_definition_by_name(session, oauth_connection_id)
+                if not definition or not definition.default_value:
+                    raise ValueError(
+                        f"OAuth definition '{oauth_connection_id}' not found or has no default value"
+                    )
+                connection_uuid = UUID(definition.default_value)
+
+    LOGGER.info(f"Resolving OAuth access token for {provider_config_key} with connection ID {connection_uuid}")
+
     with get_db_session() as session:
         access_token = await get_oauth_access_token(
             session=session,
-            oauth_connection_id=UUID(oauth_connection_id),
+            oauth_connection_id=connection_uuid,
             provider_config_key=provider_config_key,
         )
 
-    LOGGER.info(f"Resolved OAuth access token for {provider_config_key} with connection ID {oauth_connection_id}")
+    LOGGER.info(f"Resolved OAuth access token for {provider_config_key} with connection ID {connection_uuid}")
 
     return access_token
 
@@ -313,7 +343,8 @@ class OAuthComponentFactory:
             ValueError: If oauth_connection_id is missing
         """
         oauth_connection_id = kwargs.pop("oauth_connection_id", None)
-        access_token = await resolve_oauth_access_token(oauth_connection_id, self.provider_config_key)
+        variables = kwargs.pop("_variables", None)
+        access_token = await resolve_oauth_access_token(oauth_connection_id, self.provider_config_key, variables=variables)
         kwargs[self.target_param_name] = access_token
 
         for processor in self.parameter_processors:

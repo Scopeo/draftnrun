@@ -6,7 +6,15 @@ from cachetools import TTLCache
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
+from ada_backend.database.models import VariableType
 from ada_backend.repositories import integration_repository, oauth_connection_repository
+from ada_backend.repositories.variable_definitions_repository import (
+    delete_oauth_definitions_for_connection,
+    upsert_org_definition,
+)
+from ada_backend.repositories.variable_sets_repository import (
+    delete_integration_set_by_connection_id,
+)
 from ada_backend.schemas.integration_schema import CreateProjectIntegrationSchema, IntegrationSecretResponse
 from ada_backend.schemas.oauth_schemas import (
     OAuthAuthorizationResult,
@@ -172,7 +180,26 @@ async def confirm_oauth_connection(
         created_by_user_id=created_by_user_id,
     )
 
-    LOGGER.info(f"Created new OAuth connection {new_connection.id} for org {organization_id}")
+    # Auto-create oauth variable definition for this connection
+    definition_name = f"{provider_key}-{name}".replace(" ", "-").lower()
+    upsert_org_definition(
+        session,
+        organization_id,
+        definition_name,
+        type=VariableType.OAUTH,
+        default_value=str(new_connection.id),
+        description=f"OAuth connection for {provider_key}",
+        variable_metadata={"provider_config_key": provider_key, "oauth_connection_id": str(new_connection.id)},
+        editable=False,
+        required=False,
+        display_order=0,
+    )
+    session.commit()
+
+    LOGGER.info(
+        f"Created new OAuth connection {new_connection.id} "
+        f"with definition {definition_name} for org {organization_id}"
+    )
     return new_connection
 
 
@@ -285,6 +312,10 @@ async def revoke_oauth_connection(
     except NangoClientError as e:
         LOGGER.warning(f"Failed to delete Nango connection (may already be deleted): {e}")
 
+    # Delete the associated integration variable set and oauth definition before soft-deleting the connection
+    delete_integration_set_by_connection_id(session, organization_id, connection_id)
+    delete_oauth_definitions_for_connection(session, organization_id, connection_id)
+
     oauth_connection_repository.soft_delete_oauth_connection(session, connection_id)
 
 
@@ -362,7 +393,7 @@ async def get_oauth_access_token(
     Args:
         session: Database session
         oauth_connection_id: ID of the OAuthConnection
-        provider_config_key: Nango provider config key (e.g., "slack", "google")
+        provider_config_key: Nango provider config key (e.g., "slack", "google-mail")
 
     Returns:
         Valid access token from Nango

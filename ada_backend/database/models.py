@@ -234,6 +234,13 @@ class EntityType(StrEnum):
     PARAMETER_VALUE = "parameter_value"
 
 
+class SetType(StrEnum):
+    """Classifies variable *sets*: user-managed vs auto-created by OAuth."""
+
+    VARIABLE = "variable"
+    INTEGRATION = "integration"
+
+
 class VariableType(StrEnum):
     STRING = "string"
     OAUTH = "oauth"
@@ -2188,11 +2195,16 @@ class OrgVariableSet(Base):
         UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
     )
     set_id = mapped_column(String, nullable=False)
+    set_type = mapped_column(make_pg_enum(SetType), nullable=False, server_default=SetType.VARIABLE)
     values = mapped_column(JSONB, nullable=False, default=dict)
+    oauth_connection_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("oauth_connections.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     project = relationship("Project", backref="variable_sets")
+    oauth_connection = relationship("OAuthConnection")
 
     __table_args__ = (
         UniqueConstraint("organization_id", "set_id", name="uq_org_variable_set"),

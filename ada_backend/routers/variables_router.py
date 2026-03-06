@@ -9,10 +9,11 @@ import logging
 from typing import Annotated, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ada_backend.database.models import SetType, VariableType
 from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import (
     UserRights,
@@ -26,7 +27,7 @@ from ada_backend.schemas.variable_schemas import (
     VariableSetResponse,
     VariableSetUpsertRequest,
 )
-from ada_backend.services.errors import VariableDefinitionNotFound, VariableSetNotFound
+from ada_backend.services.errors import IntegrationSetProtectedError, VariableDefinitionNotFound, VariableSetNotFound
 from ada_backend.services.variables_service import (
     delete_definition_service,
     delete_set_service,
@@ -60,9 +61,13 @@ def list_org_variable_definitions(
     ],
     session: Session = Depends(get_db),
     project_id: Optional[UUID] = None,
+    type: Annotated[VariableType | None, Query()] = None,
+    exclude_type: Annotated[VariableType | None, Query()] = None,
 ):
     try:
-        return list_definitions_service(session, organization_id, project_id=project_id)
+        return list_definitions_service(
+            session, organization_id, project_id=project_id, var_type=type, exclude_type=exclude_type
+        )
     except Exception as e:
         LOGGER.error(f"Failed to list variable definitions for org {organization_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -134,9 +139,10 @@ def list_org_variable_sets(
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
+    set_type: Annotated[SetType | None, Query()] = None,
 ):
     try:
-        return list_sets_service(session, organization_id)
+        return list_sets_service(session, organization_id, set_type=set_type)
     except Exception as e:
         LOGGER.error(f"Failed to list variable sets for org {organization_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -182,9 +188,8 @@ def upsert_org_variable_set(
 ):
     try:
         return upsert_set_service(session, organization_id, set_id, body.values)
-    except ValueError as e:
-        LOGGER.error(f"Failed to upsert variable set {set_id} for org {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    except IntegrationSetProtectedError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(f"Failed to upsert variable set {set_id} for org {organization_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -205,6 +210,8 @@ def delete_org_variable_set(
 ):
     try:
         delete_set_service(session, organization_id, set_id)
+    except IntegrationSetProtectedError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except VariableSetNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:

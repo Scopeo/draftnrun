@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from ada_backend.database.models import VariableType
+from ada_backend.database.models import SetType, VariableType
 
 # --- Variable Definitions ---
 
@@ -50,7 +50,9 @@ class VariableSetResponse(BaseModel):
     organization_id: UUID
     project_id: Optional[UUID] = None
     set_id: str
+    set_type: SetType = SetType.VARIABLE
     values: dict[str, Any] = Field(default_factory=dict)
+    oauth_connection_id: Optional[UUID] = None
     created_at: str
     updated_at: str
 

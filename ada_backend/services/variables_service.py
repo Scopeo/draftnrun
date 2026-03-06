@@ -5,6 +5,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
+from ada_backend.database.models import SetType, VariableType
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.variable_definitions_repository import (
     delete_org_definition,
@@ -24,7 +25,7 @@ from ada_backend.schemas.variable_schemas import (
     VariableSetListResponse,
     VariableSetResponse,
 )
-from ada_backend.services.errors import VariableDefinitionNotFound, VariableSetNotFound
+from ada_backend.services.errors import IntegrationSetProtectedError, VariableDefinitionNotFound, VariableSetNotFound
 
 LOGGER = logging.getLogger(__name__)
 
@@ -60,7 +61,9 @@ def set_to_response(variable_set: db.OrgVariableSet) -> VariableSetResponse:
         organization_id=variable_set.organization_id,
         project_id=variable_set.project_id,
         set_id=variable_set.set_id,
+        set_type=variable_set.set_type,
         values=variable_set.values,
+        oauth_connection_id=variable_set.oauth_connection_id,
         created_at=str(variable_set.created_at),
         updated_at=str(variable_set.updated_at),
     )
@@ -70,8 +73,10 @@ def list_definitions_service(
     session: Session,
     organization_id: UUID,
     project_id: Optional[UUID] = None,
+    var_type: Optional[VariableType] = None,
+    exclude_type: Optional[VariableType] = None,
 ) -> list[VariableDefinitionResponse]:
-    defs = list_org_definitions(session, organization_id, project_id=project_id)
+    defs = list_org_definitions(session, organization_id, project_id=project_id, var_type=var_type, exclude_type=exclude_type)
     return [definition_to_response(definition) for definition in defs]
 
 
@@ -108,8 +113,9 @@ def delete_definition_service(
 def list_sets_service(
     session: Session,
     organization_id: UUID,
+    set_type: Optional[SetType] = None,
 ) -> VariableSetListResponse:
-    sets = list_org_variable_sets(session, organization_id)
+    sets = list_org_variable_sets(session, organization_id, set_type=set_type)
     return VariableSetListResponse(variable_sets=[set_to_response(variable_set) for variable_set in sets])
 
 
@@ -130,6 +136,9 @@ def upsert_set_service(
     set_id: str,
     values: dict,
 ) -> VariableSetResponse:
+    existing = get_org_variable_set(session, organization_id, set_id)
+    if existing and existing.set_type == SetType.INTEGRATION:
+        raise IntegrationSetProtectedError(set_id)
     variable_set = upsert_org_variable_set(session, organization_id, set_id, values)
     return set_to_response(variable_set)
 
@@ -139,6 +148,9 @@ def delete_set_service(
     organization_id: UUID,
     set_id: str,
 ) -> bool:
+    existing = get_org_variable_set(session, organization_id, set_id)
+    if existing and existing.set_type == SetType.INTEGRATION:
+        raise IntegrationSetProtectedError(set_id)
     deleted = delete_org_variable_set(session, organization_id, set_id)
     if not deleted:
         raise VariableSetNotFound(set_id, organization_id)
