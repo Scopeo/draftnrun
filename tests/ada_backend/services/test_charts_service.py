@@ -5,12 +5,8 @@ import numpy as np
 import pandas as pd
 
 from ada_backend.schemas.chart_schema import Chart, ChartCategory, ChartData, ChartType, Dataset
-from ada_backend.services.charts_service import (
-    TOKENS_DISTRIBUTION_BINS,
-    compute_rank_bins,
-    get_ranks_distribution_charts,
-    get_tokens_distribution_chart,
-)
+from ada_backend.services.charts_service import TOKENS_DISTRIBUTION_BINS, get_tokens_distribution_chart
+from ada_backend.services.metrics.rank_charts import compute_rank_bins, get_ranks_distribution_charts
 
 
 @patch("ada_backend.services.charts_service.query_trace_duration")
