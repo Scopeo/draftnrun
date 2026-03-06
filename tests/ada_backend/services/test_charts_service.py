@@ -75,7 +75,7 @@ def test_compute_rank_bins_large():
     assert labels[-1] == "31-33"
 
 
-@patch("ada_backend.services.charts_service.query_trace_duration")
+@patch("ada_backend.services.metrics.rank_charts.query_trace_duration")
 def test_get_ranks_distribution_charts_with_totals(mock_query_trace_duration):
     total_retrieved = 50
     total_reranked = 10
@@ -169,7 +169,7 @@ def test_get_ranks_distribution_charts_with_totals(mock_query_trace_duration):
     assert reranker_chart.data.datasets[0].data == expected_reranker_pct
 
 
-@patch("ada_backend.services.charts_service.query_trace_duration")
+@patch("ada_backend.services.metrics.rank_charts.query_trace_duration")
 def test_get_ranks_distribution_charts_fallback_to_max_rank(mock_query_trace_duration):
     """When total_*_chunks attributes are missing, fall back to max(ranks)."""
     mock_df = pd.DataFrame({
@@ -188,7 +188,7 @@ def test_get_ranks_distribution_charts_fallback_to_max_rank(mock_query_trace_dur
     assert retrieval_chart.data.labels == expected_labels
 
 
-@patch("ada_backend.services.charts_service.query_trace_duration")
+@patch("ada_backend.services.metrics.rank_charts.query_trace_duration")
 def test_get_ranks_distribution_charts_empty(mock_query_trace_duration):
     mock_df = pd.DataFrame({"attributes": [{}]})
     mock_query_trace_duration.return_value = mock_df
