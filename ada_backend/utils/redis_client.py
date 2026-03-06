@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 import redis
@@ -41,6 +41,120 @@ def get_redis_client() -> Optional[redis.Redis]:
         return None
 
 
+def xgroup_create_if_not_exists(stream_name: str, group_name: str) -> None:
+    """
+    Create a Redis Streams consumer group if it does not already exist.
+
+    Uses MKSTREAM so the stream itself is created when absent.
+    Uses id="0" so the group sees all historical messages (important for
+    crash recovery on first boot).
+    """
+    client = get_redis_client()
+    if not client:
+        LOGGER.warning(
+            f"Redis client unavailable. Cannot create consumer group '{group_name}' on stream '{stream_name}'."
+        )
+        return
+
+    try:
+        client.xgroup_create(stream_name, group_name, id="0", mkstream=True)
+        LOGGER.info(f"Created consumer group '{group_name}' on stream '{stream_name}'.")
+    except redis.exceptions.ResponseError as e:
+        if "BUSYGROUP" in str(e):
+            LOGGER.debug(f"Consumer group '{group_name}' already exists on stream '{stream_name}'.")
+        else:
+            LOGGER.error(f"Failed to create consumer group '{group_name}' on stream '{stream_name}': {e}")
+            raise
+
+
+def xreadgroup_single(
+    stream_name: str,
+    group_name: str,
+    consumer_name: str,
+    block_ms: int = 5000,
+) -> Optional[Tuple[str, Dict[str, str]]]:
+    """
+    Read one new message from a stream as a named consumer group member.
+
+    Blocks for up to *block_ms* milliseconds waiting for a message.
+
+    Returns:
+        (message_id, fields_dict) — the raw stream entry, or None on timeout.
+    """
+    client = get_redis_client()
+    if not client:
+        return None
+
+    try:
+        results = client.xreadgroup(
+            group_name,
+            consumer_name,
+            {stream_name: ">"},
+            count=1,
+            block=block_ms,
+        )
+        if not results:
+            return None
+        # results: [(stream_name, [(message_id, fields_dict)])]
+        _stream, messages = results[0]
+        message_id, fields = messages[0]
+        return message_id, fields
+    except redis.exceptions.ResponseError as e:
+        LOGGER.error(f"xreadgroup error on stream '{stream_name}': {e}")
+        return None
+
+
+def xack(stream_name: str, group_name: str, message_id: str) -> None:
+    """Acknowledge that a message has been fully processed."""
+    client = get_redis_client()
+    if not client:
+        return
+
+    try:
+        client.xack(stream_name, group_name, message_id)
+    except Exception as e:
+        LOGGER.error(f"Failed to XACK message {message_id} on stream '{stream_name}': {e}")
+
+
+def xautoclaim_pending(
+    stream_name: str,
+    group_name: str,
+    consumer_name: str,
+    min_idle_ms: int = 60_000,
+) -> List[Tuple[str, Dict[str, str]]]:
+    """
+    Reclaim pending messages that have been idle for at least *min_idle_ms* ms.
+    Intended to be called once at worker startup for crash recovery.
+
+    Returns:
+        List of (message_id, fields_dict) tuples ready for reprocessing.
+    """
+    client = get_redis_client()
+    if not client:
+        return []
+
+    try:
+        # xautoclaim returns (next_start_id, [(id, fields), ...], [deleted_ids])
+        _next, messages, _deleted = client.xautoclaim(
+            stream_name,
+            group_name,
+            consumer_name,
+            min_idle_ms,
+            start_id="0-0",
+            count=100,
+        )
+        if messages:
+            LOGGER.info(f"Reclaimed {len(messages)} stale pending message(s) on stream '{stream_name}'.")
+        return [(mid, fields) for mid, fields in messages]
+    except redis.exceptions.ResponseError as e:
+        # Stream or group may not exist yet on a fresh deployment
+        if "ERR" in str(e) or "NOGROUP" in str(e):
+            LOGGER.debug(f"xautoclaim skipped for '{stream_name}': {e}")
+            return []
+        LOGGER.error(f"xautoclaim failed on stream '{stream_name}': {e}")
+        return []
+
+
 def push_ingestion_task(
     ingestion_id: str,
     source_name: str,
@@ -51,21 +165,12 @@ def push_ingestion_task(
     source_id: Optional[str] = None,
 ) -> bool:
     """
-    Push an ingestion task to the Redis queue.
-
-    Args:
-        ingestion_id: ID for the ingestion process
-        source_name: Name of the source to ingest
-        source_type: Type of the source (e.g., 'drive', 'slack')
-        organization_id: ID of the organization
-        task_id: ID of the task
-        access_token: Authentication token for the source
-        folder_id: ID of the folder to ingest (can be empty)
+    Push an ingestion task onto the Redis Stream.
 
     Returns:
-        bool: True if successful, False otherwise
+        bool: True if the message was added, False otherwise.
     """
-    LOGGER.info(f"Preparing to push ingestion task to Redis: {ingestion_id} for {source_name} ({source_type})")
+    LOGGER.info(f"Preparing to push ingestion task to Redis stream: {ingestion_id} for {source_name} ({source_type})")
 
     client = get_redis_client()
     if not client:
@@ -73,7 +178,6 @@ def push_ingestion_task(
         return False
 
     try:
-        # Prepare payload with all essential fields
         payload = {
             "ingestion_id": ingestion_id,
             "source_name": source_name,
@@ -84,30 +188,23 @@ def push_ingestion_task(
             "source_id": source_id,
         }
 
-        # TODO: add server logging
-        # Create a safe version of the payload for logging (redact sensitive data)
         safe_payload = payload.copy()
         safe_payload["source_attributes"] = safe_payload["source_attributes"].copy()
         if "access_token" in safe_payload["source_attributes"]:
             safe_payload["source_attributes"]["access_token"] = "****REDACTED****"
 
-        LOGGER.debug(f"Prepared payload for Redis: {safe_payload}")
+        LOGGER.debug(f"Prepared payload for Redis stream: {safe_payload}")
 
-        json_payload = json.dumps(payload)
-        result = client.lpush(settings.REDIS_QUEUE_NAME, json_payload)
+        message_id = client.xadd(settings.REDIS_INGESTION_STREAM, {"data": json.dumps(payload)})
 
-        if result:
-            LOGGER.info(
-                f"Successfully pushed task {ingestion_id} to Redis queue "
-                f"{settings.REDIS_QUEUE_NAME} (queue length: {result})"
-            )
-            return True
-        else:
-            LOGGER.warning(f"Redis returned {result} when pushing to queue {settings.REDIS_QUEUE_NAME}")
-            return False
+        LOGGER.info(
+            f"Successfully pushed task {ingestion_id} to Redis stream "
+            f"'{settings.REDIS_INGESTION_STREAM}' (message_id: {message_id})"
+        )
+        return True
 
     except Exception as e:
-        LOGGER.error(f"Failed to push task {ingestion_id} to Redis queue: {str(e)}")
+        LOGGER.error(f"Failed to push task {ingestion_id} to Redis stream: {str(e)}")
         return False
 
 
@@ -142,15 +239,16 @@ def push_webhook_event(
     organization_id: Optional[UUID] = None,
 ) -> bool:
     """
-    Push a webhook event to the Redis queue for async processing.
+    Push a webhook event onto the Redis Stream for async processing.
     """
     LOGGER.info(
-        f"Preparing to push webhook event to Redis: provider={provider}, event_id={event_id}, webhook_id={webhook_id}"
+        f"Preparing to push webhook event to Redis stream: "
+        f"provider={provider}, event_id={event_id}, webhook_id={webhook_id}"
     )
 
     client = get_redis_client()
     if not client:
-        LOGGER.error(f"Redis client unavailable. Cannot push webhook event {event_id} to queue")
+        LOGGER.error(f"Redis client unavailable. Cannot push webhook event {event_id} to stream")
         return False
 
     try:
@@ -169,21 +267,16 @@ def push_webhook_event(
                 for k, v in safe_payload["payload"].items()
             }
 
-        LOGGER.debug(f"Prepared webhook payload for Redis: {safe_payload}")
+        LOGGER.debug(f"Prepared webhook payload for Redis stream: {safe_payload}")
 
-        json_payload = json.dumps(queue_payload)
-        result = client.lpush(settings.REDIS_WEBHOOK_QUEUE_NAME, json_payload)
+        message_id = client.xadd(settings.REDIS_WEBHOOK_STREAM, {"data": json.dumps(queue_payload)})
 
-        if result:
-            LOGGER.info(
-                f"Successfully pushed webhook event {event_id} to Redis queue "
-                f"{settings.REDIS_WEBHOOK_QUEUE_NAME} (queue length: {result})"
-            )
-            return True
-        else:
-            LOGGER.warning(f"Redis returned {result} when pushing to queue {settings.REDIS_WEBHOOK_QUEUE_NAME}")
-            return False
+        LOGGER.info(
+            f"Successfully pushed webhook event {event_id} to Redis stream "
+            f"'{settings.REDIS_WEBHOOK_STREAM}' (message_id: {message_id})"
+        )
+        return True
 
     except Exception as e:
-        LOGGER.error(f"Failed to push webhook event {event_id} to Redis queue: {str(e)}")
+        LOGGER.error(f"Failed to push webhook event {event_id} to Redis stream: {str(e)}")
         return False

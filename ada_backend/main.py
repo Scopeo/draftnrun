@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -44,6 +46,7 @@ from ada_backend.routers.webhooks.webhook_internal_router import router as webho
 from ada_backend.routers.webhooks.webhook_trigger_router import router as webhook_trigger_router
 from ada_backend.routers.widget_router import router as widget_router
 from ada_backend.services.rate_limit_service import limiter
+from ada_backend.utils.redis_client import xgroup_create_if_not_exists
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from logger import setup_logging
@@ -53,10 +56,19 @@ setup_logging()
 
 set_trace_manager(tm=TraceManager(project_name="ada-backend"))
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    xgroup_create_if_not_exists(settings.REDIS_INGESTION_STREAM, settings.REDIS_CONSUMER_GROUP)
+    xgroup_create_if_not_exists(settings.REDIS_WEBHOOK_STREAM, settings.REDIS_CONSUMER_GROUP)
+    yield
+
+
 app = FastAPI(
     title="Ada Backend",
     description="API for managing and running LLM agents",
     version="0.1.0",
+    lifespan=lifespan,
     openapi_tags=[
         {
             "name": "Auth",
