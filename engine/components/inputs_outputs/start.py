@@ -1,20 +1,20 @@
 import logging
-from typing import Type
+from typing import Any, Dict, Optional, Type
 
-from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
-from opentelemetry import trace as trace_api
-from pydantic import BaseModel
+from openinference.semconv.trace import OpenInferenceSpanKindValues
+from pydantic import BaseModel, Field, field_validator
 
-from engine.components.types import AgentPayload, ComponentAttributes, NodeData, ToolDescription
+from ada_backend.database.models import UIComponent
+from engine.components.component import Component
+from engine.components.types import ComponentAttributes, NodeData, ToolDescription
 from engine.components.utils import load_str_to_json
-from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_START_TOOL_DESCRIPTION = ToolDescription(
     name="Start_Tool",
-    description=("A start node that initializes the workflow with input data."),
+    description="A start node that initializes the workflow with input data.",
     tool_properties={
         "input_data": {
             "type": "json",
@@ -25,93 +25,67 @@ DEFAULT_START_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
-class Start:
-    # LEGACY: Mark as unmigrated for retro-compatibility
-    # TODO: Remove after migration to Agent base class
-    migrated: bool = False
+class StartInputs(BaseModel):
+    payload_schema: Optional[dict] = Field(
+        default=None,
+        json_schema_extra={
+            "is_tool_input": False,
+            "ui_component": UIComponent.JSON_BUILDER,
+            "drives_output_schema": True,
+        },
+    )
+    model_config = {"extra": "allow"}
+
+    @field_validator("payload_schema", mode="before")
+    @classmethod
+    def parse_payload_schema(cls, v):
+        if isinstance(v, str):
+            return load_str_to_json(v)
+        return v
+
+
+class StartOutputs(BaseModel):
+    messages: list[dict] = Field(default_factory=list)
+    model_config = {"extra": "allow"}
+
+
+class Start(Component):
+    migrated = True
+    TRACE_SPAN_KIND = OpenInferenceSpanKindValues.UNKNOWN.value
 
     def __init__(
         self,
         trace_manager: TraceManager,
         tool_description: ToolDescription,
         component_attributes: ComponentAttributes,
-        payload_schema: dict | str,
+        **kwargs,
     ):
-        self.trace_manager = trace_manager
-        self.tool_description = tool_description
-        self.component_attributes = component_attributes
-        if isinstance(payload_schema, str):
-            try:
-                self.payload_schema = load_str_to_json(payload_schema)
-            except ValueError as e:
-                raise ValueError(f"Invalid 'payload_schema' parameter: {e}") from e
-        else:
-            self.payload_schema = payload_schema
+        super().__init__(trace_manager, tool_description, component_attributes)
 
-    def get_canonical_ports(self) -> dict[str, str | None]:
-        # Expose the canonical output as the messages list so default mappings
-        # can auto-wire to downstream components expecting chat messages.
-        return {"output": "messages"}
-
-    # LEGACY: Schema methods for retro-compatibility with type discovery
-    # TODO: Remove after migration to Agent base class
     @classmethod
     def get_inputs_schema(cls) -> Type[BaseModel]:
-        """Input component accepts any input data."""
-        from engine.legacy_compatibility import create_legacy_input_schema
-
-        return create_legacy_input_schema()
+        return StartInputs
 
     @classmethod
     def get_outputs_schema(cls) -> Type[BaseModel]:
-        """Input component outputs messages list (canonical port)."""
-        from engine.legacy_compatibility import create_legacy_input_output_schema
+        return StartOutputs
 
-        return create_legacy_input_output_schema()
+    @classmethod
+    def get_canonical_ports(cls) -> Dict[str, Optional[str]]:
+        return {"output": "messages"}
 
-    # TODO: Remove after migrating Start to Component base class
-    async def close(self) -> None:
-        pass
+    async def _run_without_io_trace(self, inputs: StartInputs, ctx: Dict[str, Any]) -> StartOutputs:
+        payload_schema = inputs.payload_schema or {}
+        runtime_data = dict(inputs.model_extra or {})
+        for k, v in payload_schema.items():
+            if k not in runtime_data:
+                runtime_data[k] = v
+        messages = runtime_data.pop("messages", [])
+        return StartOutputs(messages=messages, **runtime_data)
 
-    # TODO: Refactor Agent I/O to use an unified input/output object:
-    async def run(self, input_data: AgentPayload | dict | NodeData) -> NodeData:
-        # Normalize input to a plain dict
-        # TODO: Remove after I/O refactor migration
-        if isinstance(input_data, NodeData):
-            base: dict = dict(input_data.data or {})
-            incoming_ctx = input_data.ctx.copy()
-        elif isinstance(input_data, AgentPayload):
-            base = input_data.model_dump()
-            incoming_ctx = {}
-        else:
-            base = dict(input_data)
-            incoming_ctx = {}
-
-        filtered_input = base.copy()
-        for k, v in self.payload_schema.items():
-            if k not in filtered_input:
-                filtered_input[k] = v
-
-        with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
-            span.set_attributes({
-                SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.UNKNOWN.value,
-                SpanAttributes.INPUT_VALUE: serialize_to_json(base, shorten_string=True),
-                SpanAttributes.OUTPUT_VALUE: serialize_to_json(filtered_input, shorten_string=True),
-                "component_instance_id": (
-                    str(self.component_attributes.component_instance_id)
-                    if self.component_attributes.component_instance_id is not None
-                    else None
-                ),
-            })
-            span.set_status(trace_api.StatusCode.OK)
-
-        # "messages" go in data, all other fields go in ctx
-        ctx = incoming_ctx
-        for k, v in filtered_input.items():
-            if k == "messages":
-                continue
-            ctx[k] = v
-
-        # Return NodeData with messages in data and all other fields in ctx
-        messages = filtered_input.get("messages", [])
-        return NodeData(data={"messages": messages}, ctx=ctx)
+    async def run(self, *args, **kwargs) -> NodeData:
+        result = await super().run(*args, **kwargs)
+        extra = {k: v for k, v in (result.data or {}).items() if k != "messages"}
+        if extra:
+            result.ctx.update(extra)
+        return result
