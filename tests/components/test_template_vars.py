@@ -76,7 +76,7 @@ def react_agent(mock_trace_manager, mock_llm_service):
 @patch("engine.prometheus_metric.agent_calls")
 @patch("engine.prometheus_metric.get_tracing_span")
 def test_input_block_extracts_template_vars(get_span_mock, agent_calls_mock, input_block):
-    """Test Input block returns NodeData with template vars directly in ctx."""
+    """Test Input block returns NodeData with template vars directly in data."""
     get_span_mock.return_value = MagicMock(project_id="test_project")
     agent_calls_mock.labels.return_value = MagicMock()
 
@@ -90,14 +90,14 @@ def test_input_block_extracts_template_vars(get_span_mock, agent_calls_mock, inp
 
     assert isinstance(result, NodeData)
     assert "messages" in result.data
-    assert result.ctx.get("yes") == "LOL"
-    assert result.ctx.get("name") == "John"
+    assert result.data.get("yes") == "LOL"
+    assert result.data.get("name") == "John"
 
 
 @patch("engine.prometheus_metric.agent_calls")
 @patch("engine.prometheus_metric.get_tracing_span")
 def test_input_block_preserves_existing_ctx(get_span_mock, agent_calls_mock, input_block):
-    """Test Input block preserves existing ctx data."""
+    """Test Input block preserves existing ctx data while returning extras in data."""
     get_span_mock.return_value = MagicMock(project_id="test_project")
     agent_calls_mock.labels.return_value = MagicMock()
 
@@ -112,8 +112,8 @@ def test_input_block_preserves_existing_ctx(get_span_mock, agent_calls_mock, inp
 
     assert isinstance(result, NodeData)
     assert result.ctx["existing_key"] == "existing_value"
-    assert result.ctx["yes"] == "LOL"
-    assert result.ctx["name"] == "John"
+    assert result.data["yes"] == "LOL"
+    assert result.data["name"] == "John"
 
 
 @patch("engine.prometheus_metric.agent_calls")
@@ -135,8 +135,8 @@ def test_input_block_payload_schema_as_json_string(get_span_mock, agent_calls_mo
 
     assert isinstance(result, NodeData)
     assert "messages" in result.data
-    assert result.ctx.get("country") == "France"
-    assert result.ctx.get("language") == "fr"
+    assert result.data.get("country") == "France"
+    assert result.data.get("language") == "fr"
 
 
 @patch("engine.prometheus_metric.agent_calls")
@@ -412,8 +412,8 @@ def test_input_block_with_flat_template_vars(get_span_mock, agent_calls_mock, mo
 
     assert isinstance(result, NodeData)
     assert "messages" in result.data
-    assert result.ctx.get("username") == "John"
-    assert result.ctx.get("cs_book_url") == "https://example.com/book.pdf"
+    assert result.data.get("username") == "John"
+    assert result.data.get("cs_book_url") == "https://example.com/book.pdf"
 
 
 @patch("engine.prometheus_metric.agent_calls")

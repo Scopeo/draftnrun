@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from ada_backend.database.models import UIComponent
 from engine.components.component import Component
-from engine.components.types import ComponentAttributes, NodeData, ToolDescription
+from engine.components.types import ComponentAttributes, ToolDescription
 from engine.components.utils import load_str_to_json
 from engine.trace.trace_manager import TraceManager
 
@@ -84,10 +84,3 @@ class Start(Component):
                 runtime_data[k] = v
         messages = runtime_data.pop("messages", [])
         return StartOutputs(messages=messages, **runtime_data)
-
-    async def run(self, *args, **kwargs) -> NodeData:
-        result = await super().run(*args, **kwargs)
-        extra = {k: v for k, v in (result.data or {}).items() if k != "messages"}
-        if extra:
-            result.ctx.update(extra)
-        return result
