@@ -51,3 +51,10 @@ class RunListResponse(BaseModel):
 
     runs: list[RunResponseSchema]
     pagination: RunListPagination
+
+
+class AsyncRunAcceptedSchema(BaseModel):
+    """Response when an async run is accepted (202)."""
+
+    run_id: UUID
+    status: str = "pending"

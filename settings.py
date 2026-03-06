@@ -119,6 +119,7 @@ class BaseConfig(BaseSettings):
     REDIS_PASSWORD: Optional[str] = None
     REDIS_QUEUE_NAME: str = "ada_ingestion_queue"
     REDIS_WEBHOOK_QUEUE_NAME: str = "ada_webhook_queue"
+    REDIS_RUNS_QUEUE_NAME: str = "ada_runs_queue"
     REDIS_WEBHOOK_DEDUP_TTL: int = 86400  # 24 hours in seconds
 
     # Rate limiting configuration
