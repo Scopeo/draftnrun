@@ -4,6 +4,7 @@ These functions convert between AST objects and their JSON (dict) representation
 They are pure and do not depend on engine or backend specifics.
 """
 
+import json
 from typing import Any, Dict, List, Union
 
 from engine.field_expressions.ast import (
@@ -62,5 +63,7 @@ def from_json(ast_dict: Dict[str, Any]) -> ExpressionNode:
                 if isinstance(parsed_ref, (RefNode, VarNode)):
                     parsed_refs[key] = parsed_ref
             return JsonBuildNode(template=template, refs=parsed_refs)
+        case dict() if "type" not in ast_dict:
+            return LiteralNode(value=json.dumps(ast_dict))
         case _:
             return LiteralNode(value="")
