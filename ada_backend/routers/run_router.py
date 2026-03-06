@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import UserRights, user_has_access_to_project_dependency
 from ada_backend.schemas.auth_schema import SupabaseUser
+from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.run_schema import (
     RunCreateSchema,
     RunListPagination,
@@ -15,8 +16,14 @@ from ada_backend.schemas.run_schema import (
     RunResponseSchema,
     RunUpdateStatusSchema,
 )
-from ada_backend.services.errors import InvalidRunStatusTransition, ProjectNotFound, RunNotFound
-from ada_backend.services.run_service import create_run, get_run, get_runs, update_run_status
+from ada_backend.services.errors import (
+    InvalidRunStatusTransition,
+    ProjectNotFound,
+    ResultsBucketNotConfigured,
+    RunNotFound,
+    RunResultNotFound,
+)
+from ada_backend.services.run_service import create_run, get_run, get_run_result, get_runs, update_run_status
 
 LOGGER = logging.getLogger(__name__)
 
@@ -100,6 +107,33 @@ def get_run_endpoint(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         LOGGER.exception("Failed to get run %s", run_id)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.get(
+    "/{project_id}/runs/{run_id}/result",
+    response_model=ChatResponse,
+)
+def get_run_result_endpoint(
+    project_id: UUID,
+    run_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> ChatResponse:
+    """Return the run result (ChatResponse) from S3. Run must be completed and have a result_id."""
+    try:
+        return get_run_result(session, run_id=run_id, project_id=project_id)
+    except (RunNotFound, RunResultNotFound) as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ResultsBucketNotConfigured as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.exception("Failed to get result for run %s", run_id)
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
