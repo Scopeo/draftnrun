@@ -72,12 +72,19 @@ def react_agent(mock_trace_manager, mock_llm_service):
     )
 
 
-def test_input_block_extracts_template_vars(input_block):
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.prometheus_metric.get_tracing_span")
+def test_input_block_extracts_template_vars(get_span_mock, agent_calls_mock, input_block):
     """Test Input block returns NodeData with template vars directly in ctx."""
-    input_data = {
-        "messages": [{"role": "user", "content": "hi"}],
-        "payload_schema": {"messages": [], "yes": "LOL", "name": "John"},
-    }
+    get_span_mock.return_value = MagicMock(project_id="test_project")
+    agent_calls_mock.labels.return_value = MagicMock()
+
+    input_data = NodeData(
+        data={
+            "messages": [{"role": "user", "content": "hi"}],
+            "payload_schema": {"messages": [], "yes": "LOL", "name": "John"},
+        }
+    )
     result = asyncio.run(input_block.run(input_data))
 
     assert isinstance(result, NodeData)
@@ -86,8 +93,13 @@ def test_input_block_extracts_template_vars(input_block):
     assert result.ctx.get("name") == "John"
 
 
-def test_input_block_preserves_existing_ctx(input_block):
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.prometheus_metric.get_tracing_span")
+def test_input_block_preserves_existing_ctx(get_span_mock, agent_calls_mock, input_block):
     """Test Input block preserves existing ctx data."""
+    get_span_mock.return_value = MagicMock(project_id="test_project")
+    agent_calls_mock.labels.return_value = MagicMock()
+
     input_data = NodeData(
         data={
             "messages": [{"role": "user", "content": "hi"}],
@@ -349,8 +361,13 @@ def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, mock_llm_s
     agent._completion_service.complete_async.assert_called_once()
 
 
-def test_input_block_with_flat_template_vars(mock_trace_manager):
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.prometheus_metric.get_tracing_span")
+def test_input_block_with_flat_template_vars(get_span_mock, agent_calls_mock, mock_trace_manager):
     """Test Input block handles flat template vars correctly."""
+    get_span_mock.return_value = MagicMock(project_id="test_project")
+    agent_calls_mock.labels.return_value = MagicMock()
+
     input_block = Start(
         trace_manager=mock_trace_manager,
         tool_description=ToolDescription(
@@ -359,12 +376,14 @@ def test_input_block_with_flat_template_vars(mock_trace_manager):
         component_attributes=ComponentAttributes(component_instance_name="Test Input"),
     )
 
-    input_data = {
-        "messages": [{"role": "user", "content": "Hello"}],
-        "payload_schema": {"messages": []},
-        "cs_book_url": "https://example.com/book.pdf",
-        "username": "John",
-    }
+    input_data = NodeData(
+        data={
+            "messages": [{"role": "user", "content": "Hello"}],
+            "payload_schema": {"messages": []},
+            "cs_book_url": "https://example.com/book.pdf",
+            "username": "John",
+        }
+    )
     result = asyncio.run(input_block.run(input_data))
 
     assert isinstance(result, NodeData)

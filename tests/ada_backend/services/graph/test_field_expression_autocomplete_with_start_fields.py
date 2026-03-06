@@ -24,13 +24,15 @@ def test_start_node_includes_input_fields_as_properties():
     mock_graph_runner_node.is_start_node = True
     session.query.return_value.filter.return_value.first.return_value = mock_graph_runner_node
 
-    with patch("ada_backend.services.graph.field_expression_autocomplete_service.get_component_instance") as _:
+    with patch(
+        "ada_backend.services.graph.field_expression_autocomplete_service.extract_payload_schema_from_instance"
+    ) as mock_extract:
         with patch(
-            "ada_backend.services.graph.field_expression_autocomplete_service.extract_playground_schema_from_component"
-        ) as mock_extract:
+            "ada_backend.services.graph.field_expression_autocomplete_service.get_output_ports_for_component_version"
+        ) as mock_get_ports:
             with patch(
-                "ada_backend.services.graph.field_expression_autocomplete_service.get_output_ports_for_component_version"
-            ) as mock_get_ports:
+                "ada_backend.services.graph.field_expression_autocomplete_service.get_output_port_instances_for_component_instance"
+            ) as mock_get_dynamic_ports:
                 mock_extract.return_value = {
                     "messages": [{"role": "user", "content": "Hello"}],
                     "username": "John",
@@ -40,6 +42,7 @@ def test_start_node_includes_input_fields_as_properties():
                 mock_port = MagicMock()
                 mock_port.name = "messages"
                 mock_get_ports.return_value = [mock_port]
+                mock_get_dynamic_ports.return_value = []
 
                 suggestions = _build_port_suggestions_with_start_fields(
                     session, graph_runner_id, instances, str(start_instance_id), ""
@@ -99,15 +102,18 @@ def test_start_field_query_filtering():
     mock_graph_runner_node.is_start_node = True
     session.query.return_value.filter.return_value.first.return_value = mock_graph_runner_node
 
-    with patch("ada_backend.services.graph.field_expression_autocomplete_service.get_component_instance"):
+    with patch(
+        "ada_backend.services.graph.field_expression_autocomplete_service.extract_payload_schema_from_instance"
+    ) as mock_extract:
         with patch(
-            "ada_backend.services.graph.field_expression_autocomplete_service.extract_playground_schema_from_component"
-        ) as mock_extract:
+            "ada_backend.services.graph.field_expression_autocomplete_service.get_output_ports_for_component_version"
+        ) as mock_get_ports:
             with patch(
-                "ada_backend.services.graph.field_expression_autocomplete_service.get_output_ports_for_component_version"
-            ) as mock_get_ports:
+                "ada_backend.services.graph.field_expression_autocomplete_service.get_output_port_instances_for_component_instance"
+            ) as mock_get_dynamic_ports:
                 mock_extract.return_value = {"username": "John", "api_key": "key"}
                 mock_get_ports.return_value = []
+                mock_get_dynamic_ports.return_value = []
 
                 suggestions = _build_port_suggestions_with_start_fields(
                     session, graph_runner_id, instances, str(start_instance_id), "user"
@@ -132,18 +138,21 @@ def test_messages_field_excluded_from_input_fields():
     mock_graph_runner_node.is_start_node = True
     session.query.return_value.filter.return_value.first.return_value = mock_graph_runner_node
 
-    with patch("ada_backend.services.graph.field_expression_autocomplete_service.get_component_instance"):
+    with patch(
+        "ada_backend.services.graph.field_expression_autocomplete_service.extract_payload_schema_from_instance"
+    ) as mock_extract:
         with patch(
-            "ada_backend.services.graph.field_expression_autocomplete_service.extract_playground_schema_from_component"
-        ) as mock_extract:
+            "ada_backend.services.graph.field_expression_autocomplete_service.get_output_ports_for_component_version"
+        ) as mock_get_ports:
             with patch(
-                "ada_backend.services.graph.field_expression_autocomplete_service.get_output_ports_for_component_version"
-            ) as mock_get_ports:
+                "ada_backend.services.graph.field_expression_autocomplete_service.get_output_port_instances_for_component_instance"
+            ) as mock_get_dynamic_ports:
                 mock_extract.return_value = {"messages": [{"role": "user", "content": "Hello"}], "username": "John"}
 
                 mock_port = MagicMock()
                 mock_port.name = "messages"
                 mock_get_ports.return_value = [mock_port]
+                mock_get_dynamic_ports.return_value = []
 
                 suggestions = _build_port_suggestions_with_start_fields(
                     session, graph_runner_id, instances, str(start_instance_id), ""
@@ -170,18 +179,21 @@ def test_start_node_without_payload_schema():
     mock_graph_runner_node.is_start_node = True
     session.query.return_value.filter.return_value.first.return_value = mock_graph_runner_node
 
-    with patch("ada_backend.services.graph.field_expression_autocomplete_service.get_component_instance"):
+    with patch(
+        "ada_backend.services.graph.field_expression_autocomplete_service.extract_payload_schema_from_instance"
+    ) as mock_extract:
         with patch(
-            "ada_backend.services.graph.field_expression_autocomplete_service.extract_playground_schema_from_component"
-        ) as mock_extract:
+            "ada_backend.services.graph.field_expression_autocomplete_service.get_output_ports_for_component_version"
+        ) as mock_get_ports:
             with patch(
-                "ada_backend.services.graph.field_expression_autocomplete_service.get_output_ports_for_component_version"
-            ) as mock_get_ports:
+                "ada_backend.services.graph.field_expression_autocomplete_service.get_output_port_instances_for_component_instance"
+            ) as mock_get_dynamic_ports:
                 mock_extract.return_value = None
 
                 mock_port = MagicMock()
                 mock_port.name = "messages"
                 mock_get_ports.return_value = [mock_port]
+                mock_get_dynamic_ports.return_value = []
 
                 suggestions = _build_port_suggestions_with_start_fields(
                     session, graph_runner_id, instances, str(start_instance_id), ""
