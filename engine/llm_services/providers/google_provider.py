@@ -1,7 +1,8 @@
 import asyncio
+import copy
 import json
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 import openai
 from google import genai
@@ -92,17 +93,17 @@ class GoogleProvider(BaseProvider):
     ) -> tuple[BaseModel, int, int, int]:
         client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
 
+        schema = self._resolve_schema_refs(response_format.model_json_schema())
+        self._force_additional_properties_false(schema)
+
         response_format_schema = {
             "type": "json_schema",
             "json_schema": {
                 "name": response_format.__name__,
-                "schema": response_format.model_json_schema(),
+                "schema": schema,
                 "strict": True,
             },
         }
-
-        schema = response_format_schema.get("json_schema", {}).get("schema", {})
-        self._force_additional_properties_false(schema)
 
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
@@ -134,6 +135,48 @@ class GoogleProvider(BaseProvider):
             for item in schema:
                 self._force_additional_properties_false(item)
 
+    @staticmethod
+    def _resolve_local_refs(value: Any, defs: dict[str, Any]) -> Any:
+        """Recursively inline all ``$ref`` pointers that target ``#/$defs/``."""
+        if isinstance(value, dict):
+            ref = value.get("$ref")
+            if isinstance(ref, str) and ref.startswith("#/$defs/"):
+                key = ref.removeprefix("#/$defs/")
+                target = defs.get(key, {})
+                merged = {
+                    **GoogleProvider._resolve_local_refs(target, defs),
+                    **{k: v for k, v in value.items() if k != "$ref"},
+                }
+                return GoogleProvider._resolve_local_refs(merged, defs)
+            return {k: GoogleProvider._resolve_local_refs(v, defs) for k, v in value.items()}
+        if isinstance(value, list):
+            return [GoogleProvider._resolve_local_refs(item, defs) for item in value]
+        return value
+
+    @staticmethod
+    def _resolve_schema_refs(schema: dict) -> dict:
+        """Return a copy of *schema* with ``$defs``/``$ref`` fully inlined.
+
+        Google's Generative AI API does not support JSON Schema ``$defs``, so
+        we must dereference every ``$ref`` and drop the ``$defs`` key before
+        sending a schema to the API.
+        """
+        schema = copy.deepcopy(schema)
+        defs = schema.pop("$defs", {})
+        return GoogleProvider._resolve_local_refs(schema, defs)
+
+    @classmethod
+    def _resolve_tool_refs(cls, tools: list[dict]) -> list[dict]:
+        """Resolve ``$defs``/``$ref`` inside every tool's parameter schema."""
+        resolved = []
+        for tool in tools:
+            tool = copy.deepcopy(tool)
+            params = tool.get("function", {}).get("parameters")
+            if params:
+                tool["function"]["parameters"] = cls._resolve_schema_refs(params)
+            resolved.append(tool)
+        return resolved
+
     async def constrained_complete_with_json_schema(
         self,
         messages: list[dict] | str,
@@ -142,8 +185,9 @@ class GoogleProvider(BaseProvider):
         stream: bool,
         **kwargs,
     ) -> tuple[str, int, int, int]:
-        schema = response_format.get("schema", {})
+        schema = self._resolve_schema_refs(response_format.get("schema", {}))
         name = response_format.get("name", "response")
+        self._force_additional_properties_false(schema)
 
         response_format_schema = {
             "type": "json_schema",
@@ -153,8 +197,6 @@ class GoogleProvider(BaseProvider):
                 "strict": True,
             },
         }
-
-        self._force_additional_properties_false(schema)
 
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
@@ -199,6 +241,8 @@ class GoogleProvider(BaseProvider):
             )
             response = wrap_str_content_into_chat_completion_message(content, self._model_name)
             return response, prompt_tokens, completion_tokens, total_tokens
+
+        tools = self._resolve_tool_refs(tools)
 
         client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
         response = await client.chat.completions.create(
