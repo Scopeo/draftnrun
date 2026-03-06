@@ -68,13 +68,19 @@ async def get_user_from_supabase_token(
     """
     supabase_token = authorization.credentials
 
+    def _set_user_in_context(user: SupabaseUser) -> None:
+        """Set user in request context when available (e.g. HTTP); no-op for WebSocket."""
+        try:
+            get_request_context().set_user(user)
+        except ValueError:
+            pass
+
     # Bypass authentication in offline mode
     if settings.OFFLINE_MODE:
         user = SupabaseUser(
             id=UUID("11111111-1111-1111-1111-111111111111"), email="dummy@email.com", token="offline-mode-token"
         )
-        context = get_request_context()
-        context.set_user(user)
+        _set_user_in_context(user)
         return user
 
     try:
@@ -88,8 +94,7 @@ async def get_user_from_supabase_token(
             token=supabase_token,
         )
 
-        context = get_request_context()
-        context.set_user(user)
+        _set_user_in_context(user)
 
         return user
     except HTTPException:

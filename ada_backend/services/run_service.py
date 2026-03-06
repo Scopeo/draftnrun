@@ -1,6 +1,8 @@
+import asyncio
+import json
 import logging
 from datetime import datetime, timezone
-from typing import Awaitable, List, Optional
+from typing import Any, AsyncIterator, Awaitable, Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -98,6 +100,62 @@ async def run_with_tracking(
             finished_at=datetime.now(timezone.utc),
         )
         raise
+
+
+def get_run_final_state_event(session: Session, run_id: UUID) -> Optional[Dict[str, Any]]:
+    """
+    If the run is already completed or failed, return the event dict to send over WebSocket
+    (run.completed or run.failed). Returns None if run not found or still pending/running.
+    Used when a client connects to the run stream after the run has finished.
+    """
+    run = run_repository.get_run(session, run_id)
+    if not run:
+        return None
+    status = run.status if isinstance(run.status, RunStatus) else RunStatus(str(run.status))
+    if status == RunStatus.COMPLETED:
+        return {
+            "type": "run.completed",
+            "trace_id": getattr(run, "trace_id", None),
+            "result_id": getattr(run, "result_id", None),
+        }
+    if status == RunStatus.FAILED:
+        return {
+            "type": "run.failed",
+            "error": getattr(run, "error", None) or {"message": "Run failed", "type": "UnknownError"},
+        }
+    return None
+
+
+async def stream_run_events(
+    session: Session,
+    run_id: UUID,
+    queue: asyncio.Queue,
+    *,
+    ping_timeout_seconds: float = 300.0,
+) -> AsyncIterator[str]:
+    """
+    Async generator that yields JSON messages to send over the run WebSocket stream.
+    First yields the final state event (run.completed / run.failed) if the run is already done,
+    then yields events from the queue (node.started, node.completed, run.completed, run.failed)
+    until a terminal event or timeout. Caller sends each yielded string to the WebSocket.
+    """
+    final_state = get_run_final_state_event(session, run_id)
+    if final_state is not None:
+        yield json.dumps(final_state)
+        return
+    while True:
+        try:
+            data = await asyncio.wait_for(queue.get(), timeout=ping_timeout_seconds)
+        except asyncio.TimeoutError:
+            yield json.dumps({"type": "ping"})
+            continue
+        yield data if isinstance(data, str) else json.dumps(data)
+        try:
+            evt = json.loads(data) if isinstance(data, str) else data
+            if isinstance(evt, dict) and evt.get("type") in ("run.completed", "run.failed"):
+                return
+        except (json.JSONDecodeError, TypeError):
+            pass
 
 
 def create_run(
