@@ -1,10 +1,11 @@
 import logging
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
+from ada_backend.database.models import CIPHER, VariableType
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.variable_definitions_repository import (
     delete_org_definition,
@@ -54,13 +55,39 @@ def definition_to_response(definition: db.OrgVariableDefinition) -> VariableDefi
     )
 
 
-def set_to_response(variable_set: db.OrgVariableSet) -> VariableSetResponse:
+def _build_definition_map(definitions: list[db.OrgVariableDefinition]) -> dict[str, db.OrgVariableDefinition]:
+    return {definition.name: definition for definition in definitions}
+
+
+def _mask_set_values(
+    variable_set: db.OrgVariableSet,
+    definitions_by_name: dict[str, db.OrgVariableDefinition],
+) -> dict[str, Any]:
+    response_values: dict[str, Any] = dict(variable_set.values or {})
+
+    for key, encrypted_value in (variable_set.encrypted_values or {}).items():
+        definition = definitions_by_name.get(key)
+        if definition and definition.type == VariableType.SECRET:
+            response_values[key] = {"is_set": bool(encrypted_value)}
+
+    for key, value in list(response_values.items()):
+        definition = definitions_by_name.get(key)
+        if definition and definition.type == VariableType.SECRET:
+            response_values[key] = {"is_set": bool((variable_set.encrypted_values or {}).get(key))}
+
+    return response_values
+
+
+def set_to_response(
+    variable_set: db.OrgVariableSet,
+    definitions_by_name: dict[str, db.OrgVariableDefinition],
+) -> VariableSetResponse:
     return VariableSetResponse(
         id=variable_set.id,
         organization_id=variable_set.organization_id,
         project_id=variable_set.project_id,
         set_id=variable_set.set_id,
-        values=variable_set.values,
+        values=_mask_set_values(variable_set, definitions_by_name),
         created_at=str(variable_set.created_at),
         updated_at=str(variable_set.updated_at),
     )
@@ -110,7 +137,10 @@ def list_sets_service(
     organization_id: UUID,
 ) -> VariableSetListResponse:
     sets = list_org_variable_sets(session, organization_id)
-    return VariableSetListResponse(variable_sets=[set_to_response(variable_set) for variable_set in sets])
+    definitions_by_name = _build_definition_map(list_org_definitions(session, organization_id))
+    return VariableSetListResponse(
+        variable_sets=[set_to_response(variable_set, definitions_by_name) for variable_set in sets]
+    )
 
 
 def get_set_service(
@@ -121,7 +151,8 @@ def get_set_service(
     variable_set = get_org_variable_set(session, organization_id, set_id)
     if not variable_set:
         raise VariableSetNotFound(set_id, organization_id)
-    return set_to_response(variable_set)
+    definitions_by_name = _build_definition_map(list_org_definitions(session, organization_id))
+    return set_to_response(variable_set, definitions_by_name)
 
 
 def upsert_set_service(
@@ -130,8 +161,23 @@ def upsert_set_service(
     set_id: str,
     values: dict,
 ) -> VariableSetResponse:
-    variable_set = upsert_org_variable_set(session, organization_id, set_id, values)
-    return set_to_response(variable_set)
+    definitions_by_name = _build_definition_map(list_org_definitions(session, organization_id))
+    existing_set = get_org_variable_set(session, organization_id, set_id)
+
+    plain_values: dict[str, Any] = {}
+    encrypted_values = dict(existing_set.encrypted_values or {}) if existing_set else {}
+
+    for key, value in values.items():
+        definition = definitions_by_name.get(key)
+        if definition and definition.type == VariableType.SECRET:
+            if value is None:
+                continue
+            encrypted_values[key] = CIPHER.encrypt(str(value).encode()).decode()
+            continue
+        plain_values[key] = value
+
+    variable_set = upsert_org_variable_set(session, organization_id, set_id, plain_values, encrypted_values)
+    return set_to_response(variable_set, definitions_by_name)
 
 
 def delete_set_service(

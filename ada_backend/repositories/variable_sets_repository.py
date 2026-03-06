@@ -43,16 +43,19 @@ def upsert_org_variable_set(
     organization_id: UUID,
     set_id: str,
     values: dict[str, Any],
+    encrypted_values: dict[str, str],
 ) -> db.OrgVariableSet:
     stmt = insert(db.OrgVariableSet).values(
         organization_id=organization_id,
         set_id=set_id,
         values=values,
+        encrypted_values=encrypted_values,
     )
     stmt = stmt.on_conflict_do_update(
         index_elements=["organization_id", "set_id"],
         set_={
             "values": stmt.excluded["values"],
+            "encrypted_values": stmt.excluded["encrypted_values"],
             "updated_at": func.now(),
         },
     )

@@ -2189,6 +2189,7 @@ class OrgVariableSet(Base):
     )
     set_id = mapped_column(String, nullable=False)
     values = mapped_column(JSONB, nullable=False, default=dict)
+    encrypted_values = mapped_column(JSONB, nullable=False, default=dict)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
