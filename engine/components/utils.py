@@ -182,16 +182,22 @@ def merge_constrained_output_to_root(
         LOGGER.debug(f"Could not parse constrained output as JSON: {e}")
 
 
-def extract_source_ranks(sources: list) -> tuple[list, list]:
+def extract_source_ranks(sources: list) -> tuple[list, list, int | None, int | None]:
     original_retrieval_ranks = []
     original_reranker_ranks = []
+    total_retrieved = None
+    total_reranked = None
 
     for source in sources:
         metadata = source.metadata or {}
         original_retrieval_ranks.append(metadata.get("_retrieval_rank"))
         original_reranker_ranks.append(metadata.get("_reranker_rank"))
+        if total_retrieved is None and "_total_retrieved_chunks" in metadata:
+            total_retrieved = metadata["_total_retrieved_chunks"]
+        if total_reranked is None and "_total_reranked_chunks" in metadata:
+            total_reranked = metadata["_total_reranked_chunks"]
 
     if all(rank is None for rank in original_reranker_ranks):
         original_reranker_ranks = []
 
-    return original_retrieval_ranks, original_reranker_ranks
+    return original_retrieval_ranks, original_reranker_ranks, total_retrieved, total_reranked

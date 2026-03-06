@@ -156,6 +156,7 @@ class Retriever(Component):
 
         for i, chunk in enumerate(chunks):
             chunk.metadata["_retrieval_rank"] = i + 1
+            chunk.metadata["_total_retrieved_chunks"] = len(chunks)
 
         return chunks
 

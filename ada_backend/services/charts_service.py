@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType
 from ada_backend.repositories.credits_repository import get_organization_limit, get_organization_total_credits
-from ada_backend.schemas.chart_schema import Chart, ChartData, ChartsResponse, ChartType, Dataset
+from ada_backend.schemas.chart_schema import Chart, ChartCategory, ChartData, ChartsResponse, ChartType, Dataset
+from ada_backend.services.metrics.rank_charts import get_ranks_distribution_charts
 from ada_backend.services.metrics.utils import (
     calculate_calls_per_day,
     count_conversations_per_day,
@@ -121,7 +122,8 @@ def get_agent_usage_chart(
         ["llm_token_count_prompt", "llm_token_count_completion"]
     ].fillna(0)
     token_usage = (
-        df.groupby("date")[["llm_token_count_prompt", "llm_token_count_completion"]]
+        df
+        .groupby("date")[["llm_token_count_prompt", "llm_token_count_completion"]]
         .sum()
         .reset_index()
         .rename(columns={"llm_token_count_prompt": "input_tokens", "llm_token_count_completion": "output_tokens"})
@@ -144,6 +146,7 @@ def get_agent_usage_chart(
                 datasets=datasets,
             ),
             x_axis_type="datetime",
+            category=ChartCategory.GENERAL,
         ),
         Chart(
             id=f"token_usage_{chart_id}",
@@ -165,6 +168,7 @@ def get_agent_usage_chart(
                 ],
             ),
             x_axis_type="datetime",
+            category=ChartCategory.GENERAL,
         ),
     ]
 
@@ -191,6 +195,7 @@ def get_latence_chart(project_ids: List[UUID], duration_days: int, call_type: Ca
                 Dataset(label="Latency Distribution", data=latency_hist.tolist()),
             ],
         ),
+        category=ChartCategory.GENERAL,
     )
 
 
@@ -221,6 +226,7 @@ def get_tokens_distribution_chart(
                 Dataset(label="Output Tokens Distribution", data=output_token_hist.tolist()),
             ],
         ),
+        category=ChartCategory.GENERAL,
     )
 
 
@@ -273,16 +279,15 @@ async def get_charts_by_projects(
     duration_days: int,
     call_type: CallType | None = None,
 ) -> ChartsResponse:
-    response = ChartsResponse(
-        charts=(
-            get_agent_usage_chart(project_ids, duration_days, call_type)
-            + [
-                get_latence_chart(project_ids, duration_days, call_type),
-                # get_prometheus_agent_calls_chart(project_id, duration_days),
-                get_tokens_distribution_chart(project_ids, duration_days, call_type),
-            ]
-        )
-    )
+    charts = get_agent_usage_chart(project_ids, duration_days, call_type) + [
+        get_latence_chart(project_ids, duration_days, call_type),
+        # get_prometheus_agent_calls_chart(project_id, duration_days),
+        get_tokens_distribution_chart(project_ids, duration_days, call_type),
+    ]
+
+    charts.extend(get_ranks_distribution_charts(project_ids, duration_days, call_type))
+
+    response = ChartsResponse(charts=charts)
     if len(response.charts) == 0:
         raise ValueError("No charts found for this project")
     return response
