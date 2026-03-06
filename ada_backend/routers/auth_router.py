@@ -20,6 +20,7 @@ from ada_backend.schemas.auth_schema import (
     ApiKeyGetResponse,
     AuthenticatedEntity,
     OrgApiKeyCreateRequest,
+    ProjectAuth,
     SupabaseUser,
     VerifiedApiKey,
 )
@@ -543,6 +544,51 @@ def user_has_access_to_organization_xor_verify_api_key(allowed_roles: set[str]):
         raise HTTPException(
             status_code=401,
             detail="Authentication required: provide either Authorization token or X-API-Key header",
+        )
+
+    return wrapper
+
+
+def user_has_access_to_project_xor_verify_api_key(allowed_roles: set[str]):
+    """
+    Factory that returns a dependency allowing either JWT (user with project access) or API key for the given project.
+    Used for playground (JWT) and API (X-API-Key) callers.
+    """
+
+    async def wrapper(
+        project_id: UUID,
+        authorization: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
+        x_api_key: str | None = Header(None, alias="X-API-Key"),
+        session: Session = Depends(get_db),
+    ) -> ProjectAuth:
+        if authorization and authorization.credentials and x_api_key:
+            raise HTTPException(
+                status_code=400,
+                detail="Provide either Authorization token (JWT) or X-API-Key, not both",
+            )
+        if authorization and authorization.credentials:
+            user = await get_user_from_supabase_token(authorization)
+            user = await user_has_access_to_project_dependency(allowed_roles=allowed_roles)(
+                project_id=project_id, user=user, session=session
+            )
+            return ProjectAuth(user=user, verified_api_key=None)
+        if x_api_key:
+            cleaned = x_api_key.replace("\\n", "\n").strip('"')
+            try:
+                verified = verify_api_key(session, private_key=cleaned)
+            except ValueError:
+                raise HTTPException(status_code=401, detail="Invalid API key")
+            from ada_backend.services.api_key_service import verify_project_access
+            from ada_backend.services.errors import ApiKeyAccessDenied
+
+            try:
+                verify_project_access(session, verified, project_id)
+            except ApiKeyAccessDenied:
+                raise HTTPException(status_code=403, detail="API key does not have access to this project")
+            return ProjectAuth(user=None, verified_api_key=verified)
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required: provide either Authorization token (JWT) or X-API-Key header",
         )
 
     return wrapper

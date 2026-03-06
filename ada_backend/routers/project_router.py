@@ -272,77 +272,6 @@ async def run_env_agent_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post(
-    "/{project_id}/envs/{env}/chat/async",
-    response_model=AsyncRunAcceptedSchema,
-    status_code=202,
-    tags=["Projects"],
-)
-def chat_async_endpoint(
-    project_id: UUID,
-    env: EnvType,
-    input_data: dict = Body(
-        ...,
-        example={
-            "messages": [
-                {"role": "user", "content": "Hello, how are you?"},
-            ]
-        },
-    ),
-    response_format: ResponseFormat = Query(
-        ResponseFormat.S3_KEY,
-        description="How files in the result are returned (base64, url, or s3_key). Defaults to s3_key.",
-    ),
-    sqlaclhemy_db_session: Session = Depends(get_db),
-    verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
-) -> AsyncRunAcceptedSchema:
-    """
-    Enqueue an async run and return 202 with run_id.
-    Connect to WebSocket /ws/runs/{run_id} to receive real-time events.
-    """
-    try:
-        verify_project_access(sqlaclhemy_db_session, verified_api_key, project_id)
-    except ApiKeyAccessDenied as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except InvalidApiKey as e:
-        raise HTTPException(status_code=401, detail=str(e)) from e
-    except ProjectNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-
-    try:
-        run = create_run(
-            sqlaclhemy_db_session,
-            project_id=project_id,
-            trigger=CallType.API,
-        )
-        pushed = push_run_task(
-            run_id=run.id,
-            project_id=project_id,
-            env=env.value,
-            input_data=input_data,
-            trigger=CallType.API.value,
-            response_format=response_format.value,
-        )
-        if not pushed:
-            update_run_status(
-                sqlaclhemy_db_session,
-                run_id=run.id,
-                project_id=project_id,
-                status=RunStatus.FAILED,
-                error={"message": "Failed to enqueue run; Redis unavailable.", "type": "EnqueueError"},
-            )
-            raise HTTPException(
-                status_code=503,
-                detail="Run created but could not be enqueued. Try again or use sync endpoint.",
-            )
-        return AsyncRunAcceptedSchema(run_id=run.id, status="pending")
-    except ProjectNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception("Failed to enqueue async run for project %s env %s: %s", project_id, env, e)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
 @router.get("/{project_id}/charts", response_model=ChartsResponse, tags=["Metrics"], deprecated=True)
 async def get_project_charts(
     project_id: UUID,
@@ -577,4 +506,71 @@ async def chat_env(
         LOGGER.error(
             f"Failed to run agent chat for project {project_id} in environment {env}: {str(e)}", exc_info=True
         )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post(
+    "/{project_id}/envs/{env}/chat/async",
+    response_model=AsyncRunAcceptedSchema,
+    status_code=202,
+    tags=["Projects"],
+)
+async def chat_async_endpoint(
+    project_id: UUID,
+    env: EnvType,
+    user: Annotated[
+        SupabaseUser,
+        Depends(
+            user_has_access_to_project_dependency(
+                allowed_roles=UserRights.MEMBER.value,
+            )
+        ),
+    ],
+    input_data: dict = Body(
+        ...,
+        example={
+            "messages": [
+                {"role": "user", "content": "Hello, how are you?"},
+            ]
+        },
+    ),
+    session: Session = Depends(get_db),
+) -> AsyncRunAcceptedSchema:
+    """
+    Enqueue an async run and return 202 with run_id. JWT only (same auth as sync chat).
+    Connect to WebSocket /ws/runs/{run_id} to receive real-time events.
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        run = create_run(
+            session,
+            project_id=project_id,
+            trigger=CallType.SANDBOX,
+        )
+        pushed = push_run_task(
+            run_id=run.id,
+            project_id=project_id,
+            env=env.value,
+            input_data=input_data,
+            trigger=CallType.SANDBOX.value,
+            response_format=ResponseFormat.S3_KEY.value,
+        )
+        if not pushed:
+            update_run_status(
+                session,
+                run_id=run.id,
+                project_id=project_id,
+                status=RunStatus.FAILED,
+                error={"message": "Failed to enqueue run; Redis unavailable.", "type": "EnqueueError"},
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Run created but could not be enqueued. Try again or use sync endpoint.",
+            )
+        return AsyncRunAcceptedSchema(run_id=run.id, status="pending")
+    except ProjectNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.exception("Failed to enqueue async run for project %s env %s: %s", project_id, env, e)
         raise HTTPException(status_code=500, detail="Internal server error") from e

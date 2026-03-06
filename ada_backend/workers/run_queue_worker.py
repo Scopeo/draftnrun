@@ -19,9 +19,23 @@ from ada_backend.repositories import run_repository
 from ada_backend.services.agent_runner_service import run_env_agent
 from ada_backend.services.run_service import _upload_result_to_s3, update_run_status
 from ada_backend.utils.redis_client import get_redis_client, publish_run_event
+from engine.trace.trace_context import set_trace_manager
+from engine.trace.trace_manager import TraceManager
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
+
+# Trace manager for the worker thread (ContextVar is thread-local, so we set it before each run).
+_worker_trace_manager: TraceManager | None = None
+
+
+def _ensure_worker_trace_manager() -> None:
+    """Set trace manager in the current thread so get_trace_manager() returns it when building the agent."""
+    global _worker_trace_manager
+    if _worker_trace_manager is None:
+        _worker_trace_manager = TraceManager(project_name="ada-backend-worker")
+    set_trace_manager(_worker_trace_manager)
+
 
 # Set by main on SIGTERM so the worker stops taking new work (drain).
 _drain_requested = threading.Event()
@@ -33,6 +47,7 @@ def _request_drain() -> None:
 
 def _process_run_payload(payload: dict) -> None:
     """Process one run from the queue: update RUNNING, run agent, update COMPLETED/FAILED, publish events."""
+    _ensure_worker_trace_manager()
     run_id = UUID(payload["run_id"])
     project_id = UUID(payload["project_id"])
     env_str = payload["env"]
