@@ -1,6 +1,7 @@
 """Test template variable injection through NodeData context."""
 
 import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -113,6 +114,29 @@ def test_input_block_preserves_existing_ctx(get_span_mock, agent_calls_mock, inp
     assert result.ctx["existing_key"] == "existing_value"
     assert result.ctx["yes"] == "LOL"
     assert result.ctx["name"] == "John"
+
+
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.prometheus_metric.get_tracing_span")
+def test_input_block_payload_schema_as_json_string(get_span_mock, agent_calls_mock, input_block):
+    """payload_schema arriving as a JSON string (as the graph runner delivers it from a LiteralNode)
+    is correctly parsed and its defaults are applied to fields absent from the runtime payload."""
+    get_span_mock.return_value = MagicMock(project_id="test_project")
+    agent_calls_mock.labels.return_value = MagicMock()
+
+    schema = {"messages": [], "country": "France", "language": "fr"}
+    input_data = NodeData(
+        data={
+            "messages": [{"role": "user", "content": "bonjour"}],
+            "payload_schema": json.dumps(schema),
+        }
+    )
+    result = asyncio.run(input_block.run(input_data))
+
+    assert isinstance(result, NodeData)
+    assert "messages" in result.data
+    assert result.ctx.get("country") == "France"
+    assert result.ctx.get("language") == "fr"
 
 
 @patch("engine.prometheus_metric.agent_calls")
