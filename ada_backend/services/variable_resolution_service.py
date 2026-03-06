@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ada_backend.database.models import CIPHER, VariableType
 from ada_backend.repositories.variable_definitions_repository import list_org_definitions
 from ada_backend.repositories.variable_sets_repository import get_org_variable_set
 
@@ -34,8 +35,18 @@ def resolve_variables(
     for set_id in set_ids:
         org_set = get_org_variable_set(session, organization_id, set_id)
         if org_set:
-            for name, value in org_set.values.items():
-                if name in defined_names:
-                    resolved[name] = value
+            encrypted_values = org_set.encrypted_values or {}
+            for definition in variable_definitions:
+                if definition.name not in defined_names:
+                    continue
+
+                if definition.type == VariableType.SECRET:
+                    encrypted_value = encrypted_values.get(definition.name)
+                    if encrypted_value:
+                        resolved[definition.name] = CIPHER.decrypt(encrypted_value.encode()).decode()
+                    continue
+
+                if definition.name in org_set.values:
+                    resolved[definition.name] = org_set.values[definition.name]
 
     return resolved
