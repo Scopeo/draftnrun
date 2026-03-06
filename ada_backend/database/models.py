@@ -94,6 +94,7 @@ class ParameterType(StrEnum):
 class OrgSecretType(StrEnum):
     LLM_API_KEY = "llm_api_key"
     PASSWORD = "password"
+    VARIABLE = "variable"
 
 
 class ApiKeyType(StrEnum):
@@ -1446,8 +1447,30 @@ class OrganizationSecret(Base):
     key = mapped_column(String, nullable=False, index=True)
     secret_type = mapped_column(make_pg_enum(OrgSecretType), nullable=False, default=OrgSecretType.LLM_API_KEY)
     encrypted_secret = mapped_column(String, nullable=False)
+    variable_definition_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("org_variable_definitions.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    variable_set_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("org_variable_sets.id", ondelete="CASCADE"),
+        nullable=True,
+    )
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        # Unique per (definition, set); partial so rows without definition_id are unconstrained
+        sa.Index(
+            "uq_org_secret_variable",
+            "variable_definition_id",
+            "variable_set_id",
+            unique=True,
+            postgresql_nulls_not_distinct=True,
+            postgresql_where=sa.text("variable_definition_id IS NOT NULL"),
+        ),
+    )
 
     basic_parameters = relationship(
         "BasicParameter",
