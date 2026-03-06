@@ -1,9 +1,8 @@
+import json
 from uuid import UUID, uuid4
 
 from ada_backend.database.models import EnvType
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
-import json
-
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema
