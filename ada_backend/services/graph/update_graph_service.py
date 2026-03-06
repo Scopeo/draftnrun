@@ -716,7 +716,13 @@ def _validate_expression_references(session: Session, graph_runner_id: UUID, ast
 
         is_start = is_start_node(session, graph_runner_id, source_instance_uuid)
 
-        # TODO: remove this once start node output ports are supported
+        # TODO: remove this block — it's now redundant for graphs saved after DRA-1049.
+        # Before DRA-1049, Start's extra payload fields (e.g. `username`) weren't real
+        # OutputPortInstances, so `@{{start.username}}` expressions would fail the port
+        # validation below. This block bypasses that check by reading the payload_schema directly.
+        # After DRA-1049, `sync_output_port_instances_from_schema` creates an OutputPortInstance
+        # for each top-level key, so the normal validation path handles it. Safe to delete once
+        # all existing graphs have been re-saved (which re-creates their OutputPortInstances).
         if is_start:
             try:
                 component_instance_schema = get_component_instance(session, source_instance_uuid, is_start_node=True)
