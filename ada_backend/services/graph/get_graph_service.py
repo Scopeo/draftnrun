@@ -20,7 +20,7 @@ from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 from ada_backend.services.graph.graph_validation_utils import validate_graph_runner_belongs_to_project
 from ada_backend.services.graph.playground_utils import (
     classify_schema_fields,
-    extract_playground_schema_from_component,
+    extract_payload_schema_from_instance,
 )
 from ada_backend.services.parameter_synthesis_utils import filter_conflicting_parameters
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
@@ -57,7 +57,7 @@ def get_graph_service(
         component_instances_with_definitions.append(component_instance)
 
         if component_node.is_start_node and playground_input_schema is None:
-            playground_input_schema = extract_playground_schema_from_component(component_instance)
+            playground_input_schema = extract_payload_schema_from_instance(session, component_node.id)
 
         relationships += [
             rel

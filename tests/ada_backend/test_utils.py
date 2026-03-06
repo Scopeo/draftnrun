@@ -1,3 +1,4 @@
+import json
 from uuid import UUID, uuid4
 
 from ada_backend.database.models import EnvType
@@ -5,6 +6,7 @@ from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_U
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema
+from ada_backend.schemas.pipeline.port_instance_schema import FieldExpressionSchema, InputPortInstanceSchema
 from ada_backend.schemas.project_schema import ProjectCreateSchema
 from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.services.project_service import create_workflow, get_project_service
@@ -54,10 +56,16 @@ async def create_graph_with_start_node_and_ai_agent(
                 component_id=COMPONENT_UUIDS["start"],
                 component_version_id=COMPONENT_VERSION_UUIDS["start_v2"],
                 name="Start",
-                parameters=[
-                    PipelineParameterSchema(
+                parameters=[],
+                input_port_instances=[
+                    InputPortInstanceSchema(
                         name="payload_schema",
-                        value='{"messages": [{"role": "user", "content": "{{input}}"}]}',
+                        field_expression=FieldExpressionSchema(
+                            expression_json={
+                                "type": "literal",
+                                "value": json.dumps({"messages": [{"role": "user", "content": "{{input}}"}]}),
+                            }
+                        ),
                     )
                 ],
                 is_start_node=True,

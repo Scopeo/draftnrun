@@ -308,24 +308,16 @@ def _create_dummy_agent_workflow_config():
                 "is_start_node": True,
                 "component_id": "01357c0b-bc99-44ce-a435-995acc5e2544",  # input component UUID
                 "component_version_id": "7a6e2c9b-5b1b-4a9b-9f2f-9b7f0540d4b0",
-                "parameters": [
+                "parameters": [],
+                "input_port_instances": [
                     {
-                        "value": DEFAULT_PAYLOAD_SCHEMA,
                         "name": "payload_schema",
-                        "order": None,
-                        "id": "1e50db7d-87cb-4c90-9082-451c4cbf93f9",
-                        "type": "string",
-                        "nullable": False,
-                        "default": DEFAULT_PAYLOAD_SCHEMA,
-                        "ui_component": "Textarea",
-                        "ui_component_properties": {
-                            "label": "An exemple of your payload schema",
-                            "description": "Give here an example of the payload schema "
-                            "of your input for the workflow. Must be a correct json. "
-                            "The keys of this dictonary can be referenced in the next components"
-                            " as variables, for example: {{additional_info}}",
+                        "field_expression": {
+                            "expression_json": {
+                                "type": "literal",
+                                "value": json.dumps(DEFAULT_PAYLOAD_SCHEMA),
+                            }
                         },
-                        "is_advanced": False,
                     }
                 ],
                 "tool_description": {

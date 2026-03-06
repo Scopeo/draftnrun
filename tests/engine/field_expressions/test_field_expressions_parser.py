@@ -145,6 +145,21 @@ def test_parse_expression_flexible_with_dict():
     assert ast.value == "test"
 
 
+def test_parse_expression_flexible_with_plain_dict_treats_it_as_json_literal():
+    """Plain JSON objects are treated as literal JSON, not as serialized AST."""
+    raw_value = {"username": "Pablo", "enabled": True}
+    ast = parse_expression_flexible(raw_value)
+    assert isinstance(ast, LiteralNode)
+    assert ast.value == '{"username": "Pablo", "enabled": true}'
+
+
+def test_from_json_with_plain_dict_raises_error():
+    """from_json only accepts serialized AST dicts."""
+    with pytest.raises(ValueError) as exc_info:
+        from_json({"username": "Pablo"})
+    assert "serialized field expression AST" in str(exc_info.value)
+
+
 def test_parse_expression_flexible_with_list_raises_error():
     """Test that parse_expression_flexible raises error for list input."""
     with pytest.raises(FieldExpressionParseError) as exc_info:
