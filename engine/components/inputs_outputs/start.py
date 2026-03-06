@@ -39,6 +39,8 @@ class StartInputs(BaseModel):
     @field_validator("payload_schema", mode="before")
     @classmethod
     def parse_payload_schema(cls, v):
+        if not v:
+            return None
         if isinstance(v, str):
             return load_str_to_json(v)
         return v
