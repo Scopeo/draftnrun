@@ -72,6 +72,7 @@ from engine.components.tools.terminal_command_runner import TerminalCommandRunne
 from engine.components.web_search_tool_openai import WebSearchOpenAITool
 from engine.integrations.gmail.gmail_sender import GmailSender
 from engine.integrations.gmail.gmail_sender_v2 import GmailSenderV2
+from engine.integrations.outlook.outlook_sender import OutlookSender
 from engine.integrations.providers import OAuthProvider
 from engine.integrations.slack.slack_sender import SlackSender
 from engine.storage_service.local_service import SQLLocalService
@@ -551,6 +552,14 @@ def create_factory_registry() -> FactoryRegistry:
         factory=OAuthComponentFactory(
             entity_class=GmailSenderV2,
             provider_config_key=OAuthProvider.GMAIL,
+        ),
+    )
+
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["outlook_sender"],
+        factory=OAuthComponentFactory(
+            entity_class=OutlookSender,
+            provider_config_key=OAuthProvider.OUTLOOK,
         ),
     )
 
