@@ -1367,6 +1367,18 @@ class Run(Base):
     status = mapped_column(make_pg_enum(RunStatus), nullable=False, default=RunStatus.PENDING)
     trigger = mapped_column(make_pg_enum(CallType), nullable=False, default=CallType.API)
     trace_id = mapped_column(String, nullable=True, index=True)
+    webhook_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("webhooks.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    integration_trigger_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("integration_triggers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     result_id = mapped_column(String, nullable=True)
     error = mapped_column(JSONB, nullable=True)
     started_at = mapped_column(DateTime(timezone=True), nullable=True)
@@ -1375,6 +1387,8 @@ class Run(Base):
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="runs")
+    webhook = relationship("Webhook", back_populates="runs")
+    integration_trigger = relationship("IntegrationTrigger", back_populates="runs")
 
     def __str__(self):
         return f"Run(id={self.id}, project_id={self.project_id}, status={self.status})"
@@ -2095,6 +2109,7 @@ class Webhook(Base):
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     triggers = relationship("IntegrationTrigger", back_populates="webhook", cascade="all, delete-orphan")
+    runs = relationship("Run", back_populates="webhook")
 
     __table_args__ = (Index("ix_webhooks_provider_external_client_id", "provider", "external_client_id"),)
 
@@ -2126,6 +2141,7 @@ class IntegrationTrigger(Base):
 
     webhook = relationship("Webhook", back_populates="triggers")
     project = relationship("Project", backref="integration_triggers")
+    runs = relationship("Run", back_populates="integration_trigger")
 
     __table_args__ = (
         Index("ix_integration_triggers_webhook_event", "webhook_id", "events_hash"),

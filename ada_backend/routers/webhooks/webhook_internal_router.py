@@ -17,6 +17,7 @@ from ada_backend.schemas.webhook_schema import (
 )
 from ada_backend.services.agent_runner_service import run_env_agent
 from ada_backend.services.errors import EnvironmentNotFound, MissingDataSourceError, MissingIntegrationError
+from ada_backend.services.run_service import create_run, run_with_tracking
 from ada_backend.services.webhooks.webhook_service import (
     execute_webhook,
     get_webhook_triggers_service,
@@ -75,16 +76,31 @@ async def get_webhook_triggers_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-async def _run_project_background(project_id: UUID, env: EnvType, input_data: Dict[str, Any]) -> None:
+async def _run_project_background(
+    run_id: UUID,
+    project_id: UUID,
+    env: EnvType,
+    input_data: Dict[str, Any],
+) -> None:
     # TODO: add to redis queue. currently will hold all sessions open until end of runs
+    """
+    Execute workflow for an existing run (created before 202 response).
+    Updates run status RUNNING → COMPLETED/FAILED.
+    """
     with get_db_session() as session:
         try:
-            await run_env_agent(
+            await run_with_tracking(
                 session=session,
                 project_id=project_id,
-                input_data=input_data,
-                env=env,
-                call_type=CallType.API,
+                trigger=CallType.WEBHOOK,
+                runner_coro=run_env_agent(
+                    session=session,
+                    project_id=project_id,
+                    input_data=input_data,
+                    env=env,
+                    call_type=CallType.WEBHOOK,
+                ),
+                run_id=run_id,
             )
         except EnvironmentNotFound as e:
             LOGGER.error(f"Environment not found for project {project_id} env={env}: {str(e)}", exc_info=True)
@@ -102,16 +118,28 @@ async def run_project_internal(
     env: EnvType,
     background_tasks: BackgroundTasks,
     input_data: Dict[str, Any] = Body(...),
+    session: Session = Depends(get_db),
     verified_webhook_api_key: Annotated[None, Depends(verify_webhook_api_key_dependency)] = None,
 ) -> dict:
     """
     Enqueue a workflow/agent run for a project at a given environment.
-    Returns 202 immediately and executes the run as a background task.
+    Returns 202 immediately with run_id so the client can poll run status; execution runs in background.
     Internal endpoint called by the webhook worker for direct trigger events.
     Requires X-Webhook-API-Key.
     """
-    background_tasks.add_task(_run_project_background, project_id=project_id, env=env, input_data=input_data)
-    return {"status": "accepted"}
+    run = create_run(
+        session=session,
+        project_id=project_id,
+        trigger=CallType.WEBHOOK,
+    )
+    background_tasks.add_task(
+        _run_project_background,
+        run_id=run.id,
+        project_id=project_id,
+        env=env,
+        input_data=input_data,
+    )
+    return {"status": "accepted", "run_id": str(run.id)}
 
 
 @router.post(
@@ -131,12 +159,17 @@ async def run_workflow_internal(
     Deprecated: use POST /internal/webhooks/{webhook_id}/execute instead.
     """
     try:
-        return await run_env_agent(
+        return await run_with_tracking(
             session=session,
             project_id=project_id,
-            input_data=input_data,
-            env=EnvType.PRODUCTION,
-            call_type=CallType.API,
+            trigger=CallType.WEBHOOK,
+            runner_coro=run_env_agent(
+                session=session,
+                project_id=project_id,
+                input_data=input_data,
+                env=EnvType.PRODUCTION,
+                call_type=CallType.WEBHOOK,
+            ),
         )
     except EnvironmentNotFound as e:
         LOGGER.error(f"Environment not found for project {project_id}: {str(e)}", exc_info=True)

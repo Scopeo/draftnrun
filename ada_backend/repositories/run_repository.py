@@ -11,12 +11,16 @@ def create_run(
     session: Session,
     project_id: UUID,
     trigger: db.CallType = db.CallType.API,
+    webhook_id: UUID | None = None,
+    integration_trigger_id: UUID | None = None,
 ) -> db.Run:
     """Create a new run with status pending. Caller manages transaction."""
     run = db.Run(
         project_id=project_id,
         status=db.RunStatus.PENDING,
         trigger=trigger,
+        webhook_id=webhook_id,
+        integration_trigger_id=integration_trigger_id,
     )
     session.add(run)
     session.commit()

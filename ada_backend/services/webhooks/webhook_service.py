@@ -19,6 +19,7 @@ from ada_backend.schemas.webhook_schema import (
 )
 from ada_backend.services.agent_runner_service import run_env_agent
 from ada_backend.services.errors import EnvironmentNotFound, MissingDataSourceError, MissingIntegrationError
+from ada_backend.services.run_service import run_with_tracking
 from ada_backend.services.webhooks.aircall_service import get_aircall_event_id
 from ada_backend.services.webhooks.errors import (
     WebhookEventIdNotFoundError,
@@ -264,12 +265,19 @@ async def _run_trigger(
 ) -> WebhookExecuteResult:
     project_id = UUID(trigger.project_id)
     try:
-        response = await run_env_agent(
+        response = await run_with_tracking(
             session=session,
             project_id=project_id,
-            input_data=input_base,
-            env=EnvType.PRODUCTION,
-            call_type=CallType.API,
+            trigger=CallType.WEBHOOK,
+            webhook_id=UUID(trigger.webhook_id),
+            integration_trigger_id=UUID(trigger.id),
+            runner_coro=run_env_agent(
+                session=session,
+                project_id=project_id,
+                input_data=input_base,
+                env=EnvType.PRODUCTION,
+                call_type=CallType.WEBHOOK,
+            ),
         )
         return WebhookExecuteResult(
             trigger_id=trigger.id,
