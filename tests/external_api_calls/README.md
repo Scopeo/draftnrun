@@ -45,7 +45,7 @@ CAPABILITY_MATRIX = {
 
 ### Key Features
 
-1. **Multiple models per capability**: Test different model sizes/versions (e.g., Cerebras tests both `llama-3.3-70b` and `qwen-3-32b`)
+1. **Multiple models per capability**: Test different model sizes/versions (e.g., OpenAI tests multiple model variants)
 2. **Different models for different capabilities**: e.g., `pixtral-large-latest` for vision, `mistral-ocr-latest` for OCR
 3. **Empty list = not supported**: Cleaner than hardcoded N/A checks
 
@@ -91,8 +91,8 @@ uv run pytest tests/external_api_calls/ -k "google"
 # Run tests for OpenAI gpt-4o-mini
 uv run pytest tests/external_api_calls/ -k "openai/gpt-4o-mini"
 
-# Run tests for Cerebras llama model
-uv run pytest tests/external_api_calls/ -k "cerebras/llama-3.3-70b"
+# Run tests for Cerebras gpt-oss model
+uv run pytest tests/external_api_calls/ -k "cerebras/gpt-oss-120b"
 ```
 
 ## Test Parametrization
@@ -120,8 +120,8 @@ After running tests, a markdown table is generated in `external_api_calls_matrix
 
 | Capability | openai | google | cerebras | mistral | anthropic |
 |------------|--------|--------|----------|---------|-----------|
-| Text / Complete | ✅ gpt-4o-mini | ✅ gemini-2.0-flash-lite | ✅ llama-3.3-70b<br>✅ qwen-3-32b | ✅ mistral-small-latest | ✅ claude-haiku-4-5-20251001 |
-| Text / Function Call | ✅ gpt-4o-mini | ✅ gemini-2.0-flash-lite | ✅ llama-3.3-70b<br>✅ qwen-3-32b | ✅ mistral-small-latest | ✅ claude-haiku-4-5-20251001 |
+| Text / Complete | ✅ gpt-4o-mini | ✅ gemini-2.0-flash-lite | ✅ gpt-oss-120b | ✅ mistral-small-latest | ✅ claude-haiku-4-5-20251001 |
+| Text / Function Call | ✅ gpt-4o-mini | ✅ gemini-2.0-flash-lite | ✅ gpt-oss-120b | ✅ mistral-small-latest | ✅ claude-haiku-4-5-20251001 |
 | Vision / Complete | ✅ gpt-4o-mini | ✅ gemini-2.0-flash-lite | N/A | ✅ pixtral-large-latest | ✅ claude-haiku-4-5-20251001 |
 | Specialized / OCR | N/A | N/A | N/A | ✅ mistral-ocr-latest | N/A |
 
