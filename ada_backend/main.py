@@ -1,4 +1,3 @@
-import signal
 from contextlib import asynccontextmanager
 
 import sentry_sdk
@@ -77,8 +76,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler.
 
     - Ensures required Redis consumer groups exist.
-    - Starts the run queue worker thread on startup.
-    - Registers SIGTERM handler to request graceful drain on shutdown.
+    - Starts the run queue worker thread on startup and joins it on shutdown.
     """
     # Ensure Redis consumer groups exist before processing starts
     xgroup_create_if_not_exists(settings.REDIS_INGESTION_STREAM, settings.REDIS_CONSUMER_GROUP)
@@ -86,8 +84,6 @@ async def lifespan(app: FastAPI):
 
     # Start run queue worker thread and set up graceful shutdown
     worker_thread = start_run_queue_worker_thread()
-    if worker_thread is not None:
-        signal.signal(signal.SIGTERM, lambda s, f: _request_drain())
 
     try:
         yield

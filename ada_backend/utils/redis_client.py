@@ -10,6 +10,9 @@ from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
+# Module-level Redis client cache to avoid creating a new connection on every call.
+_redis_client: Optional[redis.Redis] = None
+
 
 def get_redis_client() -> Optional[redis.Redis]:
     """
@@ -18,9 +21,15 @@ def get_redis_client() -> Optional[redis.Redis]:
     Returns:
         Optional[redis.Redis]: Redis client instance or None if configuration is missing
     """
+    global _redis_client
+
     if not settings.REDIS_HOST:
         LOGGER.warning("Redis host not configured. Skipping Redis client initialization.")
         return None
+
+    # Reuse existing client if already initialized
+    if _redis_client is not None:
+        return _redis_client
 
     LOGGER.debug(f"Connecting to Redis server at {settings.REDIS_HOST}:{settings.REDIS_PORT}")
 
@@ -32,10 +41,11 @@ def get_redis_client() -> Optional[redis.Redis]:
             password=settings.REDIS_PASSWORD,
             decode_responses=True,
         )
-        # Test connection
+        # Test connection once and cache the client
         client.ping()
         LOGGER.debug("Successfully connected to Redis server")
-        return client
+        _redis_client = client
+        return _redis_client
     except Exception as e:
         LOGGER.error(f"Failed to connect to Redis: {str(e)}")
         return None
@@ -309,7 +319,7 @@ def push_run_task(
             "response_format": response_format,
         }
         json_payload = json.dumps(payload)
-        result = client.lpush(settings.REDIS_RUNS_QUEUE_NAME, json_payload)
+        result = client.rpush(settings.REDIS_RUNS_QUEUE_NAME, json_payload)
         if result:
             LOGGER.info(
                 "Pushed run %s to Redis queue %s (queue length: %s)",
