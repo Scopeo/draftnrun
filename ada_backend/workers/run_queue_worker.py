@@ -52,7 +52,7 @@ def _process_run_payload(payload: dict) -> None:
     project_id = UUID(payload["project_id"])
     env_str = payload["env"]
     input_data = payload["input_data"]
-    response_format = ResponseFormat(payload.get("response_format", "s3_key"))
+    response_format = ResponseFormat(payload.get("response_format") or "s3_key")
     trigger_str = payload.get("trigger", CallType.API.value)
 
     session: Session = SessionLocal()
