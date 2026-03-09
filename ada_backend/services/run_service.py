@@ -61,26 +61,38 @@ async def run_with_tracking(
     project_id: UUID,
     trigger: CallType,
     runner_coro: Awaitable[ChatResponse],
+    webhook_id: UUID | None = None,
+    integration_trigger_id: UUID | None = None,
+    run_id: UUID | None = None,
 ) -> ChatResponse:
     """
-    Create a run record, set it to RUNNING, execute the runner coroutine,
-    then set COMPLETED (with result) or FAILED (with error). Same pattern as cron's _execute_cron_job.
+    Create a run record (or use existing run_id), set it to RUNNING, execute the runner coroutine,
+    then set COMPLETED (with result) or FAILED (with error).
+    When run_id is provided (e.g. after returning 202), the run row must already exist; no new run is created.
     """
-    run = create_run(session, project_id=project_id, trigger=trigger)
+    if run_id is None:
+        run = create_run(
+            session,
+            project_id=project_id,
+            trigger=trigger,
+            webhook_id=webhook_id,
+            integration_trigger_id=integration_trigger_id,
+        )
+        run_id = run.id
     now = datetime.now(timezone.utc)
     update_run_status(
         session,
-        run_id=run.id,
+        run_id=run_id,
         project_id=project_id,
         status=RunStatus.RUNNING,
         started_at=now,
     )
     try:
         result = await runner_coro
-        result_id = _upload_result_to_s3(result, project_id=project_id, run_id=run.id)
+        result_id = _upload_result_to_s3(result, project_id=project_id, run_id=run_id)
         update_run_status(
             session,
-            run_id=run.id,
+            run_id=run_id,
             project_id=project_id,
             status=RunStatus.COMPLETED,
             trace_id=result.trace_id,
@@ -91,7 +103,7 @@ async def run_with_tracking(
     except Exception as e:
         update_run_status(
             session,
-            run_id=run.id,
+            run_id=run_id,
             project_id=project_id,
             status=RunStatus.FAILED,
             error={"message": str(e), "type": type(e).__name__},
@@ -104,11 +116,19 @@ def create_run(
     session: Session,
     project_id: UUID,
     trigger: CallType = CallType.API,
+    webhook_id: UUID | None = None,
+    integration_trigger_id: UUID | None = None,
 ) -> RunResponseSchema:
     project = get_project(session, project_id=project_id)
     if not project:
         raise ProjectNotFound(project_id)
-    run = run_repository.create_run(session, project_id=project_id, trigger=trigger)
+    run = run_repository.create_run(
+        session,
+        project_id=project_id,
+        trigger=trigger,
+        webhook_id=webhook_id,
+        integration_trigger_id=integration_trigger_id,
+    )
     return RunResponseSchema.model_validate(run, from_attributes=True)
 
 
