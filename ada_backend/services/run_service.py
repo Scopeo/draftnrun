@@ -165,6 +165,10 @@ async def stream_run_events(
         try:
             data = await asyncio.wait_for(queue.get(), timeout=ping_timeout_seconds)
         except asyncio.TimeoutError:
+            final_state = get_run_final_state_event(session, run_id)
+            if final_state is not None:
+                yield json.dumps(final_state)
+                return
             yield json.dumps({"type": "ping"})
             continue
         yield data if isinstance(data, str) else json.dumps(data)

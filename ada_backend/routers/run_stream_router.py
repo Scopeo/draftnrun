@@ -21,22 +21,12 @@ from ada_backend.routers.auth_router import (
     get_user_from_supabase_token,
     user_has_access_to_project_dependency,
 )
-from ada_backend.services.api_key_service import verify_api_key, verify_project_access
-from ada_backend.services.errors import ApiKeyAccessDenied
 from ada_backend.services.run_service import stream_run_events
 from ada_backend.utils.redis_client import get_redis_client
 
 LOGGER = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ws", tags=["Run stream"])
-
-
-def _get_api_key_from_websocket(websocket: WebSocket) -> str | None:
-    """Extract api_key from WebSocket query string."""
-    query_string = websocket.scope.get("query_string", b"").decode()
-    params = urllib.parse.parse_qs(query_string)
-    keys = params.get("api_key") or params.get("X-API-Key") or []
-    return keys[0] if keys else None
 
 
 def _get_bearer_token_from_websocket(websocket: WebSocket) -> str | None:
@@ -60,20 +50,14 @@ async def _verify_ws_auth(
     session: Session,
 ) -> UUID | None:
     """
-    Verify API key or JWT (Bearer) and run access. Returns run's project_id on success, None on failure.
+    Verify JWT (Bearer) and run access. Returns run's project_id on success, None on failure.
     Closes the WebSocket with an appropriate code on failure.
     """
-    api_key = _get_api_key_from_websocket(websocket)
     bearer_token = _get_bearer_token_from_websocket(websocket)
-    if api_key and bearer_token:
-        await websocket.close(
-            code=4400, reason="Provide either api_key (query) or Authorization (JWT), not both"
-        )
-        return None
-    if not api_key and not bearer_token:
+    if not bearer_token:
         await websocket.close(
             code=4401,
-            reason="Missing authentication: provide api_key (query) or Authorization (JWT)",
+            reason="Missing authentication: provide Authorization (JWT) header or ?token= query parameter",
         )
         return None
 
@@ -81,21 +65,6 @@ async def _verify_ws_auth(
     if not run:
         await websocket.close(code=4404, reason="Run not found")
         return None
-
-    if api_key:
-        cleaned = api_key.replace("\\n", "\n").strip('"')
-        try:
-            verified = verify_api_key(session, private_key=cleaned)
-        except ValueError as e:
-            LOGGER.debug("WebSocket API key verification failed for run %s: %s", run_id, e)
-            await websocket.close(code=4401, reason="Invalid API key")
-            return None
-        try:
-            verify_project_access(session, verified, run.project_id)
-        except ApiKeyAccessDenied:
-            await websocket.close(code=4403, reason="Forbidden")
-            return None
-        return run.project_id
 
     try:
         creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=bearer_token)
@@ -170,7 +139,7 @@ async def websocket_run_stream(
 ):
     """
     Stream run events over WebSocket.
-    Auth: api_key in query, or JWT (Authorization: Bearer header or ?token= for playground).
+    Auth: JWT (Authorization: Bearer header or ?token= for playground).
     Sends JSON messages: node.started, node.completed, run.completed, run.failed.
     """
     auth = await _verify_ws_auth(websocket, run_id, session)
