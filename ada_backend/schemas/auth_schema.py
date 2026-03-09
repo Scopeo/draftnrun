@@ -60,10 +60,3 @@ class VerifiedApiKey(BaseModel):
 class AuthenticatedEntity(BaseModel):
     user_id: Optional[UUID] = None
     api_key_id: Optional[UUID] = None
-
-
-class ProjectAuth(BaseModel):
-    """Either JWT (user) or API key auth for project-scoped endpoints. Exactly one of user or verified_api_key is set."""
-
-    user: Optional[SupabaseUser] = None
-    verified_api_key: Optional[VerifiedApiKey] = None

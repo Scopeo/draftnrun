@@ -153,10 +153,13 @@ def _worker_loop() -> None:
             except json.JSONDecodeError as e:
                 LOGGER.error("Invalid JSON from run queue: %s", e)
                 continue
-            for key in ("run_id", "project_id", "env", "input_data"):
-                if key not in payload:
-                    LOGGER.error("Run queue payload missing %s", key)
-                    continue
+
+            required_keys = ("run_id", "project_id", "env", "input_data")
+            missing_keys = [key for key in required_keys if key not in payload]
+            if missing_keys:
+                LOGGER.error("Run queue payload missing keys: %s", ", ".join(missing_keys))
+                continue
+
             _process_run_payload(payload)
         except Exception as e:
             LOGGER.exception("Run queue worker error: %s", e)
