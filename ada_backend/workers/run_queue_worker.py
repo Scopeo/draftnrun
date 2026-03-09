@@ -53,15 +53,22 @@ def _process_run_payload(payload: dict) -> None:
     env_str = payload["env"]
     input_data = payload["input_data"]
     response_format = ResponseFormat(payload.get("response_format", "s3_key"))
-
-    try:
-        env = EnvType(env_str)
-    except ValueError:
-        LOGGER.warning("Invalid env in run %s: %s", run_id, env_str)
-        return
+    trigger_str = payload.get("trigger", CallType.API.value)
 
     session: Session = SessionLocal()
     try:
+        try:
+            env = EnvType(env_str)
+        except ValueError as e:
+            LOGGER.warning("Invalid env in run %s: %s", run_id, env_str)
+            raise e
+
+        try:
+            call_type = CallType(trigger_str)
+        except ValueError:
+            LOGGER.warning("Invalid trigger in run %s: %s, defaulting to API", run_id, trigger_str)
+            call_type = CallType.API
+
         run = run_repository.get_run(session, run_id)
         if not run:
             LOGGER.warning("Run %s not found, skipping", run_id)
@@ -89,7 +96,7 @@ def _process_run_payload(payload: dict) -> None:
                 project_id=project_id,
                 env=env,
                 input_data=input_data,
-                call_type=CallType.API,
+                call_type=call_type,
                 response_format=response_format,
                 event_callback=event_callback,
             )
