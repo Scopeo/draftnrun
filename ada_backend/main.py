@@ -49,8 +49,8 @@ from ada_backend.routers.webhooks.webhook_internal_router import router as webho
 from ada_backend.routers.webhooks.webhook_trigger_router import router as webhook_trigger_router
 from ada_backend.routers.widget_router import router as widget_router
 from ada_backend.services.rate_limit_service import limiter
-from ada_backend.workers.run_queue_worker import _request_drain, start_run_queue_worker_thread
 from ada_backend.utils.redis_client import xgroup_create_if_not_exists
+from ada_backend.workers.run_queue_worker import _request_drain, start_run_queue_worker_thread
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from logger import setup_logging
@@ -74,22 +74,27 @@ if settings.SENTRY_DSN:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Application lifespan handler.
+
+    - Ensures required Redis consumer groups exist.
+    - Starts the run queue worker thread on startup.
+    - Registers SIGTERM handler to request graceful drain on shutdown.
+    """
+    # Ensure Redis consumer groups exist before processing starts
     xgroup_create_if_not_exists(settings.REDIS_INGESTION_STREAM, settings.REDIS_CONSUMER_GROUP)
     xgroup_create_if_not_exists(settings.REDIS_WEBHOOK_STREAM, settings.REDIS_CONSUMER_GROUP)
-    yield
 
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Start run queue worker thread and register SIGTERM for drain on shutdown."""
+    # Start run queue worker thread and set up graceful shutdown
     worker_thread = start_run_queue_worker_thread()
     if worker_thread is not None:
         signal.signal(signal.SIGTERM, lambda s, f: _request_drain())
-    yield
-    _request_drain()
-    if worker_thread is not None:
-        worker_thread.join(timeout=10)
+
+    try:
+        yield
+    finally:
+        _request_drain()
+        if worker_thread is not None:
+            worker_thread.join(timeout=10)
 
 
 app = FastAPI(
@@ -97,7 +102,6 @@ app = FastAPI(
     lifespan=lifespan,
     description="API for managing and running LLM agents",
     version="0.1.0",
-    lifespan=lifespan,
     openapi_tags=[
         {
             "name": "Auth",
