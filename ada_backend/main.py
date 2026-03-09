@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -55,6 +56,17 @@ from settings import settings
 setup_logging()
 
 set_trace_manager(tm=TraceManager(project_name="ada-backend"))
+
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.SENTRY_ENVIRONMENT,
+        send_default_pii=True,
+        traces_sample_rate=1.0,
+        enable_logs=True,
+        profile_session_sample_rate=1.0,
+        profile_lifecycle="trace",
+    )
 
 
 @asynccontextmanager
