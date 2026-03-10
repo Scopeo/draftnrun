@@ -1,7 +1,7 @@
 """add cron to CallType
 
 Revision ID: 4071a252013a
-Revises: b81c2e3a4d5e
+Revises: c4d5e6f7a8b9
 Create Date: 2026-03-10 11:03:38.203036
 
 """
@@ -12,7 +12,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "4071a252013a"
-down_revision: Union[str, None] = "b81c2e3a4d5e"
+down_revision: Union[str, None] = "c4d5e6f7a8b9"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
