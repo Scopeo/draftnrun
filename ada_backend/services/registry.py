@@ -320,6 +320,7 @@ def create_factory_registry() -> FactoryRegistry:
             entity_class=Categorizer,
             parameter_processors=[
                 completion_service_processor,
+                llm_capability_resolver_processor,
             ],
         ),
     )
