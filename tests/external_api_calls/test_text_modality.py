@@ -17,12 +17,15 @@ from .test_helpers import (
 
 class TestTextModality:
     class TestComplete:
+        @pytest.mark.parametrize("stream", [False, True])
         @pytest.mark.parametrize(
             "provider,model",
             get_provider_model_pairs("text", "complete"),
             ids=lambda x: f"{x[0]}/{x[1]}" if isinstance(x, tuple) else str(x),
         )
-        def test_basic_completion(self, provider: str, model: str) -> None:
+        def test_basic_completion(self, provider: str, model: str, stream: bool) -> None:
+            if stream and provider != "openai":
+                pytest.skip("Streaming only implemented for OpenAI")
             skip_if_missing_settings(*get_provider_required_settings(provider))
             service = CompletionService(trace_manager=MagicMock(), provider=provider, model_name=model)
             prompt = "Say 'ok' and nothing else."
@@ -31,35 +34,43 @@ class TestTextModality:
                 messages = prompt
             else:
                 messages = [{"role": "user", "content": prompt}]
-            response = service.complete(messages)
+            response = service.complete(messages, stream=stream)
             assert isinstance(response, str)
             assert response.strip() != ""
 
+        @pytest.mark.parametrize("stream", [False, True])
         @pytest.mark.parametrize(
             "provider,model",
             get_provider_model_pairs("text", "complete_structured_pydantic"),
             ids=lambda x: f"{x[0]}/{x[1]}" if isinstance(x, tuple) else str(x),
         )
-        def test_structured_output_pydantic(self, provider: str, model: str) -> None:
+        def test_structured_output_pydantic(self, provider: str, model: str, stream: bool) -> None:
+            if stream and provider != "openai":
+                pytest.skip("Streaming only implemented for OpenAI")
             skip_if_missing_settings(*get_provider_required_settings(provider))
             service = CompletionService(trace_manager=MagicMock(), provider=provider, model_name=model)
             response = service.constrained_complete_with_pydantic(
-                "Return JSON with response='ok' and is_successful=true.", ConstrainedResponse
+                "Return JSON with response='ok' and is_successful=true.", ConstrainedResponse, stream=stream
             )
             assert isinstance(response, ConstrainedResponse)
             assert isinstance(response.response, str)
             assert response.response.strip() != ""
             assert response.is_successful is True
 
+        @pytest.mark.parametrize("stream", [False, True])
         @pytest.mark.parametrize(
             "provider,model",
             get_provider_model_pairs("text", "complete_structured_json_schema"),
             ids=lambda x: f"{x[0]}/{x[1]}" if isinstance(x, tuple) else str(x),
         )
-        def test_structured_output_json_schema(self, provider: str, model: str) -> None:
+        def test_structured_output_json_schema(self, provider: str, model: str, stream: bool) -> None:
+            if stream and provider != "openai":
+                pytest.skip("Streaming only implemented for OpenAI")
             skip_if_missing_settings(*get_provider_required_settings(provider))
             service = CompletionService(trace_manager=MagicMock(), provider=provider, model_name=model)
-            raw = service.constrained_complete_with_json_schema("Return JSON with key 'text'.", json_schema_str())
+            raw = service.constrained_complete_with_json_schema(
+                "Return JSON with key 'text'.", json_schema_str(), stream=stream
+            )
             assert isinstance(raw, str)
             assert raw.strip() != ""
             parsed = parse_possibly_double_encoded_json(raw)
@@ -67,28 +78,34 @@ class TestTextModality:
             assert "text" in parsed
 
     class TestFunctionCall:
+        @pytest.mark.parametrize("stream", [False, True])
         @pytest.mark.parametrize(
             "provider,model",
             get_provider_model_pairs("text", "function_call"),
             ids=lambda x: f"{x[0]}/{x[1]}" if isinstance(x, tuple) else str(x),
         )
-        def test_basic_function_call(self, provider: str, model: str) -> None:
+        def test_basic_function_call(self, provider: str, model: str, stream: bool) -> None:
+            if stream and provider != "openai":
+                pytest.skip("Streaming only implemented for OpenAI")
             skip_if_missing_settings(*get_provider_required_settings(provider))
             service = CompletionService(trace_manager=MagicMock(), provider=provider, model_name=model)
             tool = default_tool_description()
             messages = [{"role": "user", "content": "Call the tool extract_answer with answer='ok' and ok=true."}]
-            response = service.function_call(messages=messages, tools=[tool], tool_choice="required")
+            response = service.function_call(messages=messages, tools=[tool], tool_choice="required", stream=stream)
             assert response is not None
             assert len(response.choices) == 1
             assert response.choices[0].message is not None
 
         @pytest.mark.asyncio
+        @pytest.mark.parametrize("stream", [False, True])
         @pytest.mark.parametrize(
             "provider,model",
             get_provider_model_pairs("text", "function_call_structured"),
             ids=lambda x: f"{x[0]}/{x[1]}" if isinstance(x, tuple) else str(x),
         )
-        async def test_function_call_with_structured_output(self, provider: str, model: str) -> None:
+        async def test_function_call_with_structured_output(self, provider: str, model: str, stream: bool) -> None:
+            if stream and provider != "openai":
+                pytest.skip("Streaming only implemented for OpenAI")
             skip_if_missing_settings(*get_provider_required_settings(provider))
             service = CompletionService(trace_manager=MagicMock(), provider=provider, model_name=model)
             structured_tool = default_tool_description()
@@ -98,6 +115,7 @@ class TestTextModality:
                 tools=[],
                 tool_choice="required",
                 structured_output_tool=structured_tool,
+                stream=stream,
             )
             content = response.choices[0].message.content
             assert isinstance(content, str) and content.strip(), (
