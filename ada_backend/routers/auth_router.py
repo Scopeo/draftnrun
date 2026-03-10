@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 from supabase import Client, create_client
@@ -463,14 +463,16 @@ verify_scheduler_api_key_dependency = _create_api_key_dependency(
 )
 
 
-async def verify_webhook_or_scheduler_api_key_dependency(
-    webhook_api_key: str | None = Header(None, alias="X-Webhook-API-Key"),
-    scheduler_api_key: str | None = Header(None, alias="X-Scheduler-API-Key"),
-) -> str:
+async def verify_webhook_or_scheduler_api_key_dependency(request: Request) -> str:
     """
     Accept either a webhook or a scheduler API key and
     return which one was successfully validated ("webhook" or "scheduler").
+
+    Reads headers directly from the Request to avoid FastAPI/Pydantic v2
+    treating optional Header() parameters as required when only one is provided.
     """
+    webhook_api_key = request.headers.get("X-Webhook-API-Key")
+    scheduler_api_key = request.headers.get("X-Scheduler-API-Key")
     if webhook_api_key and settings.WEBHOOK_API_KEY_HASHED:
         if verify_ingestion_api_key(private_key=webhook_api_key) == settings.WEBHOOK_API_KEY_HASHED:
             return "webhook"

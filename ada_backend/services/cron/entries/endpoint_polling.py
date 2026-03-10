@@ -16,6 +16,7 @@ from pydantic import Field, HttpUrl
 
 from ada_backend.repositories.tracker_history_repository import seed_initial_endpoint_history
 from ada_backend.services.cron.core import BaseExecutionPayload, BaseUserPayload, CronEntrySpec, get_cron_context
+from ada_backend.services.cron.endpoint_polling_service import _extract_nested_path
 from ada_backend.services.cron.entries.agent_inference import AgentInferenceExecutionPayload, AgentInferenceUserPayload
 from ada_backend.services.cron.entries.agent_inference import (
     validate_execution as validate_execution_agent_inference,
@@ -317,30 +318,6 @@ spec = CronEntrySpec(
 
 
 # ---------------------------------------------------------------------------
-# Response extraction helpers (kept for validate_registration usage)
-# ---------------------------------------------------------------------------
-
-
-def _extract_nested_path(data: Any, path: str) -> Any:
-    """
-    Extract value from nested path in data structure.
-
-    Supports paths like:
-    - "data" -> data["data"]
-    - "data.items" -> data["data"]["items"]
-    - Works with dict and object attributes
-    """
-    current = data
-    for key in path.split("."):
-        if key:
-            if isinstance(current, dict):
-                current = current.get(key)
-            elif hasattr(current, key):
-                current = getattr(current, key)
-            else:
-                return None
-    return current
-
 
 def _extract_field_value(item: Any, field_name: str) -> Any:
     """
