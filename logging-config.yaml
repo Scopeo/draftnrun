@@ -48,3 +48,11 @@ loggers:
         level: INFO
         handlers: [console, file]
         propagate: no
+    apscheduler.executors:
+        level: WARNING
+        handlers: [console, file]
+        propagate: no
+    apscheduler.scheduler:
+        level: WARNING
+        handlers: [console, file]
+        propagate: no

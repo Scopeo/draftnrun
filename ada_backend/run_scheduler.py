@@ -4,6 +4,10 @@ import signal
 import sys
 from typing import Optional
 
+import sentry_sdk
+from sentry_sdk.crons import capture_checkin
+from sentry_sdk.crons.consts import MonitorStatus
+
 from ada_backend.scheduler.service import (
     initialize_scheduler_trace_manager,
     start_scheduler,
@@ -11,10 +15,13 @@ from ada_backend.scheduler.service import (
 )
 from engine.trace.trace_context import set_trace_manager
 from logger import setup_logging
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
 SHUTDOWN_EVENT: Optional[asyncio.Event] = None
+
+SENTRY_MONITOR_SLUG = "run-scheduler"
 
 
 def signal_handler(signum, frame):
@@ -52,6 +59,17 @@ async def run_scheduler():
 
     setup_logging(process_name="apscheduler")
 
+    if settings.SENTRY_DSN:
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            environment=settings.SENTRY_ENVIRONMENT,
+            send_default_pii=True,
+            traces_sample_rate=1.0,
+            enable_logs=True,
+            profile_session_sample_rate=1.0,
+            profile_lifecycle="trace",
+        )
+
     # Initialize the shared TraceManager singleton early
     # This ensures we only create one TraceManager instance for all scheduler jobs
     trace_manager = initialize_scheduler_trace_manager()
@@ -64,6 +82,22 @@ async def run_scheduler():
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
+    _scheduler_failed = False
+    check_in_id = capture_checkin(
+        monitor_slug=SENTRY_MONITOR_SLUG,
+        status=MonitorStatus.IN_PROGRESS,
+        monitor_config={
+            # Continuous deploys on weekdays: expect a restart at least every 12h.
+            # If no check-in arrives within that window, Sentry flags the monitor as missed.
+            "schedule": {"type": "interval", "value": 12, "unit": "hour"},
+            "timezone": "UTC",
+            "checkin_margin": 60,  # minutes grace period before flagging as missed
+            "max_runtime": 1440,   # minutes — process runs all day
+            "failure_issue_threshold": 1,
+            "recovery_threshold": 1,
+        },
+    )
+
     try:
         start_scheduler()
         LOGGER.info("APScheduler started successfully. Waiting for shutdown signal...")
@@ -71,6 +105,7 @@ async def run_scheduler():
         LOGGER.info("Shutdown signal received")
 
     except Exception as e:
+        _scheduler_failed = True
         error_msg = f"Failed to start scheduler: {e}"
         LOGGER.error(error_msg, exc_info=True)
         raise
@@ -80,9 +115,16 @@ async def run_scheduler():
             stop_scheduler()  # This waits for running jobs to complete (wait=True)
             LOGGER.info("APScheduler shut down successfully")
         except Exception as e:
+            _scheduler_failed = True
             error_msg = f"Error during scheduler shutdown: {e}"
             LOGGER.error(error_msg, exc_info=True)
             raise
+        finally:
+            capture_checkin(
+                monitor_slug=SENTRY_MONITOR_SLUG,
+                check_in_id=check_in_id,
+                status=MonitorStatus.ERROR if _scheduler_failed else MonitorStatus.OK,
+            )
 
 
 def main():
