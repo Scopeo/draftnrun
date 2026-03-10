@@ -1,10 +1,13 @@
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 from uuid import UUID
 
 from openai.types.chat import ChatCompletionMessageToolCall
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from ada_backend.database.models import PortSetupMode
 
 
 class ExecutionStrategy(StrEnum):
@@ -167,3 +170,16 @@ class ToolDescription(BaseModel):
 class ComponentAttributes(BaseModel):
     component_instance_name: str
     component_instance_id: Optional[UUID] = None
+
+
+class ToolPortConfigurationSchema(BaseModel):
+    """LLM tool-schema metadata for one input port (mirrors PortConfigurationSchema)."""
+
+    id: Optional[UUID] = None
+    input_port_instance_id: Optional[UUID] = None
+    setup_mode: "PortSetupMode"  # Imported from ada_backend.database.models
+    ai_name_override: Optional[str] = None
+    ai_description_override: Optional[str] = None
+    is_required_override: Optional[bool] = None
+    custom_parameter_type: Optional[str] = None
+    json_schema_override: Optional[dict] = None
