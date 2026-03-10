@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType, EnvType, ProjectType, ResponseFormat, RunStatus
 from ada_backend.database.setup_db import get_db
-from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
+from ada_backend.repositories.env_repository import get_project_env_binding
 from ada_backend.routers.auth_router import (
     UserRights,
     VerifiedApiKey,
@@ -352,11 +352,16 @@ async def chat(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        # Get the environment for this graph runner
-        project_env_binding = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
+        # Get the environment for this graph runner, scoped to the requested project.
+        project_env_binding = get_project_env_binding(session, project_id, graph_runner_id)
         if not project_env_binding:
-            LOGGER.error(f"Graph runner {graph_runner_id} is not bound to any project for project {project_id}")
-            raise HTTPException(status_code=404, detail=f"Graph runner {graph_runner_id} is not bound to any project")
+            LOGGER.error(
+                "Graph runner %s is not bound to project %s", graph_runner_id, project_id
+            )
+            raise HTTPException(
+                status_code=404,
+                detail=f"Graph runner {graph_runner_id} is not bound to project {project_id}",
+            )
         environment = project_env_binding.environment
         LOGGER.info(f"Determined environment {environment} for graph_runner_id {graph_runner_id}")
         return await run_with_tracking(
@@ -467,11 +472,11 @@ async def chat_async(
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    project_env_binding = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
+    project_env_binding = get_project_env_binding(session, project_id, graph_runner_id)
     if not project_env_binding:
         raise HTTPException(
             status_code=404,
-            detail=f"Graph runner {graph_runner_id} is not bound to any project",
+            detail=f"Graph runner {graph_runner_id} is not bound to project {project_id}",
         )
     environment = project_env_binding.environment
     try:

@@ -159,7 +159,7 @@ async def websocket_run_stream(
     thread = threading.Thread(
         target=_redis_subscriber_loop,
         args=(run_id, queue, loop, stop_event),
-        daemon=True,
+        daemon=False,
     )
     thread.start()
 

@@ -129,9 +129,10 @@ def get_run_final_state_event(session: Session, run_id: UUID) -> Optional[Dict[s
     run = run_repository.get_run(session, run_id)
     if not run:
         return None
-    # Expire cached instance so we read fresh status from DB (avoids stale identity map
-    # when the same session was used earlier to load this run, e.g. in _verify_ws_auth).
-    session.expire(run)
+    try:
+        session.refresh(run)
+    except Exception:
+        session.expire(run)
     status = run.status if isinstance(run.status, RunStatus) else RunStatus(str(run.status))
     if status == RunStatus.COMPLETED:
         return {
@@ -152,7 +153,7 @@ async def stream_run_events(
     run_id: UUID,
     queue: asyncio.Queue,
     *,
-    ping_timeout_seconds: float = 300.0,
+    ping_timeout_seconds: int = 60,
 ) -> AsyncIterator[str]:
     """
     Async generator that yields JSON messages to send over the run WebSocket stream.
