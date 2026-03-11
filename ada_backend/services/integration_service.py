@@ -6,7 +6,16 @@ from cachetools import TTLCache
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
+from ada_backend.database.models import VariableType
 from ada_backend.repositories import integration_repository, oauth_connection_repository
+from ada_backend.repositories.variable_definitions_repository import (
+    delete_oauth_definitions_for_connection,
+    find_oauth_definition_by_connection_id,
+    upsert_org_definition,
+)
+from ada_backend.repositories.variable_sets_repository import (
+    delete_oauth_set_by_connection_id,
+)
 from ada_backend.schemas.integration_schema import CreateProjectIntegrationSchema, IntegrationSecretResponse
 from ada_backend.schemas.oauth_schemas import (
     OAuthAuthorizationResult,
@@ -101,7 +110,7 @@ async def confirm_oauth_connection(
     provider_config_key: str | OAuthProvider,
     created_by_user_id: UUID | None = None,
     name: str = "",
-) -> db.OAuthConnection:
+) -> tuple[db.OAuthConnection, UUID | None]:
     """
     Confirm OAuth connection after user completes flow.
 
@@ -123,7 +132,8 @@ async def confirm_oauth_connection(
         name: Optional friendly name for the connection (auto-generated if empty)
 
     Returns:
-        OAuthConnection record (existing or newly created)
+        Tuple of (OAuthConnection, definition_id) where definition_id is the UUID
+        of the auto-created variable definition
 
     Raises:
         NangoConnectionNotFoundError: If connection not found in Nango (OAuth flow incomplete)
@@ -150,7 +160,8 @@ async def confirm_oauth_connection(
     )
 
     if existing_connection:
-        return existing_connection
+        existing_def = find_oauth_definition_by_connection_id(session, organization_id, existing_connection.id)
+        return existing_connection, (existing_def.id if existing_def else None)
 
     provider_key = str(provider_config_key)
     if not name or not name.strip():
@@ -172,8 +183,25 @@ async def confirm_oauth_connection(
         created_by_user_id=created_by_user_id,
     )
 
-    LOGGER.info(f"Created new OAuth connection {new_connection.id} for org {organization_id}")
-    return new_connection
+    # Auto-create oauth variable definition for this connection
+    definition = upsert_org_definition(
+        session,
+        organization_id,
+        name,
+        type=VariableType.OAUTH,
+        default_value=str(new_connection.id),
+        description=f"OAuth connection for {provider_key}",
+        variable_metadata={"provider_config_key": provider_key, "oauth_connection_id": str(new_connection.id)},
+        editable=False,
+        required=False,
+        display_order=0,
+    )
+    session.commit()
+
+    LOGGER.info(
+        f"Created new OAuth connection {new_connection.id} with definition {definition.id} for org {organization_id}"
+    )
+    return new_connection, definition.id
 
 
 async def check_connection_status(
@@ -285,6 +313,10 @@ async def revoke_oauth_connection(
     except NangoClientError as e:
         LOGGER.warning(f"Failed to delete Nango connection (may already be deleted): {e}")
 
+    # Delete the associated oauth variable set and oauth definition before soft-deleting the connection
+    delete_oauth_set_by_connection_id(session, organization_id, connection_id)
+    delete_oauth_definitions_for_connection(session, organization_id, connection_id)
+
     oauth_connection_repository.soft_delete_oauth_connection(session, connection_id)
 
 
@@ -362,7 +394,7 @@ async def get_oauth_access_token(
     Args:
         session: Database session
         oauth_connection_id: ID of the OAuthConnection
-        provider_config_key: Nango provider config key (e.g., "slack", "google")
+        provider_config_key: Nango provider config key (e.g., "slack", "google-mail")
 
     Returns:
         Valid access token from Nango

@@ -241,6 +241,7 @@ class VariableType(StrEnum):
     BOOLEAN = "boolean"
     SECRET = "secret"
     SOURCE = "source"
+    VARIABLE = "variable"
 
 
 class SelectOption(BaseModel):
@@ -2204,11 +2205,16 @@ class OrgVariableSet(Base):
         UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
     )
     set_id = mapped_column(String, nullable=False)
+    variable_type = mapped_column(make_pg_enum(VariableType), nullable=False, server_default=VariableType.VARIABLE)
     values = mapped_column(JSONB, nullable=False, default=dict)
+    oauth_connection_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("oauth_connections.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     project = relationship("Project", backref="variable_sets")
+    oauth_connection = relationship("OAuthConnection")
 
     __table_args__ = (
         UniqueConstraint("organization_id", "set_id", name="uq_org_variable_set"),
@@ -2219,4 +2225,5 @@ class OrgVariableSet(Base):
             unique=True,
             postgresql_where=sa.text("project_id IS NOT NULL"),
         ),
+        Index("ix_org_variable_sets_org_variable_type", "organization_id", "variable_type"),
     )

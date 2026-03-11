@@ -132,7 +132,7 @@ async def create_oauth_connection(
             detail="pending_connection_id is required. Obtain it from the authorize endpoint.",
         )
     try:
-        connection = await integration_service.confirm_oauth_connection(
+        connection, definition_id = await integration_service.confirm_oauth_connection(
             session=session,
             organization_id=organization_id,
             pending_connection_id=request.pending_connection_id,
@@ -145,6 +145,7 @@ async def create_oauth_connection(
             connection_id=connection.id,
             provider_config_key=connection.provider_config_key,
             name=connection.name,
+            definition_id=definition_id,
         )
     except NangoConnectionNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
