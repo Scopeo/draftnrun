@@ -27,6 +27,7 @@ from engine.components.tools.hubspot_mcp.schema import (
     TaskProperties,
 )
 from engine.components.types import ToolDescription
+from engine.llm_services.utils import resolve_schema_refs
 
 mcp = FastMCP("hubspot-crm")
 _client: HubSpotClient  # assigned in __main__ before mcp.run()
@@ -245,30 +246,12 @@ async def crm_list_association_types(
 
 
 def get_tool_descriptions(allowed: set[str]) -> list[ToolDescription]:
-    # TODO: switch to mcp.get_tools() (public async API) once OAuthComponentFactory
-    # is made async — at that point from_access_token can be async too and calling
-    # an async method here becomes trivial.
-    def _resolve_local_refs(value: Any, defs: dict[str, Any]) -> Any:
-        if isinstance(value, dict):
-            ref = value.get("$ref")
-            if isinstance(ref, str) and ref.startswith("#/$defs/"):
-                key = ref.removeprefix("#/$defs/")
-                target = defs.get(key, {})
-                # Merge ref target first, then explicit sibling keys override.
-                merged = {**_resolve_local_refs(target, defs), **{k: v for k, v in value.items() if k != "$ref"}}
-                return _resolve_local_refs(merged, defs)
-            return {k: _resolve_local_refs(v, defs) for k, v in value.items()}
-        if isinstance(value, list):
-            return [_resolve_local_refs(item, defs) for item in value]
-        return value
-
     result = []
     for name, tool in mcp._tool_manager._tools.items():
         if name not in allowed:
             continue
         params = tool.parameters or {}
-        defs = params.get("$defs", {}) if isinstance(params, dict) else {}
-        resolved_params = _resolve_local_refs(params, defs)
+        resolved_params = resolve_schema_refs(params) if isinstance(params, dict) else params
         result.append(
             ToolDescription(
                 name=name,

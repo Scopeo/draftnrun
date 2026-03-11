@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 import time
@@ -329,3 +330,45 @@ async def ensure_structured_output_response(response, structured_output_tool, co
             except Exception as e:
                 raise ValueError(f"Error parsing structured output tool response with error {e}")
     return response
+
+
+def _resolve_refs(value: Any, defs: dict[str, Any], defs_lower: dict[str, str]) -> Any:
+    """Recursively inline ``$ref`` pointers that target ``#/$defs/…``.
+
+    Falls back to case-insensitive lookup, then to an empty dict when a
+    definition is missing, so the result is always free of ``$ref``/``$defs``.
+    """
+    if isinstance(value, dict):
+        ref = value.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/$defs/"):
+            key = ref.removeprefix("#/$defs/")
+            actual_key = key if key in defs else defs_lower.get(key.lower())
+            if actual_key is None:
+                LOGGER.warning("Unresolvable $ref %s – dropping reference", ref)
+            target = defs[actual_key] if actual_key else {}
+            siblings = {k: v for k, v in value.items() if k != "$ref"}
+            merged = {**_resolve_refs(target, defs, defs_lower), **siblings}
+            return _resolve_refs(merged, defs, defs_lower)
+        return {k: _resolve_refs(v, defs, defs_lower) for k, v in value.items() if k != "$defs"}
+    if isinstance(value, list):
+        return [_resolve_refs(item, defs, defs_lower) for item in value]
+    return value
+
+
+def resolve_schema_refs(schema: dict) -> dict:
+    schema = copy.deepcopy(schema)
+    defs = schema.get("$defs", {})
+    defs_lower = {k.lower(): k for k in defs}
+    return _resolve_refs(schema, defs, defs_lower)
+
+
+def resolve_tool_refs(tools: list[dict]) -> list[dict]:
+    """Resolve ``$defs``/``$ref`` inside every tool's ``parameters`` schema."""
+    resolved = []
+    for tool in tools:
+        tool = copy.deepcopy(tool)
+        params = tool.get("function", {}).get("parameters")
+        if params:
+            tool["function"]["parameters"] = resolve_schema_refs(params)
+        resolved.append(tool)
+    return resolved
