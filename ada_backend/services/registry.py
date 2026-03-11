@@ -65,7 +65,6 @@ from engine.components.table_lookup import TableLookup
 from engine.components.tools.api_call_tool import APICallTool
 from engine.components.tools.docx_template import DocxTemplateAgent
 from engine.components.tools.hubspot_mcp_tool import HubSpotMCPTool
-from engine.components.tools.hubspot_neverdrop_mcp_tool import HubSpotNeverdropMCPTool
 from engine.components.tools.linkup_tool import LinkupSearchTool
 from engine.components.tools.python_code_runner import PythonCodeRunner
 from engine.components.tools.terminal_command_runner import TerminalCommandRunner
@@ -557,7 +556,7 @@ def create_factory_registry() -> FactoryRegistry:
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["hubspot_neverdrop_mcp_tool"],
         factory=OAuthComponentFactory(
-            entity_class=HubSpotNeverdropMCPTool,
+            entity_class=HubSpotMCPTool,
             provider_config_key=OAuthProvider.HUBSPOT_NEVERDROP,
             constructor_method="from_access_token",
             parameter_processors=[build_ignore_tool_description_processor()],
