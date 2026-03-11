@@ -39,7 +39,10 @@ def seed_mcp_hubspot_neverdrop_components(session: Session):
         component_id=COMPONENT_UUIDS["hubspot_neverdrop_mcp_tool"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.INTERNAL,
-        description="Connect to HubSpot Neverdrop via MCP to access CRM tools (contacts, deals, companies, tickets, etc.).",
+        description=(
+            "Connect to HubSpot Neverdrop via MCP to access CRM tools"
+            " (contacts, deals, companies, tickets, etc.)."
+        ),
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["hubspot_neverdrop_mcp_tool_description"],
     )
     upsert_component_versions(session, [hubspot_neverdrop_mcp_tool_version])
