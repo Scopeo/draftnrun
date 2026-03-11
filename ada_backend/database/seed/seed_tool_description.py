@@ -53,6 +53,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_table_lookup_tool_description": UUID("5c6d7e8f-9012-3456-789a-bcdef0123456"),
     "default_retriever_tool_description": UUID("b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e"),
     "hubspot_mcp_tool_description": UUID("1d6ce8b3-44ae-4c3d-a14b-2837a3a5717e"),
+    "hubspot_neverdrop_mcp_tool_description": UUID("a1e7f624-6c98-4546-b769-3607819ebad2"),
 }
 
 
@@ -147,6 +148,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["hubspot_mcp_tool_description"],
         **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
     )
+    hubspot_neverdrop_mcp_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["hubspot_neverdrop_mcp_tool_description"],
+        **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -174,5 +179,6 @@ def seed_tool_description(session: Session):
             remote_mcp_tool_description,
             default_table_lookup_tool_description,
             hubspot_mcp_tool_description,
+            hubspot_neverdrop_mcp_tool_description,
         ],
     )
