@@ -50,6 +50,35 @@ def _request_drain() -> None:
     _drain_requested.set()
 
 
+# ---------------------------------------------------------------------------
+# Worker key helpers — single source of truth for all Redis key names.
+# ---------------------------------------------------------------------------
+
+def _processing_queue_key(queue_name: str, worker_id: str) -> str:
+    return f"{queue_name}:processing:{worker_id}"
+
+
+def _heartbeat_key(queue_name: str, worker_id: str) -> str:
+    return f"{queue_name}:worker:{worker_id}:alive"
+
+
+def _cleanup_worker_keys(client, queue_name: str, worker_id: str) -> None:
+    """Delete all Redis keys owned by a worker (processing queue + heartbeat).
+
+    Safe to call even if the keys no longer exist (Redis DELETE is idempotent).
+    Called both on graceful shutdown of the current worker and after the recovery
+    path has drained an orphaned worker's processing queue.
+    """
+    try:
+        client.delete(
+            _processing_queue_key(queue_name, worker_id),
+            _heartbeat_key(queue_name, worker_id),
+        )
+        LOGGER.debug("Cleaned up Redis keys for worker %s", worker_id)
+    except Exception as e:
+        LOGGER.warning("Failed to clean up Redis keys for worker %s: %s", worker_id, e)
+
+
 def _process_run_payload(payload: dict, loop: asyncio.AbstractEventLoop) -> None:
     """Process one run from the queue: update RUNNING, run agent, update COMPLETED/FAILED, publish events."""
     _ensure_worker_trace_manager()
@@ -164,22 +193,23 @@ def _recover_orphaned_processing_queues(client, queue_name: str, own_processing_
     heartbeat key alive in Redis. A processing queue is considered orphaned — and therefore
     safe to recover — only when its corresponding heartbeat key has expired, which means the
     worker that owned it is no longer running.
+
+    After draining an orphaned queue all of the dead worker's Redis keys are explicitly
+    deleted so they do not accumulate across deploys.
     """
+    prefix = f"{queue_name}:processing:"
     try:
-        pattern = f"{queue_name}:processing:*"
         cursor = 0
         while True:
-            cursor, keys = client.scan(cursor, match=pattern, count=100)
+            cursor, keys = client.scan(cursor, match=f"{prefix}*", count=100)
             for key in keys:
                 key_str = key.decode() if isinstance(key, bytes) else key
                 if key_str == own_processing_queue:
                     continue
 
-                prefix = f"{queue_name}:processing:"
                 orphan_worker_id = key_str[len(prefix):]
-                heartbeat_key = f"{queue_name}:worker:{orphan_worker_id}:alive"
 
-                if client.exists(heartbeat_key):
+                if client.exists(_heartbeat_key(queue_name, orphan_worker_id)):
                     # Worker is still alive — do not touch its processing queue.
                     continue
 
@@ -220,6 +250,9 @@ def _recover_orphaned_processing_queues(client, queue_name: str, own_processing_
                     finally:
                         session.close()
 
+                # Explicitly remove all keys for this dead worker so they never accumulate.
+                _cleanup_worker_keys(client, queue_name, orphan_worker_id)
+
             if cursor == 0:
                 break
     except Exception as e:
@@ -247,17 +280,17 @@ def _worker_loop() -> None:
 
     queue_name = settings.REDIS_RUNS_QUEUE_NAME
     worker_id = str(uuid4())
-    processing_queue_name = f"{queue_name}:processing:{worker_id}"
-    heartbeat_key = f"{queue_name}:worker:{worker_id}:alive"
+    processing_queue_name = _processing_queue_key(queue_name, worker_id)
+    hb_key = _heartbeat_key(queue_name, worker_id)
     timeout = 5
 
     # Publish heartbeat before recovery so this worker is never mistaken for a dead one.
-    client.set(heartbeat_key, "1", ex=_HEARTBEAT_TTL)
+    client.set(hb_key, "1", ex=_HEARTBEAT_TTL)
 
     stop_heartbeat = threading.Event()
     heartbeat_thread = threading.Thread(
         target=_heartbeat_loop,
-        args=(client, heartbeat_key, stop_heartbeat),
+        args=(client, hb_key, stop_heartbeat),
         daemon=True,
         name=f"run-queue-worker-heartbeat-{worker_id[:8]}",
     )
@@ -321,12 +354,21 @@ def _worker_loop() -> None:
                 LOGGER.exception("Run queue worker error: %s", e)
     finally:
         stop_heartbeat.set()
+        # Return any items still sitting in our processing queue back to the main
+        # queue so they are picked up by another worker.  This prevents data loss
+        # when drain is requested right after brpoplpush has atomically moved an
+        # item but before it could be processed.
         try:
-            # Delete the heartbeat immediately so other workers can recover our queue without
-            # waiting for the TTL to expire if this process is restarting on the same host.
-            client.delete(heartbeat_key)
-        except Exception:
-            pass
+            while True:
+                item = client.rpoplpush(processing_queue_name, queue_name)
+                if item is None:
+                    break
+                LOGGER.info("Returned unprocessed item to main queue during shutdown")
+        except Exception as e:
+            LOGGER.warning(
+                "Failed to return items from processing queue during shutdown: %s", e
+            )
+        _cleanup_worker_keys(client, queue_name, worker_id)
         try:
             loop.close()
         except Exception:

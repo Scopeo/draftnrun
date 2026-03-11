@@ -1,9 +1,12 @@
 import json
 import logging
+import time
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 import redis
+from redis.backoff import ExponentialBackoff
+from redis.retry import Retry
 
 from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 from settings import settings
@@ -12,42 +15,86 @@ LOGGER = logging.getLogger(__name__)
 
 # Module-level Redis client cache to avoid creating a new connection on every call.
 _redis_client: Optional[redis.Redis] = None
+_last_health_check: float = 0.0
+
+# Seconds between proactive ping checks on the cached client.
+_HEALTH_CHECK_INTERVAL = 30.0
+# Number of automatic retries on transient connection failures.
+_MAX_RETRIES = 3
+
+_RECONNECT_ERRORS = (
+    redis.exceptions.ConnectionError,
+    redis.exceptions.TimeoutError,
+    redis.exceptions.BusyLoadingError,
+)
+
+
+def reset_redis_client() -> None:
+    """
+    Discard the cached Redis client so the next get_redis_client() call
+    creates a fresh connection. Call this after catching a connection error
+    that exhausted all built-in retries.
+    """
+    global _redis_client
+    _redis_client = None
+    LOGGER.info("Redis client reset — will reconnect on next call.")
 
 
 def get_redis_client() -> Optional[redis.Redis]:
     """
-    Get a Redis client instance configured with settings from environment variables.
+    Return a healthy Redis client, reconnecting automatically when the cached
+    connection has gone stale.
 
-    Returns:
-        Optional[redis.Redis]: Redis client instance or None if configuration is missing
+    Reconnection is triggered in two ways:
+    - Proactive: a ping is issued every _HEALTH_CHECK_INTERVAL seconds.
+    - Reactive: callers that catch _RECONNECT_ERRORS should call
+      reset_redis_client() so the next invocation rebuilds the connection.
+
+    The client is created with built-in exponential-backoff retry for
+    transient errors, and redis-py's health_check_interval so the pool
+    tests idle connections before handing them out.
     """
-    global _redis_client
+    global _redis_client, _last_health_check
 
     if not settings.REDIS_HOST:
         LOGGER.warning("Redis host not configured. Skipping Redis client initialization.")
         return None
 
-    # Reuse existing client if already initialized
-    if _redis_client is not None:
-        return _redis_client
+    now = time.monotonic()
 
-    LOGGER.debug(f"Connecting to Redis server at {settings.REDIS_HOST}:{settings.REDIS_PORT}")
+    if _redis_client is not None:
+        # Periodically verify the cached connection is still alive.
+        if now - _last_health_check >= _HEALTH_CHECK_INTERVAL:
+            try:
+                _redis_client.ping()
+                _last_health_check = now
+            except _RECONNECT_ERRORS as e:
+                LOGGER.warning("Redis health-check ping failed, reconnecting: %s", e)
+                _redis_client = None
+
+        if _redis_client is not None:
+            return _redis_client
+
+    LOGGER.debug("Connecting to Redis at %s:%s", settings.REDIS_HOST, settings.REDIS_PORT)
 
     try:
-        LOGGER.debug("Attempting Redis connection with password")
         client = redis.Redis(
             host=settings.REDIS_HOST,
             port=settings.REDIS_PORT,
             password=settings.REDIS_PASSWORD,
             decode_responses=True,
+            retry=Retry(ExponentialBackoff(cap=10, base=1), _MAX_RETRIES),
+            retry_on_error=list(_RECONNECT_ERRORS),
+            health_check_interval=int(_HEALTH_CHECK_INTERVAL),
         )
-        # Test connection once and cache the client
         client.ping()
-        LOGGER.debug("Successfully connected to Redis server")
         _redis_client = client
+        _last_health_check = time.monotonic()
+        LOGGER.info("Connected to Redis at %s:%s", settings.REDIS_HOST, settings.REDIS_PORT)
         return _redis_client
     except Exception as e:
-        LOGGER.error(f"Failed to connect to Redis: {str(e)}")
+        LOGGER.error("Failed to connect to Redis: %s", e)
+        _redis_client = None
         return None
 
 
@@ -109,8 +156,12 @@ def xreadgroup_single(
         _stream, messages = results[0]
         message_id, fields = messages[0]
         return message_id, fields
+    except _RECONNECT_ERRORS as e:
+        LOGGER.error("Redis connection error during xreadgroup on stream '%s': %s", stream_name, e)
+        reset_redis_client()
+        return None
     except redis.exceptions.ResponseError as e:
-        LOGGER.error(f"xreadgroup error on stream '{stream_name}': {e}")
+        LOGGER.error("xreadgroup error on stream '%s': %s", stream_name, e)
         return None
 
 
@@ -122,8 +173,11 @@ def xack(stream_name: str, group_name: str, message_id: str) -> None:
 
     try:
         client.xack(stream_name, group_name, message_id)
+    except _RECONNECT_ERRORS as e:
+        LOGGER.error("Redis connection error during XACK of %s on stream '%s': %s", message_id, stream_name, e)
+        reset_redis_client()
     except Exception as e:
-        LOGGER.error(f"Failed to XACK message {message_id} on stream '{stream_name}': {e}")
+        LOGGER.error("Failed to XACK message %s on stream '%s': %s", message_id, stream_name, e)
 
 
 def xautoclaim_pending(
@@ -213,8 +267,12 @@ def push_ingestion_task(
         )
         return True
 
+    except _RECONNECT_ERRORS as e:
+        LOGGER.error("Redis connection error pushing ingestion task %s: %s", ingestion_id, e)
+        reset_redis_client()
+        return False
     except Exception as e:
-        LOGGER.error(f"Failed to push task {ingestion_id} to Redis stream: {str(e)}")
+        LOGGER.error("Failed to push ingestion task %s to Redis stream: %s", ingestion_id, e)
         return False
 
 
@@ -236,8 +294,12 @@ def check_and_set_webhook_event(provider: str, event_id: str, ttl: int) -> bool:
         if not is_new:
             LOGGER.debug(f"Duplicate webhook event detected: provider={provider}, event_id={event_id}")
         return bool(is_new)
+    except _RECONNECT_ERRORS as e:
+        LOGGER.error("Redis connection error during webhook deduplication. Allowing event to proceed: %s", e)
+        reset_redis_client()
+        return True
     except Exception as e:
-        LOGGER.error(f"Failed to perform webhook deduplication. Allowing event to proceed: {str(e)}")
+        LOGGER.error("Failed to perform webhook deduplication. Allowing event to proceed: %s", e)
         return True
 
 
@@ -287,8 +349,12 @@ def push_webhook_event(
         )
         return True
 
+    except _RECONNECT_ERRORS as e:
+        LOGGER.error("Redis connection error pushing webhook event %s: %s", event_id, e)
+        reset_redis_client()
+        return False
     except Exception as e:
-        LOGGER.error(f"Failed to push webhook event {event_id} to Redis stream: {str(e)}")
+        LOGGER.error("Failed to push webhook event %s to Redis stream: %s", event_id, e)
         return False
 
 
@@ -330,6 +396,10 @@ def push_run_task(
             return True
         LOGGER.warning("Redis returned %s when pushing to queue %s", result, settings.REDIS_RUNS_QUEUE_NAME)
         return False
+    except _RECONNECT_ERRORS as e:
+        LOGGER.error("Redis connection error pushing run %s to queue: %s", run_id, e)
+        reset_redis_client()
+        return False
     except Exception as e:
         LOGGER.error("Failed to push run %s to Redis queue: %s", run_id, e)
         return False
@@ -351,6 +421,10 @@ def publish_run_event(run_id: UUID, event: Dict[str, Any]) -> bool:
         count = client.publish(channel, message)
         LOGGER.debug("Published event to %s (%s subscribers)", channel, count)
         return True
+    except _RECONNECT_ERRORS as e:
+        LOGGER.error("Redis connection error publishing run event for %s: %s", run_id, e)
+        reset_redis_client()
+        return False
     except Exception as e:
         LOGGER.error("Failed to publish run event for %s: %s", run_id, e)
         return False
