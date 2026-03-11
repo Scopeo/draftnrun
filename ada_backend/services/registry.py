@@ -554,6 +554,16 @@ def create_factory_registry() -> FactoryRegistry:
     )
 
     registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["hubspot_neverdrop_mcp_tool"],
+        factory=OAuthComponentFactory(
+            entity_class=HubSpotMCPTool,
+            provider_config_key=OAuthProvider.HUBSPOT_NEVERDROP,
+            constructor_method="from_access_token",
+            parameter_processors=[build_ignore_tool_description_processor()],
+        ),
+    )
+
+    registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["docx_template_agent"],
         factory=AgentFactory(
             entity_class=DocxTemplateAgent,
