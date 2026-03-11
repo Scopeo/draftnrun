@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 import sentry_sdk
@@ -57,6 +58,8 @@ from settings import settings
 
 setup_logging()
 
+LOGGER = logging.getLogger(__name__)
+
 set_trace_manager(tm=TraceManager(project_name="ada-backend"))
 
 if settings.SENTRY_DSN:
@@ -90,7 +93,15 @@ async def lifespan(app: FastAPI):
     finally:
         _request_drain()
         if worker_thread is not None:
-            worker_thread.join(timeout=10)
+            timeout = settings.WORKER_SHUTDOWN_TIMEOUT_SECONDS
+            LOGGER.info("Waiting up to %ss for run queue worker to finish current job...", timeout)
+            worker_thread.join(timeout=timeout)
+            if worker_thread.is_alive():
+                LOGGER.warning(
+                    "Run queue worker did not finish within %ss — "
+                    "in-flight run will be recovered by the next pod on restart.",
+                    timeout,
+                )
 
 
 app = FastAPI(

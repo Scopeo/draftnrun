@@ -124,6 +124,11 @@ class BaseConfig(BaseSettings):
     REDIS_RUNS_QUEUE_NAME: str = "ada_runs_queue"
     REDIS_WEBHOOK_DEDUP_TTL: int = 86400  # 24 hours in seconds
     REDIS_CONSUMER_GROUP: str = "ada_workers"
+    # Seconds the lifespan shutdown will wait for the in-flight run worker to finish
+    # before giving up and letting the process exit (run will be recovered by the next pod).
+    # Must be less than the pod's terminationGracePeriodSeconds to leave room for uvicorn
+    # and other cleanup before the SIGKILL arrives.
+    WORKER_SHUTDOWN_TIMEOUT_SECONDS: int = 60
 
     # Rate limiting configuration
     RATE_LIMIT_ENABLED: bool = True
