@@ -313,3 +313,9 @@ class VariableSetNotFound(Exception):
         self.set_id = set_id
         self.organization_id = organization_id
         super().__init__(f"Variable set '{set_id}' not found for organization {organization_id}")
+
+
+class OAuthSetProtectedError(Exception):
+    def __init__(self, set_id: str):
+        self.set_id = set_id
+        super().__init__(f"OAuth set '{set_id}' is managed by OAuth and cannot be modified directly")

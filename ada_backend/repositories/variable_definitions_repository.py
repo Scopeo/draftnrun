@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
+from ada_backend.database.models import VariableType
 
 LOGGER = logging.getLogger(__name__)
 
@@ -15,8 +16,12 @@ def list_org_definitions(
     session: Session,
     organization_id: UUID,
     project_id: Optional[UUID] = None,
+    var_type: Optional[VariableType] = None,
 ) -> list[db.OrgVariableDefinition]:
     query = session.query(db.OrgVariableDefinition).filter(db.OrgVariableDefinition.organization_id == organization_id)
+
+    if var_type is not None:
+        query = query.filter(db.OrgVariableDefinition.type == var_type)
 
     if project_id is not None:
         query = query.outerjoin(
@@ -106,3 +111,52 @@ def delete_org_definition(
         return False
     session.delete(definition)
     return True
+
+
+def get_oauth_definition_by_id(
+    session: Session,
+    definition_id: UUID,
+) -> Optional[db.OrgVariableDefinition]:
+    """Look up an oauth definition by ID. Used at runtime to resolve definition IDs to connection UUIDs."""
+    return (
+        session.query(db.OrgVariableDefinition)
+        .filter(
+            db.OrgVariableDefinition.id == definition_id,
+            db.OrgVariableDefinition.type == VariableType.OAUTH,
+        )
+        .first()
+    )
+
+
+def find_oauth_definition_by_connection_id(
+    session: Session,
+    organization_id: UUID,
+    connection_id: UUID,
+) -> Optional[db.OrgVariableDefinition]:
+    return (
+        session.query(db.OrgVariableDefinition)
+        .filter(
+            db.OrgVariableDefinition.organization_id == organization_id,
+            db.OrgVariableDefinition.type == VariableType.OAUTH,
+            db.OrgVariableDefinition.variable_metadata["oauth_connection_id"].astext == str(connection_id),
+        )
+        .first()
+    )
+
+
+def delete_oauth_definitions_for_connection(
+    session: Session,
+    organization_id: UUID,
+    connection_id: UUID,
+) -> int:
+    count = (
+        session.query(db.OrgVariableDefinition)
+        .filter(
+            db.OrgVariableDefinition.organization_id == organization_id,
+            db.OrgVariableDefinition.type == VariableType.OAUTH,
+            db.OrgVariableDefinition.variable_metadata["oauth_connection_id"].astext == str(connection_id),
+        )
+        .delete(synchronize_session="fetch")
+    )
+    session.flush()
+    return count
