@@ -239,5 +239,5 @@ class Categorizer(Component):
             category=category,
             score=score,
             reason=reason,
-            output={"category": category, "score": score, "reason": reason},
+            output=json.dumps({"category": category, "score": score, "reason": reason}),
         )
