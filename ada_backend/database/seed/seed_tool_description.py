@@ -51,7 +51,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "remote_mcp_tool_description": UUID("4c6ef0d2-53c0-4ab2-96cb-3c2b5f5b3e88"),
     "slack_sender_tool_description": UUID("60531feb-d38f-4843-bfbf-3e6bc22e030d"),
     "default_table_lookup_tool_description": UUID("5c6d7e8f-9012-3456-789a-bcdef0123456"),
-    "default_retriever_tool_description": UUID("b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e"),
+    "default_retriever_tool_description": UUID("087b7277-a05b-4f05-b0c6-dabec960d511"),
     "hubspot_mcp_tool_description": UUID("1d6ce8b3-44ae-4c3d-a14b-2837a3a5717e"),
     "hubspot_neverdrop_mcp_tool_description": UUID("a1e7f624-6c98-4546-b769-3607819ebad2"),
 }
