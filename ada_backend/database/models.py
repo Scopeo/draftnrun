@@ -91,6 +91,15 @@ class ParameterType(StrEnum):
     LLM_MODEL = "llm_model"
 
 
+class JsonSchemaType(StrEnum):
+    STRING = "string"
+    INTEGER = "integer"
+    NUMBER = "number"
+    BOOLEAN = "boolean"
+    OBJECT = "object"
+    ARRAY = "array"
+
+
 class OrgSecretType(StrEnum):
     LLM_API_KEY = "llm_api_key"
     PASSWORD = "password"
@@ -227,6 +236,12 @@ class EvaluationType(StrEnum):
 class PortType(StrEnum):
     INPUT = "INPUT"
     OUTPUT = "OUTPUT"
+
+
+class PortSetupMode(StrEnum):
+    USER_SET = "user_set"
+    DEACTIVATED = "deactivated"
+    AI_FILLED = "ai_filled"
 
 
 class EntityType(StrEnum):
@@ -1088,6 +1103,9 @@ class PortDefinition(Base):
     is_canonical = mapped_column(Boolean, nullable=False, default=False)
     description = mapped_column(Text, nullable=True)
     parameter_type = mapped_column(make_pg_enum(ParameterType), nullable=False, default=ParameterType.STRING)
+    nullable = mapped_column(
+        Boolean, nullable=False, default=True, comment="True if port is optional, False if required"
+    )
     ui_component = mapped_column(make_pg_enum(UIComponent), nullable=True)
     ui_component_properties = mapped_column(JSONB, nullable=True)
     nullable = mapped_column(Boolean, nullable=False, default=False)
@@ -1104,6 +1122,59 @@ class PortDefinition(Base):
     __table_args__ = (
         sa.UniqueConstraint("component_version_id", "name", "port_type", name="unique_component_version_port"),
     )
+
+
+class ToolInputConfiguration(Base):
+    """Configuration for how an input port is presented to an LLM for function calling.
+
+    Extends an InputPortInstance with tool-schema-specific metadata.
+    One-to-one with InputPortInstance: each port can have at most one tool configuration.
+
+    setup_mode controls the port's role at LLM call time:
+    - AI_FILLED:  the LLM provides this value at runtime (appears in tool schema)
+    - USER_SET:   the value is pre-filled by the user (stored in InputPortInstance.field_expression)
+    - DEACTIVATED: the port is excluded from both the tool schema and data flow
+    """
+
+    __tablename__ = "tool_input_configurations"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    input_port_instance_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("input_port_instances.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    setup_mode = mapped_column(make_pg_enum(PortSetupMode), nullable=False)
+
+    # LLM schema overrides (override the values coming from PortDefinition or PortInstance)
+    ai_name_override = mapped_column(String, nullable=True)
+    ai_description_override = mapped_column(Text, nullable=True)
+    is_required_override = mapped_column(
+        Boolean,
+        nullable=True,
+        comment="Override required status: True=mandatory, False=optional, None=use port definition default",
+    )
+
+    # For dynamic ports (InputPortInstance.port_definition_id IS NULL): the JSON Schema type.
+    # Catalogue ports use PortDefinition.parameter_type instead.
+    custom_parameter_type = mapped_column(make_pg_enum(JsonSchemaType), nullable=True)
+
+    # Full JSON Schema override for complex parameter types (arrays, nested objects, etc.)
+    json_schema_override = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Full JSON Schema for complex parameter types. Overrides simple type mapping.",
+    )
+
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    input_port_instance = relationship("InputPortInstance", back_populates="tool_input_configuration")
+
+    def __str__(self):
+        return f"ToolInputConfiguration(port_instance={self.input_port_instance_id}, mode={self.setup_mode})"
 
 
 class PortMapping(Base):
@@ -1281,6 +1352,12 @@ class InputPortInstance(PortInstance):
     description = mapped_column(Text, nullable=True)
 
     field_expression = relationship("FieldExpression")
+    tool_input_configuration = relationship(
+        "ToolInputConfiguration",
+        back_populates="input_port_instance",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
     __mapper_args__ = {"polymorphic_identity": PortType.INPUT}
 

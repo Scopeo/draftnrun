@@ -3,7 +3,8 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import ParameterType
+from ada_backend.database import models as db
+from ada_backend.database.models import ParameterType, PortType
 from ada_backend.repositories.categories_repository import (
     fetch_associated_category_ids,
 )
@@ -15,6 +16,7 @@ from ada_backend.repositories.component_repository import (
     get_component_version_by_id,
     get_global_parameters_by_component_version_id,
     get_instance_parameters_with_definition,
+    get_port_definitions_for_component_version_ids,
     get_subcomponent_param_def_by_component_version,
     get_tool_parameter_by_component_version,
 )
@@ -22,12 +24,13 @@ from ada_backend.repositories.integration_repository import (
     get_component_instance_integration_relationship,
     get_integration,
 )
+from ada_backend.repositories.port_configuration_repository import get_tool_input_configurations
 from ada_backend.schemas.components_schema import SubComponentParamSchema
 from ada_backend.schemas.integration_schema import GraphIntegrationSchema
-from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema
-from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema
+from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterReadSchema
+from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema, PortConfigurationSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
-from ada_backend.services.agent_builder_service import _get_tool_description
+from ada_backend.services.tool_description_generator import get_tool_description_schema
 from ada_backend.utils.component_utils import get_ui_component_properties_with_llm_options
 
 LOGGER = getLogger(__name__)
@@ -43,7 +46,7 @@ def get_component_instance(
     if component_instance is None:
         raise ValueError(f"Component instance {component_instance_id} not found")
 
-    tool_description = _get_tool_description(session, component_instance)
+    tool_description = get_tool_description_schema(session, component_instance)
 
     parameters = get_instance_parameters_with_definition(
         session,
@@ -100,6 +103,66 @@ def get_component_instance(
 
     component = get_component_by_id(session, component_version.component_id)
 
+    port_definitions = get_port_definitions_for_component_version_ids(session, [component_version.id])
+    input_ports = [p for p in port_definitions if p.port_type == PortType.INPUT]
+
+    input_port_schemas = [
+        PipelineParameterReadSchema(
+            id=input_port.id,
+            name=input_port.name,
+            type=input_port.parameter_type or ParameterType.STRING,
+            nullable=True,
+            default=None,
+            ui_component=input_port.ui_component,
+            ui_component_properties=input_port.ui_component_properties,
+            is_advanced=False,
+            kind=ParameterKind.INPUT,
+        )
+        for input_port in input_ports
+    ]
+
+    tool_input_configs = get_tool_input_configurations(session, component_instance_id)
+
+    port_configurations_schemas = [
+        PortConfigurationSchema(
+            id=config.id,
+            input_port_instance_id=config.input_port_instance_id,
+            setup_mode=config.setup_mode,
+            ai_name_override=config.ai_name_override,
+            ai_description_override=config.ai_description_override,
+            is_required_override=config.is_required_override,
+            custom_parameter_type=config.custom_parameter_type,
+            json_schema_override=config.json_schema_override,
+        )
+        for config in tool_input_configs
+    ]
+
+    regular_params_schemas = [
+        PipelineParameterReadSchema(
+            id=param.id,
+            name=param.name,
+            value=param.value,
+            type=param.type,
+            nullable=param.nullable,
+            default=param.default,
+            ui_component=param.ui_component,
+            ui_component_properties=(
+                get_ui_component_properties_with_llm_options(
+                    session,
+                    getattr(param, "model_capabilities", None),
+                    param.ui_component_properties,
+                )
+                if param.type == ParameterType.LLM_MODEL
+                else param.ui_component_properties
+            ),
+            is_advanced=param.is_advanced,
+            kind=getattr(param, "kind", ParameterKind.PARAMETER),
+        )
+        for param in parameters
+    ]
+
+    final_params = regular_params_schemas + input_port_schemas
+
     return ComponentInstanceReadSchema(
         id=component_instance_id,
         name=component_instance.name,
@@ -107,6 +170,7 @@ def get_component_instance(
         is_start_node=is_start_node,
         component_id=component.id,
         component_version_id=component_instance.component_version_id,
+        port_configurations=port_configurations_schemas,
         version_tag=component_version.version_tag,
         release_stage=component_version.release_stage,
         tool_description=tool_description,
