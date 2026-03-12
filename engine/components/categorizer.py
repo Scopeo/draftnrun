@@ -156,7 +156,7 @@ class CategorizerOutputs(BaseModel):
     category: str = Field(description="The selected category")
     score: float = Field(description="Confidence score (0-1)")
     reason: str = Field(description="Explanation for the categorization")
-    output: dict[str, Any] = Field(description="Full categorization result with category, score, and reason")
+    output: str = Field(description="Full categorization result with category, score, and reason")
 
 
 class Categorizer(Component):
