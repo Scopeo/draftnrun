@@ -44,7 +44,7 @@ class GmailSenderV2(Component):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        access_token: str,
+        access_token: Optional[str] = None,
         save_as_draft: bool = True,
         tool_description: ToolDescription = GMAIL_SENDER_TOOL_DESCRIPTION,
     ):
@@ -53,9 +53,30 @@ class GmailSenderV2(Component):
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
-        self.service = get_gmail_sender_service(access_token)
-        self.email_address = get_google_user_email(access_token)
+        self._access_token = access_token
+        self._service = None
+        self._email_address = None
         self.save_as_draft = save_as_draft
+
+    def _ensure_client(self) -> None:
+        if not self._access_token:
+            raise ValueError(
+                "Gmail Sender requires a configured OAuth connection. "
+                "Please select a Gmail connection in the component settings."
+            )
+        if self._service is None:
+            self._service = get_gmail_sender_service(self._access_token)
+            self._email_address = get_google_user_email(self._access_token)
+
+    @property
+    def service(self):
+        self._ensure_client()
+        return self._service
+
+    @property
+    def email_address(self) -> str:
+        self._ensure_client()
+        return self._email_address
 
     def gmail_create_draft(
         self,

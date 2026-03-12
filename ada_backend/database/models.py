@@ -162,6 +162,10 @@ class UIComponent(StrEnum):
     FILE_UPLOAD = "FileUpload"
     JSON_BUILDER = "JSON Builder"
     CONDITION_BUILDER = "ConditionBuilder"
+    # TODO: parameters using this ui_component are seeded with name="oauth_connection_id"
+    #       but after migration d4e5f6a7b8c9 their value stores OrgVariableDefinition.id,
+    #       not OAuthConnection.id. Rename the parameter to "oauth_definition_id" in all
+    #       seed files + a DB migration to update component_parameter_definitions.name.
     OAUTH_CONNECTION = "OAuthConnection"
     CODE = "Code"
     ROUTE_BUILDER = "RouteBuilder"

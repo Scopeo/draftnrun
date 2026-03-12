@@ -82,7 +82,7 @@ class SlackSender(Component):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        access_token: str,
+        access_token: Optional[str] = None,
         tool_description: ToolDescription = SLACK_SENDER_TOOL_DESCRIPTION,
     ):
         """Initialize SlackSender with a provided Slack OAuth access token.
@@ -90,7 +90,7 @@ class SlackSender(Component):
         Args:
             trace_manager: Trace manager for observability
             component_attributes: Component configuration attributes
-            access_token: Slack OAuth access token (injected by OAuth processor)
+            access_token: Slack OAuth access token (injected by OAuth processor); may be None until run.
             tool_description: Tool description for the component
         """
         super().__init__(
@@ -98,7 +98,8 @@ class SlackSender(Component):
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
-        self.client = WebClient(token=access_token)
+        self._access_token = access_token
+        self.client = WebClient(token=access_token) if access_token else None
 
     async def _run_without_io_trace(
         self,
@@ -115,9 +116,14 @@ class SlackSender(Component):
             SlackSenderOutputs: Response with status, channel, timestamp, and message
 
         Raises:
-            ValueError: If message or channel is not provided
+            ValueError: If message or channel is not provided, or no OAuth connection configured
             RuntimeError: If message sending fails
         """
+        if not self.client:
+            raise ValueError(
+                "Slack Sender requires a configured OAuth connection. "
+                "Please select a Slack connection in the component settings."
+            )
         span = get_current_span()
         span.set_attributes({
             SpanAttributes.INPUT_VALUE: serialize_to_json(
