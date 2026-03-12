@@ -7,6 +7,7 @@ from typing import Optional, Self
 
 from engine.components.tools.hubspot_mcp.server import get_tool_descriptions
 from engine.components.tools.mcp.local_mcp_tool import LocalMCPTool
+from engine.components.tools.mcp.shared import MCPToolInputs, MCPToolOutputs
 from engine.components.types import ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 
@@ -39,12 +40,6 @@ class HubSpotMCPTool(LocalMCPTool):
         allowed_tools: set[str] | None = None,
         timeout: int = 30,
     ) -> Self:
-        if not access_token:
-            raise ValueError(
-                "HubSpot MCP requires a configured OAuth connection. "
-                "Please select a HubSpot connection in the component settings."
-            )
-
         allowed = allowed_tools if allowed_tools is not None else _DEFAULT_TOOLS
         tool_descriptions = get_tool_descriptions(allowed)
 
@@ -53,7 +48,19 @@ class HubSpotMCPTool(LocalMCPTool):
             component_attributes=component_attributes,
             command=sys.executable,
             args=["-m", "engine.components.tools.hubspot_mcp.server"],
-            env={"HUBSPOT_ACCESS_TOKEN": access_token},
+            env={"HUBSPOT_ACCESS_TOKEN": access_token} if access_token else None,
             timeout=timeout,
             tool_descriptions=tool_descriptions,
         )
+
+    async def _run_without_io_trace(
+        self,
+        inputs: MCPToolInputs,
+        ctx: Optional[dict],
+    ) -> MCPToolOutputs:
+        if not self.env or not self.env.get("HUBSPOT_ACCESS_TOKEN"):
+            raise ValueError(
+                "HubSpot MCP requires a configured OAuth connection. "
+                "Please select a HubSpot connection in the component settings."
+            )
+        return await super()._run_without_io_trace(inputs, ctx)
