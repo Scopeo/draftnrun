@@ -121,6 +121,57 @@ def seed_gmail_components(session: Session):
         component_version_id=gmail_sender_v2_version.id,
     )
 
+    # v3: adds HTML email support
+    gmail_sender_v3_version = db.ComponentVersion(
+        id=COMPONENT_VERSION_UUIDS["gmail_sender_v3"],
+        component_id=COMPONENT_UUIDS["gmail_sender"],
+        version_tag="0.0.3",
+        release_stage=db.ReleaseStage.INTERNAL,
+        description="A component to send emails using Gmail API (with text or HTML).",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["gmail_sender_tool_description"],
+    )
+    upsert_component_versions(session, [gmail_sender_v3_version])
+
+    gmail_sender_v3_parameter_definitions = [
+        ComponentParameterDefinition(
+            id=UUID("4038cb41-b0cf-414d-9933-79d8090e4622"),
+            component_version_id=gmail_sender_v3_version.id,
+            name="oauth_connection_id",
+            type=ParameterType.STRING,
+            nullable=True,
+            order=0,
+            parameter_order_within_group=0,
+            ui_component=UIComponent.OAUTH_CONNECTION,
+            ui_component_properties=UIComponentProperties(
+                label="Gmail Connection",
+                description="Select your authorized Gmail account connection",
+                provider=OAuthProvider.GMAIL.value,
+                icon="logos-google-gmail",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        ),
+        ComponentParameterDefinition(
+            id=UUID("73f7de35-391e-4e73-8d30-2c238a4a3650"),
+            component_version_id=gmail_sender_v3_version.id,
+            name="save_as_draft",
+            type=ParameterType.BOOLEAN,
+            nullable=False,
+            default=True,
+            ui_component=UIComponent.CHECKBOX,
+            ui_component_properties=UIComponentProperties(
+                label="Save as Draft",
+                description="If checked, the email will be saved as a draft instead of being sent immediately.",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        ),
+    ]
+    upsert_components_parameter_definitions(session, gmail_sender_v3_parameter_definitions)
+
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=gmail_sender_v3_version.component_id,
+        release_stage=gmail_sender_v3_version.release_stage,
+        component_version_id=gmail_sender_v3_version.id,
+    )
+
     upsert_component_categories(
         session=session,
         component_id=gmail_sender_component.id,
