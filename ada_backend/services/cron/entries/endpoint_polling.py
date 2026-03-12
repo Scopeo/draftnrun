@@ -14,8 +14,15 @@ from uuid import UUID
 import httpx
 from pydantic import Field, HttpUrl
 
+from ada_backend.context import get_cron_execution_context
 from ada_backend.repositories.tracker_history_repository import seed_initial_endpoint_history
-from ada_backend.services.cron.core import BaseExecutionPayload, BaseUserPayload, CronEntrySpec, get_cron_context
+from ada_backend.services.cron.core import (
+    AsyncCronJobResult,
+    BaseExecutionPayload,
+    BaseUserPayload,
+    CronEntrySpec,
+    get_cron_context,
+)
 from ada_backend.services.cron.endpoint_polling_service import _extract_nested_path
 from ada_backend.services.cron.entries.agent_inference import AgentInferenceExecutionPayload, AgentInferenceUserPayload
 from ada_backend.services.cron.entries.agent_inference import (
@@ -273,7 +280,7 @@ def post_registration(execution_payload: EndpointPollingExecutionPayload, **kwar
         LOGGER.info(f"Seeded {inserted} existing endpoint values into history for cron {cron_id}", extra=log_extra)
 
 
-async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) -> dict[str, Any]:
+async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) -> AsyncCronJobResult:
     cron_id, log_extra = get_cron_context(**kwargs)
 
     if not settings.ADA_URL:
@@ -281,17 +288,22 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
     if not settings.SCHEDULER_API_KEY:
         raise ValueError("SCHEDULER_API_KEY is not configured")
 
+    cron_run_id = get_cron_execution_context().run_id
     url = f"{settings.ADA_URL}/internal/scheduler/endpoint-polling/run"
 
     LOGGER.info(
-        f"Dispatching endpoint polling for cron_id={cron_id} to {url}",
+        f"Dispatching endpoint polling for cron_id={cron_id} (cron_run_id={cron_run_id})",
         extra=log_extra,
     )
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=10) as client:
         response = await client.post(
             url,
-            json={"cron_id": str(cron_id), "payload": execution_payload.model_dump(mode="json")},
+            json={
+                "cron_id": str(cron_id),
+                "cron_run_id": str(cron_run_id),
+                "payload": execution_payload.model_dump(mode="json"),
+            },
             headers={
                 "X-Scheduler-API-Key": settings.SCHEDULER_API_KEY,
                 "Content-Type": "application/json",
@@ -300,11 +312,11 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
         response.raise_for_status()
 
     LOGGER.info(
-        f"Endpoint polling dispatched for cron_id={cron_id}",
+        f"Endpoint polling dispatched (cron_id={cron_id}, cron_run_id={cron_run_id}). "
+        "CronRun status will be updated by the background task.",
         extra=log_extra,
     )
-
-    return {"status": "accepted", "cron_id": str(cron_id)}
+    return AsyncCronJobResult(cron_run_id=cron_run_id)
 
 
 spec = CronEntrySpec(
@@ -318,6 +330,7 @@ spec = CronEntrySpec(
 
 
 # ---------------------------------------------------------------------------
+
 
 def _extract_field_value(item: Any, field_name: str) -> Any:
     """

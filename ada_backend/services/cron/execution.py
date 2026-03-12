@@ -8,6 +8,7 @@ from uuid import UUID
 from ada_backend.database.models import CronEntrypoint, CronStatus
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.cron_repository import update_cron_run
+from ada_backend.services.cron.core import AsyncCronJobResult
 from ada_backend.services.cron.registry import CRON_REGISTRY
 
 LOGGER = logging.getLogger(__name__)
@@ -40,11 +41,17 @@ async def run_cron_spec(
     try:
         execution_payload = spec.execution_payload_model(**payload)
 
-        # TODO: executor should manage its own session to avoid holding a DB connection
-        # during long-running operations (LLM calls, external APIs, etc.)
         with get_db_session() as session:
             spec.execution_validator(execution_payload, db=session, cron_id=cron_id)
             result = await spec.executor(execution_payload, db=session, cron_id=cron_id)
+
+        if isinstance(result, AsyncCronJobResult):
+            with get_db_session() as session:
+                update_cron_run(session=session, run_id=run_id, status=CronStatus.QUEUED)
+            LOGGER.info(f"Cron job {cron_id} queued (run_id={result.run_id}, cron_run_id={result.cron_run_id})")
+            return result
+
+        with get_db_session() as session:
             update_cron_run(
                 session=session,
                 run_id=run_id,

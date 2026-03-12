@@ -369,13 +369,15 @@ async def run_endpoint_polling(
                     else:
                         input_message = json.dumps(item, default=str) if item else str(new_value)
 
-                    input_data = {
-                        "messages": [{"role": "user", "content": input_message}],
-                        "item": item,
+                    body = {
+                        "input_data": {
+                            "messages": [{"role": "user", "content": input_message}],
+                            "item": item,
+                        },
                     }
                     resp = await client.post(
                         run_url,
-                        json=input_data,
+                        json=body,
                         headers={
                             "X-Scheduler-API-Key": scheduler_api_key,
                             "Content-Type": "application/json",

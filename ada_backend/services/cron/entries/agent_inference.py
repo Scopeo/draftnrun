@@ -9,9 +9,16 @@ from uuid import UUID
 import httpx
 from pydantic import Field
 
+from ada_backend.context import get_cron_execution_context
 from ada_backend.database.models import EnvType
 from ada_backend.repositories.project_repository import get_project
-from ada_backend.services.cron.core import BaseExecutionPayload, BaseUserPayload, CronEntrySpec, get_cron_context
+from ada_backend.services.cron.core import (
+    AsyncCronJobResult,
+    BaseExecutionPayload,
+    BaseUserPayload,
+    CronEntrySpec,
+    get_cron_context,
+)
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -108,7 +115,7 @@ def validate_execution(execution_payload: AgentInferenceExecutionPayload, **kwar
         raise ValueError("Project organization mismatch at execution time")
 
 
-async def execute(execution_payload: AgentInferenceExecutionPayload, **kwargs) -> dict[str, Any]:
+async def execute(execution_payload: AgentInferenceExecutionPayload, **kwargs) -> AsyncCronJobResult:
     cron_id, log_extra = get_cron_context(**kwargs)
 
     if not settings.ADA_URL:
@@ -116,37 +123,38 @@ async def execute(execution_payload: AgentInferenceExecutionPayload, **kwargs) -
     if not settings.SCHEDULER_API_KEY:
         raise ValueError("SCHEDULER_API_KEY is not configured")
 
-    url = (
+    cron_run_id = get_cron_execution_context().run_id
+
+    run_url = (
         f"{settings.ADA_URL}/internal/webhooks/projects"
         f"/{execution_payload.project_id}/envs/{execution_payload.env}/run"
     )
-
-    LOGGER.info(
-        f"Starting agent inference for project {execution_payload.project_id} in {execution_payload.env} environment",
-        extra=log_extra,
-    )
-
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            url,
-            json=execution_payload.input_data,
-            headers={
-                "X-Scheduler-API-Key": settings.SCHEDULER_API_KEY,
-                "Content-Type": "application/json",
-            },
-        )
-        response.raise_for_status()
-
-    LOGGER.info(
-        f"Agent inference accepted for project {execution_payload.project_id} (cron_id={cron_id})",
-        extra=log_extra,
-    )
-
-    return {
-        "status": "accepted",
-        "project_id": str(execution_payload.project_id),
-        "env": execution_payload.env,
+    headers = {
+        "X-Scheduler-API-Key": settings.SCHEDULER_API_KEY,
+        "Content-Type": "application/json",
     }
+    body = {
+        "input_data": execution_payload.input_data,
+        "cron_run_id": str(cron_run_id),
+    }
+
+    LOGGER.info(
+        f"Dispatching agent inference for project {execution_payload.project_id} "
+        f"in {execution_payload.env} (cron_run_id={cron_run_id})",
+        extra=log_extra,
+    )
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.post(run_url, json=body, headers=headers)
+        response.raise_for_status()
+        run_id = response.json()["run_id"]
+
+    LOGGER.info(
+        f"Agent inference accepted (run_id={run_id}, cron_run_id={cron_run_id}). "
+        "CronRun status will be updated by the background task.",
+        extra=log_extra,
+    )
+    return AsyncCronJobResult(cron_run_id=cron_run_id, run_id=run_id)
 
 
 spec = CronEntrySpec(
