@@ -37,7 +37,12 @@ from ada_backend.services.file_response_service import (
 )
 from ada_backend.services.tag_service import compose_tag_name
 from ada_backend.services.variable_resolution_service import resolve_variables
-from engine.components.errors import KeyTypePromptTemplateError, MissingKeyPromptTemplateError, NoMatchingRouteError
+from engine.components.errors import (
+    CategorizationError,
+    KeyTypePromptTemplateError,
+    MissingKeyPromptTemplateError,
+    NoMatchingRouteError,
+)
 from engine.field_expressions.serializer import from_json as expression_from_json
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.graph_runner.runnable import Runnable
@@ -310,7 +315,7 @@ async def run_agent(
             is_root_execution=True,
         )
         params = get_tracing_span()
-    except (MissingKeyPromptTemplateError, KeyTypePromptTemplateError, NoMatchingRouteError):
+    except (MissingKeyPromptTemplateError, KeyTypePromptTemplateError, NoMatchingRouteError, CategorizationError):
         raise
     except Exception as e:
         tb = traceback.format_exc()

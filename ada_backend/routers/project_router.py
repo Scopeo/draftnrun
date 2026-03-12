@@ -50,6 +50,7 @@ from ada_backend.services.project_service import (
 from ada_backend.services.run_service import run_with_tracking
 from ada_backend.services.tag_service import compose_tag_name
 from engine.components.errors import (
+    CategorizationError,
     KeyTypePromptTemplateError,
     MissingKeyPromptTemplateError,
     NoMatchingRouteError,
@@ -402,6 +403,12 @@ async def chat(
         LOGGER.error(
             f"No matching route in Router component for project {project_id}, "
             f"graph_runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except CategorizationError as e:
+        LOGGER.error(
+            f"Categorization error for project {project_id} for graph runner {graph_runner_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e

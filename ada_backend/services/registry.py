@@ -35,6 +35,7 @@ from ada_backend.services.entity_factory import (
     detect_and_convert_dataclasses,
 )
 from engine.components.ai_agent import AIAgent
+from engine.components.categorizer import Categorizer
 from engine.components.chunk_processor import ChunkProcessor
 from engine.components.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
 from engine.components.document_react_loader import DocumentReactLoaderAgent
@@ -307,6 +308,16 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["llm_call"],
         factory=AgentFactory(
             entity_class=LLMCallAgent,
+            parameter_processors=[
+                completion_service_processor,
+                llm_capability_resolver_processor,
+            ],
+        ),
+    )
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["categorizer"],
+        factory=AgentFactory(
+            entity_class=Categorizer,
             parameter_processors=[
                 completion_service_processor,
                 llm_capability_resolver_processor,
