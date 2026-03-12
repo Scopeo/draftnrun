@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from ada_backend.context import get_request_context
+from ada_backend.context import get_request_context, get_run_variables
 from ada_backend.database.models import EnvType
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
@@ -193,14 +193,19 @@ def _run_coroutine_sync(coro: Coroutine) -> Any:
     """
     Run a coroutine synchronously, handling event loop scenarios.
     Temporary patch until registry + entity factories are refactored to be async.
+
+    Context variables (including run_variables for OAuth resolution) are explicitly
+    copied to the worker thread so that ContextVars set in the calling async task
+    are visible inside the coroutine.
     """
     try:
         asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(coro)
 
+    ctx = contextvars.copy_context()
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        return executor.submit(asyncio.run, coro).result()
+        return executor.submit(ctx.run, asyncio.run, coro).result()
 
 
 class RemoteMCPToolFactory:
@@ -228,19 +233,46 @@ class RemoteMCPToolFactory:
 
 # TODO: Refactor to inject the session directly
 async def resolve_oauth_access_token(
-    oauth_connection_id: str,
+    definition_id: str | None,
     provider_config_key: str,
-) -> str:
-    """Resolve an OAuth definition ID to an access token via Nango."""
-    definition_id = UUID(oauth_connection_id)
+) -> str | None:
+    """
+    Resolve an OrgVariableDefinition ID to an access token via Nango.
+    Returns None when no connection is configured so components can be saved
+    without a connection and raise at run time instead (same pattern as Router).
 
+    The `definition_id` is what the component parameter stores after the
+    d4e5f6a7b8c9 migration (previously it stored the OAuthConnection.id directly).
+    # TODO: rename the DB column component_parameter_definitions.oauth_connection_id
+    #       → oauth_definition_id to reflect that it now stores OrgVariableDefinition.id
+
+    Resolution order:
+    1. Run-time variables context (set_id overrides set by run_agent via set_run_variables)
+    2. definition.default_value (org-level default connection)
+    3. None — component raises at run time if a connection is required
+    """
+    if not definition_id:
+        return None
+
+    definition_uuid = UUID(definition_id)
     with get_db_session() as session:
-        definition = get_oauth_definition_by_id(session, definition_id)
+        definition = get_oauth_definition_by_id(session, definition_uuid)
         if not definition:
-            raise ValueError(f"OAuth definition {definition_id} not found")
-        if not definition.default_value:
-            raise ValueError(f"OAuth definition '{definition.name}' has no connection ID")
-        connection_uuid = UUID(definition.default_value)
+            raise ValueError(f"OAuth definition {definition_uuid} not found")
+
+        # set_id override takes priority over the stored default connection
+        variables = get_run_variables()
+        LOGGER.info(f"Set run variables: {variables}")
+        if variables and definition.name in variables:
+            LOGGER.info(f"Using set run variables for {definition.name}: {variables[definition.name]}")
+            connection_uuid = UUID(variables[definition.name])
+        elif definition.default_value:
+            LOGGER.info(f"Using default value for {definition.name}: {definition.default_value}")
+            connection_uuid = UUID(definition.default_value)
+        else:
+            LOGGER.info(f"No connection found for {definition.name}")
+            return None
+
         return await get_oauth_access_token(
             session=session,
             oauth_connection_id=connection_uuid,
@@ -295,16 +327,16 @@ class OAuthComponentFactory:
             **kwargs: Component parameters including oauth_connection_id
 
         Returns:
-            Instantiated component with resolved OAuth token
-
-        Raises:
-            ValueError: If oauth_connection_id is missing
+            Instantiated component with resolved OAuth token (access_token may be None;
+            component raises at run time if a connection is required but not configured).
         """
-        oauth_connection_id = kwargs.pop("oauth_connection_id", None)
-        if isinstance(oauth_connection_id, list):
-            oauth_connection_id = oauth_connection_id[0]
-        access_token = await resolve_oauth_access_token(oauth_connection_id, self.provider_config_key)
-        kwargs[self.target_param_name] = access_token
+        # TODO: DB column is still named "oauth_connection_id" but stores OrgVariableDefinition.id
+        #       after migration d4e5f6a7b8c9 — rename column to oauth_definition_id
+        definition_id = kwargs.pop("oauth_connection_id", None)
+        if isinstance(definition_id, list):
+            definition_id = definition_id[0]
+        access_token = await resolve_oauth_access_token(definition_id, self.provider_config_key)
+        kwargs[self.target_param_name] = access_token  # may be None; component raises at run if required
 
         for processor in self.parameter_processors:
             kwargs = processor(kwargs, self.constructor_params)

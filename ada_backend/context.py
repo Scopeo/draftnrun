@@ -133,6 +133,30 @@ def get_cron_execution_context() -> CronExecutionContext:
 
 
 # ---------------------------------------------------------------------------
+# Run variables context (OAuth / set_id overrides)
+# ---------------------------------------------------------------------------
+
+_run_variables: ContextVar[dict] = ContextVar("run_variables", default={})
+
+
+def set_run_variables(variables: dict) -> None:
+    """
+    Store the resolved run-time variables dict for the current async task.
+
+    Should be called once in run_agent() after resolve_variables(), before
+    any component is instantiated.  The dict maps OrgVariableDefinition.name
+    to the resolved OAuthConnection.id string (or other variable value), with
+    set_id overrides already applied.
+    """
+    _run_variables.set(variables)
+
+
+def get_run_variables() -> dict:
+    """Return the resolved variables dict for the current async task, or {} if not set."""
+    return _run_variables.get()
+
+
+# ---------------------------------------------------------------------------
 # Unified execution ID facade
 # ---------------------------------------------------------------------------
 

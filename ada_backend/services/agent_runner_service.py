@@ -8,6 +8,7 @@ from uuid import UUID
 import networkx as nx
 from sqlalchemy.orm import Session
 
+from ada_backend.context import set_run_variables
 from ada_backend.database.models import CallType, EnvType, OrgSecretType, ResponseFormat
 from ada_backend.repositories.credits_repository import get_organization_limit, get_organization_total_credits
 from ada_backend.repositories.edge_repository import get_edges
@@ -256,6 +257,7 @@ async def run_agent(
         raise ProjectNotFound(project_id)
 
     variables = resolve_variables(session, project_details.organization_id, set_ids, project_id=project_id)
+    set_run_variables(variables)
 
     today = datetime.now()
     organization_limit = get_organization_limit(
