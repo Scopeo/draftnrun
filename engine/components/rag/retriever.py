@@ -97,7 +97,7 @@ class Retriever(Component):
         metadata_date_key: Optional[str] = None,
         max_retrieved_chunks_after_penalty: Optional[int] = None,
         component_attributes: Optional[ComponentAttributes] = None,
-        source_id: Optional[UUID] = None,
+        source_ids: Optional[list[UUID]] = None,
         tool_description: ToolDescription = RETRIEVER_TOOL_DESCRIPTION,
     ):
         if component_attributes is None:
@@ -117,8 +117,8 @@ class Retriever(Component):
         self.default_penalty_rate = default_penalty_rate
         self.metadata_date_key = metadata_date_key
         self.max_retrieved_chunks_after_penalty = max_retrieved_chunks_after_penalty
-        self.source_id = source_id
-        LOGGER.info(f"Retriever initialized with source_id={self.source_id} for collection={collection_name}")
+        self.source_ids = source_ids
+        LOGGER.info(f"Retriever initialized with source_ids={self.source_ids} for collection={collection_name}")
 
     async def _get_chunks_without_trace(
         self,
@@ -126,8 +126,18 @@ class Retriever(Component):
         filters: Optional[dict] = None,
     ) -> list[SourceChunk]:
         source_id_filter = None
-        if self.source_id:
-            source_id_filter = {"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(self.source_id)}}]}
+        if self.source_ids:
+            if len(self.source_ids) == 1:
+                source_id_filter = {
+                    "must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(self.source_ids[0])}}]
+                }
+            else:
+                source_id_filter = {
+                    "should": [
+                        {"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(sid)}}
+                        for sid in self.source_ids
+                    ]
+                }
 
         final_filter = (
             merge_qdrant_filters_with_and_conditions(source_id_filter, filters)
@@ -135,7 +145,7 @@ class Retriever(Component):
             else (source_id_filter or filters)
         )
         LOGGER.info(
-            f"Retriever querying collection '{self.collection_name}' with source_id={self.source_id}, "
+            f"Retriever querying collection '{self.collection_name}' with source_ids={self.source_ids}, "
             f"filter: {json.dumps(final_filter)}"
         )
         chunks = await self._vectorestore_service.retrieve_similar_chunks_async(
@@ -151,7 +161,7 @@ class Retriever(Component):
         )
         LOGGER.info(
             f"Retriever retrieved {len(chunks)} chunks from collection "
-            f"'{self.collection_name}' with source_id={self.source_id}"
+            f"'{self.collection_name}' with source_ids={self.source_ids}"
         )
 
         for i, chunk in enumerate(chunks):
@@ -180,7 +190,7 @@ class Retriever(Component):
                     if self.component_attributes.component_instance_id is not None
                     else None
                 ),
-                "source_id": str(self.source_id),
+                "source_ids": str(self.source_ids),
             })
 
             if len(chunks) > 30:
