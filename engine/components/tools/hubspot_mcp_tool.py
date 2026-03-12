@@ -35,12 +35,15 @@ class HubSpotMCPTool(LocalMCPTool):
         cls,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        access_token: str,
+        access_token: str | None = None,
         allowed_tools: set[str] | None = None,
         timeout: int = 30,
     ) -> Self:
         if not access_token:
-            raise ValueError("access_token is required")
+            raise ValueError(
+                "HubSpot MCP requires a configured OAuth connection. "
+                "Please select a HubSpot connection in the component settings."
+            )
 
         allowed = allowed_tools if allowed_tools is not None else _DEFAULT_TOOLS
         tool_descriptions = get_tool_descriptions(allowed)

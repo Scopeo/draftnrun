@@ -228,24 +228,33 @@ class RemoteMCPToolFactory:
 
 # TODO: Refactor to inject the session directly
 async def resolve_oauth_access_token(
-    oauth_connection_id: str,
+    oauth_connection_id: str | None,
     provider_config_key: str,
-) -> str:
-    """Resolve an OAuth definition ID to an access token via Nango."""
-    definition_id = UUID(oauth_connection_id)
+) -> str | None:
+    """Resolve an OAuth definition ID to an access token via Nango.
 
+    Returns None when no connection is configured so components can validate at run time.
+    """
+    if not oauth_connection_id:
+        LOGGER.debug("No oauth_connection_id provided, skipping token resolution")
+        return None
+
+    definition_id = UUID(oauth_connection_id)
     with get_db_session() as session:
         definition = get_oauth_definition_by_id(session, definition_id)
         if not definition:
             raise ValueError(f"OAuth definition {definition_id} not found")
         if not definition.default_value:
-            raise ValueError(f"OAuth definition '{definition.name}' has no connection ID")
+            LOGGER.debug(f"OAuth definition {definition_id} has no connection (default_value is empty)")
+            return None
         connection_uuid = UUID(definition.default_value)
-        return await get_oauth_access_token(
+        token = await get_oauth_access_token(
             session=session,
             oauth_connection_id=connection_uuid,
             provider_config_key=provider_config_key,
         )
+        LOGGER.debug(f"Resolved OAuth token for definition {definition_id} (token present: {token is not None})")
+        return token
 
 
 class OAuthComponentFactory:
@@ -288,17 +297,10 @@ class OAuthComponentFactory:
             self.constructor_params = signature(method).parameters
 
     async def _create_async(self, **kwargs) -> Any:
-        """
-        Asynchronously resolve OAuth token and create component instance.
+        """Asynchronously resolve OAuth token and create component instance.
 
-        Args:
-            **kwargs: Component parameters including oauth_connection_id
-
-        Returns:
-            Instantiated component with resolved OAuth token
-
-        Raises:
-            ValueError: If oauth_connection_id is missing
+        access_token may be None when no connection is configured;
+        the component is expected to validate at run time.
         """
         oauth_connection_id = kwargs.pop("oauth_connection_id", None)
         if isinstance(oauth_connection_id, list):
