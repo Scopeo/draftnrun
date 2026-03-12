@@ -22,7 +22,7 @@ from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.source_repository import get_data_source_by_id
 from ada_backend.repositories.variable_definitions_repository import get_oauth_definition_by_id
-from ada_backend.services.errors import MissingDataSourceError
+from ada_backend.services.errors import MissingDataSourceError, NangoTokenMissingError, OAuthConnectionNotFoundError
 from ada_backend.services.integration_service import get_oauth_access_token
 from ada_backend.services.llm_models_service import (
     get_llm_models_by_capability_select_options_service,
@@ -258,7 +258,8 @@ async def resolve_oauth_access_token(
     with get_db_session() as session:
         definition = get_oauth_definition_by_id(session, definition_uuid)
         if not definition:
-            raise ValueError(f"OAuth definition {definition_uuid} not found")
+            LOGGER.warning(f"OAuth definition {definition_uuid} not found, returning None")
+            return None
 
         # set_id override takes priority over the stored default connection
         variables = get_run_variables()
@@ -273,11 +274,15 @@ async def resolve_oauth_access_token(
             LOGGER.info(f"No connection found for {definition.name}")
             return None
 
-        return await get_oauth_access_token(
-            session=session,
-            oauth_connection_id=connection_uuid,
-            provider_config_key=provider_config_key,
-        )
+        try:
+            return await get_oauth_access_token(
+                session=session,
+                oauth_connection_id=connection_uuid,
+                provider_config_key=provider_config_key,
+            )
+        except (OAuthConnectionNotFoundError, NangoTokenMissingError) as e:
+            LOGGER.warning(f"OAuth token resolution failed for {definition.name}: {e}")
+            return None
 
 
 class OAuthComponentFactory:
