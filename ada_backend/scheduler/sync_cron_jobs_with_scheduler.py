@@ -84,19 +84,19 @@ def _sync_and_load_jobs():
         LOGGER.warning("Attempted to sync jobs, but scheduler is not running.")
         return
 
-    LOGGER.info("Syncing cron jobs between database and scheduler...")
+    LOGGER.debug("Syncing cron jobs between database and scheduler...")
 
     try:
         with get_db_session() as session:
             # 1. Get all active jobs from our DB (the source of truth)
             active_db_crons = get_all_enabled_cron_jobs(session)
             active_db_cron_ids = {str(cron.id) for cron in active_db_crons}
-            LOGGER.info(f"Found {len(active_db_crons)} active cron jobs in the database.")
+            LOGGER.debug(f"Found {len(active_db_crons)} active cron jobs in the database.")
 
             # 2. Get all jobs currently in the scheduler's job store
             scheduler_jobs = scheduler.get_jobs()
             scheduler_job_ids = {job.id for job in scheduler_jobs}
-            LOGGER.info(f"Found {len(scheduler_jobs)} jobs in the scheduler job store.")
+            LOGGER.debug(f"Found {len(scheduler_jobs)} jobs in the scheduler job store.")
 
             # 3. Remove stale jobs from the scheduler
             # Exclude the sync job itself from removal (it's not in cron_jobs table)
@@ -110,7 +110,7 @@ def _sync_and_load_jobs():
                         LOGGER.error(f"Failed to remove stale job {job_id} from scheduler: {e}")
 
             # 4. Add or update jobs from our DB to the scheduler
-            LOGGER.info("Adding/updating jobs from database to scheduler...")
+            LOGGER.debug("Adding/updating jobs from database to scheduler...")
             for cron_job in active_db_crons:
                 try:
                     add_job_to_scheduler(
@@ -123,7 +123,7 @@ def _sync_and_load_jobs():
                 except Exception as e:
                     LOGGER.error(f"Failed to load cron job {cron_job.id}: {e}")
 
-        LOGGER.info("Cron job sync complete.")
+        LOGGER.debug("Cron job sync complete.")
 
     except Exception as e:
         LOGGER.error(f"An error occurred during cron job sync: {e}")

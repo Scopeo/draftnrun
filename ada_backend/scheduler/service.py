@@ -18,7 +18,7 @@ from ada_backend.repositories.cron_repository import (
     update_cron_run,
 )
 from ada_backend.scheduler.sync_cron_jobs_with_scheduler import schedule_sync_job
-from ada_backend.scheduler.utils import log_sync_job_status
+from ada_backend.scheduler.utils import ID_SYSTEM_SYNC_CRON_JOBS, log_sync_job_status
 from ada_backend.services.cron.registry import CRON_REGISTRY
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
@@ -91,6 +91,9 @@ def _job_listener(event: JobExecutionEvent):
     job_id = event.job_id
 
     log_sync_job_status(job_id, event)
+
+    if job_id == ID_SYSTEM_SYNC_CRON_JOBS:
+        return
 
     try:
         cron_id = UUID(job_id)
@@ -268,7 +271,7 @@ def add_job_to_scheduler(
             "job is not persisted to database. Check that your separate scheduler process is running."
         )
     else:
-        LOGGER.info(f"Added cron job {cron_id} to scheduler with expression '{cron_expr}' in timezone '{tz}'")
+        LOGGER.debug(f"Added cron job {cron_id} to scheduler with expression '{cron_expr}' in timezone '{tz}'")
 
     return job
 
