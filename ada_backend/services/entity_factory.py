@@ -399,8 +399,8 @@ def build_source_metadata_extractor_processor() -> ParameterProcessor:
         model_name = None
         qdrant_schema = None
 
-        for ds in data_sources:
-            source_id_str = ds.get("id") if isinstance(ds, dict) else None
+        for data_source in data_sources:
+            source_id_str = data_source.get("id") if isinstance(data_source, dict) else None
             if not source_id_str:
                 raise ValueError("Each data_source must contain an 'id' field")
             source_id = UUID(source_id_str)
