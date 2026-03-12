@@ -6,8 +6,11 @@ from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 from slack_sdk import WebClient
 
+from ada_backend.database.models import UIComponent, UIComponentProperties
+from ada_backend.services.integration_service import resolve_oauth_access_token
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
+from engine.integrations.providers import OAuthProvider
 from engine.integrations.slack.slack_utils import send_slack_message
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
@@ -36,6 +39,19 @@ SLACK_SENDER_TOOL_DESCRIPTION = ToolDescription(
 
 
 class SlackSenderInputs(BaseModel):
+    oauth_connection_id: str = Field(
+        description="OAuth connection for Slack",
+        json_schema_extra={
+            "is_tool_input": False,
+            "ui_component": UIComponent.OAUTH_CONNECTION,
+            "ui_component_properties": UIComponentProperties(
+                label="Slack Connection",
+                description="Select your authorized Slack workspace connection",
+                provider=OAuthProvider.SLACK.value,
+                icon="logos:slack-icon",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        },
+    )
     channel: str = Field(
         description="Channel name or ID to send message to (e.g., #general or C1234567890).",
         json_schema_extra={"is_tool_input": True},
@@ -82,48 +98,22 @@ class SlackSender(Component):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        access_token: Optional[str] = None,
         tool_description: ToolDescription = SLACK_SENDER_TOOL_DESCRIPTION,
     ):
-        """Initialize SlackSender with a provided Slack OAuth access token.
-
-        Args:
-            trace_manager: Trace manager for observability
-            component_attributes: Component configuration attributes
-            access_token: Slack OAuth access token (injected by OAuth processor); may be None until run.
-            tool_description: Tool description for the component
-        """
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
-        self._access_token = access_token
-        self.client = WebClient(token=access_token) if access_token else None
 
     async def _run_without_io_trace(
         self,
         inputs: SlackSenderInputs,
         ctx: dict,
     ) -> SlackSenderOutputs:
-        """Send a message to a Slack channel.
+        access_token = await resolve_oauth_access_token(inputs.oauth_connection_id, OAuthProvider.SLACK)
+        client = WebClient(token=access_token)
 
-        Args:
-            inputs: Input parameters with channel, message, and optional thread_ts
-            ctx: Execution context
-
-        Returns:
-            SlackSenderOutputs: Response with status, channel, timestamp, and message
-
-        Raises:
-            ValueError: If message or channel is not provided, or no OAuth connection configured
-            RuntimeError: If message sending fails
-        """
-        if not self.client:
-            raise ValueError(
-                "Slack Sender requires a configured OAuth connection. "
-                "Please select a Slack connection in the component settings."
-            )
         span = get_current_span()
         span.set_attributes({
             SpanAttributes.INPUT_VALUE: serialize_to_json(
@@ -135,7 +125,7 @@ class SlackSender(Component):
         try:
             LOGGER.info(f"Sending message to Slack channel {inputs.channel}")
             result = send_slack_message(
-                client=self.client,
+                client=client,
                 channel=inputs.channel,
                 text=inputs.message,
                 thread_ts=inputs.thread_ts,

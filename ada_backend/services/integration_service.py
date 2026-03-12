@@ -7,10 +7,12 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.database.models import VariableType
+from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories import integration_repository, oauth_connection_repository
 from ada_backend.repositories.variable_definitions_repository import (
     delete_oauth_definitions_for_connection,
     find_oauth_definition_by_connection_id,
+    get_oauth_definition_by_id,
     upsert_org_definition,
 )
 from ada_backend.repositories.variable_sets_repository import (
@@ -447,3 +449,40 @@ async def add_integration_secrets_service(
         integration_id=integration_id,
         secret_id=integration_secret.id,
     )
+
+
+# TODO: Refactor to inject the session directly
+async def resolve_oauth_access_token(
+    oauth_definition_id: str,
+    provider_config_key: str,
+) -> str:
+    """Resolve an OAuth identifier to an access token via Nango.
+
+    Accepts two forms:
+    - OrgVariableDefinition ID: stored in the port FieldExpression when the user
+      configures the connection via the UI (default_value holds the OAuthConnection UUID).
+    - OAuthConnection UUID directly: injected at runtime via a variable set (set_id).
+    """
+    definition_id = UUID(oauth_definition_id)
+
+    with get_db_session() as session:
+        definition = get_oauth_definition_by_id(session, definition_id)
+
+        if definition and definition.default_value:
+            connection_uuid = UUID(definition.default_value)
+        else:
+            # Fallback: treat the value directly as an OAuthConnection UUID.
+            # This happens when oauth_connection_id is injected via a variable set at runtime.
+            # TODO: For values coming from variable sets, have components call
+            # get_oauth_access_token(...) directly with the connection ID and remove
+            # this fallback from resolve_oauth_access_token.
+            LOGGER.info(
+                "OAuth definition does not have a default value, using the definition ID "
+                f"{definition_id} as the OAuthConnection ID"
+            )
+            connection_uuid = definition_id
+        return await get_oauth_access_token(
+            session=session,
+            oauth_connection_id=connection_uuid,
+            provider_config_key=provider_config_key,
+        )

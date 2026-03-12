@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
@@ -7,20 +5,12 @@ from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
     upsert_component_versions,
     upsert_components,
-    upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
-from ada_backend.database.models import (
-    Component,
-    ComponentParameterDefinition,
-    ParameterType,
-    UIComponent,
-    UIComponentProperties,
-)
+from ada_backend.database.models import Component
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
-from engine.integrations.providers import OAuthProvider
 
 
 def seed_slack_components(session: Session):
@@ -43,27 +33,6 @@ def seed_slack_components(session: Session):
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["slack_sender_tool_description"],
     )
     upsert_component_versions(session, [slack_sender_version])
-
-    slack_sender_parameter_definitions = [
-        ComponentParameterDefinition(
-            id=UUID("7263b707-51ca-4d64-abfd-6c0907b3e860"),
-            component_version_id=slack_sender_version.id,
-            name="oauth_connection_id",
-            type=ParameterType.STRING,
-            nullable=True,
-            order=None,
-            parameter_order_within_group=0,
-            ui_component=UIComponent.OAUTH_CONNECTION,
-            ui_component_properties=UIComponentProperties(
-                label="Slack Connection",
-                description="Select your authorized Slack workspace connection",
-                provider=OAuthProvider.SLACK.value,
-                icon="logos:slack-icon",
-            ).model_dump(exclude_unset=True, exclude_none=True),
-        )
-    ]
-
-    upsert_components_parameter_definitions(session, slack_sender_parameter_definitions)
 
     upsert_release_stage_to_current_version_mapping(
         session=session,
