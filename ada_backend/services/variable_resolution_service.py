@@ -5,13 +5,11 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import VariableType
-from ada_backend.database.models import VariableType
 from ada_backend.repositories.organization_repository import (
     list_variable_secrets_for_definitions,
     list_variable_secrets_for_set,
 )
 from ada_backend.repositories.variable_definitions_repository import (
-    get_org_definition,
     list_org_definitions,
 )
 from ada_backend.repositories.variable_sets_repository import get_org_variable_set
