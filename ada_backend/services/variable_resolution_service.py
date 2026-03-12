@@ -5,11 +5,15 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import VariableType
+from ada_backend.database.models import VariableType
 from ada_backend.repositories.organization_repository import (
     list_variable_secrets_for_definitions,
     list_variable_secrets_for_set,
 )
-from ada_backend.repositories.variable_definitions_repository import list_org_definitions
+from ada_backend.repositories.variable_definitions_repository import (
+    get_org_definition,
+    list_org_definitions,
+)
 from ada_backend.repositories.variable_sets_repository import get_org_variable_set
 
 LOGGER = logging.getLogger(__name__)
@@ -48,11 +52,14 @@ def resolve_variables(
 
     # 2. Layer each set in order (later overrides earlier)
     for set_id in set_ids:
+        LOGGER.info(f"Resolving variables from set {set_id}")
         org_set = get_org_variable_set(session, organization_id, set_id)
         if not org_set:
             continue
 
         if org_set.variable_type == VariableType.OAUTH:
+            LOGGER.info(f"Found org_set {org_set}")
+            LOGGER.info(f"Org_set.variable_type: {org_set.variable_type}")
             for name, value in org_set.values.items():
                 resolved[name] = value
             continue
@@ -62,6 +69,7 @@ def resolve_variables(
         for name, value in org_set.values.items():
             definition = definitions_by_name.get(name)
             if definition and definition.type != VariableType.SECRET:
+                    LOGGER.info(f"Adding {name} = {value} to resolved")
                 resolved[name] = value
 
         for definition in variable_definitions:

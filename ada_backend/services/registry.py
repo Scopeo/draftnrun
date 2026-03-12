@@ -13,7 +13,6 @@ from ada_backend.services.entity_factory import (
     AgentFactory,
     EntityFactory,
     NonToolCallableBlockFactory,
-    OAuthComponentFactory,
     RemoteMCPToolFactory,
     build_completion_service_processor,
     build_db_service_processor,
@@ -65,14 +64,13 @@ from engine.components.synthesizer import Synthesizer
 from engine.components.table_lookup import TableLookup
 from engine.components.tools.api_call_tool import APICallTool
 from engine.components.tools.docx_template import DocxTemplateAgent
-from engine.components.tools.hubspot_mcp_tool import HubSpotMCPTool
+from engine.components.tools.hubspot_mcp_tool import HubSpotMCPTool, HubSpotNeverdropMCPTool
 from engine.components.tools.linkup_tool import LinkupSearchTool
 from engine.components.tools.python_code_runner import PythonCodeRunner
 from engine.components.tools.terminal_command_runner import TerminalCommandRunner
 from engine.components.web_search_tool_openai import WebSearchOpenAITool
 from engine.integrations.gmail.gmail_sender import GmailSender
 from engine.integrations.gmail.gmail_sender_v2 import GmailSenderV2
-from engine.integrations.providers import OAuthProvider
 from engine.integrations.slack.slack_sender import SlackSender
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
@@ -540,9 +538,8 @@ def create_factory_registry() -> FactoryRegistry:
 
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["gmail_sender_v2"],
-        factory=OAuthComponentFactory(
+        factory=AgentFactory(
             entity_class=GmailSenderV2,
-            provider_config_key=OAuthProvider.GMAIL,
         ),
     )
 
@@ -556,29 +553,30 @@ def create_factory_registry() -> FactoryRegistry:
 
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["slack_sender"],
-        factory=OAuthComponentFactory(
+        factory=AgentFactory(
             entity_class=SlackSender,
-            provider_config_key=OAuthProvider.SLACK,
         ),
     )
 
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["hubspot_mcp_tool"],
-        factory=OAuthComponentFactory(
+        factory=EntityFactory(
             entity_class=HubSpotMCPTool,
-            provider_config_key=OAuthProvider.HUBSPOT,
-            constructor_method="from_access_token",
-            parameter_processors=[build_ignore_tool_description_processor()],
+            parameter_processors=[
+                build_ignore_tool_description_processor(),
+                build_trace_manager_processor(),
+            ],
         ),
     )
 
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["hubspot_neverdrop_mcp_tool"],
-        factory=OAuthComponentFactory(
-            entity_class=HubSpotMCPTool,
-            provider_config_key=OAuthProvider.HUBSPOT_NEVERDROP,
-            constructor_method="from_access_token",
-            parameter_processors=[build_ignore_tool_description_processor()],
+        factory=EntityFactory(
+            entity_class=HubSpotNeverdropMCPTool,
+            parameter_processors=[
+                build_ignore_tool_description_processor(),
+                build_trace_manager_processor(),
+            ],
         ),
     )
 

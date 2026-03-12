@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from ada_backend.context import get_request_context, get_run_variables
+from ada_backend.context import get_request_context
 from ada_backend.database.models import EnvType
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
@@ -21,9 +21,7 @@ from ada_backend.database.seed.constants import (
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.source_repository import get_data_source_by_id
-from ada_backend.repositories.variable_definitions_repository import get_oauth_definition_by_id
 from ada_backend.services.errors import MissingDataSourceError
-from ada_backend.services.integration_service import get_oauth_access_token
 from ada_backend.services.llm_models_service import (
     get_llm_models_by_capability_select_options_service,
     get_model_id_by_name_service,
@@ -229,144 +227,6 @@ class RemoteMCPToolFactory:
                 raise ValueError("Trace manager is required")
             kwargs["trace_manager"] = trace_manager
         return _run_coroutine_sync(RemoteMCPTool.from_mcp_server(**kwargs))
-
-
-# TODO: Refactor to inject the session directly
-async def resolve_oauth_access_token(
-    definition_id: str | None,
-    provider_config_key: str,
-) -> str | None:
-    """
-    Resolve an OrgVariableDefinition ID to an access token via Nango.
-    Returns None when no connection is configured so components can be saved
-    without a connection and raise at run time instead (same pattern as Router).
-
-    The `definition_id` is what the component parameter stores after the
-    d4e5f6a7b8c9 migration (previously it stored the OAuthConnection.id directly).
-    # TODO: rename the DB column component_parameter_definitions.oauth_connection_id
-    #       → oauth_definition_id to reflect that it now stores OrgVariableDefinition.id
-
-    Resolution order:
-    1. Run-time variables context (set_id overrides set by run_agent via set_run_variables)
-    2. definition.default_value (org-level default connection)
-    3. None — component raises at run time if a connection is required
-    """
-    if not definition_id:
-        return None
-
-    definition_uuid = UUID(definition_id)
-    with get_db_session() as session:
-        definition = get_oauth_definition_by_id(session, definition_uuid)
-        if not definition:
-            raise ValueError(f"OAuth definition {definition_uuid} not found")
-
-        # set_id override takes priority over the stored default connection
-        variables = get_run_variables()
-        LOGGER.info(f"Set run variables: {variables}")
-        if variables and definition.name in variables:
-            LOGGER.info(f"Using set run variables for {definition.name}: {variables[definition.name]}")
-            connection_uuid = UUID(variables[definition.name])
-        elif definition.default_value:
-            LOGGER.info(f"Using default value for {definition.name}: {definition.default_value}")
-            connection_uuid = UUID(definition.default_value)
-        else:
-            LOGGER.info(f"No connection found for {definition.name}")
-            return None
-
-        return await get_oauth_access_token(
-            session=session,
-            oauth_connection_id=connection_uuid,
-            provider_config_key=provider_config_key,
-        )
-
-
-class OAuthComponentFactory:
-    """
-    Generic async factory for components that require OAuth access tokens via Nango.
-
-    Resolves oauth_connection_id to access_token asynchronously before instantiating the component.
-    """
-
-    def __init__(
-        self,
-        entity_class: Type,
-        provider_config_key: str,
-        target_param_name: str = "access_token",
-        parameter_processors: list[ParameterProcessor] | None = None,
-        constructor_method: str = "__init__",
-    ):
-        """
-        Initialize the OAuth component factory.
-
-        Args:
-            entity_class: The component class to instantiate
-            provider_config_key: OAuth provider key (e.g., "slack", "gmail")
-            target_param_name: Parameter name for the resolved token (default: "access_token")
-            parameter_processors: Additional parameter processors to apply after token resolution
-            constructor_method: Method to use for instantiation (default: "__init__")
-        """
-        self.entity_class = entity_class
-        self.provider_config_key = provider_config_key
-        self.target_param_name = target_param_name
-        self.parameter_processors = parameter_processors or []
-        self.constructor_method = constructor_method
-
-        if constructor_method == "__init__":
-            self.constructor_params = signature(entity_class.__init__).parameters
-        else:
-            method = getattr(entity_class, constructor_method, None)
-            if method is None or not callable(method):
-                raise ValueError(f"Method '{constructor_method}' not found or not callable on {entity_class.__name__}")
-            self.constructor_params = signature(method).parameters
-
-    async def _create_async(self, **kwargs) -> Any:
-        """
-        Asynchronously resolve OAuth token and create component instance.
-
-        Args:
-            **kwargs: Component parameters including oauth_connection_id
-
-        Returns:
-            Instantiated component with resolved OAuth token (access_token may be None;
-            component raises at run time if a connection is required but not configured).
-        """
-        # TODO: DB column is still named "oauth_connection_id" but stores OrgVariableDefinition.id
-        #       after migration d4e5f6a7b8c9 — rename column to oauth_definition_id
-        definition_id = kwargs.pop("oauth_connection_id", None)
-        if isinstance(definition_id, list):
-            definition_id = definition_id[0]
-        access_token = await resolve_oauth_access_token(definition_id, self.provider_config_key)
-        kwargs[self.target_param_name] = access_token  # may be None; component raises at run if required
-
-        for processor in self.parameter_processors:
-            kwargs = processor(kwargs, self.constructor_params)
-
-        if self.constructor_method == "__init__":
-            return self.entity_class(**kwargs)
-        else:
-            constructor = getattr(self.entity_class, self.constructor_method)
-            if asyncio.iscoroutinefunction(constructor):
-                return await constructor(**kwargs)
-            else:
-                return constructor(**kwargs)
-
-    def __call__(self, **kwargs) -> Any:
-        """
-        Create component instance, handling event loop scenarios.
-
-        Args:
-            **kwargs: Component parameters
-
-        Returns:
-            Instantiated component
-        """
-        if "trace_manager" not in kwargs:
-            trace_manager = get_trace_manager()
-            if trace_manager is None:
-                raise ValueError("Trace manager is required")
-            kwargs["trace_manager"] = trace_manager
-
-        return _run_coroutine_sync(self._create_async(**kwargs))
 
 
 class NonToolCallableBlockFactory(EntityFactory):

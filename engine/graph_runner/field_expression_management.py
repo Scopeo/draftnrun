@@ -27,6 +27,8 @@ def evaluate_expression(
 
     Uses structural pattern matching over AST node classes.
     """
+    LOGGER.info(f"Evaluating expression {expression} for {target_field_name}")
+    LOGGER.info(f"Variables: {variables}")
 
     def evaluate_ref_as_object(ref: RefNode) -> Any:
         """Evaluate a RefNode and return the raw value (possibly dict/list/str)."""
