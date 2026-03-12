@@ -134,8 +134,8 @@ class Retriever(Component):
             else:
                 source_id_filter = {
                     "should": [
-                        {"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(sid)}}
-                        for sid in self.source_ids
+                        {"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(source_id)}}
+                        for source_id in self.source_ids
                     ]
                 }
 
