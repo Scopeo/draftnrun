@@ -139,6 +139,7 @@ async def create_oauth_connection(
             provider_config_key=request.provider_config_key.value,
             created_by_user_id=auth.user_id,
             name=request.name,
+            skip_definition=request.skip_definition,
         )
 
         return OAuthConnectionResponse(

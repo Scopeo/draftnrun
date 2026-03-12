@@ -11,6 +11,7 @@ class CreateOAuthConnectionRequest(BaseModel):
     end_user_email: str | None = None
     name: str = ""
     pending_connection_id: UUID | None = None
+    skip_definition: bool = False
 
 
 class UpdateOAuthConnectionRequest(BaseModel):
