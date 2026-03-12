@@ -19,6 +19,7 @@ from ada_backend.repositories.cron_repository import (
 )
 from ada_backend.scheduler.sync_cron_jobs_with_scheduler import schedule_sync_job
 from ada_backend.scheduler.utils import log_sync_job_status
+from ada_backend.services.cron.core import AsyncCronJobResult
 from ada_backend.services.cron.registry import CRON_REGISTRY
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
@@ -73,10 +74,13 @@ def get_scheduler() -> AsyncIOScheduler:
     return _scheduler
 
 
+_ACTIVE_CRON_STATUSES = frozenset({CronStatus.RUNNING, CronStatus.QUEUED})
+
+
 def _update_recent_run_status(session, cron_id: UUID, status: CronStatus, error: Optional[str] = None):
-    """Set latest RUNNING cron run to given status and finalize timestamps."""
+    """Set latest RUNNING/QUEUED cron run to given status and finalize timestamps."""
     recent_runs = get_cron_runs_by_cron_id(session, cron_id, limit=1)
-    if recent_runs and recent_runs[0].status == CronStatus.RUNNING:
+    if recent_runs and recent_runs[0].status in _ACTIVE_CRON_STATUSES:
         update_cron_run(
             session=session,
             run_id=recent_runs[0].id,
@@ -101,12 +105,14 @@ def _job_listener(event: JobExecutionEvent):
     with get_db_session() as session:
         try:
             if event.exception:
+                # Safety net: if an exception escaped _execute_cron_job before it
+                # could update the status itself (e.g. during payload parsing),
+                # mark the run as ERROR here.
                 error_msg = str(event.exception)
                 LOGGER.error(f"Cron job {cron_id} failed: {error_msg}")
                 _update_recent_run_status(session, cron_id, CronStatus.ERROR, error_msg)
-            else:
-                LOGGER.info(f"Cron job {cron_id} completed successfully")
-                _update_recent_run_status(session, cron_id, CronStatus.COMPLETED)
+            # No else: _execute_cron_job handles COMPLETED for sync jobs;
+            # async jobs (AsyncCronJobResult) are updated by the background task callback.
         except Exception as e:
             LOGGER.error(f"Error updating cron run for job {cron_id}: {e}")
             _update_recent_run_status(session, cron_id, CronStatus.ERROR, str(e))
@@ -151,6 +157,18 @@ async def _execute_cron_job(cron_id: UUID, entrypoint: CronEntrypoint, payload: 
 
             # Execution Pydantic Model -> Executor
             result = await spec.executor(execution_payload, db=session, cron_id=cron_id)
+
+        if isinstance(result, AsyncCronJobResult):
+            # Work dispatched asynchronously (202). Move to QUEUED so the status
+            # correctly shows "waiting for background execution to start".
+            # The background task will transition QUEUED → RUNNING → COMPLETED/ERROR.
+            with get_db_session() as session:
+                update_cron_run(session=session, run_id=run_id, status=CronStatus.QUEUED)
+            LOGGER.info(
+                f"Cron job {cron_id} queued "
+                f"(run_id={result.run_id}, cron_run_id={result.cron_run_id})"
+            )
+            return result
 
         with get_db_session() as session:
             update_cron_run(

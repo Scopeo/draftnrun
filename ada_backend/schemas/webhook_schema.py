@@ -1,5 +1,6 @@
 from enum import StrEnum
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -44,6 +45,13 @@ class FilterCondition(BaseModel):
 class FilterExpression(BaseModel):
     operator: LogicalOperator
     conditions: List[FilterCondition]
+
+
+class RunProjectBody(BaseModel):
+    """Request body for POST /internal/webhooks/projects/{project_id}/envs/{env}/run."""
+
+    input_data: Dict[str, Any]
+    cron_run_id: Optional[UUID] = None
 
 
 class WebhookExecuteBody(BaseModel):

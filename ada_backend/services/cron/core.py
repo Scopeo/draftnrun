@@ -2,10 +2,24 @@
 Core protocols and spec for cron handlers and executors.
 """
 
+from dataclasses import dataclass
 from typing import Callable, Optional, Protocol, runtime_checkable
 from uuid import UUID
 
 from pydantic import BaseModel
+
+
+@dataclass
+class AsyncCronJobResult:
+    """
+    Returned by an executor when the actual work is dispatched asynchronously
+    (e.g. POSTed to a background-task endpoint that returns 202).
+    _execute_cron_job moves the CronRun to QUEUED when it sees this sentinel.
+    The background task is responsible for QUEUED → RUNNING → COMPLETED/ERROR.
+    """
+
+    cron_run_id: UUID
+    run_id: Optional[str] = None  # set when a Run record was created (agent_inference)
 
 
 class BaseUserPayload(BaseModel):
