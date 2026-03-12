@@ -1,7 +1,7 @@
 import json
 import logging
 from collections.abc import Callable
-from typing import Any, Optional, Type
+from typing import Optional, Type
 
 from pydantic import BaseModel, Field, field_validator
 
