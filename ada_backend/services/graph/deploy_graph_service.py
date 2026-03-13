@@ -5,10 +5,11 @@ from uuid import UUID, uuid4
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-from ada_backend.database.models import EnvType
+from ada_backend.database.models import EnvType, PortType
 from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,
     get_component_parameter_definition_by_component_version,
+    get_port_definitions_for_component_version_ids,
     upsert_sub_component_input,
 )
 from ada_backend.repositories.edge_repository import get_edges, upsert_edge
@@ -72,9 +73,22 @@ def copy_component_instance(
         is_start_node=is_start_node,
     )
     LOGGER.info(f"Copying component instance {component_instance.name} with ID {component_instance.id}")
+
+    # Exclude INPUT-port-backed parameters (e.g. payload_schema on Start).
+    # These are persisted as FieldExpressions and cloned separately by
+    # remap_field_expressions_for_cloning in clone_graph_runner.
+    input_port_names = {
+        port.name
+        for port in get_port_definitions_for_component_version_ids(
+            session, [component_instance.component_version_id]
+        )
+        if port.port_type == PortType.INPUT
+    }
+
     parameters = [
         PipelineParameterSchema(name=parameter.name, value=parameter.value, order=parameter.order)
         for parameter in component_instance.parameters
+        if parameter.name not in input_port_names
     ]
     LOGGER.info(f"Copied parameters: {parameters}")
     new_composant_instance = ComponentInstanceSchema(
