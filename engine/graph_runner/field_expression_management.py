@@ -9,7 +9,15 @@ type coercion, and input resolution for field expressions.
 import logging
 from typing import Any, Callable
 
-from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode, VarNode
+from engine.field_expressions.ast import (
+    ConcatNode,
+    ExpressionNode,
+    JsonBuildNode,
+    LiteralNode,
+    OAuthNode,
+    RefNode,
+    VarNode,
+)
 from engine.field_expressions.errors import FieldExpressionError
 from engine.graph_runner.types import Task
 
@@ -81,6 +89,10 @@ def evaluate_expression(
             raise FieldExpressionError(f"Variable '{var.name}' not found")
         return variables[var.name]
 
+    def evaluate_oauth(oauth: OAuthNode) -> str:
+        """Evaluate an OAuthNode by returning its definition_id for downstream resolution."""
+        return oauth.definition_id
+
     def evaluate_node(node: ExpressionNode) -> str:
         """Evaluate node to string (for concat/ref/literal)."""
         match node:
@@ -95,6 +107,9 @@ def evaluate_expression(
                 raw_value = evaluate_var(var)
                 return to_string(raw_value)
 
+            case OAuthNode() as oauth:
+                return evaluate_oauth(oauth)
+
             case ConcatNode(parts=parts):
                 return "".join(evaluate_node(part) for part in parts)
 
@@ -102,6 +117,11 @@ def evaluate_expression(
                 raise FieldExpressionError(f"Unknown node type: {node}")
 
     match expression:
+        case OAuthNode() as oauth:
+            result = evaluate_oauth(oauth)
+            LOGGER.debug(f"Evaluated OAuth expression for {target_field_name}: definition_id={result}")
+            return result
+
         case VarNode() as var:
             result = evaluate_var(var)
             LOGGER.debug(f"Evaluated variable expression for {target_field_name}: {result}")
