@@ -16,7 +16,6 @@ from ada_backend.repositories.graph_runner_repository import (
     delete_temp_folder,
     get_component_nodes,
     get_graph_runner_for_env,
-    get_start_components,
     graph_runner_exists,
 )
 from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
@@ -36,6 +35,7 @@ from ada_backend.services.file_response_service import (
     save_input_files_to_temp_folder,
     temp_folder_exists,
 )
+from ada_backend.services.graph_reachability import find_reachable_nodes
 from ada_backend.services.tag_service import compose_tag_name
 from ada_backend.services.variable_resolution_service import resolve_variables
 from engine.components.errors import (
@@ -116,7 +116,40 @@ async def build_graph_runner(
     # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
     component_nodes = get_component_nodes(session, graph_runner_id)
     edges = get_edges(session, graph_runner_id)
-    start_nodes = [str(node.id) for node in get_start_components(session, graph_runner_id)]
+
+    trigger_node_ids = {str(node.id) for node in component_nodes if node.is_trigger}
+
+    if trigger_node_ids:
+        reachable_node_ids = find_reachable_nodes(component_nodes, edges, trigger_node_ids)
+        all_node_ids = {str(node.id) for node in component_nodes}
+        unreachable_node_ids = all_node_ids - reachable_node_ids
+
+        if unreachable_node_ids:
+            unreachable_names = [
+                node.name for node in component_nodes if str(node.id) in unreachable_node_ids
+            ]
+            LOGGER.warning(
+                "Skipping %d block(s) not triggered by a start block: %s",
+                len(unreachable_node_ids),
+                ", ".join(unreachable_names),
+            )
+
+        reachable_component_nodes = [node for node in component_nodes if str(node.id) in reachable_node_ids]
+        reachable_edges = [
+            edge for edge in edges
+            if str(edge.source_node_id) in reachable_node_ids
+            and str(edge.target_node_id) in reachable_node_ids
+        ]
+        start_nodes = [str(node_id) for node_id in trigger_node_ids]
+    else:
+        # TODO: Workaround for workflows that do not have a trigger — run all blocks.
+        #  Once all workflows have a trigger, remove this fallback.
+        LOGGER.info("No trigger node found in graph %s — running all blocks", graph_runner_id)
+        reachable_node_ids = {str(node.id) for node in component_nodes}
+        reachable_component_nodes = list(component_nodes)
+        reachable_edges = list(edges)
+        start_nodes = [str(node.id) for node in component_nodes if node.is_start_node]
+
     # Fetch port mappings for this graph
     port_mappings = list_port_mappings_for_graph(session, graph_runner_id)
     port_mappings_graph = []
@@ -136,7 +169,7 @@ async def build_graph_runner(
             "dispatch_strategy": port_mapping.dispatch_strategy,
         })
 
-    component_instance_ids = [node.id for node in component_nodes]
+    component_instance_ids = [node.id for node in reachable_component_nodes]
     expressions: list[GraphRunner.ExpressionSpec] = []
     for component_instance_id in component_instance_ids:
         input_port_instances = get_input_port_instances_for_component_instance(
@@ -154,7 +187,7 @@ async def build_graph_runner(
     runnables: dict[str, Runnable] = {}
     graph = nx.DiGraph()
 
-    for component_node in component_nodes:
+    for component_node in reachable_component_nodes:
         agent = instantiate_component(
             session=session,
             component_instance_id=component_node.id,
@@ -163,7 +196,7 @@ async def build_graph_runner(
         runnables[str(component_node.id)] = agent
         graph.add_node(str(component_node.id))
 
-    for edge in edges:
+    for edge in reachable_edges:
         if edge.source_node_id:
             graph.add_edge(
                 str(edge.source_node_id),

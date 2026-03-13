@@ -125,10 +125,18 @@ def get_component_nodes(session: Session, graph_runner_id: UUID) -> list[Compone
         list[ComponentNodeDTO]
     """
     results = (
-        session.query(db.ComponentInstance, db.GraphRunnerNode)
+        session.query(db.ComponentInstance, db.GraphRunnerNode, db.Component)
         .join(
             db.GraphRunnerNode,
             db.ComponentInstance.id == db.GraphRunnerNode.node_id,
+        )
+        .join(
+            db.ComponentVersion,
+            db.ComponentInstance.component_version_id == db.ComponentVersion.id,
+        )
+        .join(
+            db.Component,
+            db.ComponentVersion.component_id == db.Component.id,
         )
         .filter(db.GraphRunnerNode.graph_runner_id == graph_runner_id)
         .all()
@@ -138,10 +146,11 @@ def get_component_nodes(session: Session, graph_runner_id: UUID) -> list[Compone
             id=component_instance.id,
             name=component_instance.name,
             is_start_node=node_to_graph_runner.is_start_node,
+            is_trigger=component.is_trigger,
             component_instance_id=component_instance.id,
             graph_runner_id=graph_runner_id,
         )
-        for component_instance, node_to_graph_runner in results
+        for component_instance, node_to_graph_runner, component in results
     ]
 
 
