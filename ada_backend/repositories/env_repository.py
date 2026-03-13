@@ -43,7 +43,7 @@ def get_env_relationship_by_graph_runner_id(
     )
 
 
-def update_graph_runner_env(session: Session, graph_runner_id: UUID, env: EnvType):
+def update_graph_runner_env(session: Session, graph_runner_id: UUID, env: EnvType, commit: bool = True):
     env_relationship = (
         session.query(db.ProjectEnvironmentBinding)
         .filter(db.ProjectEnvironmentBinding.graph_runner_id == graph_runner_id)
@@ -53,7 +53,10 @@ def update_graph_runner_env(session: Session, graph_runner_id: UUID, env: EnvTyp
         raise ValueError(f"Graph runner with ID {graph_runner_id} not found.")
     env_relationship.environment = env
     session.add(env_relationship)
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
 
 
 def bind_graph_runner_to_project(
@@ -61,6 +64,7 @@ def bind_graph_runner_to_project(
     graph_runner_id: UUID,
     project_id: UUID,
     env: Optional[EnvType] = None,
+    commit: bool = True,
 ) -> db.ProjectEnvironmentBinding:
     existing_binding = (
         (
@@ -77,12 +81,18 @@ def bind_graph_runner_to_project(
 
     if existing_binding:
         existing_binding.graph_runner_id = graph_runner_id
-        session.commit()
+        if commit:
+            session.commit()
+        else:
+            session.flush()
         return existing_binding
 
     relationship = db.ProjectEnvironmentBinding(
         graph_runner_id=graph_runner_id, project_id=project_id, environment=env
     )
     session.add(relationship)
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
     return relationship
