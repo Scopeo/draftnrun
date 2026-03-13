@@ -76,6 +76,7 @@ class ComponentNodeDTO(BaseModel):
     id: UUID
     name: str
     is_start_node: bool
+    is_trigger: bool = False
     component_instance_id: UUID | None = None
     graph_runner_id: UUID | None = None
 

@@ -336,6 +336,7 @@ class Component(Base):
     function_callable = mapped_column(Boolean, nullable=False, default=False)
     can_use_function_calling = mapped_column(Boolean, nullable=False, default=False)
     is_protected = mapped_column(Boolean, nullable=False, default=False)
+    is_trigger = mapped_column(Boolean, nullable=False, default=False)
 
     categories = relationship(
         "ComponentCategory",

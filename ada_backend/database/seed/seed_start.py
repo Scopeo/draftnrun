@@ -16,6 +16,7 @@ def seed_start_components(session: Session):
         name="Start",
         is_agent=True,
         is_protected=True,
+        is_trigger=True,
         icon="tabler-play",
     )
     upsert_components(
