@@ -5,8 +5,10 @@ from typing import Iterable, Optional, Type
 from googleapiclient.errors import HttpError
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from ada_backend.database.models import UIComponent, UIComponentProperties
+from ada_backend.services.integration_service import resolve_oauth_access_token
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.integrations.gmail.gmail_sender import (
@@ -15,6 +17,7 @@ from engine.integrations.gmail.gmail_sender import (
     GmailSenderOutputs,
 )
 from engine.integrations.gmail.gmail_utils import create_raw_mail_message
+from engine.integrations.providers import OAuthProvider
 from engine.integrations.utils import get_gmail_sender_service, get_google_user_email
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
@@ -22,15 +25,31 @@ from engine.trace.trace_manager import TraceManager
 LOGGER = logging.getLogger(__name__)
 
 
+class GmailSenderV2Inputs(GmailSenderInputs):
+    oauth_connection_id: str = Field(
+        description="OAuth connection for Gmail",
+        json_schema_extra={
+            "is_tool_input": False,
+            "ui_component": UIComponent.OAUTH_CONNECTION,
+            "ui_component_properties": UIComponentProperties(
+                label="Gmail Connection",
+                description="Select your authorized Gmail account connection",
+                provider=OAuthProvider.GMAIL.value,
+                icon="logos-google-gmail",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        },
+    )
+
+
 class GmailSenderV2(Component):
-    """Gmail sender using Nango OAuth. Receives access_token directly (injected by OAuthComponentFactory)."""
+    """Gmail sender using Nango OAuth. Resolves access_token at runtime from oauth_connection_id."""
 
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
     migrated = True
 
     @classmethod
     def get_inputs_schema(cls) -> Type[BaseModel]:
-        return GmailSenderInputs
+        return GmailSenderV2Inputs
 
     @classmethod
     def get_outputs_schema(cls) -> Type[BaseModel]:
@@ -44,7 +63,6 @@ class GmailSenderV2(Component):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        access_token: Optional[str] = None,
         save_as_draft: bool = True,
         tool_description: ToolDescription = GMAIL_SENDER_TOOL_DESCRIPTION,
     ):
@@ -53,33 +71,12 @@ class GmailSenderV2(Component):
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
-        self._access_token = access_token
-        self._service = None
-        self._email_address = None
         self.save_as_draft = save_as_draft
 
-    def _ensure_client(self) -> None:
-        if not self._access_token:
-            raise ValueError(
-                "Gmail Sender requires a configured OAuth connection. "
-                "Please select a Gmail connection in the component settings."
-            )
-        if self._service is None:
-            self._service = get_gmail_sender_service(self._access_token)
-            self._email_address = get_google_user_email(self._access_token)
-
-    @property
-    def service(self):
-        self._ensure_client()
-        return self._service
-
-    @property
-    def email_address(self) -> str:
-        self._ensure_client()
-        return self._email_address
-
-    def gmail_create_draft(
+    def _gmail_create_draft(
         self,
+        service,
+        email_address: str,
         email_subject: str,
         email_body: str,
         email_recipients: Optional[list[str]] = None,
@@ -92,14 +89,14 @@ class GmailSenderV2(Component):
             raw_email_message = create_raw_mail_message(
                 subject=email_subject,
                 body=email_body,
-                sender_email_address=self.email_address,
+                sender_email_address=email_address,
                 recipients=email_recipients,
                 cc=cc,
                 bcc=bcc,
                 attachments=attachments,
                 html_body=html_body,
             )
-            draft = self.service.users().drafts().create(userId="me", body={"message": raw_email_message}).execute()
+            draft = service.users().drafts().create(userId="me", body={"message": raw_email_message}).execute()
             LOGGER.debug(f"Draft id: {draft['id']}\nDraft message: {draft['message']}")
 
         except HttpError as error:
@@ -107,8 +104,10 @@ class GmailSenderV2(Component):
             draft = None
         return draft
 
-    def gmail_send_email(
+    def _gmail_send_email(
         self,
+        service,
+        email_address: str,
         email_subject: str,
         email_body: str,
         email_recipients: Optional[list[str]] = None,
@@ -121,23 +120,28 @@ class GmailSenderV2(Component):
             create_message = create_raw_mail_message(
                 subject=email_subject,
                 body=email_body,
-                sender_email_address=self.email_address,
+                sender_email_address=email_address,
                 recipients=email_recipients,
                 cc=cc,
                 bcc=bcc,
                 attachments=attachments,
                 html_body=html_body,
             )
-            sent_message = self.service.users().messages().send(userId="me", body=create_message).execute()
+            sent_message = service.users().messages().send(userId="me", body=create_message).execute()
             LOGGER.debug(f"Message sent successfully: {sent_message}")
         except HttpError as error:
             LOGGER.error(f"An error occurred while sending the email: {error}")
             raise RuntimeError(f"Failed to send email: {error}")
         return sent_message
 
-    async def _run_without_io_trace(self, inputs: GmailSenderInputs, ctx: dict) -> GmailSenderOutputs:
+    async def _run_without_io_trace(self, inputs: GmailSenderV2Inputs, ctx: dict) -> GmailSenderOutputs:
         if not inputs.mail_subject or not inputs.mail_body:
             raise ValueError("Both email_subject and email_body must be provided")
+
+        access_token = await resolve_oauth_access_token(inputs.oauth_connection_id, OAuthProvider.GMAIL)
+        service = get_gmail_sender_service(access_token)
+        email_address = get_google_user_email(access_token)
+
         span = get_current_span()
         span.set_attributes({
             SpanAttributes.INPUT_VALUE: serialize_to_json(
@@ -154,7 +158,9 @@ class GmailSenderV2(Component):
         })
         if self.save_as_draft or not inputs.email_recipients:
             LOGGER.info("Creating draft email")
-            draft = self.gmail_create_draft(
+            draft = self._gmail_create_draft(
+                service=service,
+                email_address=email_address,
                 email_subject=inputs.mail_subject,
                 email_body=inputs.mail_body,
                 email_recipients=inputs.email_recipients,
@@ -168,7 +174,9 @@ class GmailSenderV2(Component):
             status = f"Draft created successfully with ID: {draft['id']}"
             message_id = draft["id"]
         else:
-            sent_message = self.gmail_send_email(
+            sent_message = self._gmail_send_email(
+                service=service,
+                email_address=email_address,
                 email_subject=inputs.mail_subject,
                 email_body=inputs.mail_body,
                 email_recipients=inputs.email_recipients,

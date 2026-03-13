@@ -21,7 +21,6 @@ from ada_backend.database.seed.integrations.seed_integration import INTEGRATION_
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
-from engine.integrations.providers import OAuthProvider
 
 
 def seed_gmail_components(session: Session):
@@ -82,22 +81,6 @@ def seed_gmail_components(session: Session):
     upsert_component_versions(session, [gmail_sender_v2_version])
 
     gmail_sender_v2_parameter_definitions = [
-        ComponentParameterDefinition(
-            id=UUID("c205b8b5-61aa-485b-af33-c9e7e67792db"),
-            component_version_id=gmail_sender_v2_version.id,
-            name="oauth_connection_id",
-            type=ParameterType.STRING,
-            nullable=True,
-            order=0,
-            parameter_order_within_group=0,
-            ui_component=UIComponent.OAUTH_CONNECTION,
-            ui_component_properties=UIComponentProperties(
-                label="Gmail Connection",
-                description="Select your authorized Gmail account connection",
-                provider=OAuthProvider.GMAIL.value,
-                icon="logos-google-gmail",
-            ).model_dump(exclude_unset=True, exclude_none=True),
-        ),
         ComponentParameterDefinition(
             id=UUID("9cbc77a8-cfd7-4f06-99f7-bf4d64849f6a"),
             component_version_id=gmail_sender_v2_version.id,

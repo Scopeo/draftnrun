@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
@@ -7,20 +5,12 @@ from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
     upsert_component_versions,
     upsert_components,
-    upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
-from ada_backend.database.models import (
-    Component,
-    ComponentParameterDefinition,
-    ParameterType,
-    UIComponent,
-    UIComponentProperties,
-)
+from ada_backend.database.models import Component
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
-from engine.integrations.providers import OAuthProvider
 
 
 def seed_mcp_hubspot_neverdrop_components(session: Session):
@@ -40,33 +30,11 @@ def seed_mcp_hubspot_neverdrop_components(session: Session):
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.INTERNAL,
         description=(
-            "Connect to HubSpot Neverdrop via MCP to access CRM tools"
-            " (contacts, deals, companies, tickets, etc.)."
+            "Connect to HubSpot Neverdrop via MCP to access CRM tools (contacts, deals, companies, tickets, etc.)."
         ),
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["hubspot_neverdrop_mcp_tool_description"],
     )
     upsert_component_versions(session, [hubspot_neverdrop_mcp_tool_version])
-
-    hubspot_neverdrop_mcp_tool_parameter_definitions = [
-        ComponentParameterDefinition(
-            id=UUID("50ded9b8-5d59-486b-8c5e-91eeed909dc1"),
-            component_version_id=hubspot_neverdrop_mcp_tool_version.id,
-            name="oauth_connection_id",
-            type=ParameterType.STRING,
-            nullable=True,
-            order=None,
-            parameter_order_within_group=0,
-            ui_component=UIComponent.OAUTH_CONNECTION,
-            ui_component_properties=UIComponentProperties(
-                label="HubSpot Neverdrop Connection",
-                description="Select your authorized HubSpot Neverdrop account connection",
-                provider=OAuthProvider.HUBSPOT_NEVERDROP.value,
-                icon="logos:hubspot",
-            ).model_dump(exclude_unset=True, exclude_none=True),
-        )
-    ]
-
-    upsert_components_parameter_definitions(session, hubspot_neverdrop_mcp_tool_parameter_definitions)
 
     upsert_release_stage_to_current_version_mapping(
         session=session,

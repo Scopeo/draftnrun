@@ -2,7 +2,15 @@ import json
 import re
 from typing import Union
 
-from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode, VarNode
+from engine.field_expressions.ast import (
+    ConcatNode,
+    ExpressionNode,
+    JsonBuildNode,
+    LiteralNode,
+    OAuthNode,
+    RefNode,
+    VarNode,
+)
 from engine.field_expressions.errors import FieldExpressionParseError
 from engine.field_expressions.serializer import from_json, is_serialized_expression_ast
 
@@ -111,6 +119,8 @@ def unparse_expression(expression: ExpressionNode) -> str:
             return "@{{" + n + "}}"
         case ConcatNode(parts=parts):
             return "".join(unparse_expression(p) for p in parts)
+        case OAuthNode(definition_id=d):
+            return f"[OAUTH:{d}]"
         case JsonBuildNode():
             return "[JSON_BUILD]"  # Placeholder - cannot represent in simple text
         case _:
