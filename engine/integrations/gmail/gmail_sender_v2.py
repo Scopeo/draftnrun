@@ -86,6 +86,7 @@ class GmailSenderV2(Component):
         cc: Optional[list[str]] = None,
         bcc: Optional[list[str]] = None,
         attachments: Optional[Iterable[str | Path]] = None,
+        html_body: Optional[str] = None,
     ):
         try:
             raw_email_message = create_raw_mail_message(
@@ -96,6 +97,7 @@ class GmailSenderV2(Component):
                 cc=cc,
                 bcc=bcc,
                 attachments=attachments,
+                html_body=html_body,
             )
             draft = self.service.users().drafts().create(userId="me", body={"message": raw_email_message}).execute()
             LOGGER.debug(f"Draft id: {draft['id']}\nDraft message: {draft['message']}")
@@ -113,6 +115,7 @@ class GmailSenderV2(Component):
         cc: Optional[list[str]] = None,
         bcc: Optional[list[str]] = None,
         attachments: Optional[Iterable[str | Path]] = None,
+        html_body: Optional[str] = None,
     ):
         try:
             create_message = create_raw_mail_message(
@@ -123,6 +126,7 @@ class GmailSenderV2(Component):
                 cc=cc,
                 bcc=bcc,
                 attachments=attachments,
+                html_body=html_body,
             )
             sent_message = self.service.users().messages().send(userId="me", body=create_message).execute()
             LOGGER.debug(f"Message sent successfully: {sent_message}")
@@ -157,6 +161,7 @@ class GmailSenderV2(Component):
                 cc=inputs.cc,
                 bcc=inputs.bcc,
                 attachments=inputs.email_attachments,
+                html_body=inputs.mail_html_body,
             )
             if not draft:
                 raise RuntimeError("Failed to create draft email")
@@ -170,6 +175,7 @@ class GmailSenderV2(Component):
                 cc=inputs.cc,
                 bcc=inputs.bcc,
                 attachments=inputs.email_attachments,
+                html_body=inputs.mail_html_body,
             )
             status = f"Email sent successfully with ID: {sent_message['id']}"
             message_id = sent_message["id"]
