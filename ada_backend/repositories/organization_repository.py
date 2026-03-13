@@ -111,6 +111,75 @@ def upsert_organization_secret(
     return organization_secret
 
 
+def get_variable_secret(
+    session: Session,
+    variable_definition_id: UUID,
+    variable_set_id: Optional[UUID] = None,
+) -> Optional[db.OrganizationSecret]:
+    return (
+        session.query(db.OrganizationSecret)
+        .filter(
+            db.OrganizationSecret.variable_definition_id == variable_definition_id,
+            db.OrganizationSecret.variable_set_id == variable_set_id,
+        )
+        .first()
+    )
+
+
+def upsert_variable_secret(
+    session: Session,
+    organization_id: UUID,
+    definition_id: UUID,
+    variable_set_id: Optional[UUID],
+    key: str,
+    secret: str,
+) -> db.OrganizationSecret:
+    row = get_variable_secret(session, definition_id, variable_set_id)
+    if not row:
+        row = db.OrganizationSecret(
+            organization_id=organization_id,
+            key=key,
+            secret_type=db.OrgSecretType.VARIABLE,
+            variable_definition_id=definition_id,
+            variable_set_id=variable_set_id,
+        )
+    row.set_secret(secret)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def list_variable_secrets_for_set(
+    session: Session,
+    variable_set_id: UUID,
+) -> list[db.OrganizationSecret]:
+    return (
+        session.query(db.OrganizationSecret)
+        .filter(
+            db.OrganizationSecret.variable_set_id == variable_set_id,
+            db.OrganizationSecret.secret_type == db.OrgSecretType.VARIABLE,
+        )
+        .all()
+    )
+
+
+def list_variable_secrets_for_definitions(
+    session: Session,
+    definition_ids: list[UUID],
+    variable_set_id: Optional[UUID] = None,
+) -> list[db.OrganizationSecret]:
+    return (
+        session.query(db.OrganizationSecret)
+        .filter(
+            db.OrganizationSecret.variable_definition_id.in_(definition_ids),
+            db.OrganizationSecret.variable_set_id == variable_set_id,
+            db.OrganizationSecret.secret_type == db.OrgSecretType.VARIABLE,
+        )
+        .all()
+    )
+
+
 def delete_organization_secret(
     session: Session,
     organization_id: UUID,
