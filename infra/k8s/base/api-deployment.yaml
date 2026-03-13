@@ -21,6 +21,8 @@ spec:
         app: ada-api
     spec:
       priorityClassName: ada-critical
+      # Must exceed WORKER_SHUTDOWN_TIMEOUT_SECONDS (60s) + uvicorn shutdown overhead.
+      terminationGracePeriodSeconds: 90
       containers:
         - name: ada-api
           image: ghcr.io/scopeo/draftnrun-api:latest

@@ -66,6 +66,21 @@ class RunNotFound(Exception):
         super().__init__(f"Run not found: {run_id}")
 
 
+class RunResultNotFound(Exception):
+    """Raised when a run has no result (result_id missing or result not yet available)."""
+
+    def __init__(self, run_id: UUID):
+        self.run_id = run_id
+        super().__init__(f"Run has no result: {run_id}")
+
+
+class ResultsBucketNotConfigured(Exception):
+    """Raised when RESULTS_S3_BUCKET_NAME is not set but run result storage is required."""
+
+    def __init__(self):
+        super().__init__("Results bucket not configured")
+
+
 class InvalidRunStatusTransition(Exception):
     """Raised when updating a run to a status that would go backwards (e.g. RUNNING -> PENDING)."""
 
