@@ -102,6 +102,9 @@ def query_root_trace_duration(
 ) -> Tuple[pd.DataFrame, int]:
     """Query root traces with server-side filtering and pagination.
 
+    Runs two queries: a lightweight COUNT for the total, and a data query
+    with LIMIT/OFFSET that only fetches the requested page.
+
     Returns a tuple of (page_dataframe, total_matching_count).
     """
     start_time_offset_days = (datetime.now() - timedelta(days=duration_days)).isoformat()
@@ -119,9 +122,11 @@ def query_root_trace_duration(
     if graph_runner_id is not None:
         filters += f"\n        AND graph_runner_id = '{graph_runner_id}'"
 
-    query = f"""
-    WITH filtered_roots AS (
-      SELECT *, COUNT(*) OVER() as total_count
+    count_query = f"SELECT COUNT(*) as total FROM traces.spans WHERE {filters}"
+
+    data_query = f"""
+    WITH paginated_roots AS (
+      SELECT *
       FROM traces.spans
       WHERE {filters}
       ORDER BY start_time DESC
@@ -134,27 +139,25 @@ def query_root_trace_duration(
             COALESCE(su.credits_per_call, 0)), 0)::numeric, 0) as total_credits
       FROM traces.spans s
       LEFT JOIN credits.span_usages su ON su.span_id = s.span_id
-      WHERE s.trace_rowid IN (SELECT trace_rowid FROM filtered_roots)
+      WHERE s.trace_rowid IN (SELECT trace_rowid FROM paginated_roots)
       GROUP BY s.trace_rowid
     )
     SELECT roots.*, m.input_content, m.output_content,
            COALESCE(ttc.total_credits, 0) as total_credits
-    FROM filtered_roots roots
+    FROM paginated_roots roots
     LEFT JOIN traces.span_messages m ON m.span_id = roots.span_id
     LEFT JOIN trace_total_credits ttc ON ttc.trace_rowid = roots.trace_rowid
     ORDER BY roots.start_time DESC
     """
 
     session = get_session_trace()
-    df = pd.read_sql_query(query, session.bind)
+    total_count = pd.read_sql_query(count_query, session.bind).iloc[0]["total"]
+    df = pd.read_sql_query(data_query, session.bind)
     session.close()
-
-    total_count = int(df["total_count"].iloc[0]) if not df.empty else 0
-    df = df.drop(columns=["total_count"])
 
     df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
     df = df.replace({np.nan: None})
-    return df, total_count
+    return df, int(total_count)
 
 
 def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
