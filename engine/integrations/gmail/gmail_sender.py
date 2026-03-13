@@ -29,6 +29,10 @@ GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
             "type": "string",
             "description": "The body of the email to be sent.",
         },
+        "mail_html_body": {
+            "type": "string",
+            "description": "Optional HTML body of the email. When provided, used instead of mail_body.",
+        },
         "email_recipients": {
             "type": "array",
             "items": {"type": "string"},
@@ -62,6 +66,11 @@ class GmailSenderInputs(BaseModel):
         description="The subject of the email to be sent.", json_schema_extra={"is_tool_input": True}
     )
     mail_body: str = Field(description="The body of the email to be sent.", json_schema_extra={"is_tool_input": True})
+    mail_html_body: Optional[str] = Field(
+        default=None,
+        description="Optional HTML body of the email. When provided, used instead of mail_body.",
+        json_schema_extra={"is_tool_input": True},
+    )
     email_recipients: Optional[list[str]] = Field(
         default=None,
         description="""List of email addresses to send the email to.
@@ -144,6 +153,7 @@ class GmailSender(Component):
         cc: Optional[list[str]] = None,
         bcc: Optional[list[str]] = None,
         attachments: Optional[Iterable[str | Path]] = None,
+        html_body: Optional[str] = None,
     ):
         try:
             raw_email_message = create_raw_mail_message(
@@ -154,6 +164,7 @@ class GmailSender(Component):
                 cc=cc,
                 bcc=bcc,
                 attachments=attachments,
+                html_body=html_body,
             )
             draft = self.service.users().drafts().create(userId="me", body={"message": raw_email_message}).execute()
             LOGGER.debug(f"Draft id: {draft['id']}\nDraft message: {draft['message']}")
@@ -171,6 +182,7 @@ class GmailSender(Component):
         cc: Optional[list[str]] = None,
         bcc: Optional[list[str]] = None,
         attachments: Optional[Iterable[str | Path]] = None,
+        html_body: Optional[str] = None,
     ):
         try:
             create_message = create_raw_mail_message(
@@ -181,6 +193,7 @@ class GmailSender(Component):
                 cc=cc,
                 bcc=bcc,
                 attachments=attachments,
+                html_body=html_body,
             )
             sent_message = self.service.users().messages().send(userId="me", body=create_message).execute()
             LOGGER.debug(f"Message sent successfully: {sent_message}")
@@ -205,6 +218,7 @@ class GmailSender(Component):
                 cc=inputs.cc,
                 bcc=inputs.bcc,
                 attachments=inputs.email_attachments,
+                html_body=inputs.mail_html_body,
             )
             if not draft:
                 raise RuntimeError("Failed to create draft email")
@@ -218,6 +232,7 @@ class GmailSender(Component):
                 cc=inputs.cc,
                 bcc=inputs.bcc,
                 attachments=inputs.email_attachments,
+                html_body=inputs.mail_html_body,
             )
             status = f"Email sent successfully with ID: {sent_message['id']}"
             message_id = sent_message["id"]

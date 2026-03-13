@@ -547,6 +547,14 @@ def create_factory_registry() -> FactoryRegistry:
     )
 
     registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["gmail_sender_v3"],
+        factory=OAuthComponentFactory(
+            entity_class=GmailSenderV2,
+            provider_config_key=OAuthProvider.GMAIL,
+        ),
+    )
+
+    registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["slack_sender"],
         factory=OAuthComponentFactory(
             entity_class=SlackSender,

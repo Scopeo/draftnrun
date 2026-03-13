@@ -36,9 +36,13 @@ def create_raw_mail_message(
     cc: Optional[list[str]] = None,
     bcc: Optional[list[str]] = None,
     attachments: Optional[Iterable[str | Path]] = None,
+    html_body: Optional[str] = None,
 ) -> dict:
     message = EmailMessage()
-    message.set_content(body)
+    if html_body:
+        message.set_content(html_body, subtype="html")
+    else:
+        message.set_content(body)
     message["Subject"] = subject
     message["From"] = sender_email_address
     if recipients:
