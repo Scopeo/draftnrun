@@ -111,7 +111,10 @@ class SlackSender(Component):
         inputs: SlackSenderInputs,
         ctx: dict,
     ) -> SlackSenderOutputs:
-        access_token = await resolve_oauth_access_token(inputs.oauth_connection_id, OAuthProvider.SLACK)
+        access_token = await resolve_oauth_access_token(
+            definition_id=inputs.oauth_connection_id,
+            provider_config_key=OAuthProvider.SLACK.value,
+        )
         client = WebClient(token=access_token)
 
         span = get_current_span()

@@ -103,16 +103,9 @@ class HubSpotMCPTool(LocalMCPTool):
         inputs: HubSpotMCPToolInputs,
         ctx: Optional[dict],
     ) -> MCPToolOutputs:
-        access_token = await resolve_oauth_access_token(inputs.oauth_connection_id, self._OAUTH_PROVIDER)
+        access_token = await resolve_oauth_access_token(
+            definition_id=inputs.oauth_connection_id,
+            provider_config_key=self._OAUTH_PROVIDER.value,
+        )
         self.env = {"HUBSPOT_ACCESS_TOKEN": access_token}
         return await super()._run_without_io_trace(inputs, ctx)
-
-
-class HubSpotNeverdropMCPTool(HubSpotMCPTool):
-    """HubSpot Neverdrop variant — same behaviour, different OAuth provider."""
-
-    _OAUTH_PROVIDER = OAuthProvider.HUBSPOT_NEVERDROP
-
-    @classmethod
-    def get_inputs_schema(cls) -> Type[BaseModel]:
-        return HubSpotNeverdropMCPToolInputs

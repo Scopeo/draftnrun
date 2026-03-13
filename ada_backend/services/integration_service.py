@@ -5,6 +5,7 @@ from asyncache import cached
 from cachetools import TTLCache
 from sqlalchemy.orm import Session
 
+from ada_backend.context import get_run_variables
 from ada_backend.database import models as db
 from ada_backend.database.models import VariableType
 from ada_backend.database.setup_db import get_db_session
@@ -453,34 +454,46 @@ async def add_integration_secrets_service(
 
 # TODO: Refactor to inject the session directly
 async def resolve_oauth_access_token(
-    oauth_definition_id: str,
+    definition_id: str | None,
     provider_config_key: str,
-) -> str:
-    """Resolve an OAuth identifier to an access token via Nango.
-
-    Accepts two forms:
-    - OrgVariableDefinition ID: stored in the port FieldExpression when the user
-      configures the connection via the UI (default_value holds the OAuthConnection UUID).
-    - OAuthConnection UUID directly: injected at runtime via a variable set (set_id).
+) -> str | None:
     """
-    definition_id = UUID(oauth_definition_id)
+    Resolve an OrgVariableDefinition ID to an access token via Nango.
+    Returns None when no connection is configured so components can be saved
+    without a connection and raise at run time instead (same pattern as Router).
 
+    The `definition_id` is what the component parameter stores after the
+    d4e5f6a7b8c9 migration (previously it stored the OAuthConnection.id directly).
+    # TODO: rename the DB column component_parameter_definitions.oauth_connection_id
+    #       → oauth_definition_id to reflect that it now stores OrgVariableDefinition.id
+
+    Resolution order:
+    1. Run-time variables context (set_id overrides set by run_agent via set_run_variables)
+    2. definition.default_value (org-level default connection)
+    3. None — component raises at run time if a connection is required
+    """
+    if not definition_id:
+        return None
+
+    definition_uuid = UUID(definition_id)
     with get_db_session() as session:
-        definition = get_oauth_definition_by_id(session, definition_id)
+        definition = get_oauth_definition_by_id(session, definition_uuid)
+        if not definition:
+            raise ValueError(f"OAuth definition {definition_uuid} not found")
 
-        if definition and definition.default_value:
+        # set_id override takes priority over the stored default connection
+        variables = get_run_variables()
+        LOGGER.info(f"Set run variables: {variables}")
+        if variables and definition.name in variables:
+            LOGGER.info(f"Using set run variables for {definition.name}: {variables[definition.name]}")
+            connection_uuid = UUID(variables[definition.name])
+        elif definition.default_value:
+            LOGGER.info(f"Using default value for {definition.name}: {definition.default_value}")
             connection_uuid = UUID(definition.default_value)
         else:
-            # Fallback: treat the value directly as an OAuthConnection UUID.
-            # This happens when oauth_connection_id is injected via a variable set at runtime.
-            # TODO: For values coming from variable sets, have components call
-            # get_oauth_access_token(...) directly with the connection ID and remove
-            # this fallback from resolve_oauth_access_token.
-            LOGGER.info(
-                "OAuth definition does not have a default value, using the definition ID "
-                f"{definition_id} as the OAuthConnection ID"
-            )
-            connection_uuid = definition_id
+            LOGGER.info(f"No connection found for {definition.name}")
+            return None
+
         return await get_oauth_access_token(
             session=session,
             oauth_connection_id=connection_uuid,

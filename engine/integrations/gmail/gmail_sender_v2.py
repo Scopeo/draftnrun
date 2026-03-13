@@ -138,7 +138,10 @@ class GmailSenderV2(Component):
         if not inputs.mail_subject or not inputs.mail_body:
             raise ValueError("Both email_subject and email_body must be provided")
 
-        access_token = await resolve_oauth_access_token(inputs.oauth_connection_id, OAuthProvider.GMAIL)
+        access_token = await resolve_oauth_access_token(
+            definition_id=inputs.oauth_connection_id,
+            provider_config_key=OAuthProvider.GMAIL.value,
+        )
         service = get_gmail_sender_service(access_token)
         email_address = get_google_user_email(access_token)
 
