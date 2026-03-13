@@ -137,12 +137,12 @@ def query_root_trace_duration(
       WHERE s.trace_rowid IN (SELECT trace_rowid FROM filtered_roots)
       GROUP BY s.trace_rowid
     )
-    SELECT fr.*, m.input_content, m.output_content,
+    SELECT roots.*, m.input_content, m.output_content,
            COALESCE(ttc.total_credits, 0) as total_credits
-    FROM filtered_roots fr
-    LEFT JOIN traces.span_messages m ON m.span_id = fr.span_id
-    LEFT JOIN trace_total_credits ttc ON ttc.trace_rowid = fr.trace_rowid
-    ORDER BY fr.start_time DESC
+    FROM filtered_roots roots
+    LEFT JOIN traces.span_messages m ON m.span_id = roots.span_id
+    LEFT JOIN trace_total_credits ttc ON ttc.trace_rowid = roots.trace_rowid
+    ORDER BY roots.start_time DESC
     """
 
     session = get_session_trace()
