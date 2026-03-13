@@ -1,14 +1,14 @@
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 import numpy as np
 import pandas as pd
 from sqlalchemy import text
 
-from ada_backend.database.models import CallType
+from ada_backend.database.models import CallType, EnvType
 from engine.trace.sql_exporter import get_session_trace
 
 LOGGER = logging.getLogger(__name__)
@@ -91,41 +91,70 @@ def query_trace_duration(
     return df
 
 
-def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFrame:
+def query_root_trace_duration(
+    project_id: UUID,
+    duration_days: int,
+    environment: Optional[EnvType] = None,
+    call_type: Optional[CallType] = None,
+    graph_runner_id: Optional[UUID] = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> Tuple[pd.DataFrame, int]:
+    """Query root traces with server-side filtering and pagination.
+
+    Returns a tuple of (page_dataframe, total_matching_count).
+    """
     start_time_offset_days = (datetime.now() - timedelta(days=duration_days)).isoformat()
+    offset = (page - 1) * page_size
+
+    filters = f"""
+        project_id = '{project_id}'
+        AND start_time > '{start_time_offset_days}'
+        AND parent_id IS NULL
+    """
+    if environment is not None:
+        filters += f"\n        AND environment = '{environment.value}'"
+    if call_type is not None:
+        filters += f"\n        AND call_type = '{call_type.value}'"
+    if graph_runner_id is not None:
+        filters += f"\n        AND graph_runner_id = '{graph_runner_id}'"
 
     query = f"""
-    WITH relevant_spans AS (
-      SELECT *
+    WITH filtered_roots AS (
+      SELECT *, COUNT(*) OVER() as total_count
       FROM traces.spans
-      WHERE project_id = '{project_id}'
-      AND start_time > '{start_time_offset_days}'
+      WHERE {filters}
+      ORDER BY start_time DESC
+      LIMIT {page_size} OFFSET {offset}
     ),
     trace_total_credits AS (
       SELECT
         s.trace_rowid,
         ROUND(COALESCE(SUM(COALESCE(su.credits_input_token, 0) + COALESCE(su.credits_output_token, 0) +
             COALESCE(su.credits_per_call, 0)), 0)::numeric, 0) as total_credits
-      FROM relevant_spans s
+      FROM traces.spans s
       LEFT JOIN credits.span_usages su ON su.span_id = s.span_id
+      WHERE s.trace_rowid IN (SELECT trace_rowid FROM filtered_roots)
       GROUP BY s.trace_rowid
     )
-    SELECT s.*, m.input_content, m.output_content,
+    SELECT fr.*, m.input_content, m.output_content,
            COALESCE(ttc.total_credits, 0) as total_credits
-    FROM relevant_spans s
-    LEFT JOIN traces.span_messages m ON m.span_id = s.span_id
-    LEFT JOIN trace_total_credits ttc ON ttc.trace_rowid = s.trace_rowid
-    WHERE s.parent_id IS NULL
-    ORDER BY MAX(s.start_time) OVER (PARTITION BY s.trace_rowid) DESC,
-             s.trace_rowid, s.start_time ASC
+    FROM filtered_roots fr
+    LEFT JOIN traces.span_messages m ON m.span_id = fr.span_id
+    LEFT JOIN trace_total_credits ttc ON ttc.trace_rowid = fr.trace_rowid
+    ORDER BY fr.start_time DESC
     """
 
     session = get_session_trace()
     df = pd.read_sql_query(query, session.bind)
     session.close()
+
+    total_count = int(df["total_count"].iloc[0]) if not df.empty else 0
+    df = df.drop(columns=["total_count"])
+
     df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
     df = df.replace({np.nan: None})
-    return df
+    return df, total_count
 
 
 def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:

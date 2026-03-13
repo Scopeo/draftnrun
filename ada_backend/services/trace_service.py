@@ -190,36 +190,22 @@ def get_root_traces_by_project(
     page_size: int = 20,
     graph_runner_id: Optional[UUID] = None,
 ) -> PaginatedRootTracesResponse:
-    df_span = query_root_trace_duration(project_id, duration)
-    track_project_observability_loaded(user_id, project_id)
-    LOGGER.info(f"Querying root spans for project {project_id} with duration {duration} days")
-
-    # Debug: Log call_type distribution before filtering
-    if not df_span.empty and "call_type" in df_span.columns:
-        call_type_counts = df_span["call_type"].value_counts(dropna=False)
-        LOGGER.info(f"Call type distribution before filter: {call_type_counts.to_dict()}")
-
-    if environment is not None:
-        df_span = df_span[df_span["environment"] == environment.value]
-
-    if call_type is not None:
-        LOGGER.info(f"Filtering by call_type: {call_type.value}")
-        before_filter_count = len(df_span)
-        df_span = df_span[df_span["call_type"] == call_type.value]
-        after_filter_count = len(df_span)
-        LOGGER.info(f"Rows before filter: {before_filter_count}, after filter: {after_filter_count}")
-
-    if graph_runner_id is not None:
-        df_span = df_span[df_span["graph_runner_id"] == graph_runner_id]
-
-    total_items = len(df_span)
     if page_size <= 0:
         page_size = 20
     if page <= 0:
         page = 1
-    start = (page - 1) * page_size
-    end = start + page_size
-    df_page = df_span.iloc[start:end]
+
+    df_page, total_items = query_root_trace_duration(
+        project_id,
+        duration,
+        environment=environment,
+        call_type=call_type,
+        graph_runner_id=graph_runner_id,
+        page=page,
+        page_size=page_size,
+    )
+    track_project_observability_loaded(user_id, project_id)
+    LOGGER.info(f"Querying root spans for project {project_id} with duration {duration} days")
 
     traces = build_root_spans(df_page)
     total_pages = (total_items + page_size - 1) // page_size
