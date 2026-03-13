@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import List, Optional
 from uuid import UUID
@@ -21,7 +22,6 @@ from ada_backend.database.models import (
 from ada_backend.repositories.integration_repository import (
     delete_linked_integration,
     get_component_instance_integration_relationship,
-    get_integration,
 )
 from ada_backend.schemas.components_schema import (
     ComponentWithParametersDTO,
@@ -657,44 +657,113 @@ def process_components_with_versions(
     components_with_version: list[ComponentWithVersionDTO],
 ) -> List[ComponentWithParametersDTO]:
     component_version_ids = [c.component_version_id for c in components_with_version]
-    component_costs = (
-        {
-            cost.component_version_id: cost
-            for cost in session.query(db.ComponentCost)
-            .filter(db.ComponentCost.component_version_id.in_(component_version_ids))
+
+    if not component_version_ids:
+        return []
+
+    component_costs = {
+        cost.component_version_id: cost
+        for cost in session.query(db.ComponentCost)
+        .filter(db.ComponentCost.component_version_id.in_(component_version_ids))
+        .all()
+    }
+
+    param_definitions_by_component_version: dict[UUID, list[db.ComponentParameterDefinition]] = defaultdict(list)
+    for param_definition in (
+        session.query(db.ComponentParameterDefinition)
+        .options(joinedload(db.ComponentParameterDefinition.parameter_group))
+        .filter(db.ComponentParameterDefinition.component_version_id.in_(component_version_ids))
+        .all()
+    ):
+        param_definitions_by_component_version[param_definition.component_version_id].append(param_definition)
+
+    global_parameters_by_component_version: dict[UUID, list[db.ComponentGlobalParameter]] = defaultdict(list)
+    for global_parameter in (
+        session.query(db.ComponentGlobalParameter)
+        .filter(db.ComponentGlobalParameter.component_version_id.in_(component_version_ids))
+        .all()
+    ):
+        global_parameters_by_component_version[global_parameter.component_version_id].append(global_parameter)
+
+    subcomponent_definitions_by_component_version: dict[UUID, list[tuple]] = defaultdict(list)
+    for param_definition, child_relationship in (
+        session.query(db.ComponentParameterDefinition, db.ComponentParameterChildRelationship)
+        .join(
+            db.ComponentParameterChildRelationship,
+            db.ComponentParameterChildRelationship.component_parameter_definition_id
+            == db.ComponentParameterDefinition.id,
+        )
+        .filter(
+            db.ComponentParameterDefinition.component_version_id.in_(component_version_ids),
+            db.ComponentParameterDefinition.type == ParameterType.COMPONENT,
+        )
+        .all()
+    ):
+        subcomponent_definitions_by_component_version[param_definition.component_version_id].append(
+            (param_definition, child_relationship)
+        )
+
+    parameter_groups_by_component_version: dict[UUID, list[db.ComponentParameterGroup]] = defaultdict(list)
+    for parameter_group in (
+        session.query(db.ComponentParameterGroup)
+        .options(joinedload(db.ComponentParameterGroup.parameter_group))
+        .filter(db.ComponentParameterGroup.component_version_id.in_(component_version_ids))
+        .order_by(db.ComponentParameterGroup.group_order_within_component)
+        .all()
+    ):
+        parameter_groups_by_component_version[parameter_group.component_version_id].append(parameter_group)
+
+    tool_descriptions_by_component_version: dict[UUID, db.ToolDescription] = {
+        component_version_id: tool_description
+        for component_version_id, tool_description in (
+            session.query(db.ComponentVersion.id, db.ToolDescription)
+            .join(db.ToolDescription, db.ComponentVersion.default_tool_description_id == db.ToolDescription.id)
+            .filter(db.ComponentVersion.id.in_(component_version_ids))
+            .all()
+        )
+    }
+
+    integration_ids = {c.integration_id for c in components_with_version if c.integration_id}
+    integrations_by_id: dict[UUID, db.Integration] = {}
+    if integration_ids:
+        integrations_by_id = {
+            integration.id: integration
+            for integration in session.query(db.Integration)
+            .filter(db.Integration.id.in_(integration_ids))
             .all()
         }
-        if component_version_ids
-        else {}
-    )
+
+    llm_options_cache: dict[frozenset, list] = {}
 
     result = []
     for component_with_version in components_with_version:
         try:
-            parameters = get_component_parameter_definition_by_component_version(
-                session,
-                component_with_version.component_version_id,
+            parameters = param_definitions_by_component_version.get(
+                component_with_version.component_version_id, []
             )
 
             # Hide parameters enforced globally for this component from the UI
-            global_params = get_global_parameters_by_component_version_id(
-                session, component_with_version.component_version_id
+            global_parameters = global_parameters_by_component_version.get(
+                component_with_version.component_version_id, []
             )
-            global_param_def_ids = {gp.parameter_definition_id for gp in global_params}
+            global_param_def_ids = {
+                global_parameter.parameter_definition_id for global_parameter in global_parameters
+            }
 
-            subcomponent_params = get_subcomponent_param_def_by_component_version(
-                session,
-                component_with_version.component_version_id,
+            subcomponent_params = subcomponent_definitions_by_component_version.get(
+                component_with_version.component_version_id, []
             )
 
-            parameter_groups = get_component_parameter_groups(session, component_with_version.component_version_id)
+            parameter_groups = parameter_groups_by_component_version.get(
+                component_with_version.component_version_id, []
+            )
             parameter_groups_dto = [
                 ParameterGroupSchema(
-                    id=pg.parameter_group.id,
-                    name=pg.parameter_group.name,
-                    group_order_within_component_version=pg.group_order_within_component,
+                    id=component_parameter_group.parameter_group.id,
+                    name=component_parameter_group.parameter_group.name,
+                    group_order_within_component_version=component_parameter_group.group_order_within_component,
                 )
-                for pg in parameter_groups
+                for component_parameter_group in parameter_groups
             ]
 
             parameters_to_fill = []
@@ -731,6 +800,7 @@ def process_components_with_versions(
                                     session,
                                     param.model_capabilities,
                                     param.ui_component_properties,
+                                    llm_options_cache,
                                 )
                                 if param.type == ParameterType.LLM_MODEL
                                 else param.ui_component_properties
@@ -743,8 +813,8 @@ def process_components_with_versions(
                         )
                     )
 
-            default_tool_description_db = get_tool_description_component(
-                session=session, component_version_id=component_with_version.component_version_id
+            default_tool_description_db = tool_descriptions_by_component_version.get(
+                component_with_version.component_version_id
             )
             tool_description = (
                 ToolDescriptionSchema(
@@ -757,9 +827,8 @@ def process_components_with_versions(
                 if default_tool_description_db
                 else None
             )
-            if component_with_version.integration_id:
-                integration = get_integration(session, component_with_version.integration_id)
 
+            integration = integrations_by_id.get(component_with_version.integration_id)
             component_cost = component_costs.get(component_with_version.component_version_id)
 
             # Create ComponentWithParametersDTO
@@ -777,7 +846,7 @@ def process_components_with_versions(
                             name=integration.name,
                             service=integration.service,
                         )
-                        if component_with_version.integration_id
+                        if integration
                         else None
                     ),
                     tool_parameter_name=tool_param_name,
