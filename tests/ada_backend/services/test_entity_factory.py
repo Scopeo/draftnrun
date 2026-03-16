@@ -55,9 +55,10 @@ class MockAgent:
 
 
 # --- Tests ---
-def test_entity_factory_basic_instantiation():
+@pytest.mark.asyncio
+async def test_entity_factory_basic_instantiation():
     factory = EntityFactory(MockEntity)
-    instance = factory(param1="test", param2=42, param3=3.14, param4=True)
+    instance = await factory(param1="test", param2=42, param3=3.14, param4=True)
     assert isinstance(instance, MockEntity)
     assert instance.param1 == "test"
     assert instance.param2 == 42
@@ -65,18 +66,20 @@ def test_entity_factory_basic_instantiation():
     assert instance.param4 is True
 
 
-def test_entity_factory_missing_params():
+@pytest.mark.asyncio
+async def test_entity_factory_missing_params():
     factory = EntityFactory(MockEntity)
     with pytest.raises(TypeError):
-        factory(param1="test", param2=42)  # Missing param3 and param4
+        await factory(param1="test", param2=42)  # Missing param3 and param4
 
 
-def test_entity_factory_with_processors():
+@pytest.mark.asyncio
+async def test_entity_factory_with_processors():
     factory = EntityFactory(
         MockEntityWithDataclass,
         parameter_processors=[detect_and_convert_dataclasses],
     )
-    instance = factory(
+    instance = await factory(
         dataclass_param={"name": "test_dataclass", "value": 42},
         primitive_param="primitive_value",
     )
@@ -87,7 +90,8 @@ def test_entity_factory_with_processors():
     assert instance.primitive_param == "primitive_value"
 
 
-def test_agent_factory_instantiation():
+@pytest.mark.asyncio
+async def test_agent_factory_instantiation():
     factory = AgentFactory(
         entity_class=MockAgent,
         parameter_processors=[],
@@ -100,28 +104,30 @@ def test_agent_factory_instantiation():
         required_tool_properties=["key"],
     )
 
-    instance = factory(tool_description=tool_description)
+    instance = await factory(tool_description=tool_description)
     assert isinstance(instance, MockAgent)
     assert instance.tool_description == tool_description
     assert instance.trace_manager == get_trace_manager()
 
 
-def test_agent_factory_missing_tool_description():
+@pytest.mark.asyncio
+async def test_agent_factory_missing_tool_description():
     factory = AgentFactory(
         entity_class=MockAgent,
         parameter_processors=[],
     )
 
     with pytest.raises(ValueError, match="Tool description must be a ToolDescription object."):
-        factory()
+        await factory()
 
 
-def test_pydantic_processor():
+@pytest.mark.asyncio
+async def test_pydantic_processor():
     factory = EntityFactory(
         MockEntityWithPydantic,
         parameter_processors=[pydantic_processor],
     )
-    instance = factory(
+    instance = await factory(
         pydantic_param={"name": "pydantic_name", "value": 99},
         primitive_param=100,
     )
@@ -132,13 +138,14 @@ def test_pydantic_processor():
     assert instance.primitive_param == 100
 
 
-def test_combined_processor_usage():
+@pytest.mark.asyncio
+async def test_combined_processor_usage():
     factory = EntityFactory(
         MockEntityWithDataclass,
         parameter_processors=[detect_and_convert_dataclasses, pydantic_processor],
     )
 
-    instance = factory(
+    instance = await factory(
         dataclass_param={"name": "dc_test", "value": 1},
         primitive_param="dc_value",
     )
@@ -148,7 +155,8 @@ def test_combined_processor_usage():
     assert instance.primitive_param == "dc_value"
 
 
-def test_trace_manager_processor():
+@pytest.mark.asyncio
+async def test_trace_manager_processor():
     factory = EntityFactory(MockAgent, parameter_processors=[build_trace_manager_processor()])
     tool_description = ToolDescription(
         name="tool_name",
@@ -157,12 +165,13 @@ def test_trace_manager_processor():
         required_tool_properties=["param"],
     )
 
-    instance = factory(tool_description=tool_description)
+    instance = await factory(tool_description=tool_description)
     assert instance.trace_manager == get_trace_manager()
     assert instance.tool_description == tool_description
 
 
-def test_agent_factory_invalid_tool_description():
+@pytest.mark.asyncio
+async def test_agent_factory_invalid_tool_description():
     factory = AgentFactory(
         entity_class=MockAgent,
         parameter_processors=[],
@@ -176,7 +185,7 @@ def test_agent_factory_invalid_tool_description():
     }
 
     with pytest.raises(ValueError, match="Tool description must be a ToolDescription object."):
-        factory(tool_description=invalid_tool_description)
+        await factory(tool_description=invalid_tool_description)
 
 
 def test_get_llm_provider_and_model():
