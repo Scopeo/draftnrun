@@ -1,6 +1,8 @@
+import asyncio
+import json
 import logging
 from datetime import datetime, timezone
-from typing import Awaitable, List, Optional
+from typing import Any, AsyncIterator, Awaitable, Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -10,9 +12,15 @@ from ada_backend.repositories import run_repository
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.run_schema import RunResponseSchema
-from ada_backend.services.errors import InvalidRunStatusTransition, ProjectNotFound, RunNotFound
+from ada_backend.services.errors import (
+    InvalidRunStatusTransition,
+    ProjectNotFound,
+    ResultsBucketNotConfigured,
+    RunNotFound,
+    RunResultNotFound,
+)
 from ada_backend.services.s3_files_service import get_s3_client_and_ensure_bucket
-from data_ingestion.boto3_client import upload_file_to_bucket
+from data_ingestion.boto3_client import get_content_from_file, upload_file_to_bucket
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -112,6 +120,70 @@ async def run_with_tracking(
         raise
 
 
+def get_run_final_state_event(session: Session, run_id: UUID) -> Optional[Dict[str, Any]]:
+    """
+    If the run is already completed or failed, return the event dict to send over WebSocket
+    (run.completed or run.failed). Returns None if run not found or still pending/running.
+    Used when a client connects to the run stream after the run has finished.
+    """
+    run = run_repository.get_run(session, run_id)
+    if not run:
+        return None
+    try:
+        session.refresh(run)
+    except Exception:
+        session.expire(run)
+    status = run.status if isinstance(run.status, RunStatus) else RunStatus(str(run.status))
+    if status == RunStatus.COMPLETED:
+        return {
+            "type": "run.completed",
+            "trace_id": getattr(run, "trace_id", None),
+            "result_id": getattr(run, "result_id", None),
+        }
+    if status == RunStatus.FAILED:
+        return {
+            "type": "run.failed",
+            "error": getattr(run, "error", None) or {"message": "Run failed", "type": "UnknownError"},
+        }
+    return None
+
+
+async def stream_run_events(
+    session: Session,
+    run_id: UUID,
+    queue: asyncio.Queue,
+    *,
+    ping_timeout_seconds: int = 60,
+) -> AsyncIterator[str]:
+    """
+    Async generator that yields JSON messages to send over the run WebSocket stream.
+    First yields the final state event (run.completed / run.failed) if the run is already done,
+    then yields events from the queue (node.started, node.completed, run.completed, run.failed)
+    until a terminal event or timeout. Caller sends each yielded string to the WebSocket.
+    """
+    final_state = get_run_final_state_event(session, run_id)
+    if final_state is not None:
+        yield json.dumps(final_state)
+        return
+    while True:
+        try:
+            data = await asyncio.wait_for(queue.get(), timeout=ping_timeout_seconds)
+        except asyncio.TimeoutError:
+            final_state = get_run_final_state_event(session, run_id)
+            if final_state is not None:
+                yield json.dumps(final_state)
+                return
+            yield json.dumps({"type": "ping"})
+            continue
+        yield data if isinstance(data, str) else json.dumps(data)
+        try:
+            evt = json.loads(data) if isinstance(data, str) else data
+            if isinstance(evt, dict) and evt.get("type") in ("run.completed", "run.failed"):
+                return
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+
 def create_run(
     session: Session,
     project_id: UUID,
@@ -139,6 +211,25 @@ def get_run(session: Session, run_id: UUID, project_id: UUID) -> RunResponseSche
     if run.project_id != project_id:
         raise RunNotFound(run_id)
     return RunResponseSchema.model_validate(run, from_attributes=True)
+
+
+def get_run_result(session: Session, run_id: UUID, project_id: UUID) -> ChatResponse:
+    """
+    Fetch the run's result (ChatResponse) from S3. Run must exist and belong to project.
+    Raises RunNotFound if run missing or wrong project; RunResultNotFound if no result_id;
+    ResultsBucketNotConfigured if bucket not set; ValueError if S3 get fails.
+    """
+    run_schema = get_run(session, run_id=run_id, project_id=project_id)
+    result_id = run_schema.result_id
+    if not result_id:
+        raise RunResultNotFound(run_id)
+    bucket_name = settings.RESULTS_S3_BUCKET_NAME
+    if not bucket_name:
+        raise ResultsBucketNotConfigured()
+    s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
+    content = get_content_from_file(s3_client, bucket_name=bucket_name, key=result_id)
+    data = json.loads(content.decode("utf-8"))
+    return ChatResponse.model_validate(data)
 
 
 def get_runs(

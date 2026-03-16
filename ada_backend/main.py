@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 import sentry_sdk
@@ -37,6 +38,7 @@ from ada_backend.routers.project_router import router as project_router
 from ada_backend.routers.qa_evaluation_router import router as qa_evaluation_router
 from ada_backend.routers.quality_assurance_router import router as quality_assurance_router
 from ada_backend.routers.run_router import router as run_router
+from ada_backend.routers.run_stream_router import router as run_stream_router
 from ada_backend.routers.s3_files_router import router as s3_files_router
 from ada_backend.routers.source_router import router as source_router
 from ada_backend.routers.template_router import router as template_router
@@ -48,12 +50,15 @@ from ada_backend.routers.webhooks.webhook_trigger_router import router as webhoo
 from ada_backend.routers.widget_router import router as widget_router
 from ada_backend.services.rate_limit_service import limiter
 from ada_backend.utils.redis_client import xgroup_create_if_not_exists
+from ada_backend.workers.run_queue_worker import _request_drain, start_run_queue_worker_thread
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from logger import setup_logging
 from settings import settings
 
 setup_logging()
+
+LOGGER = logging.getLogger(__name__)
 
 set_trace_manager(tm=TraceManager(project_name="ada-backend"))
 
@@ -71,16 +76,39 @@ if settings.SENTRY_DSN:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Application lifespan handler.
+
+    - Ensures required Redis consumer groups exist.
+    - Starts the run queue worker thread on startup and joins it on shutdown.
+    """
+    # Ensure Redis consumer groups exist before processing starts
     xgroup_create_if_not_exists(settings.REDIS_INGESTION_STREAM, settings.REDIS_CONSUMER_GROUP)
     xgroup_create_if_not_exists(settings.REDIS_WEBHOOK_STREAM, settings.REDIS_CONSUMER_GROUP)
-    yield
+
+    # Start run queue worker thread and set up graceful shutdown
+    worker_thread = start_run_queue_worker_thread()
+
+    try:
+        yield
+    finally:
+        _request_drain()
+        if worker_thread is not None:
+            timeout = settings.WORKER_SHUTDOWN_TIMEOUT_SECONDS
+            LOGGER.info("Waiting up to %ss for run queue worker to finish current job...", timeout)
+            worker_thread.join(timeout=timeout)
+            if worker_thread.is_alive():
+                LOGGER.warning(
+                    "Run queue worker did not finish within %ss — "
+                    "in-flight run will be recovered by the next pod on restart.",
+                    timeout,
+                )
 
 
 app = FastAPI(
     title="Ada Backend",
+    lifespan=lifespan,
     description="API for managing and running LLM agents",
     version="0.1.0",
-    lifespan=lifespan,
     openapi_tags=[
         {
             "name": "Auth",
@@ -199,6 +227,7 @@ app.include_router(auth_router)
 app.include_router(org_router)
 app.include_router(project_router)
 app.include_router(run_router)
+app.include_router(run_stream_router)
 app.include_router(variables_router)
 app.include_router(agent_router)
 app.include_router(integration_router)
