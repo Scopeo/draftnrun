@@ -138,7 +138,9 @@ class GmailSender(Component):
             google_client_secret = settings.GOOGLE_CLIENT_SECRET
 
         with get_db_session() as session:
-            access_token = get_oauth_access_token(session, secret_integration_id, google_client_id, google_client_secret)
+            access_token = get_oauth_access_token(
+                session, secret_integration_id, google_client_id, google_client_secret
+            )
         self.service = get_gmail_sender_service(access_token)
         self.save_as_draft = save_as_draft
 
