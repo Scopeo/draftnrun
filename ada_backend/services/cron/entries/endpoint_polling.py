@@ -727,7 +727,6 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
                     "item": item,  # Pass item as separate field for easy access
                 }
                 workflow_result = await run_env_agent(
-                    session=db,
                     project_id=agent_inference_execution_payload.project_id,
                     env=agent_inference_execution_payload.env,
                     input_data=input_data,

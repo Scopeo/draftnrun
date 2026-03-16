@@ -8,17 +8,16 @@ from openinference.semconv.trace import SpanAttributes
 from opentelemetry.sdk.trace import BoundedAttributes, Event, ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.trace.status import StatusCode
-from sqlalchemy import create_engine, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import sessionmaker
 
 from ada_backend.database.models import SpanUsage, Usage
-from ada_backend.database.setup_db import get_db_url
+from ada_backend.database.setup_db import engine as _trace_engine
 from ada_backend.database.trace_models import Span, SpanMessage
 from engine.trace.nested_utils import split_nested_keys
 
 LOGGER = logging.getLogger(__name__)
 
-_trace_engine = create_engine(get_db_url(), echo=False, pool_size=3, pool_pre_ping=True, pool_recycle=1800)
 _TraceSession = sessionmaker(bind=_trace_engine)
 
 

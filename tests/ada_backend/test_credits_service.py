@@ -487,7 +487,6 @@ async def test_llm_credits_count_as_usage_flag(db_session):
         ) as mock_complete:
             mock_complete.return_value = mock_response
             result = await run_env_agent(
-                session,
                 project_id,
                 db.EnvType.DRAFT,
                 {"messages": [{"role": "user", "content": "test"}]},
@@ -515,7 +514,6 @@ async def test_llm_credits_count_as_usage_flag(db_session):
         ) as mock_complete:
             mock_complete.return_value = mock_response
             result = await run_env_agent(
-                session,
                 project_id,
                 db.EnvType.DRAFT,
                 {"messages": [{"role": "user", "content": "test"}]},

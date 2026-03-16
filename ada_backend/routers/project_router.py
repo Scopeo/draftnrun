@@ -6,7 +6,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType, EnvType, ProjectType, ResponseFormat, RunStatus
-from ada_backend.database.setup_db import get_db
+from ada_backend.database.setup_db import get_db, get_db_session
 from ada_backend.repositories.env_repository import get_project_env_binding
 from ada_backend.routers.auth_router import (
     UserRights,
@@ -206,7 +206,6 @@ async def run_env_agent_endpoint(
             "Only 'base64' or 'url' are allowed for this endpoint."
         ),
     ),
-    sqlaclhemy_db_session: Session = Depends(get_db),
     verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
 ) -> ChatResponse:
     if response_format == ResponseFormat.S3_KEY:
@@ -216,14 +215,13 @@ async def run_env_agent_endpoint(
         )
 
     try:
-        verify_project_access(sqlaclhemy_db_session, verified_api_key, project_id)
+        with get_db_session() as session:
+            verify_project_access(session, verified_api_key, project_id)
 
         return await run_with_tracking(
-            session=sqlaclhemy_db_session,
             project_id=project_id,
             trigger=CallType.API,
             runner_coro=run_env_agent(
-                session=sqlaclhemy_db_session,
                 project_id=project_id,
                 input_data=input_data,
                 env=env,
@@ -347,38 +345,36 @@ async def chat(
             ]
         },
     ),
-    session: Session = Depends(get_db),
 ) -> ChatResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        # Get the environment for this graph runner, scoped to the requested project.
-        project_env_binding = get_project_env_binding(session, project_id, graph_runner_id)
-        if not project_env_binding:
-            LOGGER.error(
-                "Graph runner %s is not bound to project %s", graph_runner_id, project_id
+        with get_db_session() as session:
+            project_env_binding = get_project_env_binding(session, project_id, graph_runner_id)
+            if not project_env_binding:
+                LOGGER.error(
+                    "Graph runner %s is not bound to project %s", graph_runner_id, project_id
+                )
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Graph runner {graph_runner_id} is not bound to project {project_id}",
+                )
+            environment = project_env_binding.environment
+            tag_name = compose_tag_name(
+                project_env_binding.graph_runner.tag_version,
+                project_env_binding.graph_runner.version_name,
             )
-            raise HTTPException(
-                status_code=404,
-                detail=f"Graph runner {graph_runner_id} is not bound to project {project_id}",
-            )
-        environment = project_env_binding.environment
         LOGGER.info(f"Determined environment {environment} for graph_runner_id {graph_runner_id}")
         return await run_with_tracking(
-            session=session,
             project_id=project_id,
             trigger=CallType.SANDBOX,
             runner_coro=run_agent(
-                session=session,
                 project_id=project_id,
                 graph_runner_id=graph_runner_id,
                 input_data=input_data,
                 environment=environment,
                 call_type=CallType.SANDBOX,
-                tag_name=compose_tag_name(
-                    project_env_binding.graph_runner.tag_version,
-                    project_env_binding.graph_runner.version_name,
-                ),
+                tag_name=tag_name,
                 response_format=ResponseFormat.S3_KEY,
             ),
         )
@@ -540,17 +536,14 @@ async def chat_env(
             ]
         },
     ),
-    session: Session = Depends(get_db),
 ) -> ChatResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return await run_with_tracking(
-            session=session,
             project_id=project_id,
             trigger=CallType.SANDBOX,
             runner_coro=run_env_agent(
-                session=session,
                 project_id=project_id,
                 input_data=input_data,
                 env=env,
