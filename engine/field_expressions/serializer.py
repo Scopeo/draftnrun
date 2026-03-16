@@ -11,6 +11,7 @@ from engine.field_expressions.ast import (
     ExpressionNode,
     JsonBuildNode,
     LiteralNode,
+    OAuthNode,
     RefNode,
     VarNode,
 )
@@ -28,6 +29,8 @@ def to_json(expression: ExpressionNode) -> Dict[str, Any]:
             return result
         case VarNode(name=name):
             return {"type": "var", "name": name}
+        case OAuthNode(definition_id=definition_id):
+            return {"type": "oauth", "definition_id": definition_id}
         case ConcatNode(parts=parts):
             return {"type": "concat", "parts": [to_json(p) for p in parts]}
         case JsonBuildNode(template=template, refs=refs):
@@ -53,6 +56,8 @@ def is_serialized_expression_ast(value: Dict[str, Any]) -> bool:
             return "key" not in rest or rest["key"] is None or isinstance(rest["key"], str)
         case {"type": "var", "name": _}:
             return True
+        case {"type": "oauth", "definition_id": _}:
+            return True
         case {"type": "concat", "parts": list(parts)}:
             return all(isinstance(part, dict) and is_serialized_expression_ast(part) for part in parts)
         case {"type": "json_build", "template": _, "refs": dict(refs)}:
@@ -73,6 +78,8 @@ def from_json(ast_dict: Dict[str, Any]) -> ExpressionNode:
             return RefNode(instance=str(instance), port=str(port), key=rest.get("key"))
         case {"type": "var", "name": name}:
             return VarNode(name=str(name))
+        case {"type": "oauth", "definition_id": definition_id}:
+            return OAuthNode(definition_id=str(definition_id))
         case {"type": "concat", "parts": parts}:
             hydrated: List[ExpressionNode] = [from_json(p) for p in (parts or [])]
             filtered: List[Union[LiteralNode, RefNode, VarNode]] = [

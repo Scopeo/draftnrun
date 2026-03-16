@@ -38,6 +38,13 @@ class ConcatNode:
 
 
 @dataclass(frozen=True)
+class OAuthNode:
+    """Reference to an OAuth variable definition, resolved to an access token at runtime."""
+
+    definition_id: str
+
+
+@dataclass(frozen=True)
 class JsonBuildNode:
     """Build JSON structure with refs that preserve object types.
 
@@ -56,4 +63,4 @@ class JsonBuildNode:
     refs: Dict[str, Union[RefNode, VarNode]]  # Placeholder string -> RefNode/VarNode mapping
 
 
-ExpressionNode = Union[LiteralNode, RefNode, VarNode, ConcatNode, JsonBuildNode]
+ExpressionNode = Union[LiteralNode, RefNode, VarNode, OAuthNode, ConcatNode, JsonBuildNode]
