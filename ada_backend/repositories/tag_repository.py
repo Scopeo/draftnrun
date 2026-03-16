@@ -42,6 +42,7 @@ def update_graph_runner_tag_fields(
     tag_version: Optional[str] = None,
     version_name: Optional[str] = None,
     change_log: Optional[str] = None,
+    commit: bool = True,
 ) -> None:
     """Update GraphRunner tag-related fields in one place.
 
@@ -59,4 +60,7 @@ def update_graph_runner_tag_fields(
         graph_runner.change_log = change_log
 
     session.add(graph_runner)
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()

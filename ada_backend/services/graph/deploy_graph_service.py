@@ -326,25 +326,28 @@ def deploy_graph_service(
         env=EnvType.PRODUCTION,
     )
 
-    if previous_production_graph:
-        update_graph_runner_env(session, previous_production_graph.id, env=None)
-        LOGGER.info(f"Removed previous production graph runner {previous_production_graph.id} from production")
-
     new_graph_runner_id = clone_graph_runner(
         session=session,
         graph_runner_id_to_copy=graph_runner_id,
         project_id=project_id,
     )
+
+    if previous_production_graph:
+        update_graph_runner_env(session, previous_production_graph.id, env=None, commit=False)
+        LOGGER.info(f"Removed previous production graph runner {previous_production_graph.id} from production")
+
     new_tag = compute_next_tag_version(session, project_id)
-    update_graph_runner_tag_fields(session, graph_runner_id, tag_version=new_tag)
+    update_graph_runner_tag_fields(session, graph_runner_id, tag_version=new_tag, commit=False)
     bind_graph_runner_to_project(
-        session, graph_runner_id=graph_runner_id, project_id=project_id, env=EnvType.PRODUCTION
+        session, graph_runner_id=graph_runner_id, project_id=project_id, env=EnvType.PRODUCTION, commit=False
     )
     LOGGER.info(f"Updated graph runner {graph_runner_id} to production")
 
     bind_graph_runner_to_project(
-        session, graph_runner_id=new_graph_runner_id, project_id=project_id, env=EnvType.DRAFT
+        session, graph_runner_id=new_graph_runner_id, project_id=project_id, env=EnvType.DRAFT, commit=False
     )
+
+    session.commit()
 
     return GraphDeployResponse(
         project_id=project_id,
