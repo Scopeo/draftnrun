@@ -60,3 +60,7 @@ class VariableSetResponse(BaseModel):
 
 class VariableSetListResponse(BaseModel):
     variable_sets: list[VariableSetResponse]
+
+
+class SetIdsResponse(BaseModel):
+    set_ids: list[str]

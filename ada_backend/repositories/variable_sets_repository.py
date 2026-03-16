@@ -2,7 +2,7 @@ import logging
 from typing import Any, Optional
 from uuid import UUID
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -36,6 +36,26 @@ def list_org_variable_sets(
     if variable_type is not None:
         query = query.filter(db.OrgVariableSet.variable_type == variable_type)
     return query.order_by(db.OrgVariableSet.set_id).all()
+
+
+def list_set_ids_for_project(
+    session: Session,
+    organization_id: UUID,
+    project_id: UUID,
+) -> list[str]:
+    rows = (
+        session.query(db.OrgVariableSet.set_id)
+        .filter(
+            db.OrgVariableSet.organization_id == organization_id,
+            or_(
+                db.OrgVariableSet.project_id == project_id,
+                db.OrgVariableSet.project_id.is_(None),
+            ),
+        )
+        .order_by(db.OrgVariableSet.set_id)
+        .all()
+    )
+    return [row.set_id for row in rows]
 
 
 def upsert_org_variable_set(
