@@ -31,6 +31,7 @@ class VariableDefinitionResponse(BaseModel):
     description: Optional[str] = None
     required: bool = False
     default_value: Optional[str] = None
+    has_default_value: bool = False
     metadata: Optional[dict[str, Any]] = None
     editable: bool = True
     display_order: int = 0
