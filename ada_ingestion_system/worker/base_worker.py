@@ -8,23 +8,31 @@ from pathlib import Path
 from typing import Any, Dict
 
 import redis
-import structlog
+import sentry_sdk
 from dotenv import load_dotenv
 
-# TODO: use same logging as the rest of the code
-structlog.configure(
-    processors=[structlog.processors.TimeStamper(fmt="iso"), structlog.processors.JSONRenderer()],
-    wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
-    context_class=dict,
-    logger_factory=structlog.PrintLoggerFactory(),
-    cache_logger_on_first_use=True,
-)
+from settings import settings
 
-logger = structlog.get_logger()
+logger = logging.getLogger(__name__)
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 
 dotenv_path = Path(__file__).parent.parent / ".env"
 logger.info(f"Loading environment variables from {dotenv_path}")
 load_dotenv(dotenv_path=dotenv_path)
+
+if settings.SENTRY_DSN_REDIS:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN_REDIS,
+        environment=settings.SENTRY_ENVIRONMENT,
+        send_default_pii=True,
+        enable_logs=True,
+        traces_sample_rate=1.0,
+    )
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
@@ -47,23 +55,33 @@ def _xgroup_create_if_not_exists(stream_name: str, group_name: str) -> None:
     """Create a consumer group on the stream, creating the stream if absent."""
     try:
         redis_client.xgroup_create(stream_name, group_name, id="0", mkstream=True)
-        logger.info("consumer_group_created", stream=stream_name, group=group_name)
+        logger.info("consumer_group_created stream=%s group=%s", stream_name, group_name)
     except redis.exceptions.ResponseError as e:
         if "BUSYGROUP" in str(e):
-            logger.debug("consumer_group_already_exists", stream=stream_name, group=group_name)
+            logger.debug("consumer_group_already_exists stream=%s group=%s", stream_name, group_name)
         else:
-            logger.error("consumer_group_create_failed", stream=stream_name, group=group_name, error=str(e))
+            logger.error(
+                "consumer_group_create_failed stream=%s group=%s error=%s",
+                stream_name,
+                group_name,
+                str(e),
+            )
             raise
 
 
 class BaseWorker:
     """Base class for Redis Streams workers with crash-safe delivery."""
 
-    def __init__(self, stream_name: str, max_concurrent: int):
+    def __init__(self, stream_name: str, max_concurrent: int, worker_type: str):
         self.stream_name = stream_name
         self.max_concurrent = max_concurrent
         self.current_threads = 0
         self.lock = threading.Lock()
+        self.worker_type = worker_type
+
+        if settings.SENTRY_DSN_REDIS:
+            sentry_sdk.set_tag("worker_type", worker_type)
+            sentry_sdk.set_tag("redis_stream", stream_name)
         # Ensure the stream and consumer group exist before the loop starts.
         _xgroup_create_if_not_exists(self.stream_name, CONSUMER_GROUP)
 
@@ -137,9 +155,7 @@ class BaseWorker:
         try:
             # First, check for poison messages that have been delivered too many times.
             # XPENDING with a range returns per-message detail including delivery count.
-            pending_details = redis_client.xpending_range(
-                self.stream_name, CONSUMER_GROUP, "-", "+", count=100
-            )
+            pending_details = redis_client.xpending_range(self.stream_name, CONSUMER_GROUP, "-", "+", count=100)
             poison_ids: set = set()
             for entry in pending_details:
                 mid = entry["message_id"]
@@ -175,12 +191,15 @@ class BaseWorker:
                     )
                     for message_id, fields in safe_messages:
                         self._dispatch(message_id, fields, consumer_name)
+                logger.info("reclaimed_pending_messages stream=%s count=%s", self.stream_name, len(messages))
+                for message_id, fields in messages:
+                    self._dispatch(message_id, fields, consumer_name)
         except redis.exceptions.ResponseError as e:
             # Stream or group may not exist yet on a completely fresh deployment.
             if "ERR" in str(e) or "NOGROUP" in str(e):
-                logger.debug("xautoclaim_skipped", stream=self.stream_name, error=str(e))
+                logger.debug("xautoclaim_skipped stream=%s error=%s", self.stream_name, str(e))
             else:
-                logger.error("xautoclaim_failed", stream=self.stream_name, error=str(e))
+                logger.error("xautoclaim_failed stream=%s error=%s", self.stream_name, str(e))
 
     def _dispatch(self, message_id: str, fields: Dict[str, str], consumer_name: str) -> None:
         """Parse a raw stream entry and dispatch it to a worker thread."""
@@ -188,12 +207,12 @@ class BaseWorker:
         try:
             payload = json.loads(raw)
         except json.JSONDecodeError as e:
-            logger.error("invalid_json", error=str(e), stream=self.stream_name, message_id=message_id)
+            logger.error("invalid_json error=%s stream=%s message_id=%s", str(e), self.stream_name, message_id)
             redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
             return
 
         if not self._validate_payload(payload, self.get_required_fields()):
-            logger.error("invalid_payload_format", stream=self.stream_name, message_id=message_id)
+            logger.error("invalid_payload_format stream=%s message_id=%s", self.stream_name, message_id)
             redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
             return
 
@@ -218,13 +237,18 @@ class BaseWorker:
             try:
                 redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
             except Exception as e:
-                logger.error("xack_failed", stream=self.stream_name, message_id=message_id, error=str(e))
+                logger.error("xack_failed stream=%s message_id=%s error=%s", self.stream_name, message_id, str(e))
             self._decrement_thread_count()
 
     def run(self) -> None:
         """Main worker loop — crash-safe via Redis Streams consumer groups."""
         consumer_name = self._consumer_name()
-        logger.info("worker_starting", stream=self.stream_name, consumer=consumer_name, group=CONSUMER_GROUP)
+        logger.info(
+            "worker_starting stream=%s consumer=%s group=%s",
+            self.stream_name,
+            consumer_name,
+            CONSUMER_GROUP,
+        )
 
         # Recover any messages that were mid-flight when a previous instance crashed.
         self._reclaim_pending(consumer_name)
@@ -253,14 +277,10 @@ class BaseWorker:
                 self._dispatch(message_id, fields, consumer_name)
 
             except redis.ConnectionError:
-                logger.warning(
-                    "redis_connection_error",
-                    stream=self.stream_name,
-                    retry_in_seconds=5,
-                )
+                logger.warning("redis_connection_error stream=%s retry_in_seconds=%s", self.stream_name, 5)
                 time.sleep(5)
             except Exception as e:
-                logger.error("unexpected_error", error=str(e), stream=self.stream_name)
+                logger.error("unexpected_error error=%s stream=%s", str(e), self.stream_name)
                 time.sleep(1)
 
     def get_required_fields(self) -> list[str]:
@@ -278,4 +298,4 @@ class BaseWorker:
         The message remains unacknowledged in the PEL and will be reclaimed on
         the next worker restart (or by another idle consumer).
         """
-        logger.info("task_deferred_pending_capacity", stream=self.stream_name)
+        logger.info("task_deferred_pending_capacity stream=%s", self.stream_name)

@@ -68,6 +68,7 @@ class BaseConfig(BaseSettings):
     SENTRY_TRACES_SAMPLE_RATE: float = Field(0.1, ge=0.0, le=1.0)
     SENTRY_PROFILE_SESSION_SAMPLE_RATE: float = Field(0.1, ge=0.0, le=1.0)
     SENTRY_SEND_PII: bool = False
+    SENTRY_DSN_REDIS: Optional[str] = None
 
     @property
     def custom_models(self) -> dict[str, dict[str, Any]]:

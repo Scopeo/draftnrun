@@ -14,7 +14,11 @@ MAX_CONCURRENT_WEBHOOKS = int(os.getenv("MAX_CONCURRENT_WEBHOOKS", 2))
 
 class WebhookWorker(BaseWorker):
     def __init__(self):
-        super().__init__(stream_name=WEBHOOK_STREAM_NAME, max_concurrent=MAX_CONCURRENT_WEBHOOKS)
+        super().__init__(
+            stream_name=WEBHOOK_STREAM_NAME,
+            max_concurrent=MAX_CONCURRENT_WEBHOOKS,
+            worker_type="redis_webhook",
+        )
 
     def get_required_fields(self) -> list[str]:
         """Get required fields for webhook payload."""
@@ -30,18 +34,18 @@ class WebhookWorker(BaseWorker):
             webhook_payload = payload["payload"]
 
             logger.info(
-                "processing_webhook",
-                webhook_id=webhook_id,
-                provider=provider,
-                event_id=event_id,
-                organization_id=organization_id,
+                "processing_webhook webhook_id=%s provider=%s event_id=%s organization_id=%s",
+                webhook_id,
+                provider,
+                event_id,
+                organization_id,
             )
 
             # Get the ada_backend path - assumes a standard structure
             ada_backend_path = Path(__file__).parents[2]
             script_path = ada_backend_path / "webhook_scripts" / "webhook_main.py"
             if not script_path.exists():
-                logger.error("script_not_found", path=str(script_path))
+                logger.error("script_not_found path=%s", str(script_path))
                 return
 
             # Prepare the Python command to run the script
@@ -72,7 +76,7 @@ class WebhookWorker(BaseWorker):
             if len(safe_cmd) >= 3:
                 # Sanitize payload in the command for logging
                 safe_cmd[2] = safe_cmd[2].replace(repr(webhook_payload), "***SANITIZED_PAYLOAD***")
-            logger.info("executing_command", cmd=" ".join(safe_cmd))
+            logger.info("executing_command cmd=%s", " ".join(safe_cmd))
 
             process = subprocess.Popen(
                 cmd,
@@ -110,7 +114,7 @@ class WebhookWorker(BaseWorker):
                                 while "\n" in stdout_buffer:
                                     line, stdout_buffer = stdout_buffer.split("\n", 1)
                                     if line.strip():
-                                        logger.info("script_live", output=line.strip())
+                                        logger.info("script_live output=%s", line.strip())
                         except Exception:
                             pass
 
@@ -122,7 +126,7 @@ class WebhookWorker(BaseWorker):
                                 while "\n" in stderr_buffer:
                                     line, stderr_buffer = stderr_buffer.split("\n", 1)
                                     if line.strip():
-                                        logger.error("script_live_error", output=line.strip())
+                                        logger.error("script_live_error output=%s", line.strip())
                         except Exception:
                             pass
 
@@ -141,27 +145,31 @@ class WebhookWorker(BaseWorker):
             if stdout_buffer.strip():
                 for line in stdout_buffer.strip().split("\n"):
                     if line.strip():
-                        logger.info("script_final", output=line.strip())
+                        logger.info("script_final output=%s", line.strip())
 
             if stderr_buffer.strip():
                 for line in stderr_buffer.strip().split("\n"):
                     if line.strip():
-                        logger.error("script_final_error", output=line.strip())
+                        logger.error("script_final_error output=%s", line.strip())
 
             if process.returncode != 0:
-                logger.error("script_failed", return_code=process.returncode)
+                logger.error("script_failed return_code=%s", process.returncode)
             else:
-                logger.info("webhook_processing_completed", webhook_id=webhook_id, event_id=event_id)
+                logger.info(
+                    "webhook_processing_completed webhook_id=%s event_id=%s",
+                    webhook_id,
+                    event_id,
+                )
 
         except Exception as e:
-            logger.error("webhook_processing_error", error=str(e), exc_info=True)
+            logger.error("webhook_processing_error error=%s", str(e), exc_info=True)
 
     def _log_queued_task(self, payload: Dict[str, Any]) -> None:
         """Log queued webhook task."""
         logger.info(
-            "webhook_queued_for_processing",
-            webhook_id=payload.get("webhook_id"),
-            event_id=payload.get("event_id"),
+            "webhook_queued_for_processing webhook_id=%s event_id=%s",
+            payload.get("webhook_id"),
+            payload.get("event_id"),
         )
 
 

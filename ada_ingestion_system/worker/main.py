@@ -20,7 +20,11 @@ DEFAULT_API_BASE_URL = "http://localhost:8000"
 
 class Worker(BaseWorker):
     def __init__(self):
-        super().__init__(stream_name=STREAM_NAME, max_concurrent=MAX_CONCURRENT_INGESTIONS)
+        super().__init__(
+            stream_name=STREAM_NAME,
+            max_concurrent=MAX_CONCURRENT_INGESTIONS,
+            worker_type="redis_ingestion",
+        )
 
     def get_required_fields(self) -> list[str]:
         """Get required fields for ingestion task payload."""
@@ -50,11 +54,11 @@ class Worker(BaseWorker):
                 safe_payload["source_attributes"] = safe_attrs
 
             logger.info(
-                "processing_task",
-                ingestion_id=ingestion_id,
-                source_type=source_type,
-                organization_id=organization_id,
-                parameters=safe_payload,
+                "processing_task ingestion_id=%s source_type=%s organization_id=%s parameters=%s",
+                ingestion_id,
+                source_type,
+                organization_id,
+                safe_payload,
             )
 
             # Enhanced logging for debugging
@@ -71,15 +75,17 @@ class Worker(BaseWorker):
             ada_backend_path = Path(__file__).parents[2] / "ada_backend"
             script_path = ada_backend_path / "scripts" / "main.py"
             if not script_path.exists():
-                logger.error("script_not_found", path=str(script_path))
+                logger.error("script_not_found path=%s", str(script_path))
                 # Try alternative path
                 alt_script_path = Path(__file__).parents[2] / "ingestion_script" / "main.py"
                 if alt_script_path.exists():
                     script_path = alt_script_path
-                    logger.info("using_alternative_script_path", path=str(script_path))
+                    logger.info("using_alternative_script_path path=%s", str(script_path))
                 else:
                     logger.error(
-                        "all_script_paths_not_found", primary=str(script_path), alternative=str(alt_script_path)
+                        "all_script_paths_not_found primary=%s alternative=%s",
+                        str(script_path),
+                        str(alt_script_path),
                     )
                     return
 
@@ -105,7 +111,7 @@ class Worker(BaseWorker):
             # Set API_BASE_URL to http for localhost connections
             if "API_BASE_URL" not in env:
                 env["API_BASE_URL"] = DEFAULT_API_BASE_URL
-                logger.info("using_default_api_base_url", url=DEFAULT_API_BASE_URL)
+                logger.info("using_default_api_base_url url=%s", DEFAULT_API_BASE_URL)
             # TODO: Find alternative (end)
 
             # Determine the script module path based on the script location
@@ -144,7 +150,7 @@ class Worker(BaseWorker):
 
                     safe_cmd[2] = re.sub(r"'access_token': '[^']*'", "'access_token': '***REDACTED***'", safe_cmd[2])
                     safe_cmd[2] = re.sub(r'"access_token": "[^"]*"', '"access_token": "***REDACTED***"', safe_cmd[2])
-            logger.info("executing_command", cmd=" ".join(safe_cmd))
+            logger.info("executing_command cmd=%s", " ".join(safe_cmd))
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -186,7 +192,7 @@ class Worker(BaseWorker):
                                 while "\n" in stdout_buffer:
                                     line, stdout_buffer = stdout_buffer.split("\n", 1)
                                     if line.strip():
-                                        logger.info("script_live", output=line.strip())
+                                        logger.info("script_live output=%s", line.strip())
                         except Exception:
                             pass
 
@@ -200,7 +206,7 @@ class Worker(BaseWorker):
                                     line, stderr_buffer = stderr_buffer.split("\n", 1)
                                     if line.strip():
                                         stderr_lines.append(line.strip())
-                                        logger.error("script_live_error", output=line.strip())
+                                        logger.error("script_live_error output=%s", line.strip())
                         except Exception:
                             pass
 
@@ -219,22 +225,27 @@ class Worker(BaseWorker):
             if stdout_buffer.strip():
                 for line in stdout_buffer.strip().split("\n"):
                     if line.strip():
-                        logger.info("script_final", output=line.strip())
+                        logger.info("script_final output=%s", line.strip())
 
             if stderr_buffer.strip():
                 for line in stderr_buffer.strip().split("\n"):
                     if line.strip():
                         stderr_lines.append(line.strip())
-                        logger.error("script_final_error", output=line.strip())
+                        logger.error("script_final_error output=%s", line.strip())
 
             # Generate error summary if we have stderr content
             if stderr_lines:
                 stderr_text = "\n".join(stderr_lines)
                 error_summary = self._parse_error_message(stderr_text)
-                logger.error("script_error_summary", **error_summary)
+                logger.error(
+                    "script_error_summary error_type=%s error_message=%s possible_solution=%s",
+                    error_summary.get("error_type"),
+                    error_summary.get("error_message"),
+                    error_summary.get("possible_solution"),
+                )
 
             if process.returncode != 0:
-                logger.error("script_failed", return_code=process.returncode)
+                logger.error("script_failed return_code=%s", process.returncode)
                 # Update task status to FAILED when subprocess fails
 
                 result_metadata = TaskResultMetadata(
@@ -253,7 +264,7 @@ class Worker(BaseWorker):
                 logger.info("task_completed", ingestion_id=ingestion_id)
 
         except Exception as e:
-            logger.error("task_error", error=str(e), exc_info=True)
+            logger.error("task_error error=%s", str(e), exc_info=True)
             # Update task status to FAILED when worker encounters an exception
             try:
                 result_metadata = TaskResultMetadata(
@@ -269,7 +280,7 @@ class Worker(BaseWorker):
                     result_metadata=result_metadata,
                 )
             except Exception as update_error:
-                logger.error("failed_to_update_task_status", error=str(update_error))
+                logger.error("failed_to_update_task_status error=%s", str(update_error))
 
     def _parse_error_message(self, stderr_text: str) -> dict:
         """Parse error messages to provide a cleaner summary."""
@@ -356,19 +367,19 @@ class Worker(BaseWorker):
             response.raise_for_status()
 
             logger.info(
-                "task_status_updated_to_failed",
-                ingestion_id=ingestion_id,
-                task_id=task_id,
-                organization_id=organization_id,
+                "task_status_updated_to_failed ingestion_id=%s task_id=%s organization_id=%s",
+                ingestion_id,
+                task_id,
+                organization_id,
             )
 
         except Exception as e:
             logger.error(
-                "failed_to_update_task_status_to_failed",
-                ingestion_id=ingestion_id,
-                task_id=task_id,
-                organization_id=organization_id,
-                error=str(e),
+                "failed_to_update_task_status_to_failed ingestion_id=%s task_id=%s organization_id=%s error=%s",
+                ingestion_id,
+                task_id,
+                organization_id,
+                str(e),
             )
 
     def log_redis_state(self):
@@ -378,38 +389,38 @@ class Worker(BaseWorker):
         try:
             # Test Redis connection
             ping_result = redis_client.ping()
-            logger.info("Redis connectivity test: {}".format(ping_result))
+            logger.info("Redis connectivity test: %s", ping_result)
 
             # Get queue length
             queue_length = redis_client.llen(self.stream_name)
-            logger.info("Current queue length: {}".format(queue_length))
+            logger.info("Current queue length: %s", queue_length)
 
             # Get queue contents (up to 10 items)
             queue_items = redis_client.lrange(self.stream_name, 0, 9)
-            logger.info("Queue items retrieved: {}".format(len(queue_items)))
+            logger.info("Queue items retrieved: %s", len(queue_items))
 
             if queue_items:
                 logger.info("Queue preview (up to 10 items):")
                 for i, item in enumerate(queue_items):
                     try:
                         parsed = json.loads(item)
-                        logger.info("  Item {}: {}".format(i, json.dumps(parsed)))
+                        logger.info("Queue item %s: %s", i, json.dumps(parsed))
                     except json.JSONDecodeError:
-                        logger.info("  Item {} (not valid JSON): {}...".format(i, item[:100]))
+                        logger.info("Queue item %s (not valid JSON): %s...", i, item[:100])
                     except Exception as e:
-                        logger.info("  Error processing item {}: {}".format(i, str(e)))
+                        logger.info("Error processing item %s: %s", i, str(e))
             else:
                 logger.info("Queue is empty")
 
             # Get other Redis keys
             try:
                 all_keys = redis_client.keys("*")
-                logger.info("All Redis keys: {}".format(all_keys))
+                logger.info("All Redis keys: %s", all_keys)
             except Exception as key_error:
-                logger.error("Failed to get Redis keys: {}".format(str(key_error)))
+                logger.error("Failed to get Redis keys: %s", str(key_error))
 
         except Exception as e:
-            logger.error("Error logging Redis state: {}".format(str(e)), exc_info=True)
+            logger.error("Error logging Redis state: %s", str(e), exc_info=True)
 
         logger.info("End Redis state logging")
 
@@ -464,7 +475,7 @@ class Worker(BaseWorker):
 
     def _log_queued_task(self, payload: Dict[str, Any]) -> None:
         """Log queued ingestion task."""
-        logger.info("task_queued_for_external_processing", ingestion_id=payload.get("ingestion_id"))
+        logger.info("task_queued_for_external_processing ingestion_id=%s", payload.get("ingestion_id"))
 
     def spawn_external_worker(self, payload: Dict[str, Any]) -> None:
         """Spawn an external worker (EC2/Fargate) for the task."""
