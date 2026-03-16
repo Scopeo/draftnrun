@@ -7,7 +7,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field, validator
 
-from ada_backend.database.setup_db import get_db
+from ada_backend.database.setup_db import get_db_session
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.integrations.gmail.gmail_utils import create_raw_mail_message
@@ -137,9 +137,8 @@ class GmailSender(Component):
         if not google_client_secret:
             google_client_secret = settings.GOOGLE_CLIENT_SECRET
 
-        # TODO: move the logic to fetch the access token to outside the agent
-        session = next(get_db())
-        access_token = get_oauth_access_token(session, secret_integration_id, google_client_id, google_client_secret)
+        with get_db_session() as session:
+            access_token = get_oauth_access_token(session, secret_integration_id, google_client_id, google_client_secret)
         self.service = get_gmail_sender_service(access_token)
         self.save_as_draft = save_as_draft
 

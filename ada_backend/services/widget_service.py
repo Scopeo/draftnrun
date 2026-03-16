@@ -115,7 +115,6 @@ async def widget_chat_service(
         input_data["conversation_id"] = conversation_id
 
     result = await run_env_agent(
-        session=session,
         project_id=widget.project_id,
         env=EnvType.PRODUCTION,
         input_data=input_data,

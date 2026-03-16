@@ -120,7 +120,6 @@ async def execute(execution_payload: AgentInferenceExecutionPayload, **kwargs) -
     )
 
     result = await run_env_agent(
-        session=db,
         project_id=execution_payload.project_id,
         env=execution_payload.env,
         input_data=execution_payload.input_data,
