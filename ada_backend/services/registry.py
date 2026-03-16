@@ -118,7 +118,7 @@ class FactoryRegistry:
             raise ValueError(f"Component version ID {component_version_id} is not registered.")
         return self._registry[component_version_id]
 
-    def create(
+    async def create(
         self,
         component_version_id: UUID,
         *args,
@@ -136,7 +136,7 @@ class FactoryRegistry:
             Any: The instantiated entity.
         """
         factory = self.get(component_version_id=component_version_id)
-        return factory(*args, **kwargs)
+        return await factory(*args, **kwargs)
 
     def list_registered_versions(self) -> list[UUID]:
         """

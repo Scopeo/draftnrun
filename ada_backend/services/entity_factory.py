@@ -5,7 +5,7 @@ import json
 import logging
 from dataclasses import is_dataclass
 from inspect import signature
-from typing import Any, Callable, Coroutine, Optional, Type, Union, get_args, get_origin, get_type_hints
+from typing import Any, Callable, Optional, Type, Union, get_args, get_origin, get_type_hints
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -126,7 +126,7 @@ class EntityFactory:
             kwargs = processor(kwargs, self.constructor_params)
         return args, kwargs
 
-    def __call__(self, *args, **kwargs) -> Any:
+    async def __call__(self, *args, **kwargs) -> Any:
         """
         Create an instance of the entity using the provided arguments.
 
@@ -189,46 +189,21 @@ class AgentFactory(EntityFactory):
         return args, kwargs
 
 
-def _run_coroutine_sync(coro: Coroutine) -> Any:
-    """
-    Run a coroutine synchronously, handling event loop scenarios.
-    Temporary patch until registry + entity factories are refactored to be async.
-
-    Context variables (including run_variables for OAuth resolution) are explicitly
-    copied to the worker thread so that ContextVars set in the calling async task
-    are visible inside the coroutine.
-    """
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-
-    ctx = contextvars.copy_context()
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        return executor.submit(ctx.run, asyncio.run, coro).result()
-
-
 class RemoteMCPToolFactory:
     """
-    Minimal factory to construct RemoteMCPTool via its async autodescovery constructor.
-    Runs the coroutine synchronously and drops unused params coming from the registry.
-    TODO: If more components need async constructors, extract a shared async-capable
-    factory/helper to avoid repeating this pattern.
+    Minimal factory to construct RemoteMCPTool via its async autodiscovery constructor.
     """
 
-    # TODO: Replace with a proper async-capable factory interface; exposed for port seeding.
     entity_class = RemoteMCPTool
 
-    def __call__(self, **kwargs):
-        # Tool descriptions come from the server; drop any default from DB seed
+    async def __call__(self, **kwargs):
         kwargs.pop("tool_description", None)
-        # Ensure trace manager is set if missing
         if "trace_manager" not in kwargs:
             trace_manager = get_trace_manager()
             if trace_manager is None:
                 raise ValueError("Trace manager is required")
             kwargs["trace_manager"] = trace_manager
-        return _run_coroutine_sync(RemoteMCPTool.from_mcp_server(**kwargs))
+        return await RemoteMCPTool.from_mcp_server(**kwargs)
 
 
 # TODO: Refactor to inject the session directly
@@ -350,9 +325,9 @@ class OAuthComponentFactory:
             else:
                 return constructor(**kwargs)
 
-    def __call__(self, **kwargs) -> Any:
+    async def __call__(self, **kwargs) -> Any:
         """
-        Create component instance, handling event loop scenarios.
+        Create component instance by resolving OAuth token asynchronously.
 
         Args:
             **kwargs: Component parameters
@@ -366,7 +341,7 @@ class OAuthComponentFactory:
                 raise ValueError("Trace manager is required")
             kwargs["trace_manager"] = trace_manager
 
-        return _run_coroutine_sync(self._create_async(**kwargs))
+        return await self._create_async(**kwargs)
 
 
 class NonToolCallableBlockFactory(EntityFactory):

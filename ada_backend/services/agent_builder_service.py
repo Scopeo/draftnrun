@@ -122,7 +122,7 @@ def _resolve_literal_field_expressions(
     return literal_values
 
 
-def instantiate_component(
+async def instantiate_component(
     session: Session,
     component_instance_id: UUID,
     project_id: Optional[UUID] = None,
@@ -185,7 +185,7 @@ def instantiate_component(
         param_name = sub_component.parameter_definition.name
         LOGGER.debug(f"Found sub-component: {param_name=}, {sub_component.child_component_instance.ref=}\n")
         try:
-            instantiated_sub_component = instantiate_component(
+            instantiated_sub_component = await instantiate_component(
                 session,
                 sub_component.child_component_instance.id,
                 project_id=project_id,
@@ -305,7 +305,7 @@ def instantiate_component(
         if base_component and base_component == "API Call":
             component_version_id = COMPONENT_VERSION_UUIDS["api_call_tool"]
         # Create component instance using the component version ID
-        return FACTORY_REGISTRY.create(
+        return await FACTORY_REGISTRY.create(
             component_version_id=component_version_id,
             **input_params,
         )
