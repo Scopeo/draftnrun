@@ -1,0 +1,50 @@
+name: E2E Project Flow Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-project-flow:
+    runs-on: ubuntu-latest
+
+    env:
+      STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
+      SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+      E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
+      E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+      PROJECT_TEST_MATRIX: ${{ secrets.PROJECT_TEST_MATRIX }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests pytest
+
+      - name: Run E2E flow tests
+        run: >
+          pytest scripts/test_project_flow.py
+          -v
+          --tb=short
+          --junitxml=report.xml
+
+      - name: Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-flow-report
+          path: report.xml
+
+      - name: Publish test results
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: E2E Flow Results
+          path: report.xml
+          reporter: java-junit
