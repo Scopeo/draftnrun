@@ -22,14 +22,14 @@ logging.basicConfig(
 )
 
 dotenv_path = Path(__file__).parent.parent / ".env"
-logger.info(f"Loading environment variables from {dotenv_path}")
+logger.info("loading_env_vars path=%s", dotenv_path)
 load_dotenv(dotenv_path=dotenv_path)
 
 if settings.SENTRY_DSN_REDIS:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN_REDIS,
         environment=settings.SENTRY_ENVIRONMENT,
-        send_default_pii=True,
+        send_default_pii=False,
         enable_logs=True,
         traces_sample_rate=1.0,
     )

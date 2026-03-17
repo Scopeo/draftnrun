@@ -61,14 +61,15 @@ class Worker(BaseWorker):
                 safe_payload,
             )
 
-            # Enhanced logging for debugging
             logger.info(
-                f"[WORKER] Starting ingestion task processing - ID: {ingestion_id}, "
-                f"Source: {source_name}, Type: {source_type}, Org: {organization_id}"
-            )
-            logger.info(
-                f"[WORKER] Task details - Task ID: {task_id}, "
-                f"Source attributes keys: {list(source_attributes.keys()) if source_attributes else 'None'}"
+                "task_processing_start ingestion_id=%s source_name=%s source_type=%s"
+                " organization_id=%s task_id=%s source_attribute_keys=%s",
+                ingestion_id,
+                source_name,
+                source_type,
+                organization_id,
+                task_id,
+                list(source_attributes.keys()) if source_attributes else [],
             )
 
             # Get the ada_backend path - assumes a standard structure
@@ -261,7 +262,7 @@ class Worker(BaseWorker):
                     result_metadata=result_metadata,
                 )
             else:
-                logger.info("task_completed", ingestion_id=ingestion_id)
+                logger.info("task_completed ingestion_id=%s", ingestion_id)
 
         except Exception as e:
             logger.error("task_error error=%s", str(e), exc_info=True)
@@ -384,45 +385,46 @@ class Worker(BaseWorker):
 
     def log_redis_state(self):
         """Log current Redis state including queue contents."""
-        logger.info("Begin Redis state logging")
+        logger.debug("redis_state_logging_start stream=%s", self.stream_name)
 
         try:
-            # Test Redis connection
             ping_result = redis_client.ping()
-            logger.info("Redis connectivity test: %s", ping_result)
+            logger.debug("redis_ping result=%s", ping_result)
 
-            # Get queue length
             queue_length = redis_client.llen(self.stream_name)
-            logger.info("Current queue length: %s", queue_length)
+            logger.debug("redis_queue_length stream=%s length=%s", self.stream_name, queue_length)
 
-            # Get queue contents (up to 10 items)
             queue_items = redis_client.lrange(self.stream_name, 0, 9)
-            logger.info("Queue items retrieved: %s", len(queue_items))
+            logger.debug("redis_queue_items_retrieved stream=%s count=%s", self.stream_name, len(queue_items))
 
             if queue_items:
-                logger.info("Queue preview (up to 10 items):")
                 for i, item in enumerate(queue_items):
                     try:
                         parsed = json.loads(item)
-                        logger.info("Queue item %s: %s", i, json.dumps(parsed))
+                        logger.debug(
+                            "redis_queue_item stream=%s index=%s keys=%s",
+                            self.stream_name, i, list(parsed.keys()),
+                        )
                     except json.JSONDecodeError:
-                        logger.info("Queue item %s (not valid JSON): %s...", i, item[:100])
+                        logger.debug(
+                            "redis_queue_item_invalid_json stream=%s index=%s preview=%s",
+                            self.stream_name, i, item[:100],
+                        )
                     except Exception as e:
-                        logger.info("Error processing item %s: %s", i, str(e))
+                        logger.debug("redis_queue_item_error stream=%s index=%s error=%s", self.stream_name, i, str(e))
             else:
-                logger.info("Queue is empty")
+                logger.debug("redis_queue_empty stream=%s", self.stream_name)
 
-            # Get other Redis keys
             try:
                 all_keys = redis_client.keys("*")
-                logger.info("All Redis keys: %s", all_keys)
+                logger.debug("redis_keys count=%s keys=%s", len(all_keys), all_keys)
             except Exception as key_error:
-                logger.error("Failed to get Redis keys: %s", str(key_error))
+                logger.error("redis_keys_fetch_failed error=%s", str(key_error))
 
         except Exception as e:
-            logger.error("Error logging Redis state: %s", str(e), exc_info=True)
+            logger.error("redis_state_logging_failed error=%s", str(e), exc_info=True)
 
-        logger.info("End Redis state logging")
+        logger.debug("redis_state_logging_end stream=%s", self.stream_name)
 
     def _on_dead_letter(self, message_id: str, fields: Dict[str, str], reason: str = "") -> None:
         """Mark the ingestion task as FAILED when its message is dead-lettered."""
@@ -479,7 +481,7 @@ class Worker(BaseWorker):
 
     def spawn_external_worker(self, payload: Dict[str, Any]) -> None:
         """Spawn an external worker (EC2/Fargate) for the task."""
-        logger.info("Spawning external worker")
+        logger.info("spawning_external_worker ingestion_id=%s", payload.get("ingestion_id"))
         # TODO: Implement AWS EC2 spawning
         pass
 
