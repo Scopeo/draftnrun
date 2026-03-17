@@ -34,10 +34,24 @@ _client: HubSpotClient  # assigned in __main__ before mcp.run()
 
 
 class Tag(str, Enum):
+    auth = "auth"
     contacts = "contacts"
     companies = "companies"
     engagements = "engagements"
     associations = "associations"
+
+
+@mcp.tool(
+    name="auth_get_current_user",
+    description=(
+        "Retrieve the HubSpot user and account associated with the current access token. "
+        "Returns the user's email, user ID, hub ID, and hub domain. "
+        "Use this to identify who is the owner making requests."
+    ),
+    tags={Tag.auth},
+)
+async def auth_get_current_user() -> dict[str, Any]:
+    return await _client.get_token_hubspot_metadata()
 
 
 @mcp.tool(name="crm_create_contact", description="Create a new HubSpot contact.", tags={Tag.contacts})
@@ -245,9 +259,10 @@ async def crm_list_association_types(
     )
 
 
-def get_tool_descriptions(allowed: set[str]) -> list[ToolDescription]:
+async def get_tool_descriptions(allowed: set[str]) -> list[ToolDescription]:
     result = []
-    for name, tool in mcp._tool_manager._tools.items():
+    tools = await mcp.get_tools()
+    for name, tool in tools.items():
         if name not in allowed:
             continue
         params = tool.parameters or {}
