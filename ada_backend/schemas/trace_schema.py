@@ -70,8 +70,8 @@ class RootTraceSpan(BaseModel):
     span_kind: str
     start_time: str
     end_time: str
-    input: list
-    output: list
+    input_preview: str = ""
+    output_preview: str = ""
     status_code: str
     environment: EnvType | None
     call_type: CallType | None
@@ -84,7 +84,6 @@ class RootTraceSpan(BaseModel):
 class Pagination(BaseModel):
     page: int
     size: int
-    total_items: int
     total_pages: int
 
 

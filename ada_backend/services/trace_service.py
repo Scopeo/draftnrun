@@ -138,35 +138,32 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
     return trace_trees
 
 
-def build_root_spans(df: pd.DataFrame) -> List[RootTraceSpan]:
-    """Builds a list of root spans from the DataFrame."""
-    root_spans = []
-    for _, row in df.iterrows():
-        LOGGER.debug(f"Processing row: {row}")
-        span_kind = row["span_kind"]
-        input, output, _, _, _ = get_attributes_with_messages(span_kind, row, filter_to_last_message=True)
-        attributes = row.get("attributes", {})
-        root_spans.append(
-            RootTraceSpan(
-                trace_id=row["trace_rowid"],
-                span_id=row["span_id"],
-                name=row["name"],
-                span_kind=span_kind,
-                start_time=str(row["start_time"]) if row["start_time"] is not None else "",
-                end_time=str(row["end_time"]) if row["end_time"] is not None else "",
-                input=input,
-                output=output,
-                status_code=row["status_code"],
-                environment=row.get("environment", None),
-                call_type=row.get("call_type", None),
-                graph_runner_id=row.get("graph_runner_id", None),
-                tag_name=row.get("tag_name", None),
-                conversation_id=attributes.get("conversation_id"),
-                total_credits=row.get("total_credits", None),
-            )
-        )
+def build_root_spans(rows: List[dict]) -> List[RootTraceSpan]:
+    """Builds a list of root spans from query result rows.
 
-    return root_spans
+    Expects input_preview and output_preview as pre-extracted plain text
+    columns from the SQL query (truncated at 500 chars).
+    """
+    return [
+        RootTraceSpan(
+            trace_id=row["trace_rowid"],
+            span_id=row["span_id"],
+            name=row["name"],
+            span_kind=row["span_kind"],
+            start_time=str(row["start_time"]) if row["start_time"] is not None else "",
+            end_time=str(row["end_time"]) if row["end_time"] is not None else "",
+            input_preview=row.get("input_preview") or "",
+            output_preview=row.get("output_preview") or "",
+            status_code=row["status_code"],
+            environment=row.get("environment"),
+            call_type=row.get("call_type"),
+            graph_runner_id=row.get("graph_runner_id"),
+            tag_name=row.get("tag_name"),
+            conversation_id=row.get("conversation_id"),
+            total_credits=row.get("total_credits"),
+        )
+        for row in rows
+    ]
 
 
 def get_span_trace_service(user_id: UUID, trace_id: UUID) -> TraceSpan:
@@ -190,40 +187,25 @@ def get_root_traces_by_project(
     page_size: int = 20,
     graph_runner_id: Optional[UUID] = None,
 ) -> PaginatedRootTracesResponse:
-    df_span = query_root_trace_duration(project_id, duration)
-    track_project_observability_loaded(user_id, project_id)
-    LOGGER.info(f"Querying root spans for project {project_id} with duration {duration} days")
-
-    # Debug: Log call_type distribution before filtering
-    if not df_span.empty and "call_type" in df_span.columns:
-        call_type_counts = df_span["call_type"].value_counts(dropna=False)
-        LOGGER.info(f"Call type distribution before filter: {call_type_counts.to_dict()}")
-
-    if environment is not None:
-        df_span = df_span[df_span["environment"] == environment.value]
-
-    if call_type is not None:
-        LOGGER.info(f"Filtering by call_type: {call_type.value}")
-        before_filter_count = len(df_span)
-        df_span = df_span[df_span["call_type"] == call_type.value]
-        after_filter_count = len(df_span)
-        LOGGER.info(f"Rows before filter: {before_filter_count}, after filter: {after_filter_count}")
-
-    if graph_runner_id is not None:
-        df_span = df_span[df_span["graph_runner_id"] == graph_runner_id]
-
-    total_items = len(df_span)
     if page_size <= 0:
         page_size = 20
     if page <= 0:
         page = 1
-    start = (page - 1) * page_size
-    end = start + page_size
-    df_page = df_span.iloc[start:end]
 
-    traces = build_root_spans(df_page)
-    total_pages = (total_items + page_size - 1) // page_size
+    rows, total_pages = query_root_trace_duration(
+        project_id,
+        duration,
+        environment=environment,
+        call_type=call_type,
+        graph_runner_id=graph_runner_id,
+        page=page,
+        page_size=page_size,
+    )
+    track_project_observability_loaded(user_id, project_id)
+    LOGGER.info(f"Querying root spans for project {project_id} with duration {duration} days")
+
+    traces = build_root_spans(rows)
     return PaginatedRootTracesResponse(
-        pagination=Pagination(page=page, size=page_size, total_items=total_items, total_pages=total_pages),
+        pagination=Pagination(page=page, size=page_size, total_pages=total_pages),
         traces=traces,
     )

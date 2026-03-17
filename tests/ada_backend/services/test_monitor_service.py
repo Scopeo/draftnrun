@@ -94,8 +94,7 @@ def test_monitor_service(
         # Validate the paginated response structure
         assert paginated_response.pagination.page >= 1
         assert paginated_response.pagination.size > 0
-        assert paginated_response.pagination.total_items >= 0
-        assert paginated_response.pagination.total_pages >= 0
+        assert paginated_response.pagination.total_pages >= 1
 
         # Check traces list
         traces = paginated_response.traces
