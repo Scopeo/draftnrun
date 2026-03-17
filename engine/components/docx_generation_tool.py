@@ -44,6 +44,7 @@ class DOCXGenerationToolInputs(BaseModel):
         },
     )
     filename: Optional[str] = Field(
+        default=None,
         description="The desired filename for the generated DOCX file.",
         json_schema_extra={
             "is_tool_input": True,

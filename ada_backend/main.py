@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 
 import sentry_sdk
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import start_http_server
@@ -260,6 +260,15 @@ app.include_router(webhook_trigger_router)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+
+@app.exception_handler(HTTPException)
+async def sentry_http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    if exc.__cause__ and exc.status_code >= 500:
+        sentry_sdk.capture_exception(exc.__cause__)
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
+
+
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(

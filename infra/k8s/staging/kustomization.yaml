@@ -18,6 +18,8 @@ images:
     newTag: staging
   - name: ghcr.io/scopeo/draftnrun-scheduler
     newTag: staging
+  - name: ghcr.io/scopeo/draftnrun-mcp-server
+    newTag: staging
 
 labels:
   - pairs:

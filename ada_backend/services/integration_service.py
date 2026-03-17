@@ -385,12 +385,16 @@ def list_oauth_connections(
 
 @cached(
     cache=_NANGO_TOKEN_CACHE,
-    key=lambda session, oauth_connection_id, provider_config_key: (str(oauth_connection_id), provider_config_key),
+    key=lambda session, oauth_connection_id, provider_config_key, organization_id=None: (
+        str(oauth_connection_id),
+        provider_config_key,
+    ),
 )
 async def get_oauth_access_token(
     session: Session,
     oauth_connection_id: UUID,
     provider_config_key: str | OAuthProvider,
+    organization_id: UUID | None = None,
 ) -> str:
     """
     Get OAuth access token from Nango.
@@ -400,16 +404,22 @@ async def get_oauth_access_token(
         session: Database session
         oauth_connection_id: ID of the OAuthConnection
         provider_config_key: Nango provider config key (e.g., "slack", "google-mail")
+        organization_id: When provided, verifies the connection belongs to this org
 
     Returns:
         Valid access token from Nango
 
     Raises:
-        ValueError: If connection not found or Nango connection invalid
+        OAuthConnectionNotFoundError: If connection not found
+        OAuthConnectionUnauthorizedError: If connection doesn't belong to organization
+        NangoTokenMissingError: If Nango credentials lack an access token
     """
     connection = oauth_connection_repository.get_oauth_connection_by_id(session, oauth_connection_id)
     if not connection:
         raise OAuthConnectionNotFoundError(connection_id=oauth_connection_id)
+
+    if organization_id is not None and connection.organization_id != organization_id:
+        raise OAuthConnectionUnauthorizedError(connection_id=oauth_connection_id, organization_id=organization_id)
 
     nango = get_nango_client()
     nango_connection = await nango.get_connection(

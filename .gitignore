@@ -5,8 +5,11 @@
 .coverage
 .pytest_cache
 .idea
-.cursor
 .claude/*
+**.log
+**.logs
+.cursor/plans/**
+.cursor/mcp.json
 
 # virtual-env
 venv

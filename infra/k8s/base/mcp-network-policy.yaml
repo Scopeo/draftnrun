@@ -1,0 +1,62 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ada-mcp
+  labels:
+    app: ada-mcp
+spec:
+  podSelector:
+    matchLabels:
+      app: ada-mcp
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from Traefik (public MCP endpoint)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - protocol: TCP
+          port: 8090
+  egress:
+    # Allow DNS resolution (CoreDNS)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app: coredns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow connection to ada-api (backend calls)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: ada-api
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow HTTPS to Supabase and Redis.
+    # NOTE: no "to" clause — destinations are dynamic external IPs (Supabase,
+    # Sentry, Nango) that cannot be pinned to a stable CIDR range. Accepted
+    # risk: egress on 443/6379 is open to any IP.
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6379
