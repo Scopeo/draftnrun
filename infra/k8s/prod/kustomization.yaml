@@ -19,6 +19,9 @@ images:
   - name: ghcr.io/scopeo/draftnrun-scheduler
     newTag: latest
 
+patches:
+  - path: api-resources-patch.yaml
+
 labels:
   - pairs:
       environment: prod
