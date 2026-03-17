@@ -160,6 +160,24 @@ class GraphRunner:
 
             return final_output
 
+    def _release_consumed_predecessors(self, node_id: str) -> None:
+        """Free predecessor results once all their successors have consumed them.
+
+        Leaf nodes (out_degree == 0) are kept because collect_legacy_outputs
+        needs them after the loop.
+        """
+        for pred_id in self.graph.predecessors(node_id):
+            pred_task = self.tasks.get(pred_id)
+            if pred_task is None or pred_task.result is None:
+                continue
+            # Keep leaf-node results for final output collection
+            if self.graph.out_degree(pred_id) == 0:
+                continue
+            # Check if every successor of this predecessor has moved past NOT_READY
+            # (i.e., has already gathered its inputs or will never run)
+            if all(self.tasks[succ].state != TaskState.NOT_READY for succ in self.graph.successors(pred_id)):
+                pred_task.result = None
+
     async def _run_without_io_trace(self, input_data: dict[str, Any]) -> AgentPayload:
         """The core execution loop of the graph."""
         self._initialize_execution(input_data)
@@ -169,6 +187,7 @@ class GraphRunner:
             assert task.state == TaskState.READY, f"Node '{node_id}' is not ready"
             runnable = self.runnables[node_id]
             node_inputs_data = self._gather_inputs(node_id)
+            self._release_consumed_predecessors(node_id)
             input_packet = NodeData(data=node_inputs_data, ctx=self.run_context)
             if self.event_callback:
                 try:
