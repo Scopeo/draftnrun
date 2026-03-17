@@ -377,19 +377,17 @@ def build_source_metadata_extractor_processor() -> ParameterProcessor:
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        data_source = params.get("data_source", None)
-        if data_source is None:
+        data_sources = params.get("data_source", None)
+        if data_sources is None:
             component_attrs = params.get("component_attributes")
             component_name = getattr(component_attrs, "component_instance_name", None)
             raise MissingDataSourceError(component_name)
 
-        if isinstance(data_source, str):
-            data_source = json.loads(data_source)
+        if isinstance(data_sources, str):
+            data_sources = json.loads(data_sources)
 
-        if not isinstance(data_source, list):
+        if not isinstance(data_sources, list):
             raise ValueError("data_source must be a list of dicts")
-
-        data_sources = data_source
 
         source_ids: list[UUID] = []
         collection_name = None
@@ -397,8 +395,8 @@ def build_source_metadata_extractor_processor() -> ParameterProcessor:
         model_name = None
         qdrant_schemas: list[QdrantCollectionSchema] = []
 
-        for ds in data_sources:
-            source_id_str = ds.get("id") if isinstance(ds, dict) else None
+        for data_source in data_sources:
+            source_id_str = data_source.get("id") if isinstance(data_source, dict) else None
             if not source_id_str:
                 raise ValueError("Each data_source must contain an 'id' field")
             source_id = UUID(source_id_str)
