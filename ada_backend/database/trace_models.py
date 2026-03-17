@@ -1,16 +1,8 @@
+import sqlalchemy as sa
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 from opentelemetry.trace.status import StatusCode
-from sqlalchemy import (
-    TIMESTAMP,
-    UUID,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-)
-from sqlalchemy import (
-    Enum as SQLAlchemyEnum,
-)
+from sqlalchemy import TIMESTAMP, UUID, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import mapped_column
 
@@ -21,7 +13,15 @@ class Span(Base):
     """Represents a trace span in the traces schema."""
 
     __tablename__ = "spans"
-    __table_args__ = {"schema": "traces"}
+    __table_args__ = (
+        Index(
+            "ix_traces_spans_root_listing",
+            "project_id",
+            "start_time",
+            postgresql_where=sa.text("parent_id IS NULL"),
+        ),
+        {"schema": "traces"},
+    )
 
     id = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -73,7 +73,7 @@ class SpanMessage(Base):
     __table_args__ = {"schema": "traces"}
 
     id = mapped_column(Integer, primary_key=True, autoincrement=True)
-    span_id = mapped_column(String, ForeignKey("traces.spans.span_id", ondelete="CASCADE"), nullable=False)
+    span_id = mapped_column(String, ForeignKey("traces.spans.span_id", ondelete="CASCADE"), nullable=False, index=True)
     input_content = mapped_column(Text, nullable=False)
     output_content = mapped_column(Text, nullable=False)
 
