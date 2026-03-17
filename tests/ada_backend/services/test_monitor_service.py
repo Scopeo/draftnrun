@@ -70,13 +70,13 @@ def test_monitor_service(
 
     data = {"messages": [{"role": "user", "content": "Hello, how are you?"}]}
     output = asyncio.run(
-            run_env_agent(
-                project_id=GRAPH_TEST_PROJECT_ID,
-                env=EnvType.DRAFT,
-                input_data=data,
-                call_type=CallType.SANDBOX,
-            )
+        run_env_agent(
+            project_id=GRAPH_TEST_PROJECT_ID,
+            env=EnvType.DRAFT,
+            input_data=data,
+            call_type=CallType.SANDBOX,
         )
+    )
     assert isinstance(output.message, str)
     assert output.error is None, f"Graph execution failed with error: {output.error}"
     assert isinstance(output.artifacts, dict)
