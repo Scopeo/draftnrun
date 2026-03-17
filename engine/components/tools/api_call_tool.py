@@ -210,12 +210,25 @@ class APICallTool(Component):
         # Format the API response as a readable message
         if api_response.get("success", False):
             content = json.dumps(api_response["data"], indent=2)
+            data = api_response.get("data", {})
         else:
-            content = f"API call failed: {api_response.get('error', 'Unknown error')}"
+            error_details = {
+                "error": api_response.get("error", "Unknown error"),
+                "status_code": api_response.get("status_code"),
+                "response_body": api_response.get("response_body"),
+            }
+            content = f"API call failed: {json.dumps(error_details, indent=2)}"
+            response_body = api_response.get("response_body")
+            if isinstance(response_body, dict):
+                data = response_body
+            elif response_body is not None:
+                data = {"raw": response_body}
+            else:
+                data = {}
 
         return APICallToolOutputs(
             output=content,
             status_code=api_response["status_code"],
-            data=api_response.get("data", {}),
+            data=data,
             success=api_response["success"],
         )
