@@ -188,7 +188,7 @@ async def build_graph_runner(
     graph = nx.DiGraph()
 
     for component_node in reachable_component_nodes:
-        agent = instantiate_component(
+        agent = await instantiate_component(
             session=session,
             component_instance_id=component_node.id,
             project_id=project_id,
