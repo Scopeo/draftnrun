@@ -386,21 +386,19 @@ def build_source_metadata_extractor_processor() -> ParameterProcessor:
         if isinstance(data_source, str):
             data_source = json.loads(data_source)
 
-        if isinstance(data_source, dict):
-            data_sources = [data_source]
-        elif isinstance(data_source, list):
-            data_sources = data_source
-        else:
-            raise ValueError("data_source must be a dict or a list of dicts")
+        if not isinstance(data_source, list):
+            raise ValueError("data_source must be a list of dicts")
+
+        data_sources = data_source
 
         source_ids: list[UUID] = []
         collection_name = None
         provider = None
         model_name = None
-        qdrant_schema = None
+        qdrant_schemas: list[QdrantCollectionSchema] = []
 
-        for data_source in data_sources:
-            source_id_str = data_source.get("id") if isinstance(data_source, dict) else None
+        for ds in data_sources:
+            source_id_str = ds.get("id") if isinstance(ds, dict) else None
             if not source_id_str:
                 raise ValueError("Each data_source must contain an 'id' field")
             source_id = UUID(source_id_str)
@@ -410,16 +408,27 @@ def build_source_metadata_extractor_processor() -> ParameterProcessor:
                 source = get_data_source_by_id(session, source_id)
                 if source is None:
                     raise ValueError(f"Source with id {source_id} not found")
+                qdrant_schemas.append(QdrantCollectionSchema(**source.qdrant_schema))
                 if collection_name is None:
                     collection_name = source.qdrant_collection_name
                     provider, model_name = get_llm_provider_and_model(llm_model=source.embedding_model_reference)
-                    qdrant_schema = QdrantCollectionSchema(**source.qdrant_schema)
+
+        merged_schema = qdrant_schemas[0]
+        for schema in qdrant_schemas[1:]:
+            if merged_schema.metadata_fields_to_keep is None or schema.metadata_fields_to_keep is None:
+                merged_schema.metadata_fields_to_keep = None
+            else:
+                merged_schema.metadata_fields_to_keep = (
+                    merged_schema.metadata_fields_to_keep | schema.metadata_fields_to_keep
+                )
+            if schema.source_id_field and not merged_schema.source_id_field:
+                merged_schema.source_id_field = schema.source_id_field
 
         params["source_ids"] = source_ids
         params["collection_name"] = collection_name
         params["embedding_provider"] = provider
         params["embedding_model_name"] = model_name
-        params["qdrant_schema"] = qdrant_schema
+        params["qdrant_schema"] = merged_schema
 
         return params
 
