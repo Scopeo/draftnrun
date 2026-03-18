@@ -44,6 +44,9 @@ def _process_components_with_ports(
                 is_tool_input=port.is_tool_input,
                 is_advanced=port.is_advanced,
                 drives_output_schema=port.drives_output_schema,
+                display_order=port.display_order,
+                parameter_group_id=port.parameter_group_id,
+                parameter_order_within_group=port.parameter_order_within_group,
             )
         )
         # Track input ports per component_version for input-parameter synthesis
@@ -70,8 +73,9 @@ def _process_components_with_ports(
                     ui_component_properties=input_port.ui_component_properties,
                     is_advanced=input_port.is_advanced,
                     drives_output_schema=input_port.drives_output_schema,
-                    parameter_group_id=None,
-                    parameter_order_within_group=None,
+                    order=input_port.display_order,
+                    parameter_group_id=input_port.parameter_group_id,
+                    parameter_order_within_group=input_port.parameter_order_within_group,
                     parameter_group_name=None,
                     kind=ParameterKind.INPUT,
                 )

@@ -2,6 +2,7 @@ import json
 from datetime import date
 from enum import Enum
 from typing import Optional, Type
+from uuid import UUID
 
 from linkup import LinkupClient
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -13,6 +14,10 @@ from engine.components.component import Component
 from engine.components.types import ComponentAttributes, SourceChunk, SourcedResponse, ToolDescription
 from engine.trace.trace_manager import TraceManager
 from settings import settings
+
+LINKUP_GROUP_SEARCH_CONFIG_ID = UUID("71893ed4-7810-41f9-bf0e-d41aed53310b")
+LINKUP_GROUP_DATE_FILTERS_ID = UUID("7b9d45f0-9603-4359-84af-bc0c962c7cf4")
+LINKUP_GROUP_DOMAIN_FILTERS_ID = UUID("8150f0f1-17fd-4518-9cb9-b2e6a1da930b")
 
 LINKUP_TOOL_DESCRIPTION = ToolDescription(
     name="Linkup_Web_Search_Tool",
@@ -61,7 +66,12 @@ class LinkupDepth(str, Enum):
 class LinkupSearchToolInputs(BaseModel):
     query: str = Field(
         description="The standalone question to be answered using web search.",
-        json_schema_extra={"is_tool_input": True},
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 1,
+            "parameter_group_id": LINKUP_GROUP_SEARCH_CONFIG_ID,
+            "parameter_order_within_group": 1,
+        },
     )
     depth: LinkupDepth = Field(
         default=LinkupDepth.STANDARD,
@@ -78,27 +88,50 @@ class LinkupSearchToolInputs(BaseModel):
                 ],
             },
             "is_tool_input": True,
+            "display_order": 2,
+            "parameter_group_id": LINKUP_GROUP_SEARCH_CONFIG_ID,
+            "parameter_order_within_group": 2,
         },
     )
     from_date: Optional[date] = Field(
         default=None,
         description="The date from which the search results should be considered.",
-        json_schema_extra={"is_tool_input": True},
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 3,
+            "parameter_group_id": LINKUP_GROUP_DATE_FILTERS_ID,
+            "parameter_order_within_group": 1,
+        },
     )
     to_date: Optional[date] = Field(
         default=None,
         description="The date until which the search results should be considered.",
-        json_schema_extra={"is_tool_input": True},
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 4,
+            "parameter_group_id": LINKUP_GROUP_DATE_FILTERS_ID,
+            "parameter_order_within_group": 2,
+        },
     )
     include_domains: Optional[list[str]] = Field(
         default=None,
         description="The domains you want to search on.",
-        json_schema_extra={"is_tool_input": True},
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 5,
+            "parameter_group_id": LINKUP_GROUP_DOMAIN_FILTERS_ID,
+            "parameter_order_within_group": 1,
+        },
     )
     exclude_domains: Optional[list[str]] = Field(
         default=None,
         description="The domains you want to exclude from the search.",
-        json_schema_extra={"is_tool_input": True},
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 6,
+            "parameter_group_id": LINKUP_GROUP_DOMAIN_FILTERS_ID,
+            "parameter_order_within_group": 2,
+        },
     )
     model_config = {"extra": "allow"}  # For backward compatibility
 

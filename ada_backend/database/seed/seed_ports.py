@@ -140,12 +140,18 @@ def seed_port_definitions(session: Session):
             is_tool_input = True
             is_advanced = False
             drives_output_schema = False
+            display_order = None
+            parameter_group_id = None
+            parameter_order_within_group = None
             if isinstance(extra, dict):
                 ui_component = extra.get("ui_component")
                 ui_component_properties = extra.get("ui_component_properties")
                 is_tool_input = extra.get("is_tool_input", True)
                 is_advanced = extra.get("is_advanced", False)
                 drives_output_schema = extra.get("drives_output_schema", False)
+                display_order = extra.get("display_order")
+                parameter_group_id = extra.get("parameter_group_id")
+                parameter_order_within_group = extra.get("parameter_order_within_group")
 
             port_description = field_info.description
             parameter_type = get_parameter_type(field_info)
@@ -184,6 +190,9 @@ def seed_port_definitions(session: Session):
                 port.is_tool_input = is_tool_input
                 port.is_advanced = is_advanced
                 port.drives_output_schema = drives_output_schema
+                port.display_order = display_order
+                port.parameter_group_id = parameter_group_id
+                port.parameter_order_within_group = parameter_order_within_group
                 LOGGER.info(f"  - Updating INPUT port: {field_name}")
             else:
                 port = db.PortDefinition(
@@ -200,6 +209,9 @@ def seed_port_definitions(session: Session):
                     is_tool_input=is_tool_input,
                     is_advanced=is_advanced,
                     drives_output_schema=drives_output_schema,
+                    display_order=display_order,
+                    parameter_group_id=parameter_group_id,
+                    parameter_order_within_group=parameter_order_within_group,
                 )
                 session.add(port)
                 LOGGER.info(f"  - Creating INPUT port: {field_name}")

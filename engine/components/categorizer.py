@@ -87,6 +87,7 @@ class CategorizerInputs(BaseModel):
         default="",
         description="The content to categorize",
         json_schema_extra={
+            "display_order": 0,
             "parameter_type": ParameterType.STRING,
             "ui_component": UIComponent.TEXTAREA,
             "ui_component_properties": UIComponentProperties(
@@ -98,6 +99,7 @@ class CategorizerInputs(BaseModel):
     categories: dict[str, str] = Field(
         description="Available categories with their descriptions to choose from.",
         json_schema_extra={
+            "display_order": 1,
             "ui_component": UIComponent.CATEGORIES_BUILDER,
             "is_tool_input": False,
             "parameter_type": ParameterType.JSON,
@@ -118,6 +120,7 @@ class CategorizerInputs(BaseModel):
         default=None,
         description="Additional information to help with categorization",
         json_schema_extra={
+            "display_order": 2,
             "ui_component": UIComponent.TEXTAREA,
             "is_tool_input": False,
             "ui_component_properties": UIComponentProperties(
