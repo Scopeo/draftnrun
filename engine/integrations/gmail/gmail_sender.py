@@ -12,6 +12,7 @@ from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.integrations.gmail.gmail_utils import create_raw_mail_message
 from engine.integrations.utils import get_gmail_sender_service, get_google_user_email, get_oauth_access_token
+from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
@@ -209,7 +210,15 @@ class GmailSender(Component):
             raise ValueError("Both email_subject and email_body must be provided")
         span = get_current_span()
         span.set_attributes({
-            SpanAttributes.INPUT_VALUE: f"Subject: {inputs.mail_subject}\n Body: {inputs.mail_body}",
+            SpanAttributes.INPUT_VALUE: serialize_to_json(
+                {
+                    "mail_subject": inputs.mail_subject,
+                    "recipient_count": len(inputs.email_recipients or []),
+                    "cc_count": len(inputs.cc or []),
+                    "bcc_count": len(inputs.bcc or []),
+                    "attachment_count": len(inputs.email_attachments or []),
+                },
+            ),
         })
         if self.save_as_draft or not inputs.email_recipients:
             LOGGER.info("Creating draft email")

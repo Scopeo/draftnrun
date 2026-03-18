@@ -9,11 +9,7 @@ from pydantic import BaseModel, Field, validator
 
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
-from engine.integrations.outlook.outlook_utils import (
-    GRAPH_API_BASE,
-    build_graph_mail_payload,
-    get_outlook_user_email,
-)
+from engine.integrations.outlook.outlook_utils import GRAPH_API_BASE, build_graph_mail_payload, get_outlook_user_email
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
@@ -95,7 +91,10 @@ class OutlookSenderInputs(BaseModel):
 
 class OutlookSenderOutputs(BaseModel):
     status: str = Field(description="The status of the email operation.")
-    message_id: str = Field(description="The ID of the sent message or draft.")
+    message_id: Optional[str] = Field(
+        default=None,
+        description="The ID of the draft message, or None when the email was submitted for delivery.",
+    )
 
 
 class OutlookSender(Component):
@@ -164,8 +163,8 @@ class OutlookSender(Component):
             timeout=30.0,
         )
         if response.status_code not in (200, 201):
-            LOGGER.error(f"Failed to create Outlook draft: {response.status_code} {response.text}")
-            raise RuntimeError(f"Failed to create Outlook draft: {response.status_code} {response.text}")
+            LOGGER.error("Failed to create Outlook draft: status=%s", response.status_code)
+            raise RuntimeError(f"Failed to create Outlook draft: {response.status_code}")
         draft = response.json()
         LOGGER.debug(f"Draft id: {draft['id']}")
         return draft
@@ -178,7 +177,7 @@ class OutlookSender(Component):
         cc: Optional[list[str]] = None,
         bcc: Optional[list[str]] = None,
         attachments: Optional[Iterable[str | Path]] = None,
-    ) -> dict:
+    ) -> None:
         message_payload = build_graph_mail_payload(
             subject=email_subject,
             body=email_body,
@@ -195,9 +194,8 @@ class OutlookSender(Component):
             timeout=30.0,
         )
         if response.status_code not in (200, 202):
-            LOGGER.error(f"Failed to send Outlook email: {response.status_code} {response.text}")
-            raise RuntimeError(f"Failed to send Outlook email: {response.status_code} {response.text}")
-        return {"id": message_payload.get("subject", "unknown"), "status": "sent"}
+            LOGGER.error("Failed to send Outlook email: status=%s", response.status_code)
+            raise RuntimeError(f"Failed to send Outlook email: {response.status_code}")
 
     async def _run_without_io_trace(self, inputs: OutlookSenderInputs, ctx: dict) -> OutlookSenderOutputs:
         if not inputs.mail_subject or not inputs.mail_body:
@@ -207,11 +205,10 @@ class OutlookSender(Component):
             SpanAttributes.INPUT_VALUE: serialize_to_json(
                 {
                     "mail_subject": inputs.mail_subject,
-                    "mail_body": inputs.mail_body,
-                    "email_recipients": inputs.email_recipients,
-                    "cc": inputs.cc,
-                    "bcc": inputs.bcc,
-                    "email_attachments": inputs.email_attachments,
+                    "recipient_count": len(inputs.email_recipients or []),
+                    "cc_count": len(inputs.cc or []),
+                    "bcc_count": len(inputs.bcc or []),
+                    "attachment_count": len(inputs.email_attachments or []),
                 },
                 shorten_string=True,
             ),
@@ -237,6 +234,6 @@ class OutlookSender(Component):
                 bcc=inputs.bcc,
                 attachments=inputs.email_attachments,
             )
-            status = "Email sent successfully"
-            message_id = "sent"
+            status = "Email accepted for delivery"
+            message_id = None
         return OutlookSenderOutputs(status=status, message_id=message_id)
