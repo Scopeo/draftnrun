@@ -45,10 +45,7 @@ class HybridSynthesizer(Synthesizer):
         chunks: list[SourceChunk],
         query_str: str,
     ) -> HybridSynthesizerResponse:
-        context_str = build_context_from_source_chunks(
-            sources=chunks,
-            llm_metadata_keys=chunks[0].metadata.keys() if chunks else [],
-        )
+        context_str = build_context_from_source_chunks(sources=chunks)
         with open(image_id, "rb") as image_file:
             encoded_image = image_file.read()
 

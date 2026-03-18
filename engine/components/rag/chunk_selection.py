@@ -40,10 +40,7 @@ class RelevantChunkSelector(CloseMixin):
         chunks: list[SourceChunk],
         question: str,
     ) -> RelevantChunk:
-        sources = build_context_from_source_chunks(
-            sources=chunks,
-            llm_metadata_keys=chunks[0].metadata.keys() if chunks else [],
-        )
+        sources = build_context_from_source_chunks(sources=chunks)
         response = await self._llm_service.constrained_complete_with_pydantic_async(
             messages=[
                 {

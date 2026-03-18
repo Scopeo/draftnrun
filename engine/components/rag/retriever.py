@@ -13,7 +13,7 @@ from engine.components.component import Component
 from engine.components.synthesizer_prompts import DEFAULT_INSTRUCTIONS_FEW_SHOT_LEARNING
 from engine.components.types import ComponentAttributes, SourceChunk, ToolDescription
 from engine.components.utils import merge_qdrant_filters_with_and_conditions
-from engine.qdrant_service import QdrantService
+from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 from ingestion_script.utils import SOURCE_ID_COLUMN_NAME
@@ -98,6 +98,7 @@ class Retriever(Component):
         max_retrieved_chunks_after_penalty: Optional[int] = None,
         component_attributes: Optional[ComponentAttributes] = None,
         source_ids: Optional[list[UUID]] = None,
+        source_schemas: Optional[dict[str, QdrantCollectionSchema]] = None,
         tool_description: ToolDescription = RETRIEVER_TOOL_DESCRIPTION,
     ):
         if component_attributes is None:
@@ -118,6 +119,7 @@ class Retriever(Component):
         self.metadata_date_key = metadata_date_key
         self.max_retrieved_chunks_after_penalty = max_retrieved_chunks_after_penalty
         self.source_ids = source_ids
+        self.source_schemas = source_schemas
         LOGGER.info(f"Retriever initialized with source_ids={self.source_ids} for collection={collection_name}")
 
     async def _get_chunks_without_trace(
@@ -158,6 +160,7 @@ class Retriever(Component):
             default_penalty_rate=self.default_penalty_rate,
             metadata_date_key=cast_string_to_list(self.metadata_date_key),
             max_retrieved_chunks_after_penalty=self.max_retrieved_chunks_after_penalty,
+            source_schemas=self.source_schemas,
         )
         LOGGER.info(
             f"Retriever retrieved {len(chunks)} chunks from collection "
@@ -259,10 +262,7 @@ class Retriever(Component):
                 f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.tool_name": tool_name,
             })
 
-        chunks_output = build_context_from_source_chunks(
-            sources=chunks,
-            llm_metadata_keys=chunks[0].metadata.keys() if chunks else [],
-        )
+        chunks_output = build_context_from_source_chunks(sources=chunks)
 
         return RetrieverOutputs(formatted_content=chunks_output, artifacts={"sources": chunks})
 

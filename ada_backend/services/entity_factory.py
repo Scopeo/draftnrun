@@ -411,22 +411,12 @@ def build_source_metadata_extractor_processor() -> ParameterProcessor:
                     collection_name = source.qdrant_collection_name
                     provider, model_name = get_llm_provider_and_model(llm_model=source.embedding_model_reference)
 
-        merged_schema = qdrant_schemas[0]
-        for schema in qdrant_schemas[1:]:
-            if merged_schema.metadata_fields_to_keep is None or schema.metadata_fields_to_keep is None:
-                merged_schema.metadata_fields_to_keep = None
-            else:
-                merged_schema.metadata_fields_to_keep = (
-                    merged_schema.metadata_fields_to_keep | schema.metadata_fields_to_keep
-                )
-            if schema.source_id_field and not merged_schema.source_id_field:
-                merged_schema.source_id_field = schema.source_id_field
-
         params["source_ids"] = source_ids
         params["collection_name"] = collection_name
         params["embedding_provider"] = provider
         params["embedding_model_name"] = model_name
-        params["qdrant_schema"] = merged_schema
+        params["qdrant_schema"] = qdrant_schemas[0]
+        params["source_schemas"] = {str(sid): schema for sid, schema in zip(source_ids, qdrant_schemas)}
 
         return params
 
@@ -915,6 +905,7 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
         provider = params.pop("embedding_provider")
         model_name = params.pop("embedding_model_name")
         qdrant_schema = params.pop("qdrant_schema")
+        source_schemas = params.pop("source_schemas", None)
         params.pop("data_source", None)
 
         embedding_service = EmbeddingService(
@@ -936,13 +927,13 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
             ParameterToValidate(argument="metadata_date_key", type=str, optional=True),
         ]
         validated_params = _pop_and_validate_parameters(list_of_params_to_pop, params)
-
         retriever = Retriever(
             trace_manager=get_trace_manager(),
             qdrant_service=qdrant_service,
             collection_name=collection_name,
             component_attributes=None,
             source_ids=source_ids,
+            source_schemas=source_schemas,
             **validated_params,
         )
 
