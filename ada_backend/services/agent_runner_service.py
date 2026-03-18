@@ -286,7 +286,7 @@ async def run_agent(
     if set_ids is None:
         set_ids = _extract_set_ids(input_data)
 
-    # All DB operations use a short-lived session that is closed before agent execution.
+    # Short-lived session for setup queries — freed before graph building begins.
     with get_db_session() as session:
         project_details = get_project_with_details(session, project_id=project_id)
         if not project_details:
@@ -339,7 +339,11 @@ async def run_agent(
             tag_name=tag_name,
             **tracing_params,
         )
+    # Setup session freed — DB connection returned to pool before graph building.
 
+    # Separate short-lived session for graph building (component instantiation may make
+    # external API calls, so keep it isolated from the setup session above).
+    with get_db_session() as session:
         agent = await get_agent_for_project(
             session,
             project_id=project_id,
@@ -347,8 +351,7 @@ async def run_agent(
             variables=variables,
             event_callback=event_callback,
         )
-
-    # Session is closed — DB connection returned to pool before LLM execution.
+    # Graph session freed — DB connection returned to pool before LLM execution.
     try:
         agent_output = await agent.run(
             input_data,

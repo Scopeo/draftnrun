@@ -91,6 +91,8 @@ class BaseConfig(BaseSettings):
     ADA_DB_URL: Optional[str] = None
 
     # Database connection pool settings
+    # TODO: add a connection bouncer (e.g. PgBouncer). Pool size is per-process, so with
+    # multiple pods the total connection count grows fast and is not scalable as-is.
     ADA_DB_POOL_SIZE: int = 10
     ADA_DB_MAX_OVERFLOW: int = 20
     ADA_DB_POOL_TIMEOUT: int = 30
