@@ -1101,6 +1101,13 @@ class PortDefinition(Base):
     is_tool_input = mapped_column(Boolean, nullable=False, default=True)
     is_advanced = mapped_column(Boolean, nullable=False, default=False)
     drives_output_schema = mapped_column(Boolean, nullable=False, default=False)
+    display_order = mapped_column(Integer, nullable=True)
+    parameter_group_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("parameter_groups.id", name="fk_port_definitions_parameter_group_id"),
+        nullable=True,
+    )
+    parameter_order_within_group = mapped_column(Integer, nullable=True)
 
     component_version = relationship("ComponentVersion", back_populates="port_definitions")
 

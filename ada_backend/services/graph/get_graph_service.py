@@ -145,6 +145,7 @@ def get_graph_service(
                     ui_component_properties=input_port.ui_component_properties,
                     is_advanced=input_port.is_advanced,
                     drives_output_schema=input_port.drives_output_schema,
+                    order=input_port.display_order,
                     value=field_expression_by_name.get(input_port.name),
                 )
             )

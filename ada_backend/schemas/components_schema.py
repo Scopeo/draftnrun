@@ -47,6 +47,9 @@ class PortDefinitionSchema(BaseModel):
     is_tool_input: bool = True
     is_advanced: bool = False
     drives_output_schema: bool = False
+    display_order: Optional[int] = None
+    parameter_group_id: Optional[UUID] = None
+    parameter_order_within_group: Optional[int] = None
 
 
 class ComponentWithParametersDTO(ComponentVersionUseInfoSchema, ComponentSchema):

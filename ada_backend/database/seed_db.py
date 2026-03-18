@@ -26,7 +26,7 @@ from ada_backend.database.seed.seed_docx_generation import seed_docx_generation_
 from ada_backend.database.seed.seed_docx_template import seed_docx_template_components
 from ada_backend.database.seed.seed_filter import seed_filter_components
 from ada_backend.database.seed.seed_if_else import seed_if_else_components
-from ada_backend.database.seed.seed_linkup_tool import seed_linkup_tool_components
+from ada_backend.database.seed.seed_linkup_tool import seed_linkup_tool_components, seed_linkup_tool_parameter_groups
 from ada_backend.database.seed.seed_llm_call import seed_llm_call_components, seed_llm_call_parameter_groups
 from ada_backend.database.seed.seed_ocr_call import seed_ocr_call_components
 from ada_backend.database.seed.seed_pdf_generation import seed_pdf_generation_components
@@ -91,6 +91,7 @@ def seed_db(session: Session):
         seed_project_reference_components(session)
         seed_chunk_processor_components(session)
         seed_linkup_tool_components(session)
+        seed_linkup_tool_parameter_groups(session)
         seed_retriever_tool_components(session)
         seed_static_responder_components(session)
         seed_table_lookup_components(session)

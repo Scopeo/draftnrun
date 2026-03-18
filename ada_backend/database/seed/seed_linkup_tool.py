@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
@@ -9,7 +11,23 @@ from ada_backend.database.component_definition_seeding import (
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
-from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
+from ada_backend.database.seed.utils import (
+    COMPONENT_UUIDS,
+    COMPONENT_VERSION_UUIDS,
+    build_parameters_group,
+    build_parameters_group_definitions,
+)
+from engine.components.tools.linkup_tool import (
+    LINKUP_GROUP_DATE_FILTERS_ID,
+    LINKUP_GROUP_DOMAIN_FILTERS_ID,
+    LINKUP_GROUP_SEARCH_CONFIG_ID,
+)
+
+LINKUP_TOOL_PARAMETER_GROUP_UUIDS: dict[str, UUID] = {
+    "search_configuration": LINKUP_GROUP_SEARCH_CONFIG_ID,
+    "date_filters": LINKUP_GROUP_DATE_FILTERS_ID,
+    "domain_filters": LINKUP_GROUP_DOMAIN_FILTERS_ID,
+}
 
 
 def seed_linkup_tool_components(session: Session):
@@ -50,3 +68,44 @@ def seed_linkup_tool_components(session: Session):
         component_id=linkup_tool.id,
         category_ids=[CATEGORY_UUIDS["search_engine"], CATEGORY_UUIDS["most_used"]],
     )
+
+
+def seed_linkup_tool_parameter_groups(session: Session):
+    """Seed parameter groups for Linkup Search Tool input ports."""
+
+    parameter_groups = [
+        db.ParameterGroup(
+            id=LINKUP_TOOL_PARAMETER_GROUP_UUIDS["search_configuration"],
+            name="Search Configuration",
+        ),
+        db.ParameterGroup(
+            id=LINKUP_TOOL_PARAMETER_GROUP_UUIDS["date_filters"],
+            name="Date Filters",
+        ),
+        db.ParameterGroup(
+            id=LINKUP_TOOL_PARAMETER_GROUP_UUIDS["domain_filters"],
+            name="Domain Filters",
+        ),
+    ]
+    build_parameters_group(session, parameter_groups)
+
+    component_parameter_groups = [
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["linkup_search_tool"],
+            parameter_group_id=LINKUP_TOOL_PARAMETER_GROUP_UUIDS["search_configuration"],
+            group_order_within_component=1,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["linkup_search_tool"],
+            parameter_group_id=LINKUP_TOOL_PARAMETER_GROUP_UUIDS["date_filters"],
+            group_order_within_component=2,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["linkup_search_tool"],
+            parameter_group_id=LINKUP_TOOL_PARAMETER_GROUP_UUIDS["domain_filters"],
+            group_order_within_component=3,
+        ),
+    ]
+    build_parameters_group_definitions(session, component_parameter_groups)
+
+    session.commit()
