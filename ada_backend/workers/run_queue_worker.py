@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType, EnvType, ResponseFormat, RunStatus
-from ada_backend.database.setup_db import SessionLocal
+from ada_backend.database.setup_db import SessionLocal, get_db_session
 from ada_backend.repositories import run_repository
 from ada_backend.services.agent_runner_service import run_env_agent
 from ada_backend.services.run_service import _upload_result_to_s3, update_run_status
@@ -89,7 +89,6 @@ def _process_run_payload(payload: dict, loop: asyncio.AbstractEventLoop) -> None
     response_format = ResponseFormat(payload.get("response_format") or "s3_key")
     trigger_str = payload.get("trigger", CallType.API.value)
 
-    session: Session = SessionLocal()
     try:
         try:
             env = EnvType(env_str)
@@ -103,30 +102,30 @@ def _process_run_payload(payload: dict, loop: asyncio.AbstractEventLoop) -> None
             LOGGER.warning("Invalid trigger in run %s: %s, defaulting to API", run_id, trigger_str)
             call_type = CallType.API
 
-        run = run_repository.get_run(session, run_id)
-        if not run:
-            LOGGER.warning("Run %s not found, skipping", run_id)
-            return
-        current = run.status if isinstance(run.status, RunStatus) else RunStatus(str(run.status))
-        if current != RunStatus.PENDING:
-            LOGGER.debug("Run %s already %s, skipping", run_id, current)
-            return
+        with get_db_session() as session:
+            run = run_repository.get_run(session, run_id)
+            if not run:
+                LOGGER.warning("Run %s not found, skipping", run_id)
+                return
+            current = run.status if isinstance(run.status, RunStatus) else RunStatus(str(run.status))
+            if current != RunStatus.PENDING:
+                LOGGER.debug("Run %s already %s, skipping", run_id, current)
+                return
 
-        now = datetime.now(timezone.utc)
-        update_run_status(
-            session,
-            run_id=run_id,
-            project_id=project_id,
-            status=RunStatus.RUNNING,
-            started_at=now,
-        )
+            now = datetime.now(timezone.utc)
+            update_run_status(
+                session,
+                run_id=run_id,
+                project_id=project_id,
+                status=RunStatus.RUNNING,
+                started_at=now,
+            )
 
         async def event_callback(evt: dict):
             publish_run_event(run_id, evt)
 
         async def execute_agent():
             return await run_env_agent(
-                session=session,
                 project_id=project_id,
                 env=env,
                 input_data=input_data,
@@ -135,18 +134,18 @@ def _process_run_payload(payload: dict, loop: asyncio.AbstractEventLoop) -> None
                 event_callback=event_callback,
             )
 
-        # Use the long-lived event loop for this worker thread.
         result = loop.run_until_complete(execute_agent())
         result_id = _upload_result_to_s3(result, project_id=project_id, run_id=run_id)
-        update_run_status(
-            session,
-            run_id=run_id,
-            project_id=project_id,
-            status=RunStatus.COMPLETED,
-            trace_id=result.trace_id,
-            result_id=result_id,
-            finished_at=datetime.now(timezone.utc),
-        )
+        with get_db_session() as session:
+            update_run_status(
+                session,
+                run_id=run_id,
+                project_id=project_id,
+                status=RunStatus.COMPLETED,
+                trace_id=result.trace_id,
+                result_id=result_id,
+                finished_at=datetime.now(timezone.utc),
+            )
         publish_run_event(
             run_id,
             {"type": "run.completed", "trace_id": result.trace_id, "result_id": result_id},
@@ -155,14 +154,15 @@ def _process_run_payload(payload: dict, loop: asyncio.AbstractEventLoop) -> None
     except Exception as e:
         LOGGER.exception("Run %s failed: %s", run_id, e)
         try:
-            update_run_status(
-                session,
-                run_id=run_id,
-                project_id=project_id,
-                status=RunStatus.FAILED,
-                error={"message": str(e), "type": type(e).__name__},
-                finished_at=datetime.now(timezone.utc),
-            )
+            with get_db_session() as session:
+                update_run_status(
+                    session,
+                    run_id=run_id,
+                    project_id=project_id,
+                    status=RunStatus.FAILED,
+                    error={"message": str(e), "type": type(e).__name__},
+                    finished_at=datetime.now(timezone.utc),
+                )
         except Exception as status_exc:
             LOGGER.exception("Failed to update run %s to FAILED: %s", run_id, status_exc)
 
@@ -173,8 +173,6 @@ def _process_run_payload(payload: dict, loop: asyncio.AbstractEventLoop) -> None
             )
         except Exception as event_exc:
             LOGGER.exception("Failed to publish run.failed event for %s: %s", run_id, event_exc)
-    finally:
-        session.close()
 
 
 def _heartbeat_loop(client, heartbeat_key: str, stop_event: threading.Event) -> None:

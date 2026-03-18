@@ -826,7 +826,6 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
                     current_context.run,
                     asyncio.run,
                     get_agent_for_project(
-                        session=session,
                         graph_runner_id=gr_id,
                         project_id=project_id,
                     ),

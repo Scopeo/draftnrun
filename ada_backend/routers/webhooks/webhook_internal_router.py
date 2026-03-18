@@ -7,7 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType, EnvType
-from ada_backend.database.setup_db import get_db, get_db_session
+from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import verify_webhook_api_key_dependency
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.webhook_schema import (
@@ -31,7 +31,6 @@ LOGGER = logging.getLogger(__name__)
 async def execute_webhook_endpoint(
     webhook_id: UUID,
     body: WebhookExecuteBody,
-    session: Session = Depends(get_db),
     verified_webhook_api_key: Annotated[None, Depends(verify_webhook_api_key_dependency)] = None,
 ) -> WebhookExecuteResponse:
     """
@@ -39,7 +38,6 @@ async def execute_webhook_endpoint(
     and run the workflow for each trigger. Internal endpoint for webhook workers.
     """
     return await execute_webhook(
-        session=session,
         webhook_id=webhook_id,
         provider=body.provider,
         event_id=body.event_id,
@@ -82,34 +80,30 @@ async def _run_project_background(
     env: EnvType,
     input_data: Dict[str, Any],
 ) -> None:
-    # TODO: add to redis queue. currently will hold all sessions open until end of runs
     """
     Execute workflow for an existing run (created before 202 response).
     Updates run status RUNNING → COMPLETED/FAILED.
     """
-    with get_db_session() as session:
-        try:
-            await run_with_tracking(
-                session=session,
+    try:
+        await run_with_tracking(
+            project_id=project_id,
+            trigger=CallType.WEBHOOK,
+            runner_coro=run_env_agent(
                 project_id=project_id,
-                trigger=CallType.WEBHOOK,
-                runner_coro=run_env_agent(
-                    session=session,
-                    project_id=project_id,
-                    input_data=input_data,
-                    env=env,
-                    call_type=CallType.WEBHOOK,
-                ),
-                run_id=run_id,
-            )
-        except EnvironmentNotFound as e:
-            LOGGER.error(f"Environment not found for project {project_id} env={env}: {str(e)}", exc_info=True)
-        except MissingDataSourceError as e:
-            LOGGER.error(f"Data source not found for project {project_id} env={env}: {str(e)}", exc_info=True)
-        except MissingIntegrationError as e:
-            LOGGER.error(f"Missing integration for project {project_id} env={env}: {str(e)}", exc_info=True)
-        except Exception as e:
-            LOGGER.error(f"Failed to run workflow for project {project_id} env={env}: {str(e)}", exc_info=True)
+                input_data=input_data,
+                env=env,
+                call_type=CallType.WEBHOOK,
+            ),
+            run_id=run_id,
+        )
+    except EnvironmentNotFound as e:
+        LOGGER.error(f"Environment not found for project {project_id} env={env}: {str(e)}", exc_info=True)
+    except MissingDataSourceError as e:
+        LOGGER.error(f"Data source not found for project {project_id} env={env}: {str(e)}", exc_info=True)
+    except MissingIntegrationError as e:
+        LOGGER.error(f"Missing integration for project {project_id} env={env}: {str(e)}", exc_info=True)
+    except Exception as e:
+        LOGGER.error(f"Failed to run workflow for project {project_id} env={env}: {str(e)}", exc_info=True)
 
 
 @router.post("/projects/{project_id}/envs/{env}/run", status_code=202)
@@ -150,7 +144,6 @@ async def run_project_internal(
 async def run_workflow_internal(
     project_id: UUID,
     input_data: Dict[str, Any] = Body(...),
-    session: Session = Depends(get_db),
     verified_webhook_api_key: Annotated[None, Depends(verify_webhook_api_key_dependency)] = None,
 ) -> ChatResponse:
     """
@@ -160,11 +153,9 @@ async def run_workflow_internal(
     """
     try:
         return await run_with_tracking(
-            session=session,
             project_id=project_id,
             trigger=CallType.WEBHOOK,
             runner_coro=run_env_agent(
-                session=session,
                 project_id=project_id,
                 input_data=input_data,
                 env=EnvType.PRODUCTION,

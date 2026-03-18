@@ -1,3 +1,4 @@
+import logging
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine, event
@@ -7,6 +8,8 @@ from ada_backend.database import trace_models  # noqa: F401  # Import to registe
 from ada_backend.database.models import Base
 from settings import settings
 
+LOGGER = logging.getLogger(__name__)
+
 
 def get_db_url() -> str:
     if not settings.ADA_DB_URL:
@@ -14,7 +17,15 @@ def get_db_url() -> str:
     return settings.ADA_DB_URL
 
 
-engine = create_engine(get_db_url(), echo=False, pool_pre_ping=True, pool_recycle=1800)
+engine = create_engine(
+    get_db_url(),
+    echo=False,
+    pool_size=settings.ADA_DB_POOL_SIZE,
+    max_overflow=settings.ADA_DB_MAX_OVERFLOW,
+    pool_timeout=settings.ADA_DB_POOL_TIMEOUT,
+    pool_recycle=settings.ADA_DB_POOL_RECYCLE,
+    pool_pre_ping=True,
+)
 
 
 # Enable SQLite foreign key support
@@ -24,6 +35,31 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
+
+if hasattr(engine.pool, "size"):
+
+    @event.listens_for(engine, "checkout")
+    def _on_checkout(dbapi_conn, connection_rec, connection_proxy):
+        pool = engine.pool
+        LOGGER.debug(
+            "Pool checkout: checked_out=%s checked_in=%s overflow=%s pool_size=%s",
+            pool.checkedout(),
+            pool.checkedin(),
+            pool.overflow(),
+            pool.size(),
+        )
+
+    @event.listens_for(engine, "checkin")
+    def _on_checkin(dbapi_conn, connection_rec):
+        pool = engine.pool
+        LOGGER.debug(
+            "Pool checkin: checked_out=%s checked_in=%s overflow=%s pool_size=%s",
+            pool.checkedout(),
+            pool.checkedin(),
+            pool.overflow(),
+            pool.size(),
+        )
 
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
