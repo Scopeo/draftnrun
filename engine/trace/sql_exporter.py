@@ -9,7 +9,7 @@ from opentelemetry.sdk.trace import BoundedAttributes, Event, ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.trace.status import StatusCode
 from sqlalchemy import func, select, update
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from ada_backend.database.models import SpanUsage, Usage
 from ada_backend.database.setup_db import engine as _trace_engine
@@ -123,7 +123,7 @@ class SQLSpanExporter(SpanExporter):
         finally:
             session.close()
 
-    def _export_with_session(self, session, spans: list[ReadableSpan]) -> SpanExportResult:
+    def _export_with_session(self, session: Session, spans: list[ReadableSpan]) -> SpanExportResult:
         for span in spans:
             cumulative_error_count = int(span.status.status_code is StatusCode.ERROR)
             cumulative_llm_token_count_prompt = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT, 0))
@@ -268,5 +268,4 @@ class SQLSpanExporter(SpanExporter):
                 )
             )
         session.commit()
-        session.expunge_all()
         return SpanExportResult.SUCCESS
