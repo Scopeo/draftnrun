@@ -107,102 +107,110 @@ def setup_tracing_context(
 
 
 async def build_graph_runner(
-    session: Session,
     graph_runner_id: UUID,
     project_id: UUID,
     variables: dict[str, Any] | None = None,
     event_callback=None,
 ) -> GraphRunner:
     trace_manager = get_trace_manager()
-    # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
-    component_nodes = get_component_nodes(session, graph_runner_id)
-    edges = get_edges(session, graph_runner_id)
 
-    trigger_node_ids = {str(node.id) for node in component_nodes if node.is_trigger}
+    with get_db_session() as session:
+        # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
+        component_nodes = get_component_nodes(session, graph_runner_id)
+        edges = get_edges(session, graph_runner_id)
 
-    if trigger_node_ids:
-        reachable_node_ids = find_reachable_nodes(component_nodes, edges, trigger_node_ids)
-        all_node_ids = {str(node.id) for node in component_nodes}
-        unreachable_node_ids = all_node_ids - reachable_node_ids
+        trigger_node_ids = {str(node.id) for node in component_nodes if node.is_trigger}
 
-        if unreachable_node_ids:
-            unreachable_names = [
-                node.name for node in component_nodes if str(node.id) in unreachable_node_ids
+        if trigger_node_ids:
+            reachable_node_ids = find_reachable_nodes(component_nodes, edges, trigger_node_ids)
+            all_node_ids = {str(node.id) for node in component_nodes}
+            unreachable_node_ids = all_node_ids - reachable_node_ids
+
+            if unreachable_node_ids:
+                unreachable_names = [
+                    node.name for node in component_nodes if str(node.id) in unreachable_node_ids
+                ]
+                LOGGER.warning(
+                    "Skipping %d block(s) not triggered by a start block: %s",
+                    len(unreachable_node_ids),
+                    ", ".join(unreachable_names),
+                )
+
+            reachable_component_nodes = [node for node in component_nodes if str(node.id) in reachable_node_ids]
+            reachable_edges = [
+                edge for edge in edges
+                if str(edge.source_node_id) in reachable_node_ids
+                and str(edge.target_node_id) in reachable_node_ids
             ]
-            LOGGER.warning(
-                "Skipping %d block(s) not triggered by a start block: %s",
-                len(unreachable_node_ids),
-                ", ".join(unreachable_names),
-            )
+            start_nodes = [str(node_id) for node_id in trigger_node_ids]
+        else:
+            # TODO: Workaround for workflows that do not have a trigger — run all blocks.
+            #  Once all workflows have a trigger, remove this fallback.
+            LOGGER.info("No trigger node found in graph %s — running all blocks", graph_runner_id)
+            reachable_node_ids = {str(node.id) for node in component_nodes}
+            reachable_component_nodes = list(component_nodes)
+            reachable_edges = list(edges)
+            start_nodes = [str(node.id) for node in component_nodes if node.is_start_node]
 
-        reachable_component_nodes = [node for node in component_nodes if str(node.id) in reachable_node_ids]
-        reachable_edges = [
-            edge for edge in edges
-            if str(edge.source_node_id) in reachable_node_ids
-            and str(edge.target_node_id) in reachable_node_ids
+        port_mappings = list_port_mappings_for_graph(session, graph_runner_id)
+        port_mappings_graph = []
+        for port_mapping in port_mappings:
+            source_port_name = get_source_port_name(port_mapping)
+            if source_port_name is None:
+                LOGGER.warning(
+                    f"PortMapping {port_mapping.id} has neither source_port_definition_id nor "
+                    "source_output_port_instance_id set; skipping"
+                )
+                continue
+            port_mappings_graph.append({
+                "source_instance_id": str(port_mapping.source_instance_id),
+                "source_port_name": source_port_name,
+                "target_instance_id": str(port_mapping.target_instance_id),
+                "target_port_name": port_mapping.target_port_definition.name,
+                "dispatch_strategy": port_mapping.dispatch_strategy,
+            })
+
+        component_instance_ids = [node.id for node in reachable_component_nodes]
+        expressions: list[GraphRunner.ExpressionSpec] = []
+        for component_instance_id in component_instance_ids:
+            input_port_instances = get_input_port_instances_for_component_instance(
+                session, component_instance_id, eager_load_field_expression=True
+            )
+            for input_port_instance in input_port_instances:
+                if input_port_instance.field_expression and input_port_instance.field_expression.expression_json:
+                    expression_ast = expression_from_json(input_port_instance.field_expression.expression_json)
+                    expressions.append({
+                        "target_instance_id": str(component_instance_id),
+                        "field_name": input_port_instance.name,
+                        "expression_ast": expression_ast,
+                    })
+
+        # Extract plain Python values before session closes — ORM objects
+        # become detached and their attributes are inaccessible afterwards.
+        reachable_node_ids_ordered = [node.id for node in reachable_component_nodes]
+        edge_tuples = [
+            (edge.source_node_id, edge.target_node_id, edge.order)
+            for edge in reachable_edges
         ]
-        start_nodes = [str(node_id) for node_id in trigger_node_ids]
-    else:
-        # TODO: Workaround for workflows that do not have a trigger — run all blocks.
-        #  Once all workflows have a trigger, remove this fallback.
-        LOGGER.info("No trigger node found in graph %s — running all blocks", graph_runner_id)
-        reachable_node_ids = {str(node.id) for node in component_nodes}
-        reachable_component_nodes = list(component_nodes)
-        reachable_edges = list(edges)
-        start_nodes = [str(node.id) for node in component_nodes if node.is_start_node]
 
-    # Fetch port mappings for this graph
-    port_mappings = list_port_mappings_for_graph(session, graph_runner_id)
-    port_mappings_graph = []
-    for port_mapping in port_mappings:
-        source_port_name = get_source_port_name(port_mapping)
-        if source_port_name is None:
-            LOGGER.warning(
-                f"PortMapping {port_mapping.id} has neither source_port_definition_id nor "
-                "source_output_port_instance_id set; skipping"
-            )
-            continue
-        port_mappings_graph.append({
-            "source_instance_id": str(port_mapping.source_instance_id),
-            "source_port_name": source_port_name,
-            "target_instance_id": str(port_mapping.target_instance_id),
-            "target_port_name": port_mapping.target_port_definition.name,
-            "dispatch_strategy": port_mapping.dispatch_strategy,
-        })
-
-    component_instance_ids = [node.id for node in reachable_component_nodes]
-    expressions: list[GraphRunner.ExpressionSpec] = []
-    for component_instance_id in component_instance_ids:
-        input_port_instances = get_input_port_instances_for_component_instance(
-            session, component_instance_id, eager_load_field_expression=True
-        )
-        for input_port_instance in input_port_instances:
-            if input_port_instance.field_expression and input_port_instance.field_expression.expression_json:
-                expression_ast = expression_from_json(input_port_instance.field_expression.expression_json)
-                expressions.append({
-                    "target_instance_id": str(component_instance_id),
-                    "field_name": input_port_instance.name,
-                    "expression_ast": expression_ast,
-                })
-
+    # Session closed — no DB connection held during component instantiation.
     runnables: dict[str, Runnable] = {}
     graph = nx.DiGraph()
 
-    for component_node in reachable_component_nodes:
+    for node_id in reachable_node_ids_ordered:
         agent = await instantiate_component(
-            session=session,
-            component_instance_id=component_node.id,
+            component_instance_id=node_id,
             project_id=project_id,
         )
-        runnables[str(component_node.id)] = agent
-        graph.add_node(str(component_node.id))
+        runnables[str(node_id)] = agent
+        graph.add_node(str(node_id))
 
-    for edge in reachable_edges:
-        if edge.source_node_id:
+    for source_node_id, target_node_id, order in edge_tuples:
+        if source_node_id:
             graph.add_edge(
-                str(edge.source_node_id),
-                str(edge.target_node_id),
-                order=edge.order,
+                str(source_node_id),
+                str(target_node_id),
+                order=order,
             )
 
     return GraphRunner(
@@ -218,26 +226,24 @@ async def build_graph_runner(
 
 
 async def get_agent_for_project(
-    session: Session,
     graph_runner_id: UUID,
     project_id: UUID,
     variables: dict[str, Any] | None = None,
     event_callback=None,
 ) -> GraphRunner:
-    project = get_project(session, project_id=project_id)
-    if not project:
-        raise ProjectNotFound(project_id)
+    with get_db_session() as session:
+        project = get_project(session, project_id=project_id)
+        if not project:
+            raise ProjectNotFound(project_id)
+        if not graph_runner_exists(session, graph_id=graph_runner_id):
+            raise GraphNotFound(graph_runner_id)
 
-    if graph_runner_exists(session, graph_id=graph_runner_id):
-        return await build_graph_runner(
-            session,
-            graph_runner_id,
-            project_id,
-            variables=variables,
-            event_callback=event_callback,
-        )
-    else:
-        raise GraphNotFound(graph_runner_id)
+    return await build_graph_runner(
+        graph_runner_id,
+        project_id,
+        variables=variables,
+        event_callback=event_callback,
+    )
 
 
 async def run_env_agent(
@@ -341,17 +347,12 @@ async def run_agent(
         )
     # Setup session freed — DB connection returned to pool before graph building.
 
-    # Separate short-lived session for graph building (component instantiation may make
-    # external API calls, so keep it isolated from the setup session above).
-    with get_db_session() as session:
-        agent = await get_agent_for_project(
-            session,
-            project_id=project_id,
-            graph_runner_id=graph_runner_id,
-            variables=variables,
-            event_callback=event_callback,
-        )
-    # Graph session freed — DB connection returned to pool before LLM execution.
+    agent = await get_agent_for_project(
+        project_id=project_id,
+        graph_runner_id=graph_runner_id,
+        variables=variables,
+        event_callback=event_callback,
+    )
     try:
         agent_output = await agent.run(
             input_data,
