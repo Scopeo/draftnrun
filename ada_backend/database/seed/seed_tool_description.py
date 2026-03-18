@@ -153,6 +153,7 @@ def seed_tool_description(session: Session):
     hubspot_neverdrop_mcp_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["hubspot_neverdrop_mcp_tool_description"],
         **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
+    )
     outlook_sender_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["outlook_sender_tool_description"],
         **OUTLOOK_SENDER_TOOL_DESCRIPTION.model_dump(),
