@@ -2,7 +2,7 @@ import json
 import logging
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Type, Union
 
 import pandas as pd
 import sqlalchemy
@@ -10,6 +10,7 @@ from func_timeout import FunctionTimedOut, func_timeout
 from sqlalchemy import MetaData, create_engine, text
 from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
+from sqlalchemy.engine import URL
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.type_api import TypeEngine
 
@@ -47,9 +48,35 @@ DEFAULT_MAPPING = {"CURRENT_TIMESTAMP": sqlalchemy.func.current_timestamp()}
 
 class SQLLocalService(DBService):
     def __init__(
-        self, engine_url: str, component_attributes: Optional[ComponentAttributes] = None, connection_timeout: int = 7
+        self,
+        engine_url: Union[str, URL, None] = None,
+        component_attributes: Optional[ComponentAttributes] = None,
+        connection_timeout: int = 7,
+        *,
+        drivername: Optional[str] = None,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        database: Optional[str] = None,
     ):
         super().__init__(component_attributes=component_attributes)
+
+        if engine_url is None and drivername and host and username and database:
+            engine_url = URL.create(
+                drivername=drivername,
+                username=username,
+                password=password,
+                host=host,
+                port=port,
+                database=database,
+            )
+
+        if engine_url is None:
+            raise ValueError(
+                "Provide either engine_url or individual connection parameters "
+                "(drivername, host, username, password, database)"
+            )
 
         def _initialize_connection():
             """All connection logic wrapped in this function for timeout."""
