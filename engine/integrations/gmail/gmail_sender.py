@@ -210,15 +210,7 @@ class GmailSender(Component):
             raise ValueError("Both email_subject and email_body must be provided")
         span = get_current_span()
         span.set_attributes({
-            SpanAttributes.INPUT_VALUE: serialize_to_json(
-                {
-                    "mail_subject": inputs.mail_subject,
-                    "recipient_count": len(inputs.email_recipients or []),
-                    "cc_count": len(inputs.cc or []),
-                    "bcc_count": len(inputs.bcc or []),
-                    "attachment_count": len(inputs.email_attachments or []),
-                },
-            ),
+            SpanAttributes.INPUT_VALUE: f"Subject: {inputs.mail_subject}\n Body: {inputs.mail_body}",
         })
         if self.save_as_draft or not inputs.email_recipients:
             LOGGER.info("Creating draft email")
