@@ -61,3 +61,13 @@ class OAuthConnectionStatus(BaseModel):
     provider_config_key: str
     connection_id: UUID | None = None
     name: str | None = None
+
+
+class GmailSendAsAlias(BaseModel):
+    email: str
+    display_name: str = ""
+    is_primary: bool = False
+
+
+class GmailSendAsResponse(BaseModel):
+    aliases: list[GmailSendAsAlias]

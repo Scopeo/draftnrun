@@ -1,4 +1,5 @@
 import logging
+import re
 from pathlib import Path
 from typing import Iterable, Optional, Type
 
@@ -56,6 +57,13 @@ GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
             "items": {"type": "string"},
             "description": ("List of file paths to attach to the email."),
         },
+        "from_email": {
+            "type": "string",
+            "description": (
+                "Optional sender email address. Must be a verified Gmail sendAs alias. "
+                "When omitted, the primary Gmail address is used."
+            ),
+        },
     },
     required_tool_properties=["mail_subject", "mail_body"],
 )
@@ -92,6 +100,24 @@ class GmailSenderInputs(BaseModel):
         description="List of file paths to attach to the email.",
         json_schema_extra={"is_tool_input": True},
     )
+    from_email: Optional[str] = Field(
+        default=None,
+        description="Optional sender email address (must be a verified Gmail sendAs alias).",
+        json_schema_extra={"is_tool_input": True},
+    )
+
+    @validator("from_email", pre=True)
+    def validate_from_email(cls, v):
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            return None
+        v = v.strip().lower()
+        if not v:
+            return None
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", v):
+            raise ValueError(f"Invalid sender email address: '{v}'")
+        return v
 
     @validator("email_recipients", pre=True)
     def validate_email_recipients(cls, v):
@@ -156,12 +182,13 @@ class GmailSender(Component):
         bcc: Optional[list[str]] = None,
         attachments: Optional[Iterable[str | Path]] = None,
         html_body: Optional[str] = None,
+        sender_email: Optional[str] = None,
     ):
         try:
             raw_email_message = create_raw_mail_message(
                 subject=email_subject,
                 body=email_body,
-                sender_email_address=self.email_address,
+                sender_email_address=sender_email or self.email_address,
                 recipients=email_recipients,
                 cc=cc,
                 bcc=bcc,
@@ -185,12 +212,13 @@ class GmailSender(Component):
         bcc: Optional[list[str]] = None,
         attachments: Optional[Iterable[str | Path]] = None,
         html_body: Optional[str] = None,
+        sender_email: Optional[str] = None,
     ):
         try:
             create_message = create_raw_mail_message(
                 subject=email_subject,
                 body=email_body,
-                sender_email_address=self.email_address,
+                sender_email_address=sender_email or self.email_address,
                 recipients=email_recipients,
                 cc=cc,
                 bcc=bcc,
@@ -208,8 +236,12 @@ class GmailSender(Component):
         if not inputs.mail_subject or not inputs.mail_body:
             raise ValueError("Both email_subject and email_body must be provided")
         span = get_current_span()
+        sender = inputs.from_email or None
+        effective_sender = sender or self.email_address
         span.set_attributes({
-            SpanAttributes.INPUT_VALUE: f"Subject: {inputs.mail_subject}\n Body: {inputs.mail_body}",
+            SpanAttributes.INPUT_VALUE: (
+                f"Subject: {inputs.mail_subject}\nBody: {inputs.mail_body}\nSender: {effective_sender}"
+            ),
         })
         if self.save_as_draft or not inputs.email_recipients:
             LOGGER.info("Creating draft email")
@@ -221,6 +253,7 @@ class GmailSender(Component):
                 bcc=inputs.bcc,
                 attachments=inputs.email_attachments,
                 html_body=inputs.mail_html_body,
+                sender_email=sender,
             )
             if not draft:
                 raise RuntimeError("Failed to create draft email")
@@ -235,6 +268,7 @@ class GmailSender(Component):
                 bcc=inputs.bcc,
                 attachments=inputs.email_attachments,
                 html_body=inputs.mail_html_body,
+                sender_email=sender,
             )
             status = f"Email sent successfully with ID: {sent_message['id']}"
             message_id = sent_message["id"]

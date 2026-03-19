@@ -87,12 +87,13 @@ class GmailSenderV2(Component):
         bcc: Optional[list[str]] = None,
         attachments: Optional[Iterable[str | Path]] = None,
         html_body: Optional[str] = None,
+        sender_email: Optional[str] = None,
     ):
         try:
             raw_email_message = create_raw_mail_message(
                 subject=email_subject,
                 body=email_body,
-                sender_email_address=self.email_address,
+                sender_email_address=sender_email or self.email_address,
                 recipients=email_recipients,
                 cc=cc,
                 bcc=bcc,
@@ -116,12 +117,13 @@ class GmailSenderV2(Component):
         bcc: Optional[list[str]] = None,
         attachments: Optional[Iterable[str | Path]] = None,
         html_body: Optional[str] = None,
+        sender_email: Optional[str] = None,
     ):
         try:
             create_message = create_raw_mail_message(
                 subject=email_subject,
                 body=email_body,
-                sender_email_address=self.email_address,
+                sender_email_address=sender_email or self.email_address,
                 recipients=email_recipients,
                 cc=cc,
                 bcc=bcc,
@@ -148,10 +150,12 @@ class GmailSenderV2(Component):
                     "cc": inputs.cc,
                     "bcc": inputs.bcc,
                     "email_attachments": inputs.email_attachments,
+                    "from_email": inputs.from_email,
                 },
                 shorten_string=True,
             ),
         })
+        sender = inputs.from_email or None
         if self.save_as_draft or not inputs.email_recipients:
             LOGGER.info("Creating draft email")
             draft = self.gmail_create_draft(
@@ -162,6 +166,7 @@ class GmailSenderV2(Component):
                 bcc=inputs.bcc,
                 attachments=inputs.email_attachments,
                 html_body=inputs.mail_html_body,
+                sender_email=sender,
             )
             if not draft:
                 raise RuntimeError("Failed to create draft email")
@@ -176,6 +181,7 @@ class GmailSenderV2(Component):
                 bcc=inputs.bcc,
                 attachments=inputs.email_attachments,
                 html_body=inputs.mail_html_body,
+                sender_email=sender,
             )
             status = f"Email sent successfully with ID: {sent_message['id']}"
             message_id = sent_message["id"]

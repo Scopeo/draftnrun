@@ -9,6 +9,7 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -20,6 +21,8 @@ from ada_backend.routers.auth_router import (
 from ada_backend.schemas.auth_schema import AuthenticatedEntity
 from ada_backend.schemas.oauth_schemas import (
     CreateOAuthConnectionRequest,
+    GmailSendAsAlias,
+    GmailSendAsResponse,
     OAuthConnectionListItem,
     OAuthConnectionResponse,
     OAuthConnectionStatusResponse,
@@ -29,6 +32,7 @@ from ada_backend.schemas.oauth_schemas import (
 from ada_backend.services import integration_service
 from ada_backend.services.errors import (
     NangoConnectionNotFoundError,
+    NangoTokenMissingError,
     OAuthConnectionNotFoundError,
     OAuthConnectionUnauthorizedError,
 )
@@ -254,3 +258,60 @@ async def delete_oauth_connection(
     except Exception as e:
         LOGGER.exception("OAuth revoke failed")
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
+
+
+@router.get(
+    "/organizations/{organization_id}/oauth-connections/{connection_id}/gmail-send-as",
+    response_model=GmailSendAsResponse,
+    summary="List Gmail sendAs aliases for a connection",
+)
+async def list_gmail_send_as(
+    organization_id: UUID,
+    connection_id: UUID,
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> GmailSendAsResponse:
+    """List verified sendAs aliases for a Gmail OAuth connection."""
+    try:
+        access_token = await integration_service.get_oauth_access_token(
+            session=session,
+            oauth_connection_id=connection_id,
+            organization_id=organization_id,
+            provider_config_key=OAuthProvider.GMAIL.value,
+        )
+    except OAuthConnectionNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except OAuthConnectionUnauthorizedError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    except NangoTokenMissingError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+    except httpx.RequestError as e:
+        LOGGER.warning("Gmail sendAs API request failed for connection %s: %s", connection_id, e)
+        raise HTTPException(status_code=502, detail="Upstream Gmail API error") from e
+
+    if resp.status_code != 200:
+        LOGGER.error("Gmail sendAs API failed: %s %s", resp.status_code, resp.text)
+        raise HTTPException(status_code=502, detail="Failed to fetch Gmail aliases")
+
+    data = resp.json()
+    aliases = [
+        GmailSendAsAlias(
+            email=entry["sendAsEmail"],
+            display_name=entry.get("displayName", ""),
+            is_primary=entry.get("isPrimary", False),
+        )
+        for entry in data.get("sendAs", [])
+        if entry.get("isPrimary") or entry.get("verificationStatus") == "accepted"
+    ]
+    aliases.sort(key=lambda a: (not a.is_primary, a.email))
+    return GmailSendAsResponse(aliases=aliases)
