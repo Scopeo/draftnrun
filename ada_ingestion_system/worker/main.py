@@ -1,5 +1,6 @@
 import json
 import os
+import resource
 import subprocess
 from pathlib import Path
 from typing import Any, Dict
@@ -16,6 +17,13 @@ MAX_CONCURRENT_INGESTIONS = int(os.getenv("MAX_CONCURRENT_INGESTIONS", 2))
 
 # Default API base URL - use HTTP for localhost
 DEFAULT_API_BASE_URL = "http://localhost:8000"
+
+
+def _set_subprocess_memory_limit():
+    """Cap subprocess virtual memory so OOM kills the subprocess, not the pod."""
+    limit_mb = int(os.getenv("SUBPROCESS_MEMORY_LIMIT_MB", "1024"))
+    limit_bytes = limit_mb * 1024 * 1024
+    resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
 
 
 class Worker(BaseWorker):
@@ -151,6 +159,7 @@ class Worker(BaseWorker):
                 stderr=subprocess.PIPE,
                 env=env,  # Use our custom environment with the Fernet key
                 cwd=str(Path(__file__).parents[2]),  # Run from repository root
+                preexec_fn=_set_subprocess_memory_limit,
             )
 
             # Real-time logging - stream output as it happens
