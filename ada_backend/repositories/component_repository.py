@@ -337,6 +337,10 @@ def get_component_basic_parameters(
     """
     return (
         session.query(db.BasicParameter)
+        .options(
+            joinedload(db.BasicParameter.parameter_definition),
+            joinedload(db.BasicParameter.organization_secret),
+        )
         .filter(
             db.BasicParameter.component_instance_id == component_instance_id,
         )
