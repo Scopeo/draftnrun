@@ -413,6 +413,55 @@ class Worker(BaseWorker):
 
         logger.info("End Redis state logging")
 
+    def _on_dead_letter(self, message_id: str, fields: Dict[str, str], reason: str = "") -> None:
+        """Mark the ingestion task as FAILED when its message is dead-lettered."""
+        try:
+            raw = fields.get("data", "")
+            payload = json.loads(raw) if raw else {}
+        except (json.JSONDecodeError, TypeError):
+            logger.error("dead_letter_unparseable", message_id=message_id)
+            return
+
+        if not isinstance(payload, dict):
+            logger.error(
+                "dead_letter_invalid_payload_shape",
+                message_id=message_id,
+                payload_type=type(payload).__name__,
+            )
+            return
+
+        organization_id = payload.get("organization_id")
+        task_id = payload.get("task_id")
+        source_name = payload.get("source_name", "unknown")
+        source_type = payload.get("source_type", "unknown")
+        ingestion_id = payload.get("ingestion_id", "unknown")
+
+        if not organization_id or not task_id:
+            logger.error("dead_letter_missing_ids", message_id=message_id, payload_keys=list(payload.keys()))
+            return
+
+        logger.error(
+            "dead_letter_marking_task_failed",
+            ingestion_id=ingestion_id,
+            task_id=task_id,
+            organization_id=organization_id,
+            source_name=source_name,
+        )
+
+        msg = f"Task failed after repeated crashes ({reason or 'unknown'}). Source: {source_name}, Type: {source_type}"
+        result_metadata = TaskResultMetadata(
+            message=msg,
+            type=ResultType.ERROR,
+        )
+        self._update_task_status_to_failed(
+            organization_id=organization_id,
+            task_id=task_id,
+            source_name=source_name,
+            source_type=source_type,
+            ingestion_id=ingestion_id,
+            result_metadata=result_metadata,
+        )
+
     def _log_queued_task(self, payload: Dict[str, Any]) -> None:
         """Log queued ingestion task."""
         logger.info("task_queued_for_external_processing", ingestion_id=payload.get("ingestion_id"))
