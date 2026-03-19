@@ -36,6 +36,12 @@ redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASS
 # How long (ms) a PEL entry must be idle before it is reclaimed on startup.
 _PENDING_IDLE_THRESHOLD_MS = 60_000
 
+# Max delivery attempts before a message is dead-lettered.
+_MAX_DELIVERY_ATTEMPTS = int(os.getenv("MAX_DELIVERY_ATTEMPTS", "3"))
+
+# Dead-letter stream suffix — appended to the main stream name.
+_DEADLETTER_SUFFIX = ":deadletter"
+
 
 def _xgroup_create_if_not_exists(stream_name: str, group_name: str) -> None:
     """Create a consumer group on the stream, creating the stream if absent."""
@@ -88,13 +94,67 @@ class BaseWorker:
             return False
         return all(field in payload for field in required_fields)
 
+    def _dead_letter(self, message_id: str, fields: Dict[str, str], delivery_count: int, reason: str) -> None:
+        """Move a poison message to the dead-letter stream, ACK it, and log."""
+        dl_stream = self.stream_name + _DEADLETTER_SUFFIX
+        try:
+            # Preserve original payload + add diagnostics
+            dl_entry = {
+                **fields,
+                "_original_stream": self.stream_name,
+                "_original_message_id": message_id,
+                "_delivery_count": str(delivery_count),
+                "_reason": reason,
+                "_dead_lettered_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+            redis_client.xadd(dl_stream, dl_entry)
+            redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
+            logger.error(
+                "message_dead_lettered",
+                stream=self.stream_name,
+                message_id=message_id,
+                delivery_count=delivery_count,
+                reason=reason,
+                dead_letter_stream=dl_stream,
+            )
+        except Exception as e:
+            # Last resort: ACK anyway to stop the crash loop
+            logger.error("dead_letter_failed_forcing_ack", message_id=message_id, error=str(e))
+            try:
+                redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
+            except Exception:
+                pass
+
     def _reclaim_pending(self, consumer_name: str) -> None:
         """
         On startup, reclaim PEL entries that have been idle long enough to
         indicate their previous consumer crashed without acknowledging them.
-        Reclaimed messages are processed immediately like fresh messages.
+
+        Before re-dispatching, check delivery count via XPENDING.  Messages
+        that exceeded _MAX_DELIVERY_ATTEMPTS are dead-lettered instead of
+        reprocessed — this breaks the OOM crash-loop cycle.
         """
         try:
+            # First, check for poison messages that have been delivered too many times.
+            # XPENDING with a range returns per-message detail including delivery count.
+            pending_details = redis_client.xpending_range(
+                self.stream_name, CONSUMER_GROUP, "-", "+", count=100
+            )
+            poison_ids: set = set()
+            for entry in pending_details:
+                mid = entry["message_id"]
+                deliveries = entry["times_delivered"]
+                if deliveries >= _MAX_DELIVERY_ATTEMPTS:
+                    # Read the original message so we can dead-letter it with its payload
+                    msgs = redis_client.xrange(self.stream_name, min=mid, max=mid, count=1)
+                    fields = msgs[0][1] if msgs else {}
+                    reason = f"exceeded max delivery attempts ({deliveries}/{_MAX_DELIVERY_ATTEMPTS})"
+                    self._dead_letter(mid, fields, deliveries, reason)
+                    # Notify subclass so it can mark the task as failed in the API
+                    self._on_dead_letter(mid, fields)
+                    poison_ids.add(mid)
+
+            # Now reclaim remaining non-poison messages
             _next, messages, _deleted = redis_client.xautoclaim(
                 self.stream_name,
                 CONSUMER_GROUP,
@@ -104,13 +164,16 @@ class BaseWorker:
                 count=100,
             )
             if messages:
-                logger.info(
-                    "reclaimed_pending_messages",
-                    stream=self.stream_name,
-                    count=len(messages),
-                )
-                for message_id, fields in messages:
-                    self._dispatch(message_id, fields, consumer_name)
+                # Filter out any messages we just dead-lettered
+                safe_messages = [(mid, fields) for mid, fields in messages if mid not in poison_ids]
+                if safe_messages:
+                    logger.info(
+                        "reclaimed_pending_messages",
+                        stream=self.stream_name,
+                        count=len(safe_messages),
+                    )
+                    for message_id, fields in safe_messages:
+                        self._dispatch(message_id, fields, consumer_name)
         except redis.exceptions.ResponseError as e:
             # Stream or group may not exist yet on a completely fresh deployment.
             if "ERR" in str(e) or "NOGROUP" in str(e):
@@ -202,6 +265,11 @@ class BaseWorker:
     def get_required_fields(self) -> list[str]:
         """Return required payload field names. Must be implemented by subclasses."""
         raise NotImplementedError("Subclasses must implement get_required_fields")
+
+    def _on_dead_letter(self, message_id: str, fields: Dict[str, str]) -> None:
+        """Called when a message is dead-lettered.  Override in subclasses to
+        mark the task as failed in the API, send alerts, etc."""
+        pass
 
     def _log_queued_task(self, payload: Dict[str, Any]) -> None:
         """
