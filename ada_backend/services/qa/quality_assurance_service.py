@@ -195,7 +195,6 @@ async def run_qa_service(
         for input_entry in input_entries:
             try:
                 chat_response = await run_agent(
-                    session=session,
                     project_id=project_id,
                     graph_runner_id=run_request.graph_runner_id,
                     input_data=input_entry.input,

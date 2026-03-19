@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType, RunStatus
+from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories import run_repository
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.schemas.project_schema import ChatResponse
@@ -65,7 +66,6 @@ def _upload_result_to_s3(
 
 
 async def run_with_tracking(
-    session: Session,
     project_id: UUID,
     trigger: CallType,
     runner_coro: Awaitable[ChatResponse],
@@ -77,46 +77,52 @@ async def run_with_tracking(
     Create a run record (or use existing run_id), set it to RUNNING, execute the runner coroutine,
     then set COMPLETED (with result) or FAILED (with error).
     When run_id is provided (e.g. after returning 202), the run row must already exist; no new run is created.
+
+    Each DB operation uses its own short-lived session so that no connection is held
+    during the (potentially long-running) runner coroutine.
     """
-    if run_id is None:
-        run = create_run(
+    with get_db_session() as session:
+        if run_id is None:
+            run = create_run(
+                session,
+                project_id=project_id,
+                trigger=trigger,
+                webhook_id=webhook_id,
+                integration_trigger_id=integration_trigger_id,
+            )
+            run_id = run.id
+        now = datetime.now(timezone.utc)
+        update_run_status(
             session,
+            run_id=run_id,
             project_id=project_id,
-            trigger=trigger,
-            webhook_id=webhook_id,
-            integration_trigger_id=integration_trigger_id,
+            status=RunStatus.RUNNING,
+            started_at=now,
         )
-        run_id = run.id
-    now = datetime.now(timezone.utc)
-    update_run_status(
-        session,
-        run_id=run_id,
-        project_id=project_id,
-        status=RunStatus.RUNNING,
-        started_at=now,
-    )
     try:
         result = await runner_coro
         result_id = _upload_result_to_s3(result, project_id=project_id, run_id=run_id)
-        update_run_status(
-            session,
-            run_id=run_id,
-            project_id=project_id,
-            status=RunStatus.COMPLETED,
-            trace_id=result.trace_id,
-            result_id=result_id,
-            finished_at=datetime.now(timezone.utc),
-        )
+        with get_db_session() as session:
+            update_run_status(
+                session,
+                run_id=run_id,
+                project_id=project_id,
+                status=RunStatus.COMPLETED,
+                trace_id=result.trace_id,
+                result_id=result_id,
+                finished_at=datetime.now(timezone.utc),
+            )
         return result
     except Exception as e:
-        update_run_status(
-            session,
-            run_id=run_id,
-            project_id=project_id,
-            status=RunStatus.FAILED,
-            error={"message": str(e), "type": type(e).__name__},
-            finished_at=datetime.now(timezone.utc),
-        )
+        with get_db_session() as session:
+            update_run_status(
+                session,
+                run_id=run_id,
+                project_id=project_id,
+                status=RunStatus.FAILED,
+                error={"message": str(e), "type": type(e).__name__},
+                finished_at=datetime.now(timezone.utc),
+            )
         raise
 
 

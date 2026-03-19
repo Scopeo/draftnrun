@@ -8,17 +8,16 @@ from openinference.semconv.trace import SpanAttributes
 from opentelemetry.sdk.trace import BoundedAttributes, Event, ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.trace.status import StatusCode
-from sqlalchemy import create_engine, func, select, update
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import func, select, update
+from sqlalchemy.orm import Session, sessionmaker
 
 from ada_backend.database.models import SpanUsage, Usage
-from ada_backend.database.setup_db import get_db_url
+from ada_backend.database.setup_db import engine as _trace_engine
 from ada_backend.database.trace_models import Span, SpanMessage
 from engine.trace.nested_utils import split_nested_keys
 
 LOGGER = logging.getLogger(__name__)
 
-_trace_engine = create_engine(get_db_url(), echo=False, pool_size=3, pool_pre_ping=True, pool_recycle=1800)
 _TraceSession = sessionmaker(bind=_trace_engine)
 
 
@@ -102,9 +101,6 @@ def convert_to_list(obj: Any) -> list[str] | None:
 
 
 class SQLSpanExporter(SpanExporter):
-    def __init__(self):
-        self.session = get_session_trace()
-
     @staticmethod
     def _should_count_as_usage(
         component_instance_id: str | None,
@@ -118,6 +114,16 @@ class SQLSpanExporter(SpanExporter):
 
     def export(self, spans: list[ReadableSpan]) -> SpanExportResult:
         LOGGER.info(f"Exporting {len(spans)} spans to SQL database")
+        session = get_session_trace()
+        try:
+            return self._export_with_session(session, spans)
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def _export_with_session(self, session: Session, spans: list[ReadableSpan]) -> SpanExportResult:
         for span in spans:
             cumulative_error_count = int(span.status.status_code is StatusCode.ERROR)
             cumulative_llm_token_count_prompt = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT, 0))
@@ -128,7 +134,7 @@ class SQLSpanExporter(SpanExporter):
             json_span = json.loads(span.to_json())
 
             if accumulation := (
-                self.session.execute(
+                session.execute(
                     select(
                         func.sum(Span.cumulative_error_count),
                         func.sum(Span.cumulative_llm_token_count_prompt),
@@ -192,7 +198,7 @@ class SQLSpanExporter(SpanExporter):
             ancestors = ancestors.union_all(
                 select(Span.id, Span.parent_id).join(child, Span.span_id == child.c.parent_id)
             )
-            self.session.execute(
+            session.execute(
                 update(Span)
                 .where(Span.id.in_(select(ancestors.c.id)))
                 .values(
@@ -203,8 +209,8 @@ class SQLSpanExporter(SpanExporter):
                     + cumulative_llm_token_count_completion,
                 )
             )
-            self.session.add(span_row)
-            self.session.flush()
+            session.add(span_row)
+            session.flush()
 
             has_credits = (
                 credits_input_token is not None
@@ -221,7 +227,7 @@ class SQLSpanExporter(SpanExporter):
                     credits_per_call=credits_per_call,
                     credits_per=credits_per,
                 )
-                self.session.add(span_usage)
+                session.add(span_usage)
 
                 # Update Usage table with total credits
                 count_as_usage = self._should_count_as_usage(
@@ -237,7 +243,7 @@ class SQLSpanExporter(SpanExporter):
                         year = current_date.year
                         month = current_date.month
 
-                        usage_record = self.session.execute(
+                        usage_record = session.execute(
                             select(Usage).where(
                                 Usage.project_id == project_id, Usage.year == year, Usage.month == month
                             )
@@ -252,18 +258,14 @@ class SQLSpanExporter(SpanExporter):
                                 month=month,
                                 credits_used=total_span_credits,
                             )
-                            self.session.add(new_usage)
+                            session.add(new_usage)
 
-            self.session.add(
+            session.add(
                 SpanMessage(
                     span_id=span_row.span_id,
                     input_content=json.dumps(input) if input is not None else None,
                     output_content=json.dumps(output) if output is not None else None,
                 )
             )
-        self.session.commit()
-        self.session.expunge_all()
+        session.commit()
         return SpanExportResult.SUCCESS
-
-    def shutdown(self):
-        self.session.close()

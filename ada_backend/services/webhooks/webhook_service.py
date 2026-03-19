@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy.orm.session import Session
 
 from ada_backend.database.models import CallType, EnvType, Webhook, WebhookProvider
+from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.webhook_repository import get_enabled_webhook_triggers
 from ada_backend.schemas.webhook_schema import (
     FilterExpression,
@@ -207,7 +208,6 @@ def get_webhook_triggers_service(
 
 
 async def execute_webhook(
-    session: Session,
     webhook_id: UUID,
     provider: str,
     event_id: str,
@@ -217,12 +217,13 @@ async def execute_webhook(
     Get triggers for the webhook, prepare workflow input (provider-specific),
     and run the workflow for each trigger.
     """
-    triggers = get_webhook_triggers_service(
-        session=session,
-        webhook_id=webhook_id,
-        provider=provider,
-        event_data=payload,
-    )
+    with get_db_session() as session:
+        triggers = get_webhook_triggers_service(
+            session=session,
+            webhook_id=webhook_id,
+            provider=provider,
+            event_data=payload,
+        )
 
     if len(triggers) == 0:
         return WebhookExecuteResponse(processed=0, total=0, results=[])
@@ -237,7 +238,7 @@ async def execute_webhook(
     out: List[WebhookExecuteResult] = []
     for trigger in triggers:
         try:
-            r = await _run_trigger(session, trigger, input_base)
+            r = await _run_trigger(trigger, input_base)
             out.append(r)
         except Exception as e:
             LOGGER.exception("Unexpected error in execute_webhook", exc_info=e)
@@ -259,20 +260,17 @@ async def execute_webhook(
 
 
 async def _run_trigger(
-    session: Session,
     trigger: IntegrationTriggerResponse,
     input_base: Dict[str, Any],
 ) -> WebhookExecuteResult:
     project_id = UUID(trigger.project_id)
     try:
         response = await run_with_tracking(
-            session=session,
             project_id=project_id,
             trigger=CallType.WEBHOOK,
             webhook_id=UUID(trigger.webhook_id),
             integration_trigger_id=UUID(trigger.id),
             runner_coro=run_env_agent(
-                session=session,
                 project_id=project_id,
                 input_data=input_base,
                 env=EnvType.PRODUCTION,

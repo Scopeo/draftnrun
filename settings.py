@@ -90,6 +90,14 @@ class BaseConfig(BaseSettings):
     ADA_DB_NAME: Optional[str] = None
     ADA_DB_URL: Optional[str] = None
 
+    # Database connection pool settings
+    # TODO: add a connection bouncer (e.g. PgBouncer). Pool size is per-process, so with
+    # multiple pods the total connection count grows fast and is not scalable as-is.
+    ADA_DB_POOL_SIZE: int = 10
+    ADA_DB_MAX_OVERFLOW: int = 20
+    ADA_DB_POOL_TIMEOUT: int = 30
+    ADA_DB_POOL_RECYCLE: int = 1800
+
     # Ingestion database settings
     INGESTION_DB_URL: Optional[str] = None
 
@@ -287,6 +295,10 @@ class _SettingsProxy:
         "ADA_DB_USER",
         "ADA_DB_PASSWORD",
         "ADA_DB_NAME",
+        "ADA_DB_POOL_SIZE",
+        "ADA_DB_MAX_OVERFLOW",
+        "ADA_DB_POOL_TIMEOUT",
+        "ADA_DB_POOL_RECYCLE",
     }
 
     def __init__(self, delegate: BaseConfig) -> None:

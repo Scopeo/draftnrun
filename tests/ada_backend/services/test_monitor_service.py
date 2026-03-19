@@ -7,7 +7,6 @@ from openai.types.chat.chat_completion import Choice
 from openai.types.completion_usage import CompletionUsage
 
 from ada_backend.database.models import CallType, EnvType
-from ada_backend.database.setup_db import get_db_session
 from ada_backend.schemas.trace_schema import RootTraceSpan
 from ada_backend.services.agent_runner_service import run_env_agent
 from ada_backend.services.trace_service import get_root_traces_by_project
@@ -69,40 +68,38 @@ def test_monitor_service(
 
     user_id = uuid4()
 
-    with get_db_session() as session:
-        data = {"messages": [{"role": "user", "content": "Hello, how are you?"}]}
-        output = asyncio.run(
-            run_env_agent(
-                session=session,
-                project_id=GRAPH_TEST_PROJECT_ID,
-                env=EnvType.DRAFT,
-                input_data=data,
-                call_type=CallType.SANDBOX,
-            )
-        )
-        assert isinstance(output.message, str)
-        assert output.error is None, f"Graph execution failed with error: {output.error}"
-        assert isinstance(output.artifacts, dict)
-
-        duration = 7
-        paginated_response = get_root_traces_by_project(
-            user_id=user_id,
+    data = {"messages": [{"role": "user", "content": "Hello, how are you?"}]}
+    output = asyncio.run(
+        run_env_agent(
             project_id=GRAPH_TEST_PROJECT_ID,
-            duration=duration,
+            env=EnvType.DRAFT,
+            input_data=data,
+            call_type=CallType.SANDBOX,
         )
+    )
+    assert isinstance(output.message, str)
+    assert output.error is None, f"Graph execution failed with error: {output.error}"
+    assert isinstance(output.artifacts, dict)
 
-        # Validate the paginated response structure
-        assert paginated_response.pagination.page >= 1
-        assert paginated_response.pagination.size > 0
-        assert paginated_response.pagination.total_pages >= 1
+    duration = 7
+    paginated_response = get_root_traces_by_project(
+        user_id=user_id,
+        project_id=GRAPH_TEST_PROJECT_ID,
+        duration=duration,
+    )
 
-        # Check traces list
-        traces = paginated_response.traces
-        assert len(traces) > 0
-        assert isinstance(traces, list)
+    # Validate the paginated response structure
+    assert paginated_response.pagination.page >= 1
+    assert paginated_response.pagination.size > 0
+    assert paginated_response.pagination.total_pages >= 1
 
-        # Validate each trace has all required RootTraceSpan fields
-        keys_trace_span = list(RootTraceSpan.model_fields.keys())
-        for trace in traces:
-            trace_dict = trace.model_dump()
-            assert all(key in trace_dict for key in keys_trace_span)
+    # Check traces list
+    traces = paginated_response.traces
+    assert len(traces) > 0
+    assert isinstance(traces, list)
+
+    # Validate each trace has all required RootTraceSpan fields
+    keys_trace_span = list(RootTraceSpan.model_fields.keys())
+    for trace in traces:
+        trace_dict = trace.model_dump()
+        assert all(key in trace_dict for key in keys_trace_span)

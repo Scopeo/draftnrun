@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.context import set_run_variables
 from ada_backend.database.models import CallType, EnvType, OrgSecretType, ResponseFormat
+from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.credits_repository import get_organization_limit, get_organization_total_credits
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.repositories.graph_runner_repository import (
@@ -240,7 +241,6 @@ async def get_agent_for_project(
 
 
 async def run_env_agent(
-    session: Session,
     project_id: UUID,
     env: EnvType,
     input_data: dict,
@@ -250,17 +250,19 @@ async def run_env_agent(
     event_callback=None,
 ) -> ChatResponse:
     set_ids = _extract_set_ids(input_data)
-    graph_runner = get_graph_runner_for_env(session=session, project_id=project_id, env=env)
-    if not graph_runner:
-        raise EnvironmentNotFound(project_id, env.value)
+    with get_db_session() as session:
+        graph_runner = get_graph_runner_for_env(session=session, project_id=project_id, env=env)
+        if not graph_runner:
+            raise EnvironmentNotFound(project_id, env.value)
+        graph_runner_id = graph_runner.id
+        tag_name = compose_tag_name(graph_runner.tag_version, graph_runner.version_name)
     return await run_agent(
-        session=session,
         project_id=project_id,
-        graph_runner_id=graph_runner.id,
+        graph_runner_id=graph_runner_id,
         input_data=input_data,
         environment=env,
         call_type=call_type,
-        tag_name=compose_tag_name(graph_runner.tag_version, graph_runner.version_name),
+        tag_name=tag_name,
         response_format=response_format,
         cron_id=cron_id,
         set_ids=set_ids,
@@ -270,7 +272,6 @@ async def run_env_agent(
 
 # TODO: agent_runner should not be aware of cron_id
 async def run_agent(
-    session: Session,
     project_id: UUID,
     graph_runner_id: UUID,
     input_data: dict,
@@ -285,65 +286,72 @@ async def run_agent(
     if set_ids is None:
         set_ids = _extract_set_ids(input_data)
 
-    project_details = get_project_with_details(session, project_id=project_id)
-    if not project_details:
-        raise ProjectNotFound(project_id)
+    # Short-lived session for setup queries — freed before graph building begins.
+    with get_db_session() as session:
+        project_details = get_project_with_details(session, project_id=project_id)
+        if not project_details:
+            raise ProjectNotFound(project_id)
 
-    variables = resolve_variables(session, project_details.organization_id, set_ids, project_id=project_id)
-    set_run_variables(variables)
+        organization_id = project_details.organization_id
 
-    today = datetime.now()
-    organization_limit = get_organization_limit(
-        session=session,
-        organization_id=project_details.organization_id,
-    )
-    if organization_limit and organization_limit.limit is not None:
-        current_usage = get_organization_total_credits(
-            session,
-            project_details.organization_id,
-            today.year,
-            today.month,
+        variables = resolve_variables(session, organization_id, set_ids, project_id=project_id)
+        set_run_variables(variables)
+
+        today = datetime.now()
+        organization_limit = get_organization_limit(
+            session=session,
+            organization_id=organization_id,
         )
-        if current_usage >= organization_limit.limit:
-            raise OrganizationLimitExceededError(
-                project_details.organization_id, organization_limit.limit, current_usage
+        if organization_limit and organization_limit.limit is not None:
+            current_usage = get_organization_total_credits(
+                session,
+                organization_id,
+                today.year,
+                today.month,
             )
-    # TODO : Add again the monitoring for frequently asked questions after parallelization of agent run
-    # db_service = SQLLocalService(engine_url="sqlite:///ada_backend/database/monitor.db", dialect="sqlite")
-    # asyncio.create_task(monitor_questions(db_service, project_id, input_data))
-    uuid_for_temp_folder = str(uuid.uuid4())
+            if current_usage >= organization_limit.limit:
+                raise OrganizationLimitExceededError(
+                    organization_id, organization_limit.limit, current_usage
+                )
+        # TODO : Add again the monitoring for frequently asked questions after parallelization of agent run
+        # db_service = SQLLocalService(engine_url="sqlite:///ada_backend/database/monitor.db", dialect="sqlite")
+        # asyncio.create_task(monitor_questions(db_service, project_id, input_data))
+        uuid_for_temp_folder = str(uuid.uuid4())
 
-    # Generate conversation_id if not provided
-    conversation_id = input_data.get("conversation_id")
-    if not conversation_id:
-        conversation_id = str(uuid.uuid4())
+        conversation_id = input_data.get("conversation_id")
+        if not conversation_id:
+            conversation_id = str(uuid.uuid4())
 
-    save_input_files_to_temp_folder(input_data, uuid_for_temp_folder)
+        save_input_files_to_temp_folder(input_data, uuid_for_temp_folder)
 
-    tracing_params = {}
-    if cron_id:
-        tracing_params["cron_id"] = str(cron_id)
+        tracing_params = {}
+        if cron_id:
+            tracing_params["cron_id"] = str(cron_id)
 
-    setup_tracing_context(
-        session=session,
-        project_id=project_id,
-        conversation_id=conversation_id,
-        uuid_for_temp_folder=uuid_for_temp_folder,
-        environment=environment,
-        call_type=call_type,
-        graph_runner_id=graph_runner_id,
-        tag_name=tag_name,
-        **tracing_params,
-    )
+        setup_tracing_context(
+            session=session,
+            project_id=project_id,
+            conversation_id=conversation_id,
+            uuid_for_temp_folder=uuid_for_temp_folder,
+            environment=environment,
+            call_type=call_type,
+            graph_runner_id=graph_runner_id,
+            tag_name=tag_name,
+            **tracing_params,
+        )
+    # Setup session freed — DB connection returned to pool before graph building.
 
-    agent = await get_agent_for_project(
-        session,
-        project_id=project_id,
-        graph_runner_id=graph_runner_id,
-        variables=variables,
-        event_callback=event_callback,
-    )
-
+    # Separate short-lived session for graph building (component instantiation may make
+    # external API calls, so keep it isolated from the setup session above).
+    with get_db_session() as session:
+        agent = await get_agent_for_project(
+            session,
+            project_id=project_id,
+            graph_runner_id=graph_runner_id,
+            variables=variables,
+            event_callback=event_callback,
+        )
+    # Graph session freed — DB connection returned to pool before LLM execution.
     try:
         agent_output = await agent.run(
             input_data,
@@ -375,7 +383,7 @@ async def run_agent(
             try:
                 files = process_files_for_response(
                     temp_folder_path=uuid_for_temp_folder,
-                    org_id=str(project_details.organization_id),
+                    org_id=str(organization_id),
                     project_id=str(project_id),
                     conversation_id=conversation_id,
                     response_format=response_format,
