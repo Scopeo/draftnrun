@@ -6,6 +6,7 @@ from typing import Any, Iterable, Optional
 
 import httpx
 
+from engine.integrations.outlook.errors import AttachmentNotFoundError, AttachmentPathError, AttachmentTooLargeError
 from engine.temps_folder_utils import get_output_dir
 
 LOGGER = logging.getLogger(__name__)
@@ -23,9 +24,9 @@ def _ensure_paths(attachments: Optional[Iterable[str | Path]]) -> list[Path]:
     for att in attachments:
         p = (output_dir / Path(att)).resolve()
         if not p.is_relative_to(output_dir):
-            raise ValueError(f"Attachment path escapes the output directory: {att!r}")
+            raise AttachmentPathError(str(att))
         if not p.is_file():
-            raise FileNotFoundError(f"Attachment not found or not a file: {p}")
+            raise AttachmentNotFoundError(str(p))
         paths.append(p)
     return paths
 
@@ -41,11 +42,7 @@ def _build_attachments(attachments: Optional[Iterable[str | Path]]) -> list[dict
     for path in _ensure_paths(attachments):
         file_size = path.stat().st_size
         if file_size > _INLINE_ATTACHMENT_LIMIT_BYTES:
-            raise ValueError(
-                f"Attachment '{path.name}' is {file_size / (1024 * 1024):.1f} MB, which exceeds "
-                f"the 3 MB limit for Microsoft Graph inline attachments. "
-                f"Large file attachments via upload sessions are not yet supported."
-            )
+            raise AttachmentTooLargeError(path.name, file_size, _INLINE_ATTACHMENT_LIMIT_BYTES)
         mime, _ = mimetypes.guess_type(path.name)
         content_type = mime or "application/octet-stream"
         data = path.read_bytes()
@@ -71,7 +68,7 @@ def build_graph_mail_payload(
     message: dict[str, Any] = {
         "subject": subject,
         "body": {
-            "contentType": "HTML",
+            "contentType": "Text",
             "content": body,
         },
         "from": {

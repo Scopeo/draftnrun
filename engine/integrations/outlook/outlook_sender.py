@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, validator
 
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
+from engine.integrations.outlook.errors import OutlookAPIError
 from engine.integrations.outlook.outlook_utils import GRAPH_API_BASE, build_graph_mail_payload, get_outlook_user_email
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
@@ -164,7 +165,7 @@ class OutlookSender(Component):
         )
         if response.status_code not in (200, 201):
             LOGGER.error("Failed to create Outlook draft: status=%s", response.status_code)
-            raise RuntimeError(f"Failed to create Outlook draft: {response.status_code}")
+            raise OutlookAPIError("create Outlook draft", response.status_code)
         draft = response.json()
         LOGGER.debug(f"Draft id: {draft['id']}")
         return draft
@@ -195,7 +196,7 @@ class OutlookSender(Component):
         )
         if response.status_code not in (200, 202):
             LOGGER.error("Failed to send Outlook email: status=%s", response.status_code)
-            raise RuntimeError(f"Failed to send Outlook email: {response.status_code}")
+            raise OutlookAPIError("send Outlook email", response.status_code)
 
     async def _run_without_io_trace(self, inputs: OutlookSenderInputs, ctx: dict) -> OutlookSenderOutputs:
         if not inputs.mail_subject or not inputs.mail_body:
@@ -204,7 +205,6 @@ class OutlookSender(Component):
         span.set_attributes({
             SpanAttributes.INPUT_VALUE: serialize_to_json(
                 {
-                    "mail_subject": inputs.mail_subject,
                     "recipient_count": len(inputs.email_recipients or []),
                     "cc_count": len(inputs.cc or []),
                     "bcc_count": len(inputs.bcc or []),
