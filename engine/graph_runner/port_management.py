@@ -178,12 +178,17 @@ def validate_port_mappings(port_mappings: list[PortMapping], runnables: dict):
 
 
 def synthesize_default_mappings(
-    graph, runnables: dict, input_node_id: str, existing_mappings: list[PortMapping]
+    graph,
+    runnables: dict,
+    input_node_id: str,
+    existing_mappings: list[PortMapping],
+    expressions_by_target: dict[tuple[str, str], Any] | None = None,
 ) -> list[PortMapping]:
     """Create explicit direct port mappings for nodes with exactly one real predecessor
     when no mappings are provided. Uses canonical ports from runnables.
 
     - Skips start nodes that only depend on the virtual input node (passthrough).
+    - Skips nodes whose canonical input field already has a field expression.
     - Raises an error if a node has multiple real predecessors and no mappings.
     """
     new_mappings: list[PortMapping] = []
@@ -251,6 +256,16 @@ def synthesize_default_mappings(
 
         source_port_name = source_port_name or "output"
         target_port_name = target_port_name or "input"
+
+        # Skip synthesis when a field expression already targets this field;
+        # the expression will handle the data flow instead of a port mapping.
+        if expressions_by_target and (node_id, target_port_name) in expressions_by_target:
+            LOGGER.debug(
+                "Skipping default mapping for %s.%s — field expression exists",
+                node_id,
+                target_port_name,
+            )
+            continue
 
         new_mappings.append(
             PortMapping(

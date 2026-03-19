@@ -275,13 +275,17 @@ class GraphRunner:
             variables=self.variables,
         )
         target_type = get_target_field_type(target_component, field_name)
-        if (
-            isinstance(evaluated_value, str)
-            and target_type is not str
-            and self.coercion_matrix.should_attempt_coercion(target_type)
-        ):
-            LOGGER.warning(f"Coercing expression result to {target_type} for field {field_name}")
-            evaluated_value = self.coercion_matrix.coerce(evaluated_value, target_type, str)
+        if target_type and self.coercion_matrix.should_attempt_coercion(target_type):
+            source_type = type(evaluated_value)
+            coerced = self.coercion_matrix.coerce(evaluated_value, target_type, source_type)
+            if coerced is not evaluated_value:
+                LOGGER.warning(
+                    "Coercing expression result from %s to %s for field %s",
+                    source_type.__name__,
+                    target_type,
+                    field_name,
+                )
+                evaluated_value = coerced
         input_data[field_name] = evaluated_value
         LOGGER.debug(f"Set {node_id}.{field_name} from {log_prefix}: {evaluated_value}")
 
@@ -490,7 +494,13 @@ class GraphRunner:
         - Skips start nodes that only depend on the virtual input node (passthrough).
         - Raises an error if a node has multiple real predecessors and no mappings.
         """
-        new_mappings = synthesize_default_mappings(self.graph, self.runnables, self._input_node_id, self.port_mappings)
+        new_mappings = synthesize_default_mappings(
+            self.graph,
+            self.runnables,
+            self._input_node_id,
+            self.port_mappings,
+            self._expressions_by_target_ast,
+        )
 
         if not new_mappings:
             return
