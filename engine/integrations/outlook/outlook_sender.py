@@ -234,6 +234,6 @@ class OutlookSender(Component):
                 bcc=inputs.bcc,
                 attachments=inputs.email_attachments,
             )
-            status = "Email accepted for delivery"
+            status = "Email sent successfully"
             message_id = None
         return OutlookSenderOutputs(status=status, message_id=message_id)

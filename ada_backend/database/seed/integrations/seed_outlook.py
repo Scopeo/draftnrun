@@ -30,7 +30,7 @@ def seed_outlook_components(session: Session):
         is_agent=True,
         function_callable=True,
         can_use_function_calling=False,
-        icon="logos-microsoft-outlook",
+        icon="custom-microsoft-outlook",
     )
     upsert_components(session, [outlook_sender_component])
 
