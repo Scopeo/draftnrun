@@ -5,7 +5,7 @@ from typing import Iterable, Optional, Type
 import httpx
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
@@ -83,8 +83,8 @@ class OutlookSenderInputs(BaseModel):
         json_schema_extra={"is_tool_input": True},
     )
 
-    @validator("email_recipients", pre=True)
-    def validate_email_recipients(cls, v):
+    @field_validator("email_recipients", mode="before")
+    def validate_email_recipients(self, v):
         if isinstance(v, str):
             return [v]
         return v
