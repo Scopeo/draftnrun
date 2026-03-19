@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import httpx
-from sqlalchemy.orm import Session
 
+from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.tracker_history_repository import (
     create_tracked_values_bulk,
     get_tracked_values_history,
@@ -299,7 +299,6 @@ def _filter_matching_items(
 async def run_endpoint_polling(
     cron_id: UUID,
     payload: EndpointPollingExecutionPayload,
-    db: Session,
     ada_url: str,
     scheduler_api_key: str,
 ) -> dict[str, Any]:
@@ -340,8 +339,9 @@ async def run_endpoint_polling(
         LOGGER.info(f"Found {len(polled_values)} values from endpoint", extra=log_extra)
 
     if payload.track_history:
-        stored_history = get_tracked_values_history(db, cron_id)
-        stored_ids = {str(record.tracked_value) for record in stored_history}
+        with get_db_session() as history_db:
+            stored_history = get_tracked_values_history(history_db, cron_id)
+            stored_ids = {str(record.tracked_value) for record in stored_history}
         LOGGER.info(f"Found {len(stored_ids)} already processed values", extra=log_extra)
         new_values = polled_values - stored_ids
         LOGGER.info(f"Identified {len(new_values)} new values", extra=log_extra)
@@ -392,7 +392,12 @@ async def run_endpoint_polling(
                     workflow_results.append({"id": new_value, "status": "error", "error": str(e)})
 
     if successful_values and payload.track_history:
-        create_tracked_values_bulk(session=db, cron_id=cron_id, tracked_values=successful_values)
+        with get_db_session() as history_db:
+            create_tracked_values_bulk(
+                session=history_db,
+                cron_id=cron_id,
+                tracked_values=successful_values,
+            )
         LOGGER.info(f"Added {len(successful_values)} successfully processed values to history", extra=log_extra)
     elif successful_values and not payload.track_history:
         LOGGER.info(

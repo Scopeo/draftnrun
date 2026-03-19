@@ -30,13 +30,13 @@ async def _run_endpoint_polling_background(
     payload: EndpointPollingExecutionPayload,
 ) -> None:
     succeeded = True
+    error_msg: str | None = None
     with get_db_session() as db:
         update_cron_run(session=db, run_id=cron_run_id, status=CronStatus.RUNNING)
         try:
             await run_endpoint_polling(
                 cron_id=cron_id,
                 payload=payload,
-                db=db,
                 ada_url=settings.ADA_URL,
                 scheduler_api_key=settings.SCHEDULER_API_KEY,
             )
@@ -46,11 +46,17 @@ async def _run_endpoint_polling_background(
                 exc_info=True,
             )
             succeeded = False
+            error_msg = str(e)
+            # Reset the SQLAlchemy session state after an exception.
+            # Without this, the session may remain in a failed transactional state and
+            # subsequent commits (e.g. update_cron_run) can fail, leaving the CronRun stuck in RUNNING.
+            db.rollback()
         update_cron_run(
             session=db,
             run_id=cron_run_id,
             status=CronStatus.COMPLETED if succeeded else CronStatus.ERROR,
             finished_at=datetime.now(timezone.utc),
+            error=error_msg,
         )
 
 

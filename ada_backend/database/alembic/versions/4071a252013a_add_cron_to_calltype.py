@@ -18,7 +18,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE call_type ADD VALUE IF NOT EXISTS 'cron'")
+    # PostgreSQL requires enum value additions outside a transaction block
+    with op.get_context().autocommit_block():
+        op.execute("ALTER TYPE call_type ADD VALUE IF NOT EXISTS 'cron'")
 
 
 def downgrade() -> None:

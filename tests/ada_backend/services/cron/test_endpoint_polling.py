@@ -592,7 +592,6 @@ class TestExecute:
             result = await run_endpoint_polling(
                 cron_id=uuid4(),
                 payload=payload,
-                db=mock_db_session,
                 ada_url="https://test.example.com",
                 scheduler_api_key="test-key",
             )
@@ -625,7 +624,6 @@ class TestExecute:
             result = await run_endpoint_polling(
                 cron_id=uuid4(),
                 payload=payload,
-                db=mock_db_session,
                 ada_url="https://test.example.com",
                 scheduler_api_key="test-key",
             )
@@ -690,7 +688,6 @@ class TestExecute:
             result = await run_endpoint_polling(
                 cron_id=uuid4(),
                 payload=payload,
-                db=mock_db_session,
                 ada_url="https://test.example.com",
                 scheduler_api_key="test-key",
             )
@@ -725,7 +722,6 @@ class TestExecute:
             result = await run_endpoint_polling(
                 cron_id=uuid4(),
                 payload=payload,
-                db=mock_db_session,
                 ada_url="https://test.example.com",
                 scheduler_api_key="test-key",
             )
@@ -756,7 +752,6 @@ class TestExecute:
             result = await run_endpoint_polling(
                 cron_id=uuid4(),
                 payload=payload,
-                db=mock_db_session,
                 ada_url="https://test.example.com",
                 scheduler_api_key="test-key",
             )
@@ -805,7 +800,6 @@ class TestExecute:
             result = await run_endpoint_polling(
                 cron_id=uuid4(),
                 payload=payload,
-                db=mock_db_session,
                 ada_url="https://test.example.com",
                 scheduler_api_key="test-key",
             )

@@ -147,7 +147,32 @@ async def execute(execution_payload: AgentInferenceExecutionPayload, **kwargs) -
     async with httpx.AsyncClient(timeout=10) as client:
         response = await client.post(run_url, json=body, headers=headers)
         response.raise_for_status()
-        run_id = response.json()["run_id"]
+        try:
+            resp_data = response.json()
+        except ValueError as e:
+            # response.json() raises ValueError on invalid JSON.
+            raise ValueError(f"Webhook endpoint returned invalid JSON: {response.text[:500]}") from e
+
+        run_id = resp_data.get("run_id") if isinstance(resp_data, dict) else None
+        payload_repr = repr(resp_data)
+        if len(payload_repr) > 500:
+            payload_repr = payload_repr[:500] + "..."
+        if not run_id:
+            raise ValueError(f"Webhook endpoint did not return run_id: {payload_repr}")
+        if not isinstance(run_id, str):
+            raise ValueError(f"Webhook endpoint returned non-string run_id: {run_id!r} (payload={payload_repr})")
+
+        run_id = run_id.strip()
+        if not run_id:
+            raise ValueError(f"Webhook endpoint returned an empty run_id (payload={payload_repr})")
+
+        # Validate it is a UUID; downstream expects run identifiers to be UUID strings.
+        try:
+            UUID(run_id)
+        except ValueError as e:
+            raise ValueError(
+                f"Webhook endpoint returned invalid run_id UUID: {run_id!r} (payload={payload_repr})"
+            ) from e
 
     LOGGER.info(
         f"Agent inference accepted (run_id={run_id}, cron_run_id={cron_run_id}). "

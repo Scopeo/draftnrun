@@ -92,10 +92,10 @@ async def _execute_run(
     env: EnvType,
     input_data: Dict[str, Any],
     trigger: CallType,
-) -> bool:
+) -> tuple[bool, str | None]:
     """
     Execute a workflow run and update its status (RUNNING -> COMPLETED/FAILED).
-    Returns True on success, False on any failure.
+    Returns (success, error_msg) where error_msg is set when success is False.
     """
     try:
         await run_with_tracking(
@@ -109,16 +109,19 @@ async def _execute_run(
             ),
             run_id=run_id,
         )
-        return True
+        return True, None
     except EnvironmentNotFound as e:
         LOGGER.error(f"Environment not found for project {project_id} env={env}: {str(e)}", exc_info=True)
+        return False, str(e)
     except MissingDataSourceError as e:
         LOGGER.error(f"Data source not found for project {project_id} env={env}: {str(e)}", exc_info=True)
+        return False, str(e)
     except MissingIntegrationError as e:
         LOGGER.error(f"Missing integration for project {project_id} env={env}: {str(e)}", exc_info=True)
+        return False, str(e)
     except Exception as e:
         LOGGER.error(f"Failed to run workflow for project {project_id} env={env}: {str(e)}", exc_info=True)
-    return False
+        return False, str(e)
 
 
 async def _execute_cron_run(
@@ -139,7 +142,7 @@ async def _execute_cron_run(
         except Exception as e:
             LOGGER.error(f"Failed to set CronRun {cron_run_id} to RUNNING: {e}", exc_info=True)
 
-    succeeded = await _execute_run(run_id, project_id, env, input_data, trigger)
+    succeeded, error_msg = await _execute_run(run_id, project_id, env, input_data, trigger)
 
     with get_db_session() as session:
         try:
@@ -148,6 +151,7 @@ async def _execute_cron_run(
                 run_id=cron_run_id,
                 status=CronStatus.COMPLETED if succeeded else CronStatus.ERROR,
                 finished_at=datetime.now(timezone.utc),
+                error=error_msg,
             )
             LOGGER.info(
                 f"CronRun {cron_run_id} marked {'COMPLETED' if succeeded else 'ERROR'} after run {run_id} finished"

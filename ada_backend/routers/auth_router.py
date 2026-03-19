@@ -476,9 +476,11 @@ async def verify_webhook_or_scheduler_api_key_dependency(request: Request) -> st
     if webhook_api_key and settings.WEBHOOK_API_KEY_HASHED:
         if verify_ingestion_api_key(private_key=webhook_api_key) == settings.WEBHOOK_API_KEY_HASHED:
             return "webhook"
+        raise HTTPException(status_code=401, detail="Invalid webhook API key")
     if scheduler_api_key and settings.SCHEDULER_API_KEY_HASHED:
         if verify_ingestion_api_key(private_key=scheduler_api_key) == settings.SCHEDULER_API_KEY_HASHED:
             return "scheduler"
+        raise HTTPException(status_code=401, detail="Invalid scheduler API key")
     raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
