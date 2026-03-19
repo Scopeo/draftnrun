@@ -158,6 +158,8 @@ def downgrade() -> None:
             SELECT EXISTS (
                 SELECT FROM information_schema.tables WHERE table_name = 'port_mappings'
             ) AND EXISTS (
+                SELECT FROM information_schema.tables WHERE table_name = 'port_definitions'
+            ) AND EXISTS (
                 SELECT FROM information_schema.tables WHERE table_name = 'field_expressions'
             ) AND EXISTS (
                 SELECT FROM information_schema.tables WHERE table_name = 'port_instances'
@@ -170,23 +172,50 @@ def downgrade() -> None:
     if not tables_exist:
         return
 
-    # Remove field expressions that were auto-generated for canonical port mappings.
-    # We identify them by matching RefNode expressions whose (instance, port) pair
-    # corresponds to an existing canonical port mapping.
-    connection.execute(
+    # Identify migration-created field expressions by matching RefNode expressions
+    # whose (instance, port) pair corresponds to a canonical port mapping.
+    # Matching on BOTH instance AND port avoids deleting user-authored refs that
+    # happen to target the same source component but a different port.
+    rows = connection.execute(
         text("""
-            DELETE FROM field_expressions fe
-            USING input_port_instances ipi,
-                  port_instances pi,
-                  port_mappings pm,
-                  port_definitions tpd
-            WHERE ipi.field_expression_id = fe.id
-              AND pi.id = ipi.id
-              AND pi.component_instance_id = pm.target_instance_id
-              AND pi.name = tpd.name
-              AND tpd.id = pm.target_port_definition_id
-              AND tpd.is_canonical = true
+            SELECT fe.id AS fe_id, ipi.id AS ipi_id
+            FROM field_expressions fe
+            JOIN input_port_instances ipi ON ipi.field_expression_id = fe.id
+            JOIN port_instances pi ON pi.id = ipi.id
+            JOIN port_mappings pm
+                ON pi.component_instance_id = pm.target_instance_id
+            JOIN port_definitions tpd
+                ON tpd.id = pm.target_port_definition_id
+               AND pi.name = tpd.name
+            LEFT JOIN port_definitions spd
+                ON spd.id = pm.source_port_definition_id
+            LEFT JOIN port_instances sopi
+                ON sopi.id = pm.source_output_port_instance_id
+            WHERE tpd.is_canonical = true
               AND fe.expression_json->>'type' = 'ref'
               AND fe.expression_json->>'instance' = pm.source_instance_id::text
+              AND fe.expression_json->>'port' = COALESCE(spd.name, sopi.name)
         """)
-    )
+    ).fetchall()
+
+    if not rows:
+        return
+
+    for fe_id, ipi_id in rows:
+        # Delete in FK-safe order: input_port_instance, then port_instance,
+        # then field_expression.  This also removes port_instance rows that
+        # pre-existed the migration with a NULL field_expression_id; those
+        # rows were functionally empty and will be re-created if the
+        # migration re-runs.
+        connection.execute(
+            text("DELETE FROM input_port_instances WHERE id = :ipi_id"),
+            {"ipi_id": str(ipi_id)},
+        )
+        connection.execute(
+            text("DELETE FROM port_instances WHERE id = :ipi_id"),
+            {"ipi_id": str(ipi_id)},
+        )
+        connection.execute(
+            text("DELETE FROM field_expressions WHERE id = :fe_id"),
+            {"fe_id": str(fe_id)},
+        )
