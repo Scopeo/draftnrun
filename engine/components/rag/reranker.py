@@ -67,7 +67,7 @@ class Reranker(CloseMixin, ABC):
                 span.set_attributes({
                     f"{output_prefix}.content": reranker_chunk.content,
                     f"{output_prefix}.id": reranker_chunk.name,
-                    f"{output_prefix}.score": reranker_chunk.metadata["reranked_score"],
+                    f"{output_prefix}.score": reranker_chunk.metadata["_reranked_score"],
                     f"{output_prefix}.metadata": metadata_str,
                     f"{output_prefix}.metadata.retrieval_rank": retrieval_rank,
                     f"{output_prefix}.metadata.reranker_rank": i + 1,

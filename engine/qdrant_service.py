@@ -13,6 +13,7 @@ import pandas as pd
 
 from engine.components.types import SourceChunk
 from engine.llm_services.llm_service import EmbeddingService
+from ingestion_script.utils import SOURCE_ID_COLUMN_NAME
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -510,10 +511,9 @@ class QdrantService:
 
             chunk_schema = schema
             if source_schemas:
-                sid_field = schema.source_id_field or "source_id"
-                chunk_source_id = chunk_data.get(sid_field)
-                if chunk_source_id and chunk_source_id in source_schemas:
-                    chunk_schema = source_schemas[chunk_source_id]
+                source_id = chunk_data.get(SOURCE_ID_COLUMN_NAME)
+                if source_id and source_id in source_schemas:
+                    chunk_schema = source_schemas[source_id]
 
             content = chunk_data.get(chunk_schema.content_field)
             if not content:

@@ -372,7 +372,7 @@ class NonToolCallableBlockFactory(EntityFactory):
 def build_source_metadata_extractor_processor() -> ParameterProcessor:
     """
     Extracts source_ids, collection_name, embedding model info, and qdrant_schema from data_source.
-    Supports both a single data_source dict and a list of data_source dicts.
+    data_source must be a list of dicts, each containing an 'id' field.
     Leaves data_source intact for downstream processors.
     """
 
@@ -395,14 +395,14 @@ def build_source_metadata_extractor_processor() -> ParameterProcessor:
         model_name = None
         qdrant_schemas: list[QdrantCollectionSchema] = []
 
-        for data_source in data_sources:
-            source_id_str = data_source.get("id") if isinstance(data_source, dict) else None
-            if not source_id_str:
-                raise ValueError("Each data_source must contain an 'id' field")
-            source_id = UUID(source_id_str)
-            source_ids.append(source_id)
+        with get_db_session() as session:
+            for data_source in data_sources:
+                source_id_str = data_source.get("id") if isinstance(data_source, dict) else None
+                if not source_id_str:
+                    raise ValueError("Each data_source must contain an 'id' field")
+                source_id = UUID(source_id_str)
+                source_ids.append(source_id)
 
-            with get_db_session() as session:
                 source = get_data_source_by_id(session, source_id)
                 if source is None:
                     raise ValueError(f"Source with id {source_id} not found")
@@ -416,7 +416,7 @@ def build_source_metadata_extractor_processor() -> ParameterProcessor:
         params["embedding_provider"] = provider
         params["embedding_model_name"] = model_name
         params["qdrant_schema"] = qdrant_schemas[0]
-        params["source_schemas"] = {str(sid): schema for sid, schema in zip(source_ids, qdrant_schemas)}
+        params["source_schemas"] = {str(source_id): schema for source_id, schema in zip(source_ids, qdrant_schemas)}
 
         return params
 

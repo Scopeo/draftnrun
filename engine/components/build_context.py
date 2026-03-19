@@ -43,19 +43,10 @@ def format_source_chunk_metadata(
         'Metadata:\\nauthor: Jane Doe\\nyear: 2021\\n'
     """
     metadata = source.metadata or {}
-    _excluded_keys = {"reranked_score", "_retrieval_rank", "_reranker_rank"}
     if llm_metadata_keys:
-        metadata = {
-            key: metadata[key]
-            for key in llm_metadata_keys
-            if key in metadata and key not in _excluded_keys
-        }
+        metadata = {key: metadata[key] for key in llm_metadata_keys if key in metadata and not key.startswith("_")}
     else:
-        metadata = {
-            key: value
-            for key, value in metadata.items()
-            if not key.startswith("_") and key not in _excluded_keys
-        }
+        metadata = {key: value for key, value in metadata.items() if not key.startswith("_")}
 
     if not metadata:
         LOGGER.info("No metadata available for source: %s", source.name)
