@@ -10,6 +10,7 @@ on:
       - "engine/components/tools/terminal_command_runner.py"
       - "engine/components/tools/sandbox_utils.py"
       - "tests/e2b/**"
+      - ".github/workflows/e2b-ci.yml"
 
 concurrency:
   group: e2b-ci
@@ -31,7 +32,7 @@ jobs:
           lfs: true
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 

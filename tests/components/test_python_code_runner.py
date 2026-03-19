@@ -36,6 +36,7 @@ def mock_sandbox():
     mock_execution.error = None
     mock_execution.results = []
     mock_execution.logs = Mock(stdout=["Hello, World!"], stderr=[])
+    mock_execution.execution_count = 1
     mock.run_code = AsyncMock(return_value=mock_execution)
     mock.files.list = AsyncMock(return_value=[])
     mock.kill = AsyncMock()

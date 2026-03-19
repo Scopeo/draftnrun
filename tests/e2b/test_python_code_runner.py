@@ -57,7 +57,7 @@ def test_execute_simple_python_code(e2b_tool):
     assert result_data["error"] is None
     assert "Hello, World!" in result_data["stdout"][0]
     assert len(result_data["results"]) > 0
-    assert result_data["results"][0].text == "42"
+    assert result_data["results"][0]["text"] == "42"
 
 
 def test_execute_python_code_with_imports(e2b_tool):
@@ -84,9 +84,9 @@ result
     assert "Current date:" in result_data["stdout"][0]
     assert len(result_data["results"]) > 0
     result_obj = result_data["results"][0]
-    assert hasattr(result_obj, "json") and result_obj.json is not None
-    assert "area" in result_obj.json
-    assert "date" in result_obj.json
+    assert isinstance(result_obj, dict) and "json" in result_obj and result_obj["json"] is not None
+    assert "area" in result_obj["json"]
+    assert "date" in result_obj["json"]
 
 
 def test_execute_python_code_with_error(e2b_tool):
@@ -127,9 +127,9 @@ files = os.listdir('.')
     assert "File content: Hello from E2B sandbox!" in result_data["stdout"][0]
     assert len(result_data["results"]) > 0
     result_obj = result_data["results"][0]
-    assert hasattr(result_obj, "json") and result_obj.json is not None
-    assert result_obj.json["content"] == "Hello from E2B sandbox!"
-    assert "test_file.txt" in result_obj.json["files"]
+    assert isinstance(result_obj, dict) and "json" in result_obj and result_obj["json"] is not None
+    assert result_obj["json"]["content"] == "Hello from E2B sandbox!"
+    assert "test_file.txt" in result_obj["json"]["files"]
 
 
 def test_execute_python_code_with_data_processing(e2b_tool):
@@ -163,11 +163,11 @@ print(f"Even numbers: {even_numbers}")
     assert "Even numbers: [2, 4, 6, 8, 10]" in result_data["stdout"][0]
     assert len(result_data["results"]) > 0
     result_obj = result_data["results"][0]
-    assert hasattr(result_obj, "json") and result_obj.json is not None
-    assert result_obj.json["total"] == 55
-    assert result_obj.json["average"] == 5.5
-    assert result_obj.json["count"] == 10
-    assert result_obj.json["even_numbers"] == [2, 4, 6, 8, 10]
+    assert isinstance(result_obj, dict) and "json" in result_obj and result_obj["json"] is not None
+    assert result_obj["json"]["total"] == 55
+    assert result_obj["json"]["average"] == 5.5
+    assert result_obj["json"]["count"] == 10
+    assert result_obj["json"]["even_numbers"] == [2, 4, 6, 8, 10]
 
 
 def test_execute_python_code_with_single_image(e2b_tool):
@@ -355,7 +355,7 @@ def test_run_without_io_trace_simple_code(e2b_tool):
     assert execution_data["error"] is None
     assert "Async test" in execution_data["stdout"][0]
     assert len(execution_data["results"]) > 0
-    assert "4" in execution_data["results"][0]
+    assert execution_data["results"][0]["text"] == "4"
     assert "execution_result" in result.artifacts
 
 
@@ -396,9 +396,10 @@ json.dumps(result)
     assert "Processed 5 numbers" in execution_data["stdout"][0]
     assert len(execution_data["results"]) > 0
     result_obj = execution_data["results"][0]
-    assert "original_data" in result_obj
-    assert "statistics" in result_obj
-    assert '"count": 5' in result_obj
+    assert result_obj["text"] is not None
+    assert "original_data" in result_obj["text"]
+    assert "statistics" in result_obj["text"]
+    assert '"count": 5' in result_obj["text"]
 
 
 def test_execute_python_code_with_shared_sandbox_from_context():
@@ -417,6 +418,7 @@ def test_execute_python_code_with_shared_sandbox_from_context():
     mock_execution.logs = Mock(stdout=["Test output"], stderr=[])
     mock_shared_sandbox.run_code.return_value = mock_execution
     mock_shared_sandbox.is_running.return_value = True
+    mock_shared_sandbox.files.list = AsyncMock(return_value=[])
 
     mock_params = TracingSpanParams(
         project_id="test_project",
