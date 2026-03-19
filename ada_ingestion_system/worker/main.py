@@ -413,7 +413,7 @@ class Worker(BaseWorker):
 
         logger.info("End Redis state logging")
 
-    def _on_dead_letter(self, message_id: str, fields: Dict[str, str]) -> None:
+    def _on_dead_letter(self, message_id: str, fields: Dict[str, str], reason: str = "") -> None:
         """Mark the ingestion task as FAILED when its message is dead-lettered."""
         try:
             raw = fields.get("data", "")
@@ -440,8 +440,9 @@ class Worker(BaseWorker):
             source_name=source_name,
         )
 
+        msg = f"Task failed after repeated crashes ({reason or 'unknown'}). Source: {source_name}, Type: {source_type}"
         result_metadata = TaskResultMetadata(
-            message=f"Task killed after repeated crashes (likely OOM). Source: {source_name}, Type: {source_type}",
+            message=msg,
             type=ResultType.ERROR,
         )
         self._update_task_status_to_failed(

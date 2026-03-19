@@ -144,14 +144,15 @@ class BaseWorker:
             for entry in pending_details:
                 mid = entry["message_id"]
                 deliveries = entry["times_delivered"]
-                if deliveries >= _MAX_DELIVERY_ATTEMPTS:
+                idle_ms = entry["time_since_delivered"]
+                if deliveries >= _MAX_DELIVERY_ATTEMPTS and idle_ms >= _PENDING_IDLE_THRESHOLD_MS:
                     # Read the original message so we can dead-letter it with its payload
                     msgs = redis_client.xrange(self.stream_name, min=mid, max=mid, count=1)
                     fields = msgs[0][1] if msgs else {}
                     reason = f"exceeded max delivery attempts ({deliveries}/{_MAX_DELIVERY_ATTEMPTS})"
                     self._dead_letter(mid, fields, deliveries, reason)
                     # Notify subclass so it can mark the task as failed in the API
-                    self._on_dead_letter(mid, fields)
+                    self._on_dead_letter(mid, fields, reason)
                     poison_ids.add(mid)
 
             # Now reclaim remaining non-poison messages
@@ -266,7 +267,7 @@ class BaseWorker:
         """Return required payload field names. Must be implemented by subclasses."""
         raise NotImplementedError("Subclasses must implement get_required_fields")
 
-    def _on_dead_letter(self, message_id: str, fields: Dict[str, str]) -> None:
+    def _on_dead_letter(self, message_id: str, fields: Dict[str, str], reason: str = "") -> None:
         """Called when a message is dead-lettered.  Override in subclasses to
         mark the task as failed in the API, send alerts, etc."""
         pass
