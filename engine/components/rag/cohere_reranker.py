@@ -46,6 +46,6 @@ class CohereReranker(Reranker):
             chunks[result.index] for result in response.results if result.relevance_score >= self._score_threshold
         ]
         for chunk, result in zip(reranked_chunks, response.results, strict=False):
-            chunk.metadata["_reranked_score"] = result.relevance_score
+            chunk.metadata["reranked_score"] = result.relevance_score
         LOGGER.info(f"Reranked {len(reranked_chunks)} chunks")
         return reranked_chunks
