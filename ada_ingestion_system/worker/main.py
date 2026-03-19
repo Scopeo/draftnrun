@@ -422,6 +422,14 @@ class Worker(BaseWorker):
             logger.error("dead_letter_unparseable", message_id=message_id)
             return
 
+        if not isinstance(payload, dict):
+            logger.error(
+                "dead_letter_invalid_payload_shape",
+                message_id=message_id,
+                payload_type=type(payload).__name__,
+            )
+            return
+
         organization_id = payload.get("organization_id")
         task_id = payload.get("task_id")
         source_name = payload.get("source_name", "unknown")
