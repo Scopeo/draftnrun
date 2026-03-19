@@ -3,6 +3,7 @@ HubSpot MCP Tool — wraps the internal FastMCP server via stdio.
 """
 
 import sys
+from collections.abc import Collection
 from typing import Optional, Self
 
 from engine.components.tools.hubspot_mcp.server import get_tool_descriptions
@@ -11,7 +12,7 @@ from engine.components.tools.mcp.shared import MCPToolInputs, MCPToolOutputs
 from engine.components.types import ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 
-_DEFAULT_TOOLS = {
+HUBSPOT_DEFAULT_TOOL_NAMES: tuple[str, ...] = (
     "auth_get_current_user",
     "crm_create_contact",
     "crm_update_contact",
@@ -26,7 +27,18 @@ _DEFAULT_TOOLS = {
     "notes_create",
     "emails_create",
     "tasks_create",
-}
+)
+
+
+def _normalize_allowed_tools(allowed_tools: Collection[str] | None) -> set[str]:
+    if allowed_tools is None:
+        return set(HUBSPOT_DEFAULT_TOOL_NAMES)
+
+    allowed = set(allowed_tools)
+    unknown = allowed - set(HUBSPOT_DEFAULT_TOOL_NAMES)
+    if unknown:
+        raise ValueError(f"Unknown HubSpot tools: {sorted(unknown)}")
+    return allowed
 
 
 class HubSpotMCPTool(LocalMCPTool):
@@ -37,11 +49,14 @@ class HubSpotMCPTool(LocalMCPTool):
         cls,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        access_token: Optional[str] = None,
-        allowed_tools: set[str] | None = None,
+        access_token: str,
+        allowed_tools: Collection[str] | None = None,
         timeout: int = 30,
     ) -> Self:
-        allowed = allowed_tools if allowed_tools is not None else _DEFAULT_TOOLS
+        if not access_token:
+            raise ValueError("access_token is required")
+
+        allowed = _normalize_allowed_tools(allowed_tools)
         tool_descriptions = await get_tool_descriptions(allowed)
 
         return cls(

@@ -14,12 +14,14 @@ from ada_backend.database.models import (
     Component,
     ComponentParameterDefinition,
     ParameterType,
+    SelectOption,
     UIComponent,
     UIComponentProperties,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
+from engine.components.tools.hubspot_mcp_tool import HUBSPOT_DEFAULT_TOOL_NAMES
 from engine.integrations.providers import OAuthProvider
 
 
@@ -60,7 +62,22 @@ def seed_mcp_hubspot_components(session: Session):
                 provider=OAuthProvider.HUBSPOT.value,
                 icon="logos:hubspot",
             ).model_dump(exclude_unset=True, exclude_none=True),
-        )
+        ),
+        ComponentParameterDefinition(
+            id=UUID("1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e"),
+            component_version_id=hubspot_mcp_tool_version.id,
+            name="allowed_tools",
+            type=ParameterType.JSON,
+            nullable=True,
+            order=None,
+            parameter_order_within_group=1,
+            ui_component=UIComponent.MULTISELECT,
+            ui_component_properties=UIComponentProperties(
+                label="Allowed HubSpot tools",
+                description="Select the HubSpot tools that this component instance can call.",
+                options=[SelectOption(value=name, label=name) for name in HUBSPOT_DEFAULT_TOOL_NAMES],
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        ),
     ]
 
     upsert_components_parameter_definitions(session, hubspot_mcp_tool_parameter_definitions)

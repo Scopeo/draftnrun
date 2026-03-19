@@ -148,6 +148,7 @@ class UIComponent(StrEnum):
     AUTOCOMPLETE = "Autocomplete"
     CHECKBOX = "Checkbox"
     COMBOBOX = "Combobox"
+    MULTISELECT = "MultiSelect"
     DATE_TIME_PICKER = "Date Time Picker"
     EDITORS = "Editors"
     FILE_INPUT = "File Input"
