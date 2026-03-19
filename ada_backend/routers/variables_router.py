@@ -21,6 +21,7 @@ from ada_backend.routers.auth_router import (
 )
 from ada_backend.schemas.auth_schema import AuthenticatedEntity
 from ada_backend.schemas.variable_schemas import (
+    SetIdsResponse,
     VariableDefinitionResponse,
     VariableDefinitionUpsertRequest,
     VariableSetListResponse,
@@ -31,6 +32,7 @@ from ada_backend.services.errors import OAuthSetProtectedError, VariableDefiniti
 from ada_backend.services.variables_service import (
     delete_definition_service,
     delete_set_service,
+    get_set_ids_service,
     get_set_service,
     list_definitions_service,
     list_sets_service,
@@ -122,6 +124,27 @@ def delete_org_variable_definition(
         LOGGER.error(f"Failed to delete variable definition {name} for org {organization_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
     return {"detail": "deleted"}
+
+
+@org_router.get(
+    "/{organization_id}/set-ids",
+    response_model=SetIdsResponse,
+    tags=["Variable Sets"],
+)
+def get_set_ids(
+    organization_id: UUID,
+    project_id: UUID,
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    try:
+        return get_set_ids_service(session, organization_id, project_id)
+    except Exception as e:
+        LOGGER.error(f"Failed to get set ids for org {organization_id} project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @org_router.get(

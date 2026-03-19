@@ -22,9 +22,11 @@ from ada_backend.repositories.variable_sets_repository import (
     delete_org_variable_set,
     get_org_variable_set,
     list_org_variable_sets,
+    list_set_ids_for_project,
     upsert_org_variable_set,
 )
 from ada_backend.schemas.variable_schemas import (
+    SetIdsResponse,
     VariableDefinitionResponse,
     VariableDefinitionUpsertRequest,
     VariableSetListResponse,
@@ -154,6 +156,15 @@ def list_sets_service(
 ) -> VariableSetListResponse:
     sets = list_org_variable_sets(session, organization_id, variable_type=variable_type)
     return VariableSetListResponse(variable_sets=[set_to_response(session, variable_set) for variable_set in sets])
+
+
+def get_set_ids_service(
+    session: Session,
+    organization_id: UUID,
+    project_id: UUID,
+) -> SetIdsResponse:
+    set_ids = list_set_ids_for_project(session, organization_id, project_id)
+    return SetIdsResponse(set_ids=set_ids)
 
 
 def get_set_service(
