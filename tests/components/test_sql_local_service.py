@@ -152,6 +152,81 @@ def test_describe_table(postgres_service, sample_table_definition):
     assert {col["name"] for col in description} == {col.name for col in sample_table_definition.columns}
 
 
+def test_insert_rows(postgres_service, sample_table_definition):
+    postgres_service.create_table(
+        "test_table",
+        table_definition=sample_table_definition,
+        schema_name=TEST_SCHEMA_NAME,
+    )
+    postgres_service.insert_rows(
+        [
+            {"chunk_id": 1, "name": "Alice", "created_at": "2021-01-01 11:10:00"},
+            {"chunk_id": 2, "name": "Bob", "created_at": "2021-01-01 11:10:00"},
+        ],
+        "test_table",
+        TEST_SCHEMA_NAME,
+    )
+    rows = postgres_service.get_table_rows("test_table", TEST_SCHEMA_NAME)
+    assert len(rows) == 2
+    assert {r["name"] for r in rows} == {"Alice", "Bob"}
+
+
+def test_insert_rows_empty(postgres_service, sample_table_definition):
+    postgres_service.create_table(
+        "test_table",
+        table_definition=sample_table_definition,
+        schema_name=TEST_SCHEMA_NAME,
+    )
+    postgres_service.insert_rows([], "test_table", TEST_SCHEMA_NAME)
+    rows = postgres_service.get_table_rows("test_table", TEST_SCHEMA_NAME)
+    assert len(rows) == 0
+
+
+def test_refresh_table_from_rows(postgres_service, sample_table_definition):
+    postgres_service.create_table(
+        "test_table",
+        table_definition=sample_table_definition,
+        schema_name=TEST_SCHEMA_NAME,
+    )
+    postgres_service.insert_rows(
+        [
+            {"chunk_id": 1, "name": "Alice", "created_at": "2021-01-01 11:10:00"},
+            {"chunk_id": 2, "name": "Bob", "created_at": "2021-01-01 11:10:00"},
+        ],
+        "test_table",
+        TEST_SCHEMA_NAME,
+    )
+    postgres_service._refresh_table_from_rows(
+        rows=[{"chunk_id": 1, "name": "Alice Updated", "created_at": "2021-02-01 11:15:00"}],
+        table_name="test_table",
+        id_column="chunk_id",
+        table_definition=sample_table_definition,
+        schema_name=TEST_SCHEMA_NAME,
+    )
+    rows = postgres_service.get_table_rows("test_table", TEST_SCHEMA_NAME)
+    assert len(rows) == 2
+    alice_row = next(r for r in rows if r["chunk_id"] == 1)
+    assert alice_row["name"] == "Alice Updated"
+
+
+def test_fetch_sql_query_as_dicts(postgres_service, sample_table_definition):
+    postgres_service.create_table(
+        "test_table",
+        table_definition=sample_table_definition,
+        schema_name=TEST_SCHEMA_NAME,
+    )
+    postgres_service.insert_rows(
+        [{"chunk_id": 1, "name": "Alice", "created_at": "2021-01-01 11:10:00"}],
+        "test_table",
+        TEST_SCHEMA_NAME,
+    )
+    result = postgres_service._fetch_sql_query_as_dicts(
+        f"SELECT chunk_id, name FROM {TEST_SCHEMA_NAME}.test_table;"
+    )
+    assert len(result) == 1
+    assert result[0]["name"] == "Alice"
+
+
 def test_error_when_inserting_new_column(postgres_service, sample_table_definition):
     postgres_service.create_table(
         "test_table",

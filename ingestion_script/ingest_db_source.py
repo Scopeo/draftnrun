@@ -5,12 +5,11 @@ from functools import partial
 from typing import Optional
 from uuid import UUID
 
-import pandas as pd
 from llama_index.core.node_parser import SentenceSplitter
 
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import SourceAttributes
-from engine.qdrant_service import FieldSchema, QdrantService, map_pandas_dtype_to_qdrant_field_schema
+from engine.qdrant_service import FieldSchema, QdrantService
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import DBDefinition
 from engine.storage_service.local_service import SQLLocalService
@@ -34,6 +33,7 @@ from ingestion_script.utils import (
     resolve_sql_timestamp_filter,
     upload_source,
 )
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -63,6 +63,26 @@ def _map_sqlalchemy_type_to_internal(type_str: str) -> str:
     return "VARCHAR"
 
 
+def _serialize_value(value):
+    """Convert Timestamp/datetime objects to ISO format strings for JSON serialization."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
+def _infer_qdrant_field_schema(sample_value) -> FieldSchema:
+    """Infer Qdrant field schema from a sample Python value."""
+    if isinstance(sample_value, (int, float)):
+        return FieldSchema.FLOAT
+    if isinstance(sample_value, bool):
+        return FieldSchema.BOOL
+    if isinstance(sample_value, datetime):
+        return FieldSchema.DATETIME
+    return FieldSchema.KEYWORD
+
+
 async def get_db_source(
     db_url: str,
     table_name: str,
@@ -77,37 +97,37 @@ async def get_db_source(
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
     sql_query_filter: Optional[str] = None,
-) -> pd.DataFrame:
+) -> list[dict]:
     sql_local_service = SQLLocalService(engine_url=db_url)
-    df = sql_local_service.get_table_df(
+    source_rows = sql_local_service.get_table_rows(
         table_name=table_name,
         schema_name=source_schema_name,
         sql_query_filter=sql_query_filter,
     )
-    if df.empty:
+    if not source_rows:
         raise ValueError(f"The table '{table_name}' is empty. No data to ingest.")
 
-    if id_column_name not in df.columns:
-        raise ValueError(f"ID column '{id_column_name}' not found in the columns: {df.columns.tolist()}")
-    if not set(text_column_names).issubset(df.columns):
-        raise ValueError(f"Text columns {text_column_names} not found in the columns: {df.columns.tolist()}")
-    if metadata_column_names is not None and not set(metadata_column_names).issubset(df.columns):
-        raise ValueError(f"Metadata columns {metadata_column_names} not found in the columns: {df.columns.tolist()}")
-    if timestamp_column_name and timestamp_column_name not in df.columns:
-        raise ValueError(f"Timestamp column '{timestamp_column_name}' not found in the columns: {df.columns.tolist()}")
+    col_names = set(source_rows[0].keys())
+    if id_column_name not in col_names:
+        raise ValueError(f"ID column '{id_column_name}' not found in the columns: {sorted(col_names)}")
+    if not set(text_column_names).issubset(col_names):
+        raise ValueError(f"Text columns {text_column_names} not found in the columns: {sorted(col_names)}")
+    if metadata_column_names is not None and not set(metadata_column_names).issubset(col_names):
+        raise ValueError(f"Metadata columns {metadata_column_names} not found in the columns: {sorted(col_names)}")
+    if timestamp_column_name and timestamp_column_name not in col_names:
+        raise ValueError(
+            f"Timestamp column '{timestamp_column_name}' not found in the columns: {sorted(col_names)}"
+        )
 
-    # TODO: remove this when we have a proper metadata schema
     if metadata_column_names:
         for col in metadata_column_names:
-            qdrant_field_schema = map_pandas_dtype_to_qdrant_field_schema(df[col].dtype)
-            LOGGER.info(
-                f"Creating index for metadata column '{col}' with pandas type {df[col].dtype} "
-                f"and qdrant type {qdrant_field_schema}"
-            )
+            sample = next((r[col] for r in source_rows if r.get(col) is not None), None)
+            field_schema = _infer_qdrant_field_schema(sample)
+            LOGGER.info(f"Creating index for metadata column '{col}' with qdrant type {field_schema}")
             await qdrant_service.create_index_if_needed_async(
                 collection_name=qdrant_collection_name,
                 field_name=col,
-                field_schema_type=qdrant_field_schema,
+                field_schema_type=field_schema,
             )
     if timestamp_column_name:
         await qdrant_service.create_index_if_needed_async(
@@ -116,71 +136,49 @@ async def get_db_source(
             field_schema_type=FieldSchema.DATETIME,
         )
 
-    df["text"] = df[text_column_names].apply(lambda x: " ".join(x.astype(str)), axis=1)
-    LOGGER.info(f"Retrieved {len(df)} rows from the source table '{table_name}'.")
+    LOGGER.info(f"Retrieved {len(source_rows)} rows from the source table '{table_name}'.")
 
     splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-    df["chunks"] = df["text"].apply(lambda x: splitter.split_text(x))
-    df_chunks = df.explode("chunks", ignore_index=True).rename(columns={"chunks": CHUNK_COLUMN_NAME})
-    df_chunks["chunk_index"] = df_chunks.groupby(id_column_name).cumcount() + 1
-    df_chunks[ORDER_COLUMN_NAME] = df_chunks["chunk_index"] - 1
-    df_chunks[CHUNK_ID_COLUMN_NAME] = (
-        df_chunks[id_column_name].astype(str) + "_" + df_chunks["chunk_index"].astype(str)
-    )
-    df_chunks[FILE_ID_COLUMN_NAME] = table_name + "_" + df_chunks[id_column_name].astype(str)
+    unified_rows: list[dict] = []
 
-    if url_pattern:
-        df_chunks[URL_COLUMN_NAME] = df_chunks.apply(
-            lambda row: url_pattern.format_map({k: ("" if pd.isna(v) else v) for k, v in row.items()}), axis=1
-        )
-    else:
-        df_chunks[URL_COLUMN_NAME] = None
+    for src_row in source_rows:
+        row_id = src_row[id_column_name]
+        combined_text = " ".join(str(src_row.get(c) or "") for c in text_column_names)
+        chunks = splitter.split_text(combined_text)
+        file_id = f"{table_name}_{row_id}"
+        ts_value = src_row.get(timestamp_column_name) if timestamp_column_name else None
 
-    unified_df = pd.DataFrame()
-    unified_df[CHUNK_ID_COLUMN_NAME] = df_chunks[CHUNK_ID_COLUMN_NAME]
-    unified_df[CHUNK_COLUMN_NAME] = df_chunks[CHUNK_COLUMN_NAME]
-    unified_df[FILE_ID_COLUMN_NAME] = df_chunks[FILE_ID_COLUMN_NAME]
-    unified_df[ORDER_COLUMN_NAME] = df_chunks[ORDER_COLUMN_NAME]
-    # Use file_id as document_title for database sources (file_id = table_name + "_" + id_column_value)
-    unified_df[DOCUMENT_TITLE_COLUMN_NAME] = df_chunks[FILE_ID_COLUMN_NAME]
+        for idx, chunk_text in enumerate(chunks, start=1):
+            chunk_id = f"{row_id}_{idx}"
 
-    if timestamp_column_name and timestamp_column_name in df_chunks.columns:
-        unified_df[TIMESTAMP_COLUMN_NAME] = df_chunks[timestamp_column_name]
-    else:
-        unified_df[TIMESTAMP_COLUMN_NAME] = None
+            if url_pattern:
+                safe_row = {k: ("" if v is None else v) for k, v in src_row.items()}
+                url_val = url_pattern.format_map(safe_row)
+            else:
+                url_val = None
 
-    if URL_COLUMN_NAME in df_chunks.columns:
-        unified_df[URL_COLUMN_NAME] = df_chunks[URL_COLUMN_NAME]
-    else:
-        unified_df[URL_COLUMN_NAME] = None
+            metadata: dict = {}
+            if timestamp_column_name and ts_value is not None:
+                metadata[timestamp_column_name] = _serialize_value(ts_value)
+            if metadata_column_names:
+                for mc in metadata_column_names:
+                    if mc != timestamp_column_name:
+                        mv = src_row.get(mc)
+                        if mv is not None:
+                            metadata[mc] = _serialize_value(mv)
 
-    def build_metadata(row):
-        def serialize_value(value):
-            """Convert Timestamp/datetime objects to ISO format strings for JSON serialization."""
-            if pd.isna(value):
-                return None
-            if isinstance(value, pd.Timestamp):
-                return value.isoformat()
-            if isinstance(value, datetime):
-                return value.isoformat()
-            return value
+            unified_rows.append({
+                CHUNK_ID_COLUMN_NAME: chunk_id,
+                CHUNK_COLUMN_NAME: chunk_text,
+                FILE_ID_COLUMN_NAME: file_id,
+                ORDER_COLUMN_NAME: idx - 1,
+                DOCUMENT_TITLE_COLUMN_NAME: file_id,
+                TIMESTAMP_COLUMN_NAME: _serialize_value(ts_value),
+                URL_COLUMN_NAME: url_val,
+                METADATA_COLUMN_NAME: json.dumps(metadata) if metadata else json.dumps({}),
+            })
 
-        metadata = {}
-        if timestamp_column_name and timestamp_column_name in df_chunks.columns:
-            timestamp_value = row.get(timestamp_column_name)
-            if not pd.isna(timestamp_value):
-                metadata[timestamp_column_name] = serialize_value(timestamp_value)
-        if metadata_column_names:
-            for col in metadata_column_names:
-                if col != timestamp_column_name and col in df_chunks.columns:
-                    col_value = row.get(col)
-                    if not pd.isna(col_value):
-                        metadata[col] = serialize_value(col_value)
-        return json.dumps(metadata) if metadata else json.dumps({})
-
-    unified_df[METADATA_COLUMN_NAME] = df_chunks.apply(build_metadata, axis=1)
-
-    return unified_df
+    return unified_rows
 
 
 async def upload_db_source(
@@ -227,7 +225,7 @@ async def upload_db_source(
         timestamp_column_name=timestamp_column_name,
     )
 
-    df = await get_db_source(
+    rows = await get_db_source(
         db_url=source_db_url,
         table_name=source_table_name,
         id_column_name=id_column_name,
@@ -243,21 +241,26 @@ async def upload_db_source(
         qdrant_collection_name=qdrant_collection_name,
     )
 
-    df[SOURCE_ID_COLUMN_NAME] = str(source_id)
+    sid = str(source_id)
+    for row in rows:
+        row[SOURCE_ID_COLUMN_NAME] = sid
 
-    db_service.update_table(
-        new_df=df,
-        table_name=storage_table_name,
-        table_definition=db_definition,
-        id_column_name=CHUNK_ID_COLUMN_NAME,
-        timestamp_column_name=TIMESTAMP_COLUMN_NAME,
-        append_mode=update_existing,
-        schema_name=storage_schema_name,
-        sql_query_filter=combined_filter_sql_unified,  # Use unified filter for unified table
-        source_id=str(source_id),  # Pass source_id to filter existing IDs by source
-    )
+    for i in range(0, len(rows), settings.INGESTION_BATCH_SIZE):
+        batch = rows[i : i + settings.INGESTION_BATCH_SIZE]
+        LOGGER.info(f"Flushing DB-source batch {i // settings.INGESTION_BATCH_SIZE + 1} ({len(batch)} rows)")
+        db_service.update_table(
+            new_rows=batch,
+            table_name=storage_table_name,
+            table_definition=db_definition,
+            id_column_name=CHUNK_ID_COLUMN_NAME,
+            timestamp_column_name=TIMESTAMP_COLUMN_NAME,
+            append_mode=update_existing,
+            schema_name=storage_schema_name,
+            sql_query_filter=combined_filter_sql_unified,
+            source_id=sid,
+        )
 
-    LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {len(df)} rows.")
+    LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {len(rows)} rows.")
     await sync_chunks_to_qdrant(
         storage_schema_name,
         storage_table_name,

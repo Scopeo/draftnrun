@@ -2,11 +2,9 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Optional
 
-import pandas as pd
-
 from engine.components.close_mixin import CloseMixin
 from engine.components.component import ComponentAttributes
-from engine.storage_service.db_utils import CHUNK_ID_COLUMN, DBDefinition, convert_to_correct_pandas_type
+from engine.storage_service.db_utils import CHUNK_ID_COLUMN, DBDefinition, cast_id_value
 
 LOGGER = logging.getLogger(__name__)
 
@@ -45,12 +43,7 @@ class DBService(CloseMixin, ABC):
         pass
 
     @abstractmethod
-    def get_table_df(
-        self,
-        table_name: str,
-        schema_name: Optional[str] = None,
-        sql_query_filter: Optional[str] = None,
-    ) -> pd.DataFrame:
+    def get_table_df(self, table_name: str, schema_name: Optional[str] = None, sql_query_filter: Optional[str] = None):
         pass
 
     @abstractmethod
@@ -69,7 +62,13 @@ class DBService(CloseMixin, ABC):
         pass
 
     @abstractmethod
-    def insert_df_to_table(self, df: pd.DataFrame, table_name: str, schema_name: Optional[str] = None) -> None:
+    def insert_rows(self, rows: list[dict], table_name: str, schema_name: Optional[str] = None) -> None:
+        """Insert a list of row dicts into a table."""
+        pass
+
+    @abstractmethod
+    def insert_df_to_table(self, df, table_name: str, schema_name: Optional[str] = None) -> None:
+        """Legacy wrapper -- prefer insert_rows for new code."""
         pass
 
     @abstractmethod
@@ -95,9 +94,19 @@ class DBService(CloseMixin, ABC):
         """
         pass
 
+    @abstractmethod
+    def _fetch_sql_query_as_dicts(self, query: str) -> list[dict]:
+        """Execute a SQL query and return the result as a list of dicts."""
+        pass
+
+    @abstractmethod
+    def _fetch_sql_query_as_dataframe(self, query: str):
+        """Legacy wrapper -- prefer _fetch_sql_query_as_dicts for new code."""
+        pass
+
     def update_table(
         self,
-        new_df: pd.DataFrame,
+        new_rows: list[dict],
         table_name: str,
         table_definition: DBDefinition,
         id_column_name: str,
@@ -108,14 +117,14 @@ class DBService(CloseMixin, ABC):
         source_id: Optional[str] = None,
     ) -> None:
         """
-        Update a table on Database with a new DataFrame.
+        Update a table on Database with new rows (list[dict]).
         If the table does not exist, it will be created.
         """
-        if schema_name:
-            target_table_name = f"{schema_name}.{table_name}"
-        else:
-            target_table_name = table_name
+        if not new_rows:
+            LOGGER.info("Empty row list provided, skipping update")
+            return
 
+        target_table_name = f"{schema_name}.{table_name}" if schema_name else table_name
         table_exists = self.table_exists(table_name, schema_name=schema_name)
 
         if not table_exists:
@@ -125,13 +134,8 @@ class DBService(CloseMixin, ABC):
                 table_definition=table_definition,
                 schema_name=schema_name,
             )
-            # Convert pandas NaT to None for datetime-like columns before insert
-            for col in new_df.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
-                new_df[col] = new_df[col].astype(object).where(new_df[col].notna(), None)
-            self.insert_df_to_table(df=new_df, table_name=table_name, schema_name=schema_name)
+            self.insert_rows(rows=new_rows, table_name=table_name, schema_name=schema_name)
         else:
-            # For checking existing IDs and preventing duplicates, get IDs as a set
-            # If source_id is provided, filter by source_id to avoid cross-source chunk_id collisions
             all_existing_ids = self._fetch_column_as_set(
                 table_name=table_name,
                 column_name=id_column_name,
@@ -139,35 +143,42 @@ class DBService(CloseMixin, ABC):
                 source_id=source_id,
             )
 
-            # For UPDATE operations, use the filtered query if provided
             query = (
                 f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name}"
                 if timestamp_column_name
                 else f"SELECT {id_column_name} FROM {target_table_name}"
             )
             final_query = f"{query} WHERE {sql_query_filter};" if sql_query_filter else f"{query};"
-            old_df = self._fetch_sql_query_as_dataframe(final_query)
-            old_df = convert_to_correct_pandas_type(old_df, id_column_name, table_definition)
+            old_rows = self._fetch_sql_query_as_dicts(final_query)
 
-            common_df = new_df.merge(old_df, on=id_column_name, how="inner")
+            old_by_id: dict = {}
+            for row in old_rows:
+                rid = cast_id_value(row[id_column_name], id_column_name, table_definition)
+                old_by_id[rid] = row
+
+            new_by_id: dict = {}
+            for row in new_rows:
+                rid = cast_id_value(row[id_column_name], id_column_name, table_definition)
+                new_by_id[rid] = row
+
+            common_ids = set(new_by_id.keys()) & set(old_by_id.keys())
 
             if timestamp_column_name and not sql_query_filter:
-                ids_to_update = set(
-                    common_df[common_df[timestamp_column_name + "_x"] > common_df[timestamp_column_name + "_y"]][
-                        id_column_name
-                    ]
-                )
+                ids_to_update = set()
+                for cid in common_ids:
+                    new_ts = new_by_id[cid].get(timestamp_column_name)
+                    old_ts = old_by_id[cid].get(timestamp_column_name)
+                    if new_ts is not None and old_ts is not None and str(new_ts) > str(old_ts):
+                        ids_to_update.add(cid)
             else:
-                ids_to_update = set(common_df[id_column_name])
+                ids_to_update = common_ids
 
             LOGGER.info(f"Found {len(ids_to_update)} rows to update in the table")
-            updated_data = new_df[new_df[id_column_name].isin(ids_to_update)].copy()
+            updated_data = [new_by_id[rid] for rid in ids_to_update]
 
-            if not updated_data.empty:
-                for col in updated_data.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
-                    updated_data[col] = updated_data[col].astype(object).where(updated_data[col].notna(), None)
-                self._refresh_table_from_df(
-                    df=updated_data,
+            if updated_data:
+                self._refresh_table_from_rows(
+                    rows=updated_data,
                     table_name=table_name,
                     id_column=id_column_name,
                     table_definition=table_definition,
@@ -176,18 +187,20 @@ class DBService(CloseMixin, ABC):
             else:
                 LOGGER.info("No rows to update, skipping update operation")
 
-            new_df["exists"] = new_df[id_column_name].isin(all_existing_ids)
-            LOGGER.info(f"Found {new_df['exists'][new_df['exists']].sum()} existing rows in the table")
-            new_data = new_df[~new_df["exists"]].copy()
-            new_data.drop(columns=["exists"], inplace=True)
-            # Convert pandas NaT to None for datetime-like columns before insert
-            for col in new_data.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
-                new_data[col] = new_data[col].astype(object).where(new_data[col].notna(), None)
-            self.insert_df_to_table(new_data, table_name, schema_name=schema_name)
+            existing_count = sum(
+                1 for row in new_rows
+                if cast_id_value(row[id_column_name], id_column_name, table_definition) in all_existing_ids
+            )
+            LOGGER.info(f"Found {existing_count} existing rows in the table")
+            new_data = [
+                row for row in new_rows
+                if cast_id_value(row[id_column_name], id_column_name, table_definition) not in all_existing_ids
+            ]
+            self.insert_rows(new_data, table_name, schema_name=schema_name)
 
             if not append_mode:
-                filtered_existing_ids = set(old_df[id_column_name]) if len(old_df) > 0 else set()
-                new_ids_in_scope = set(new_df[id_column_name])
+                filtered_existing_ids = set(old_by_id.keys())
+                new_ids_in_scope = set(new_by_id.keys())
                 ids_to_delete = filtered_existing_ids - new_ids_in_scope
 
                 LOGGER.info(f"Found {len(ids_to_delete)} rows to delete in the filtered scope")
@@ -200,9 +213,9 @@ class DBService(CloseMixin, ABC):
                     )
 
     @abstractmethod
-    def _refresh_table_from_df(
+    def _refresh_table_from_rows(
         self,
-        df: pd.DataFrame,
+        rows: list[dict],
         table_name: str,
         id_column: str,
         table_definition: DBDefinition,
@@ -211,7 +224,15 @@ class DBService(CloseMixin, ABC):
         pass
 
     @abstractmethod
-    def _fetch_sql_query_as_dataframe(self, query: str) -> pd.DataFrame:
+    def _refresh_table_from_df(
+        self,
+        df,
+        table_name: str,
+        id_column: str,
+        table_definition: DBDefinition,
+        schema_name: Optional[str] = None,
+    ) -> None:
+        """Legacy wrapper -- prefer _refresh_table_from_rows for new code."""
         pass
 
     @abstractmethod

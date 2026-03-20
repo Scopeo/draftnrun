@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import resource
 import subprocess
 from pathlib import Path
 from typing import Any, Dict
@@ -39,6 +40,15 @@ def _is_real_error(line: str) -> bool:
 # Redis configuration
 STREAM_NAME = os.getenv("REDIS_INGESTION_STREAM", "ada_ingestion_stream")
 MAX_CONCURRENT_INGESTIONS = int(os.getenv("MAX_CONCURRENT_INGESTIONS", 2))
+SUBPROCESS_MEMORY_LIMIT_MB = int(os.getenv("SUBPROCESS_MEMORY_LIMIT_MB", "1400"))
+
+
+def _set_memory_limit() -> None:
+    """preexec_fn callback: cap virtual address space for the child process."""
+    if SUBPROCESS_MEMORY_LIMIT_MB > 0:
+        limit_bytes = SUBPROCESS_MEMORY_LIMIT_MB * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
+
 
 # Default API base URL - use HTTP for localhost
 DEFAULT_API_BASE_URL = "http://localhost:8000"
@@ -182,8 +192,9 @@ class Worker(BaseWorker):
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                env=env,  # Use our custom environment with the Fernet key
-                cwd=str(Path(__file__).parents[2]),  # Run from repository root
+                env=env,
+                cwd=str(Path(__file__).parents[2]),
+                preexec_fn=_set_memory_limit,
             )
 
             # Real-time logging - stream output as it happens
@@ -339,7 +350,11 @@ class Worker(BaseWorker):
             result["error_message"] = "SSL connection failed to localhost"
             result["possible_solution"] = "Set API_BASE_URL environment variable to http://localhost:8000"
 
-        # Add new error pattern for module not found
+        elif "MemoryError" in stderr_text or "Cannot allocate memory" in stderr_text:
+            result["error_type"] = "Out of Memory"
+            result["error_message"] = "Subprocess exceeded memory limit"
+            result["possible_solution"] = "Reduce source size or increase SUBPROCESS_MEMORY_LIMIT_MB"
+
         elif "ModuleNotFoundError" in stderr_text:
             module_match = "No module named" in stderr_text
             if module_match:

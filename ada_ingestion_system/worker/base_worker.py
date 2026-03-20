@@ -112,18 +112,26 @@ class BaseWorker:
             return False
         return all(field in payload for field in required_fields)
 
-    def _dead_letter(self, message_id: str, fields: Dict[str, str], delivery_count: int, reason: str) -> None:
+    def _dead_letter(
+        self,
+        message_id: str,
+        fields: Dict[str, str],
+        delivery_count: int,
+        reason: str,
+        error_type: str = "",
+    ) -> None:
         """Move a poison message to the dead-letter stream, ACK it, and log."""
         dl_stream = self.stream_name + _DEADLETTER_SUFFIX
         try:
-            # Preserve original payload + add diagnostics
             dl_entry = {
                 **fields,
                 "_original_stream": self.stream_name,
                 "_original_message_id": message_id,
                 "_delivery_count": str(delivery_count),
                 "_reason": reason,
+                "_error_type": error_type or "unknown",
                 "_dead_lettered_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "_consumer": self._consumer_name(),
             }
             redis_client.xadd(dl_stream, dl_entry)
             redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)

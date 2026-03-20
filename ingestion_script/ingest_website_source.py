@@ -4,7 +4,6 @@ from functools import partial
 from typing import Optional
 from uuid import UUID
 
-import pandas as pd
 from firecrawl import AsyncFirecrawl
 from pydantic import BaseModel
 
@@ -19,7 +18,7 @@ from ingestion_script.utils import (
     CHUNK_ID_COLUMN_NAME,
     UNIFIED_QDRANT_SCHEMA,
     UNIFIED_TABLE_DEFINITION,
-    transform_chunks_df_for_unified_table,
+    transform_chunks_for_unified_table,
     upload_source,
 )
 from settings import settings
@@ -188,7 +187,25 @@ async def upload_website_source(
 
     db_service.create_schema(storage_schema_name)
 
-    page_chunks_dfs = []
+    chunk_buffer: list[dict] = []
+    total_flushed = 0
+
+    def _flush_website_batch(buffer: list[dict]) -> int:
+        if not buffer:
+            return 0
+        rows_for_db = transform_chunks_for_unified_table(buffer, source_id)
+        LOGGER.info(f"Flushing website batch of {len(rows_for_db)} chunks to db table {storage_table_name}")
+        db_service.update_table(
+            new_rows=rows_for_db,
+            table_name=storage_table_name,
+            table_definition=UNIFIED_TABLE_DEFINITION,
+            id_column_name=CHUNK_ID_COLUMN_NAME,
+            timestamp_column_name=TIMESTAMP_COLUMN_NAME,
+            append_mode=True,
+            schema_name=storage_schema_name,
+            source_id=str(source_id),
+        )
+        return len(rows_for_db)
 
     for page_data in scraped_pages:
         if not page_data.content or not page_data.content.strip():
@@ -221,40 +238,25 @@ async def upload_website_source(
             LOGGER.warning(f"No chunks created for {page_data.url} - skipping")
             continue
 
-        chunks_df["url"] = page_data.url
-        page_chunks_dfs.append(chunks_df)
-        LOGGER.info(f"Created {len(chunks_df)} chunks for {page_data.url}")
+        chunk_dicts = chunks_df.to_dict(orient="records")
+        for row in chunk_dicts:
+            row["url"] = page_data.url
+        valid = [r for r in chunk_dicts if r.get("content") and str(r["content"]).strip()]
+        chunk_buffer.extend(valid)
+        LOGGER.info(f"Created {len(valid)} chunks for {page_data.url}")
 
-    if not page_chunks_dfs:
-        LOGGER.warning("No chunks created from any page - nothing to sync")
+        if len(chunk_buffer) >= settings.INGESTION_BATCH_SIZE:
+            total_flushed += _flush_website_batch(chunk_buffer)
+            chunk_buffer.clear()
+
+    total_flushed += _flush_website_batch(chunk_buffer)
+    chunk_buffer.clear()
+
+    if total_flushed == 0:
+        LOGGER.warning("No valid chunks created from any page - nothing to sync")
         return
 
-    all_chunks_df = pd.concat(page_chunks_dfs, ignore_index=True)
-
-    initial_count = len(all_chunks_df)
-    all_chunks_df = all_chunks_df[all_chunks_df["content"].notna() & (all_chunks_df["content"].str.strip() != "")]
-    filtered_count = initial_count - len(all_chunks_df)
-    if filtered_count > 0:
-        LOGGER.info(f"Filtered out {filtered_count} chunks with empty content")
-
-    if all_chunks_df.empty:
-        LOGGER.warning("No valid chunks remaining after filtering - nothing to sync")
-        return
-
-    LOGGER.info(f"Syncing {len(all_chunks_df)} total chunks to db table {storage_table_name}")
-
-    all_chunks_df_for_db = transform_chunks_df_for_unified_table(all_chunks_df, source_id)
-
-    db_service.update_table(
-        new_df=all_chunks_df_for_db,
-        table_name=storage_table_name,
-        table_definition=UNIFIED_TABLE_DEFINITION,
-        id_column_name=CHUNK_ID_COLUMN_NAME,
-        timestamp_column_name=TIMESTAMP_COLUMN_NAME,
-        append_mode=True,
-        schema_name=storage_schema_name,
-        source_id=str(source_id),  # Pass source_id to filter existing IDs by source
-    )
+    LOGGER.info(f"Total {total_flushed} chunks flushed to DB across all batches")
 
     await sync_chunks_to_qdrant(
         storage_schema_name,

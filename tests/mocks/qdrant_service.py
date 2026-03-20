@@ -77,12 +77,14 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
             metadata_fields_to_keep={"metadata_to_keep_by_qdrant_field"},
         )
 
-    # Mock sync_df_with_collection_async
     async def sync_df_with_collection_async(df: pd.DataFrame, collection_name: str, **kwargs) -> bool:
         collection_data[collection_name] = df.copy()
         return True
 
-    # Set up async methods
+    async def sync_rows_with_collection_async(rows: list[dict], collection_name: str, **kwargs) -> bool:
+        collection_data[collection_name] = pd.DataFrame(rows)
+        return True
+
     mock_qdrant.collection_exists_async = AsyncMock(side_effect=collection_exists_async)
     mock_qdrant.create_collection_async = AsyncMock(side_effect=create_collection_async)
     mock_qdrant.delete_collection_async = AsyncMock(side_effect=delete_collection_async)
@@ -91,6 +93,7 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
     mock_qdrant.delete_chunks_async = AsyncMock(side_effect=delete_chunks_async)
     mock_qdrant._get_schema = Mock(side_effect=_get_schema)
     mock_qdrant.sync_df_with_collection_async = AsyncMock(side_effect=sync_df_with_collection_async)
+    mock_qdrant.sync_rows_with_collection_async = AsyncMock(side_effect=sync_rows_with_collection_async)
 
     def sync_collection_exists(*args, **kwargs):
         collection_name = kwargs.get("collection_name") or (args[0] if args else None)
@@ -127,6 +130,12 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
         other_kwargs = {k: v for k, v in kwargs.items() if k not in ("df", "collection_name")}
         return asyncio.run(sync_df_with_collection_async(df, collection_name, **other_kwargs))
 
+    def sync_sync_rows_with_collection(*args, **kwargs):
+        rows = kwargs.get("rows") or (args[0] if args else None)
+        collection_name = kwargs.get("collection_name") or (args[1] if len(args) > 1 else None)
+        other_kwargs = {k: v for k, v in kwargs.items() if k not in ("rows", "collection_name")}
+        return asyncio.run(sync_rows_with_collection_async(rows, collection_name, **other_kwargs))
+
     mock_qdrant.collection_exists = Mock(side_effect=sync_collection_exists)
     mock_qdrant.create_collection = Mock(side_effect=sync_create_collection)
     mock_qdrant.delete_collection = Mock(side_effect=sync_delete_collection)
@@ -134,6 +143,7 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
     mock_qdrant.add_chunks = Mock(side_effect=sync_add_chunks)
     mock_qdrant.delete_chunks = Mock(side_effect=sync_delete_chunks)
     mock_qdrant.sync_df_with_collection = Mock(side_effect=sync_sync_df_with_collection)
+    mock_qdrant.sync_rows_with_collection = Mock(side_effect=sync_sync_rows_with_collection)
 
     # Store collection_data for cleanup
     mock_qdrant._collection_data = collection_data

@@ -164,6 +164,7 @@ class BaseConfig(BaseSettings):
     PAGE_RESOLUTION_ZOOM: Optional[float] = 3.0
     USE_LLM_FOR_PDF_PARSING: bool = True
     INGESTION_VIA_CUSTOM_MODEL: Optional[bool] = False
+    INGESTION_BATCH_SIZE: int = 500
 
     # Google OAuth configuration
     GOOGLE_CLIENT_ID: Optional[str] = None

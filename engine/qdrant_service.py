@@ -1169,22 +1169,22 @@ class QdrantService:
     ) -> pd.DataFrame:
         return asyncio.run(self.get_collection_data_async(collection_name, query_filter_qdrant))
 
-    async def get_collection_data_async(
+    async def get_collection_data_rows_async(
         self,
         collection_name: str,
         query_filter_qdrant: Optional[dict] = None,
-    ) -> pd.DataFrame:
+    ) -> list[dict]:
+        """Return collection data as list[dict] without pandas."""
         if not await self.collection_exists_async(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
 
         schema = self._get_schema(collection_name)
-
         all_points = await self.get_points_async(
             collection_name=collection_name,
             filter=query_filter_qdrant,
         )
 
-        rows = []
+        rows: list[dict] = []
         for point in all_points:
             payload = point.get("payload", {})
             row = {
@@ -1201,14 +1201,104 @@ class QdrantService:
             if schema.source_id_field:
                 row[schema.source_id_field] = payload.get(schema.source_id_field)
 
-            # Add custom metadata fields if any
             metadata_fields = schema.metadata_fields_to_keep or payload.keys()
             for field in metadata_fields:
                 if field not in row:
                     row[field] = payload.get(field)
             rows.append(row)
+        return rows
 
+    async def get_collection_data_async(
+        self,
+        collection_name: str,
+        query_filter_qdrant: Optional[dict] = None,
+    ) -> pd.DataFrame:
+        """Legacy wrapper -- returns a pandas DataFrame."""
+        rows = await self.get_collection_data_rows_async(collection_name, query_filter_qdrant)
         return pd.DataFrame(rows)
+
+    # ── sync methods (list[dict]) ──────────────────────────────────────
+
+    async def sync_rows_with_collection_async(
+        self,
+        rows: list[dict],
+        collection_name: str,
+        query_filter_qdrant: Optional[dict] = None,
+    ) -> bool:
+        """Diff-based sync using plain list[dict] instead of DataFrame."""
+        chunk_id_field = self.default_schema.chunk_id_field
+        ts_field = self.default_schema.last_edited_ts_field
+
+        collection_count = await self.count_points_async(
+            collection_name=collection_name,
+            filter=query_filter_qdrant,
+        )
+        if collection_count == 0:
+            await self.add_chunks_async(rows, collection_name)
+            LOGGER.info(f"Qdrant collection is empty. Added {len(rows)} chunks to Qdrant")
+            return True
+
+        old_rows = await self.get_collection_data_rows_async(collection_name, query_filter_qdrant)
+
+        incoming_by_id = {r[chunk_id_field]: r for r in rows}
+        existing_by_id = {r[chunk_id_field]: r for r in old_rows}
+
+        incoming_ids = set(incoming_by_id.keys())
+        existing_ids = set(existing_by_id.keys())
+
+        ids_to_delete = existing_ids - incoming_ids
+        new_ids_to_add = incoming_ids - existing_ids
+        common_ids = incoming_ids & existing_ids
+
+        if query_filter_qdrant:
+            ids_to_update = common_ids
+        elif ts_field:
+            ids_to_update = set()
+            for cid in common_ids:
+                new_ts = incoming_by_id[cid].get(ts_field)
+                old_ts = existing_by_id[cid].get(ts_field)
+                if new_ts is not None and old_ts is not None and str(new_ts) > str(old_ts):
+                    ids_to_update.add(cid)
+        else:
+            ids_to_update = common_ids
+
+        ids_to_delete = ids_to_delete | ids_to_update
+        ids_to_upsert = new_ids_to_add | ids_to_update
+
+        if ids_to_delete:
+            await self.delete_chunks_async(
+                point_ids=list(ids_to_delete),
+                id_field=chunk_id_field,
+                collection_name=collection_name,
+            )
+            LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
+        if ids_to_upsert:
+            payloads = [incoming_by_id[cid] for cid in ids_to_upsert]
+            await self.add_chunks_async(payloads, collection_name)
+            LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
+
+        n_points = await self.count_points_async(
+            collection_name=collection_name,
+            filter=query_filter_qdrant,
+        )
+        if n_points != len(rows):
+            LOGGER.error(
+                f"Sync failed : number of points in Qdrant ({n_points}) is not equal to "
+                f"the number of incoming rows ({len(rows)})"
+            )
+            return False
+        LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
+        return True
+
+    def sync_rows_with_collection(
+        self,
+        rows: list[dict],
+        collection_name: str,
+        query_filter_qdrant: Optional[dict] = None,
+    ) -> bool:
+        return asyncio.run(self.sync_rows_with_collection_async(rows, collection_name, query_filter_qdrant))
+
+    # ── Legacy DF wrappers ─────────────────────────────────────────────
 
     def sync_df_with_collection(
         self,
@@ -1224,64 +1314,6 @@ class QdrantService:
         collection_name: str,
         query_filter_qdrant: Optional[dict] = None,
     ) -> bool:
-        collection_count = await self.count_points_async(
-            collection_name=collection_name,
-            filter=query_filter_qdrant,
-        )
-        if collection_count == 0:
-            await self.add_chunks_async(json.loads(df.to_json(orient="records", date_format="iso")), collection_name)
-            LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
-            return True
-
-        old_df = await self.get_collection_data_async(collection_name, query_filter_qdrant)
-
-        incoming_ids = set(df[self.default_schema.chunk_id_field])
-        existing_ids = set(old_df[self.default_schema.chunk_id_field])
-        ids_to_delete = existing_ids - incoming_ids
-        new_ids_to_add = incoming_ids - existing_ids
-
-        common_df = df.merge(old_df, on=self.default_schema.chunk_id_field, how="inner")
-
-        if query_filter_qdrant:
-            ids_to_update = set(common_df[self.default_schema.chunk_id_field])
-        elif self.default_schema.last_edited_ts_field:
-            ids_to_update = set(
-                common_df[
-                    common_df[self.default_schema.last_edited_ts_field + "_x"]
-                    > common_df[self.default_schema.last_edited_ts_field + "_y"]
-                ][self.default_schema.chunk_id_field]
-            )
-        else:
-            ids_to_update = set(common_df[self.default_schema.chunk_id_field])
-
-        ids_to_delete = ids_to_delete.union(ids_to_update)
-        ids_to_upsert = new_ids_to_add.union(ids_to_update)
-
-        if len(ids_to_delete) > 0:
-            await self.delete_chunks_async(
-                point_ids=list(ids_to_delete),
-                id_field=self.default_schema.chunk_id_field,
-                collection_name=collection_name,
-            )
-            LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
-        if len(ids_to_upsert) > 0:
-            chunks_to_upsert = df[df[self.default_schema.chunk_id_field].isin(ids_to_upsert)]
-            list_payloads = json.loads(chunks_to_upsert.to_json(orient="records", date_format="iso"))
-            await self.add_chunks_async(list_payloads, collection_name)
-            LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
-
-        n_points = await self.count_points_async(
-            collection_name=collection_name,
-            filter=query_filter_qdrant,
-        )
-        if n_points != len(df):
-            LOGGER.error(
-                (
-                    f"Sync failed : number of points in Qdrant ({n_points}) is not equal to the "
-                    f"number of points in the dataframe ({len(df)})"
-                )
-            )
-            return False
-        else:
-            LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
-            return True
+        """Legacy wrapper that accepts a pandas DataFrame."""
+        rows = json.loads(df.to_json(orient="records", date_format="iso"))
+        return await self.sync_rows_with_collection_async(rows, collection_name, query_filter_qdrant)
