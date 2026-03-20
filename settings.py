@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).parent.resolve()
@@ -65,6 +65,9 @@ class BaseConfig(BaseSettings):
     ENV: Optional[str] = None
     SENTRY_DSN: Optional[str] = None  # Sentry project DSN (leave unset to disable Sentry)
     SENTRY_ENVIRONMENT: str = "development"  # Sentry environment tag (e.g. development, staging, production)
+    SENTRY_TRACES_SAMPLE_RATE: float = Field(0.1, ge=0.0, le=1.0)
+    SENTRY_PROFILE_SESSION_SAMPLE_RATE: float = Field(0.1, ge=0.0, le=1.0)
+    SENTRY_SEND_PII: bool = False
 
     @property
     def custom_models(self) -> dict[str, dict[str, Any]]:

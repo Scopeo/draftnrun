@@ -63,10 +63,10 @@ async def run_scheduler():
         sentry_sdk.init(
             dsn=settings.SENTRY_DSN,
             environment=settings.SENTRY_ENVIRONMENT,
-            send_default_pii=True,
-            traces_sample_rate=1.0,
+            send_default_pii=settings.SENTRY_SEND_PII,
+            traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
             enable_logs=True,
-            profile_session_sample_rate=1.0,
+            profile_session_sample_rate=settings.SENTRY_PROFILE_SESSION_SAMPLE_RATE,
             profile_lifecycle="trace",
         )
 
