@@ -65,6 +65,9 @@ class BaseConfig(BaseSettings):
     ENV: Optional[str] = None
     SENTRY_DSN: Optional[str] = None  # Sentry project DSN (leave unset to disable Sentry)
     SENTRY_ENVIRONMENT: str = "development"  # Sentry environment tag (e.g. development, staging, production)
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+    SENTRY_PROFILE_SESSION_SAMPLE_RATE: float = 0.1
+    SENTRY_SEND_PII: bool = False
 
     @property
     def custom_models(self) -> dict[str, dict[str, Any]]:
