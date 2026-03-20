@@ -391,27 +391,40 @@ class Worker(BaseWorker):
             ping_result = redis_client.ping()
             logger.debug("redis_ping result=%s", ping_result)
 
-            queue_length = redis_client.llen(self.stream_name)
+            queue_length = redis_client.xlen(self.stream_name)
             logger.debug("redis_queue_length stream=%s length=%s", self.stream_name, queue_length)
 
-            queue_items = redis_client.lrange(self.stream_name, 0, 9)
+            queue_items = redis_client.xrange(self.stream_name, "-", "+", count=10)
             logger.debug("redis_queue_items_retrieved stream=%s count=%s", self.stream_name, len(queue_items))
 
             if queue_items:
-                for i, item in enumerate(queue_items):
+                for message_id, fields in queue_items:
                     try:
-                        parsed = json.loads(item)
+                        raw_data = fields.get("data")
+                        if raw_data is None:
+                            raw_data = fields.get(b"data")
+                        parsed = json.loads(raw_data)
                         logger.debug(
-                            "redis_queue_item stream=%s index=%s keys=%s",
-                            self.stream_name, i, list(parsed.keys()),
+                            "redis_queue_item stream=%s message_id=%s keys=%s",
+                            self.stream_name,
+                            message_id,
+                            list(parsed.keys()) if isinstance(parsed, dict) else [],
                         )
                     except json.JSONDecodeError:
+                        preview = str(raw_data)[:100] if raw_data is not None else ""
                         logger.debug(
-                            "redis_queue_item_invalid_json stream=%s index=%s preview=%s",
-                            self.stream_name, i, item[:100],
+                            "redis_queue_item_invalid_json stream=%s message_id=%s preview=%s",
+                            self.stream_name,
+                            message_id,
+                            preview,
                         )
                     except Exception as e:
-                        logger.debug("redis_queue_item_error stream=%s index=%s error=%s", self.stream_name, i, str(e))
+                        logger.debug(
+                            "redis_queue_item_error stream=%s message_id=%s error=%s",
+                            self.stream_name,
+                            message_id,
+                            str(e),
+                        )
             else:
                 logger.debug("redis_queue_empty stream=%s", self.stream_name)
 

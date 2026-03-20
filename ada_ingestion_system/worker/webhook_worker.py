@@ -12,6 +12,10 @@ WEBHOOK_STREAM_NAME = os.getenv("REDIS_WEBHOOK_STREAM", "ada_webhook_stream")
 MAX_CONCURRENT_WEBHOOKS = int(os.getenv("MAX_CONCURRENT_WEBHOOKS", 2))
 
 
+class WebhookExecutionError(RuntimeError):
+    """Raised when webhook script execution fails."""
+
+
 class WebhookWorker(BaseWorker):
     def __init__(self):
         super().__init__(
@@ -46,7 +50,7 @@ class WebhookWorker(BaseWorker):
             script_path = ada_backend_path / "webhook_scripts" / "webhook_main.py"
             if not script_path.exists():
                 logger.error("script_not_found path=%s", str(script_path))
-                return
+                raise WebhookExecutionError(f"Webhook script not found: {script_path}")
 
             # Prepare the Python command to run the script
             python_cmd = "python"  # Use the system Python runner
@@ -154,6 +158,7 @@ class WebhookWorker(BaseWorker):
 
             if process.returncode != 0:
                 logger.error("script_failed return_code=%s", process.returncode)
+                raise WebhookExecutionError(f"Webhook script failed with return code {process.returncode}")
             else:
                 logger.info(
                     "webhook_processing_completed webhook_id=%s event_id=%s",
@@ -163,6 +168,7 @@ class WebhookWorker(BaseWorker):
 
         except Exception as e:
             logger.error("webhook_processing_error error=%s", str(e), exc_info=True)
+            raise
 
     def _log_queued_task(self, payload: Dict[str, Any]) -> None:
         """Log queued webhook task."""
