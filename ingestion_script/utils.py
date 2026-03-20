@@ -138,15 +138,15 @@ def transform_chunks_for_unified_table(
     4. Returns only the required columns for the database
     """
     result: list[dict] = []
-    sid = str(source_id)
+    source_id_str = str(source_id)
     for row in chunks:
         new_row: dict = {}
-        for old_key, val in row.items():
-            new_key = _COLUMN_RENAME_MAP.get(old_key, old_key)
-            new_row[new_key] = val
+        for original_key, value in row.items():
+            mapped_key = _COLUMN_RENAME_MAP.get(original_key, original_key)
+            new_row[mapped_key] = value
         new_row[METADATA_COLUMN_NAME] = _build_flattened_metadata(new_row)
-        new_row[SOURCE_ID_COLUMN_NAME] = sid
-        result.append({col: new_row.get(col) for col in UNIFIED_TABLE_COLUMNS})
+        new_row[SOURCE_ID_COLUMN_NAME] = source_id_str
+        result.append({column: new_row.get(column) for column in UNIFIED_TABLE_COLUMNS})
     return result
 
 

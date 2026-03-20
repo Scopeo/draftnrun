@@ -1227,7 +1227,7 @@ class QdrantService:
     ) -> bool:
         """Diff-based sync using plain list[dict] instead of DataFrame."""
         chunk_id_field = self.default_schema.chunk_id_field
-        ts_field = self.default_schema.last_edited_ts_field
+        timestamp_field = self.default_schema.last_edited_ts_field
 
         collection_count = await self.count_points_async(
             collection_name=collection_name,
@@ -1238,32 +1238,33 @@ class QdrantService:
             LOGGER.info(f"Qdrant collection is empty. Added {len(rows)} chunks to Qdrant")
             return True
 
-        old_rows = await self.get_collection_data_rows_async(collection_name, query_filter_qdrant)
+        existing_rows = await self.get_collection_data_rows_async(collection_name, query_filter_qdrant)
 
-        incoming_by_id = {r[chunk_id_field]: r for r in rows}
-        existing_by_id = {r[chunk_id_field]: r for r in old_rows}
+        incoming_rows_by_id = {row[chunk_id_field]: row for row in rows}
+        existing_rows_by_id = {row[chunk_id_field]: row for row in existing_rows}
 
-        incoming_ids = set(incoming_by_id.keys())
-        existing_ids = set(existing_by_id.keys())
+        incoming_ids = set(incoming_rows_by_id.keys())
+        existing_ids = set(existing_rows_by_id.keys())
 
         ids_to_delete = existing_ids - incoming_ids
-        new_ids_to_add = incoming_ids - existing_ids
+        ids_to_add = incoming_ids - existing_ids
         common_ids = incoming_ids & existing_ids
 
         if query_filter_qdrant:
             ids_to_update = common_ids
-        elif ts_field:
+        elif timestamp_field:
             ids_to_update = set()
-            for cid in common_ids:
-                new_ts = incoming_by_id[cid].get(ts_field)
-                old_ts = existing_by_id[cid].get(ts_field)
-                if new_ts is not None and old_ts is not None and str(new_ts) > str(old_ts):
-                    ids_to_update.add(cid)
+            for chunk_id in common_ids:
+                incoming_timestamp = incoming_rows_by_id[chunk_id].get(timestamp_field)
+                existing_timestamp = existing_rows_by_id[chunk_id].get(timestamp_field)
+                if incoming_timestamp is not None and existing_timestamp is not None:
+                    if str(incoming_timestamp) > str(existing_timestamp):
+                        ids_to_update.add(chunk_id)
         else:
             ids_to_update = common_ids
 
         ids_to_delete = ids_to_delete | ids_to_update
-        ids_to_upsert = new_ids_to_add | ids_to_update
+        ids_to_upsert = ids_to_add | ids_to_update
 
         if ids_to_delete:
             await self.delete_chunks_async(
@@ -1273,21 +1274,21 @@ class QdrantService:
             )
             LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
         if ids_to_upsert:
-            payloads = [incoming_by_id[cid] for cid in ids_to_upsert]
-            await self.add_chunks_async(payloads, collection_name)
+            rows_to_upsert = [incoming_rows_by_id[chunk_id] for chunk_id in ids_to_upsert]
+            await self.add_chunks_async(rows_to_upsert, collection_name)
             LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
 
-        n_points = await self.count_points_async(
+        point_count = await self.count_points_async(
             collection_name=collection_name,
             filter=query_filter_qdrant,
         )
-        if n_points != len(rows):
+        if point_count != len(rows):
             LOGGER.error(
-                f"Sync failed : number of points in Qdrant ({n_points}) is not equal to "
+                f"Sync failed : number of points in Qdrant ({point_count}) is not equal to "
                 f"the number of incoming rows ({len(rows)})"
             )
             return False
-        LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
+        LOGGER.info(f"Sync successful : number of points in Qdrant is {point_count}")
         return True
 
     def sync_rows_with_collection(

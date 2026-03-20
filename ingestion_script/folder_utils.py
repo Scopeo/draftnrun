@@ -31,20 +31,20 @@ def flatten_metadata_json(metadata_value):
 
 def prepare_rows_for_qdrant(rows: list[dict]) -> list[dict]:
     """Prepare rows for Qdrant by flattening metadata JSON column."""
-    out: list[dict] = []
+    prepared_rows: list[dict] = []
     for row in rows:
         new_row = dict(row)
         if SOURCE_ID_COLUMN_NAME in new_row:
-            val = new_row[SOURCE_ID_COLUMN_NAME]
-            if isinstance(val, UUID):
-                new_row[SOURCE_ID_COLUMN_NAME] = str(val)
+            source_id_value = new_row[SOURCE_ID_COLUMN_NAME]
+            if isinstance(source_id_value, UUID):
+                new_row[SOURCE_ID_COLUMN_NAME] = str(source_id_value)
         if METADATA_COLUMN_NAME in new_row:
-            flat = flatten_metadata_json(new_row.pop(METADATA_COLUMN_NAME))
-            for k, v in flat.items():
-                if k not in new_row:
-                    new_row[k] = v
-        out.append(new_row)
-    return out
+            flattened_metadata = flatten_metadata_json(new_row.pop(METADATA_COLUMN_NAME))
+            for key, value in flattened_metadata.items():
+                if key not in new_row:
+                    new_row[key] = value
+        prepared_rows.append(new_row)
+    return prepared_rows
 
 
 def prepare_df_for_qdrant(df):

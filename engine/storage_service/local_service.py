@@ -2,7 +2,7 @@ import json
 import logging
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Iterator, Optional, Type
 
 import pandas as pd
 import sqlalchemy
@@ -191,6 +191,27 @@ class SQLLocalService(DBService):
             result = session.execute(stmt)
             return pd.DataFrame(result.fetchall(), columns=result.keys())
 
+    def iter_table_rows(
+        self,
+        table_name: str,
+        batch_size: int = 100,
+        schema_name: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
+    ) -> Iterator[list[dict]]:
+        """Yield batches of rows as list[dict] using server-side cursor."""
+        table = self.get_table(table_name, schema_name)
+        with self.Session() as session:
+            stmt = sqlalchemy.select(table)
+            if sql_query_filter:
+                stmt = stmt.where(text(sql_query_filter))
+            result = session.execute(stmt, execution_options={"stream_results": True})
+            keys = list(result.keys())
+            while True:
+                rows = result.fetchmany(batch_size)
+                if not rows:
+                    break
+                yield [dict(zip(keys, row)) for row in rows]
+
     def get_table_rows(
         self,
         table_name: str,
@@ -198,13 +219,18 @@ class SQLLocalService(DBService):
         sql_query_filter: Optional[str] = None,
     ) -> list[dict]:
         """Return all rows as list[dict] without pandas."""
-        table = self.get_table(table_name, schema_name)
-        with self.Session() as session:
-            stmt = sqlalchemy.select(table)
-            if sql_query_filter:
-                stmt = stmt.where(text(sql_query_filter))
-            result = session.execute(stmt)
-            return [dict(row._mapping) for row in result.fetchall()]
+        all_rows: list[dict] = []
+        for batch in self.iter_table_rows(
+            table_name, batch_size=500, schema_name=schema_name, sql_query_filter=sql_query_filter
+        ):
+            all_rows.extend(batch)
+        return all_rows
+
+    def get_column_info(self, table_name: str, schema_name: Optional[str] = None) -> dict[str, str]:
+        """Return {column_name: sql_type_string} for the table."""
+        inspector = sqlalchemy.inspect(self.engine)
+        columns = inspector.get_columns(table_name, schema=schema_name)
+        return {col["name"]: str(col["type"]) for col in columns}
 
     def describe_table(self, table_name: str, schema_name: Optional[str] = None) -> list[dict]:
         table_name = table_name.lower()
@@ -284,14 +310,14 @@ class SQLLocalService(DBService):
     def _parse_jsonb_in_rows(rows: list[dict], jsonb_columns: set[str]) -> list[dict]:
         if not jsonb_columns:
             return rows
-        out = []
+        parsed_rows = []
         for row in rows:
             new_row = dict(row)
-            for col in jsonb_columns:
-                if col in new_row:
-                    new_row[col] = SQLLocalService._parse_jsonb_value(new_row[col])
-            out.append(new_row)
-        return out
+            for column_name in jsonb_columns:
+                if column_name in new_row:
+                    new_row[column_name] = SQLLocalService._parse_jsonb_value(new_row[column_name])
+            parsed_rows.append(new_row)
+        return parsed_rows
 
     def insert_rows(
         self,

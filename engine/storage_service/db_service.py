@@ -149,36 +149,37 @@ class DBService(CloseMixin, ABC):
                 else f"SELECT {id_column_name} FROM {target_table_name}"
             )
             final_query = f"{query} WHERE {sql_query_filter};" if sql_query_filter else f"{query};"
-            old_rows = self._fetch_sql_query_as_dicts(final_query)
+            existing_rows = self._fetch_sql_query_as_dicts(final_query)
 
-            old_by_id: dict = {}
-            for row in old_rows:
-                rid = cast_id_value(row[id_column_name], id_column_name, table_definition)
-                old_by_id[rid] = row
+            existing_rows_by_id: dict = {}
+            for row in existing_rows:
+                row_id = cast_id_value(row[id_column_name], id_column_name, table_definition)
+                existing_rows_by_id[row_id] = row
 
-            new_by_id: dict = {}
+            incoming_rows_by_id: dict = {}
             for row in new_rows:
-                rid = cast_id_value(row[id_column_name], id_column_name, table_definition)
-                new_by_id[rid] = row
+                row_id = cast_id_value(row[id_column_name], id_column_name, table_definition)
+                incoming_rows_by_id[row_id] = row
 
-            common_ids = set(new_by_id.keys()) & set(old_by_id.keys())
+            common_ids = set(incoming_rows_by_id.keys()) & set(existing_rows_by_id.keys())
 
             if timestamp_column_name and not sql_query_filter:
                 ids_to_update = set()
-                for cid in common_ids:
-                    new_ts = new_by_id[cid].get(timestamp_column_name)
-                    old_ts = old_by_id[cid].get(timestamp_column_name)
-                    if new_ts is not None and old_ts is not None and str(new_ts) > str(old_ts):
-                        ids_to_update.add(cid)
+                for shared_id in common_ids:
+                    incoming_timestamp = incoming_rows_by_id[shared_id].get(timestamp_column_name)
+                    existing_timestamp = existing_rows_by_id[shared_id].get(timestamp_column_name)
+                    if incoming_timestamp is not None and existing_timestamp is not None:
+                        if incoming_timestamp > existing_timestamp:
+                            ids_to_update.add(shared_id)
             else:
                 ids_to_update = common_ids
 
             LOGGER.info(f"Found {len(ids_to_update)} rows to update in the table")
-            updated_data = [new_by_id[rid] for rid in ids_to_update]
+            rows_to_update = [incoming_rows_by_id[row_id] for row_id in ids_to_update]
 
-            if updated_data:
+            if rows_to_update:
                 self._refresh_table_from_rows(
-                    rows=updated_data,
+                    rows=rows_to_update,
                     table_name=table_name,
                     id_column=id_column_name,
                     table_definition=table_definition,
@@ -192,16 +193,16 @@ class DBService(CloseMixin, ABC):
                 if cast_id_value(row[id_column_name], id_column_name, table_definition) in all_existing_ids
             )
             LOGGER.info(f"Found {existing_count} existing rows in the table")
-            new_data = [
+            rows_to_insert = [
                 row for row in new_rows
                 if cast_id_value(row[id_column_name], id_column_name, table_definition) not in all_existing_ids
             ]
-            self.insert_rows(new_data, table_name, schema_name=schema_name)
+            self.insert_rows(rows_to_insert, table_name, schema_name=schema_name)
 
             if not append_mode:
-                filtered_existing_ids = set(old_by_id.keys())
-                new_ids_in_scope = set(new_by_id.keys())
-                ids_to_delete = filtered_existing_ids - new_ids_in_scope
+                filtered_existing_ids = set(existing_rows_by_id.keys())
+                incoming_ids_in_scope = set(incoming_rows_by_id.keys())
+                ids_to_delete = filtered_existing_ids - incoming_ids_in_scope
 
                 LOGGER.info(f"Found {len(ids_to_delete)} rows to delete in the filtered scope")
                 if ids_to_delete:

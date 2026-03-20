@@ -3,6 +3,8 @@ import uuid
 from typing import Optional
 from uuid import UUID
 
+import pandas as pd
+
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, ResultType, TaskResultMetadata
 from ada_backend.schemas.source_schema import DataSourceSchema
@@ -29,7 +31,7 @@ from ingestion_script.utils import (
     get_first_available_embeddings_custom_llm,
     get_first_available_multimodal_custom_llm,
     get_sanitize_names,
-    transform_chunks_for_unified_table,
+    transform_chunks_df_for_unified_table,
     update_ingestion_task,
 )
 from settings import settings
@@ -89,17 +91,19 @@ async def sync_chunks_to_qdrant(
     else:
         combined_filter = sql_query_filter
 
-    chunk_rows = db_service.get_table_rows(
+    chunk_rows: list[dict] = []
+    for batch in db_service.iter_table_rows(
         table_name,
+        batch_size=settings.INGESTION_BATCH_SIZE,
         schema_name=table_schema,
         sql_query_filter=combined_filter,
-    )
+    ):
+        chunk_rows.extend(prepare_rows_for_qdrant(batch))
+
     LOGGER.info(
         f"Found {len(chunk_rows)} chunks to sync to Qdrant from table {table_name} "
         f"in schema {table_schema} with filter {combined_filter}"
     )
-
-    chunk_rows = prepare_rows_for_qdrant(chunk_rows)
 
     if source_id:
         source_id_filter = {"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(source_id)}}
@@ -367,37 +371,9 @@ async def _ingest_folder_source(
             LOGGER.info("[EMPTY_FOLDER] Empty source created successfully - returning")
             return
 
-        chunk_buffer: list[dict] = []
-        total_flushed = 0
+        file_chunks_dfs = []
         failed_files = []
         successful_files = []
-
-        async def _flush_batch(buffer: list[dict]) -> None:
-            """Sanitize, transform, and write a batch to DB + Qdrant."""
-            nonlocal total_flushed
-            if not buffer:
-                return
-            for row in buffer:
-                if "document_title" in row:
-                    row["document_title"] = sanitize_for_json(row["document_title"])
-                if "metadata" in row:
-                    row["metadata"] = sanitize_for_json(row["metadata"])
-                if "url" in row:
-                    row["url"] = sanitize_for_json(row["url"])
-
-            rows_for_db = transform_chunks_for_unified_table(buffer, source_id)
-            LOGGER.info(f"Flushing batch of {len(rows_for_db)} chunks to db table {db_table_name}")
-            db_service.update_table(
-                new_rows=rows_for_db,
-                table_name=db_table_name,
-                table_definition=UNIFIED_TABLE_DEFINITION,
-                id_column_name=CHUNK_ID_COLUMN_NAME,
-                timestamp_column_name=TIMESTAMP_COLUMN_NAME,
-                append_mode=True,
-                schema_name=db_table_schema,
-                source_id=str(source_id),
-            )
-            total_flushed += len(rows_for_db)
 
         for document in files_info:
             try:
@@ -415,32 +391,23 @@ async def _ingest_folder_source(
                     LOGGER.warning(f"No chunks created for {document.file_name} - skipping")
                     continue
 
-                chunk_dicts = chunks_df.to_dict(orient="records")
-                valid_chunks = [
-                    r for r in chunk_dicts
-                    if r.get("content") and str(r["content"]).strip()
-                ]
-                chunk_buffer.extend(valid_chunks)
-                successful_files.append({"file_name": document.file_name, "chunks_count": len(valid_chunks)})
-                LOGGER.info(f"Created {len(valid_chunks)} chunks for {document.file_name}")
-
-                if len(chunk_buffer) >= settings.INGESTION_BATCH_SIZE:
-                    await _flush_batch(chunk_buffer)
-                    chunk_buffer.clear()
+                file_chunks_dfs.append(chunks_df)
+                successful_files.append({"file_name": document.file_name, "chunks_count": len(chunks_df)})
+                LOGGER.info(f"Created {len(chunks_df)} chunks for {document.file_name}")
             except Exception as e:
                 error_msg = f"Failed to process {document.file_name}: {str(e)}"
                 LOGGER.error(error_msg)
                 failed_files.append({"file_name": document.file_name, "reason": str(e)})
                 continue
 
-        # Flush remaining chunks
-        await _flush_batch(chunk_buffer)
-        chunk_buffer.clear()
-
-        if total_flushed == 0:
+        if not file_chunks_dfs:
             LOGGER.warning("No chunks created from any file - marking task as FAILED")
             if failed_files:
-                error_messages = [f"{f['file_name']}: {f['reason']}" for f in failed_files]
+                error_messages = []
+                for f in failed_files:
+                    file_name = f["file_name"]
+                    reason = f["reason"]
+                    error_messages.append(f"{file_name}: {reason}")
                 error_msg = " | ".join(error_messages)
             else:
                 error_msg = f"Unable to process files, PDF reading mode: {document_reading_mode}"
@@ -463,7 +430,40 @@ async def _ingest_folder_source(
             LOGGER.error("[NO_CHUNKS] Task marked as FAILED - no source created")
             return
 
-        LOGGER.info(f"Total {total_flushed} chunks flushed to DB across all batches")
+        all_chunks_df = pd.concat(file_chunks_dfs, ignore_index=True)
+
+        initial_count = len(all_chunks_df)
+        all_chunks_df = all_chunks_df[
+            all_chunks_df["content"].notna() & (all_chunks_df["content"].str.strip() != "")
+        ]
+        filtered_count = initial_count - len(all_chunks_df)
+        if filtered_count > 0:
+            LOGGER.info(f"Filtered out {filtered_count} chunks with empty content")
+
+        if all_chunks_df.empty:
+            LOGGER.warning("No valid chunks remaining after filtering - nothing to sync")
+            return
+
+        if "document_title" in all_chunks_df.columns:
+            all_chunks_df["document_title"] = all_chunks_df["document_title"].apply(sanitize_for_json)
+        if "metadata" in all_chunks_df.columns:
+            all_chunks_df["metadata"] = all_chunks_df["metadata"].apply(sanitize_for_json)
+        if "url" in all_chunks_df.columns:
+            all_chunks_df["url"] = all_chunks_df["url"].apply(sanitize_for_json)
+
+        all_chunks_df_for_db = transform_chunks_df_for_unified_table(all_chunks_df, source_id)
+
+        LOGGER.info(f"Syncing {len(all_chunks_df_for_db)} total chunks to db table {db_table_name}")
+        db_service.update_table(
+            new_rows=all_chunks_df_for_db.to_dict(orient="records"),
+            table_name=db_table_name,
+            table_definition=UNIFIED_TABLE_DEFINITION,
+            id_column_name=CHUNK_ID_COLUMN_NAME,
+            timestamp_column_name=TIMESTAMP_COLUMN_NAME,
+            append_mode=True,
+            schema_name=db_table_schema,
+            source_id=str(source_id),
+        )
 
         await sync_chunks_to_qdrant(
             table_schema=db_table_schema,

@@ -43,22 +43,22 @@ def _map_sqlalchemy_type_to_internal(type_str: str) -> str:
     Map SQLAlchemy/reflected type string to internal type used by DBDefinition/SQLLocalService.
     Falls back to VARCHAR when unknown; prefers DATETIME for date-like types.
     """
-    t = type_str.upper()
-    if "TIMESTAMP" in t or "DATETIME" in t or t == "DATE":
+    type_upper = type_str.upper()
+    if "TIMESTAMP" in type_upper or "DATETIME" in type_upper or type_upper == "DATE":
         return "DATETIME"
-    if t.startswith("VARCHAR") or "CHAR" in t:
+    if type_upper.startswith("VARCHAR") or "CHAR" in type_upper:
         return "VARCHAR"
-    if "TEXT" in t:
+    if "TEXT" in type_upper:
         return "TEXT"
-    if "INT" in t:
+    if "INT" in type_upper:
         return "INTEGER"
-    if any(x in t for x in ["DOUBLE", "FLOAT", "NUMERIC", "DECIMAL", "REAL"]):
+    if any(x in type_upper for x in ["DOUBLE", "FLOAT", "NUMERIC", "DECIMAL", "REAL"]):
         return "FLOAT"
-    if "BOOL" in t:
+    if "BOOL" in type_upper:
         return "BOOLEAN"
-    if "JSON" in t or "VARIANT" in t:
+    if "JSON" in type_upper or "VARIANT" in type_upper:
         return "VARIANT"
-    if "ARRAY" in t:
+    if "ARRAY" in type_upper:
         return "ARRAY"
     return "VARCHAR"
 
@@ -72,14 +72,17 @@ def _serialize_value(value):
     return value
 
 
-def _infer_qdrant_field_schema(sample_value) -> FieldSchema:
-    """Infer Qdrant field schema from a sample Python value."""
-    if isinstance(sample_value, (int, float)):
-        return FieldSchema.FLOAT
-    if isinstance(sample_value, bool):
-        return FieldSchema.BOOL
-    if isinstance(sample_value, datetime):
+def _infer_qdrant_field_schema_from_sql_type(sql_type: str) -> FieldSchema:
+    """Map a SQL column type string to a Qdrant FieldSchema."""
+    type_upper = sql_type.upper()
+    if "TIMESTAMP" in type_upper or "DATETIME" in type_upper or type_upper == "DATE":
         return FieldSchema.DATETIME
+    if "INT" in type_upper:
+        return FieldSchema.INTEGER
+    if any(x in type_upper for x in ["DOUBLE", "FLOAT", "NUMERIC", "DECIMAL", "REAL"]):
+        return FieldSchema.FLOAT
+    if "BOOL" in type_upper:
+        return FieldSchema.BOOL
     return FieldSchema.KEYWORD
 
 
@@ -99,34 +102,30 @@ async def get_db_source(
     sql_query_filter: Optional[str] = None,
 ) -> list[dict]:
     sql_local_service = SQLLocalService(engine_url=db_url)
-    source_rows = sql_local_service.get_table_rows(
-        table_name=table_name,
-        schema_name=source_schema_name,
-        sql_query_filter=sql_query_filter,
-    )
-    if not source_rows:
-        raise ValueError(f"The table '{table_name}' is empty. No data to ingest.")
 
-    col_names = set(source_rows[0].keys())
-    if id_column_name not in col_names:
-        raise ValueError(f"ID column '{id_column_name}' not found in the columns: {sorted(col_names)}")
-    if not set(text_column_names).issubset(col_names):
-        raise ValueError(f"Text columns {text_column_names} not found in the columns: {sorted(col_names)}")
-    if metadata_column_names is not None and not set(metadata_column_names).issubset(col_names):
-        raise ValueError(f"Metadata columns {metadata_column_names} not found in the columns: {sorted(col_names)}")
-    if timestamp_column_name and timestamp_column_name not in col_names:
+    column_info = sql_local_service.get_column_info(table_name, schema_name=source_schema_name)
+    column_names = set(column_info.keys())
+
+    if id_column_name not in column_names:
+        raise ValueError(f"ID column '{id_column_name}' not found in the columns: {sorted(column_names)}")
+    if not set(text_column_names).issubset(column_names):
+        raise ValueError(f"Text columns {text_column_names} not found in the columns: {sorted(column_names)}")
+    if metadata_column_names is not None and not set(metadata_column_names).issubset(column_names):
         raise ValueError(
-            f"Timestamp column '{timestamp_column_name}' not found in the columns: {sorted(col_names)}"
+            f"Metadata columns {metadata_column_names} not found in the columns: {sorted(column_names)}"
+        )
+    if timestamp_column_name and timestamp_column_name not in column_names:
+        raise ValueError(
+            f"Timestamp column '{timestamp_column_name}' not found in the columns: {sorted(column_names)}"
         )
 
     if metadata_column_names:
-        for col in metadata_column_names:
-            sample = next((r[col] for r in source_rows if r.get(col) is not None), None)
-            field_schema = _infer_qdrant_field_schema(sample)
-            LOGGER.info(f"Creating index for metadata column '{col}' with qdrant type {field_schema}")
+        for metadata_col in metadata_column_names:
+            field_schema = _infer_qdrant_field_schema_from_sql_type(column_info.get(metadata_col, "VARCHAR"))
+            LOGGER.info(f"Creating index for metadata column '{metadata_col}' with qdrant type {field_schema}")
             await qdrant_service.create_index_if_needed_async(
                 collection_name=qdrant_collection_name,
-                field_name=col,
+                field_name=metadata_col,
                 field_schema_type=field_schema,
             )
     if timestamp_column_name:
@@ -136,48 +135,58 @@ async def get_db_source(
             field_schema_type=FieldSchema.DATETIME,
         )
 
-    LOGGER.info(f"Retrieved {len(source_rows)} rows from the source table '{table_name}'.")
-
     splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     unified_rows: list[dict] = []
+    total_source_rows = 0
 
-    for src_row in source_rows:
-        row_id = src_row[id_column_name]
-        combined_text = " ".join(str(src_row.get(c) or "") for c in text_column_names)
-        chunks = splitter.split_text(combined_text)
-        file_id = f"{table_name}_{row_id}"
-        ts_value = src_row.get(timestamp_column_name) if timestamp_column_name else None
+    for batch in sql_local_service.iter_table_rows(
+        table_name=table_name,
+        batch_size=settings.INGESTION_BATCH_SIZE,
+        schema_name=source_schema_name,
+        sql_query_filter=sql_query_filter,
+    ):
+        total_source_rows += len(batch)
+        for source_row in batch:
+            row_id = source_row[id_column_name]
+            combined_text = " ".join(str(source_row.get(col) or "") for col in text_column_names)
+            chunks = splitter.split_text(combined_text)
+            file_id = f"{table_name}_{row_id}"
+            timestamp_value = source_row.get(timestamp_column_name) if timestamp_column_name else None
 
-        for idx, chunk_text in enumerate(chunks, start=1):
-            chunk_id = f"{row_id}_{idx}"
+            for chunk_index, chunk_text in enumerate(chunks, start=1):
+                chunk_id = f"{row_id}_{chunk_index}"
 
-            if url_pattern:
-                safe_row = {k: ("" if v is None else v) for k, v in src_row.items()}
-                url_val = url_pattern.format_map(safe_row)
-            else:
-                url_val = None
+                if url_pattern:
+                    null_safe_row = {k: ("" if v is None else v) for k, v in source_row.items()}
+                    url_value = url_pattern.format_map(null_safe_row)
+                else:
+                    url_value = None
 
-            metadata: dict = {}
-            if timestamp_column_name and ts_value is not None:
-                metadata[timestamp_column_name] = _serialize_value(ts_value)
-            if metadata_column_names:
-                for mc in metadata_column_names:
-                    if mc != timestamp_column_name:
-                        mv = src_row.get(mc)
-                        if mv is not None:
-                            metadata[mc] = _serialize_value(mv)
+                metadata: dict = {}
+                if timestamp_column_name and timestamp_value is not None:
+                    metadata[timestamp_column_name] = _serialize_value(timestamp_value)
+                if metadata_column_names:
+                    for metadata_col_name in metadata_column_names:
+                        if metadata_col_name != timestamp_column_name:
+                            metadata_value = source_row.get(metadata_col_name)
+                            if metadata_value is not None:
+                                metadata[metadata_col_name] = _serialize_value(metadata_value)
 
-            unified_rows.append({
-                CHUNK_ID_COLUMN_NAME: chunk_id,
-                CHUNK_COLUMN_NAME: chunk_text,
-                FILE_ID_COLUMN_NAME: file_id,
-                ORDER_COLUMN_NAME: idx - 1,
-                DOCUMENT_TITLE_COLUMN_NAME: file_id,
-                TIMESTAMP_COLUMN_NAME: _serialize_value(ts_value),
-                URL_COLUMN_NAME: url_val,
-                METADATA_COLUMN_NAME: json.dumps(metadata) if metadata else json.dumps({}),
-            })
+                unified_rows.append({
+                    CHUNK_ID_COLUMN_NAME: chunk_id,
+                    CHUNK_COLUMN_NAME: chunk_text,
+                    FILE_ID_COLUMN_NAME: file_id,
+                    ORDER_COLUMN_NAME: chunk_index - 1,
+                    DOCUMENT_TITLE_COLUMN_NAME: file_id,
+                    TIMESTAMP_COLUMN_NAME: _serialize_value(timestamp_value),
+                    URL_COLUMN_NAME: url_value,
+                    METADATA_COLUMN_NAME: json.dumps(metadata) if metadata else json.dumps({}),
+                })
 
+    if total_source_rows == 0:
+        raise ValueError(f"The table '{table_name}' is empty. No data to ingest.")
+
+    LOGGER.info(f"Retrieved {total_source_rows} rows from the source table '{table_name}'.")
     return unified_rows
 
 
@@ -241,9 +250,9 @@ async def upload_db_source(
         qdrant_collection_name=qdrant_collection_name,
     )
 
-    sid = str(source_id)
+    source_id_str = str(source_id)
     for row in rows:
-        row[SOURCE_ID_COLUMN_NAME] = sid
+        row[SOURCE_ID_COLUMN_NAME] = source_id_str
 
     for i in range(0, len(rows), settings.INGESTION_BATCH_SIZE):
         batch = rows[i : i + settings.INGESTION_BATCH_SIZE]
@@ -257,7 +266,7 @@ async def upload_db_source(
             append_mode=update_existing,
             schema_name=storage_schema_name,
             sql_query_filter=combined_filter_sql_unified,
-            source_id=sid,
+            source_id=source_id_str,
         )
 
     LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {len(rows)} rows.")

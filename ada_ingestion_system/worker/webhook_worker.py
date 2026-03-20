@@ -1,6 +1,5 @@
 import fcntl
 import os
-import resource
 import select
 import subprocess
 from pathlib import Path
@@ -11,14 +10,6 @@ from ada_ingestion_system.worker.base_worker import BaseWorker, logger
 # Redis configuration
 WEBHOOK_STREAM_NAME = os.getenv("REDIS_WEBHOOK_STREAM", "ada_webhook_stream")
 MAX_CONCURRENT_WEBHOOKS = int(os.getenv("MAX_CONCURRENT_WEBHOOKS", 2))
-WEBHOOK_SUBPROCESS_MEMORY_LIMIT_MB = int(os.getenv("WEBHOOK_SUBPROCESS_MEMORY_LIMIT_MB", "200"))
-
-
-def _set_webhook_memory_limit() -> None:
-    """preexec_fn callback: cap virtual address space for the webhook child process."""
-    if WEBHOOK_SUBPROCESS_MEMORY_LIMIT_MB > 0:
-        limit_bytes = WEBHOOK_SUBPROCESS_MEMORY_LIMIT_MB * 1024 * 1024
-        resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
 
 
 class WebhookExecutionError(RuntimeError):
@@ -96,8 +87,7 @@ class WebhookWorker(BaseWorker):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 env=env,
-                cwd=str(Path(__file__).parents[2]),
-                preexec_fn=_set_webhook_memory_limit,
+                cwd=str(Path(__file__).parents[2]),  # Run from repository root
             )
 
             # Real-time logging - stream output as it happens

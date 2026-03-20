@@ -87,9 +87,9 @@ def cast_id_value(value, column_name: str, db_definition: DBDefinition):
     """Cast *value* to the Python type that matches the DB column definition."""
     column_type = next((col.type for col in db_definition.columns if col.name == column_name), None)
     if column_type is not None:
-        py_type = PYTHON_TYPE_CAST.get(column_type)
-        if py_type is not None and value is not None:
-            return py_type(value)
+        python_type = PYTHON_TYPE_CAST.get(column_type)
+        if python_type is not None and value is not None:
+            return python_type(value)
     return value
 
 
@@ -99,8 +99,8 @@ def check_columns_matching_between_data_and_database_table(
 ) -> None:
     AUTO_MANAGED_COLUMNS = {PROCESSED_DATETIME_FIELD, CREATED_AT_COLUMN, UPDATED_AT_COLUMN}
 
-    column_table = {column["name"].lower() for column in table_description} - AUTO_MANAGED_COLUMNS
-    data_cols = set(columns_data) - AUTO_MANAGED_COLUMNS
-    if data_cols != column_table:
-        LOGGER.error(f"Columns in data and table do not match : data {data_cols}, table {column_table}")
+    table_columns = {column["name"].lower() for column in table_description} - AUTO_MANAGED_COLUMNS
+    data_columns = set(columns_data) - AUTO_MANAGED_COLUMNS
+    if data_columns != table_columns:
+        LOGGER.error(f"Columns in data and table do not match : data {data_columns}, table {table_columns}")
         raise ValueError("Columns in data and table do not match")
