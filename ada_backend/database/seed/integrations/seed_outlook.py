@@ -50,7 +50,7 @@ def seed_outlook_components(session: Session):
             component_version_id=outlook_sender_version.id,
             name="oauth_connection_id",
             type=ParameterType.STRING,
-            nullable=False,
+            nullable=True,
             order=0,
             parameter_order_within_group=0,
             ui_component=UIComponent.OAUTH_CONNECTION,
