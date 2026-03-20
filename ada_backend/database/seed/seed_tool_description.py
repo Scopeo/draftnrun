@@ -26,6 +26,7 @@ from engine.components.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.components.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
 from engine.integrations.gmail.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
+from engine.integrations.outlook.outlook_sender import OUTLOOK_SENDER_TOOL_DESCRIPTION
 from engine.integrations.slack.slack_sender import SLACK_SENDER_TOOL_DESCRIPTION
 
 TOOL_DESCRIPTION_UUIDS = {
@@ -54,6 +55,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_retriever_tool_description": UUID("b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e"),
     "hubspot_mcp_tool_description": UUID("1d6ce8b3-44ae-4c3d-a14b-2837a3a5717e"),
     "hubspot_neverdrop_mcp_tool_description": UUID("a1e7f624-6c98-4546-b769-3607819ebad2"),
+    "outlook_sender_tool_description": UUID("31344b0e-4949-42b6-98a8-6b1dcec98f3c"),
 }
 
 
@@ -152,6 +154,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["hubspot_neverdrop_mcp_tool_description"],
         **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
     )
+    outlook_sender_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["outlook_sender_tool_description"],
+        **OUTLOOK_SENDER_TOOL_DESCRIPTION.model_dump(),
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -180,5 +186,6 @@ def seed_tool_description(session: Session):
             default_table_lookup_tool_description,
             hubspot_mcp_tool_description,
             hubspot_neverdrop_mcp_tool_description,
+            outlook_sender_tool_description,
         ],
     )

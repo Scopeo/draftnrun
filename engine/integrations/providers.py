@@ -6,3 +6,4 @@ class OAuthProvider(StrEnum):
     HUBSPOT = "hubspot"
     HUBSPOT_NEVERDROP = "hubspot-neverdrop"
     GMAIL = "google-mail"
+    OUTLOOK = "outlook"
