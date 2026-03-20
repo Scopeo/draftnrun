@@ -38,10 +38,7 @@ class Synthesizer(CloseMixin):
     async def get_response(
         self, chunks: list[SourceChunk], query_str: str, optional_contexts: Optional[dict]
     ) -> SourcedResponse:
-        context_str = build_context_from_source_chunks(
-            sources=chunks,
-            llm_metadata_keys=chunks[0].metadata.keys() if chunks else [],
-        )
+        context_str = build_context_from_source_chunks(sources=chunks)
 
         with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
             input_dict = {"context_str": context_str, "query_str": query_str, **optional_contexts}

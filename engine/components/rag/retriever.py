@@ -13,10 +13,9 @@ from engine.components.component import Component
 from engine.components.synthesizer_prompts import DEFAULT_INSTRUCTIONS_FEW_SHOT_LEARNING
 from engine.components.types import ComponentAttributes, SourceChunk, ToolDescription
 from engine.components.utils import merge_qdrant_filters_with_and_conditions
-from engine.qdrant_service import QdrantService
+from engine.qdrant_service import SOURCE_ID_COLUMN_NAME, QdrantCollectionSchema, QdrantService
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
-from ingestion_script.utils import SOURCE_ID_COLUMN_NAME
 
 LOGGER = logging.getLogger(__name__)
 
@@ -97,7 +96,8 @@ class Retriever(Component):
         metadata_date_key: Optional[str] = None,
         max_retrieved_chunks_after_penalty: Optional[int] = None,
         component_attributes: Optional[ComponentAttributes] = None,
-        source_id: Optional[UUID] = None,
+        source_ids: Optional[list[UUID]] = None,
+        source_schemas: Optional[dict[str, QdrantCollectionSchema]] = None,
         tool_description: ToolDescription = RETRIEVER_TOOL_DESCRIPTION,
     ):
         if component_attributes is None:
@@ -117,8 +117,9 @@ class Retriever(Component):
         self.default_penalty_rate = default_penalty_rate
         self.metadata_date_key = metadata_date_key
         self.max_retrieved_chunks_after_penalty = max_retrieved_chunks_after_penalty
-        self.source_id = source_id
-        LOGGER.info(f"Retriever initialized with source_id={self.source_id} for collection={collection_name}")
+        self.source_ids = source_ids
+        self.source_schemas = source_schemas
+        LOGGER.info(f"Retriever initialized with source_ids={self.source_ids} for collection={collection_name}")
 
     async def _get_chunks_without_trace(
         self,
@@ -126,8 +127,15 @@ class Retriever(Component):
         filters: Optional[dict] = None,
     ) -> list[SourceChunk]:
         source_id_filter = None
-        if self.source_id:
-            source_id_filter = {"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(self.source_id)}}]}
+        if self.source_ids:
+            if len(self.source_ids) == 1:
+                source_id_filter = {
+                    "must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(self.source_ids[0])}}]
+                }
+            else:
+                source_id_filter = {
+                    "must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"any": [str(sid) for sid in self.source_ids]}}]
+                }
 
         final_filter = (
             merge_qdrant_filters_with_and_conditions(source_id_filter, filters)
@@ -135,7 +143,7 @@ class Retriever(Component):
             else (source_id_filter or filters)
         )
         LOGGER.info(
-            f"Retriever querying collection '{self.collection_name}' with source_id={self.source_id}, "
+            f"Retriever querying collection '{self.collection_name}' with source_ids={self.source_ids}, "
             f"filter: {json.dumps(final_filter)}"
         )
         chunks = await self._vectorestore_service.retrieve_similar_chunks_async(
@@ -148,10 +156,11 @@ class Retriever(Component):
             default_penalty_rate=self.default_penalty_rate,
             metadata_date_key=cast_string_to_list(self.metadata_date_key),
             max_retrieved_chunks_after_penalty=self.max_retrieved_chunks_after_penalty,
+            source_schemas=self.source_schemas,
         )
         LOGGER.info(
             f"Retriever retrieved {len(chunks)} chunks from collection "
-            f"'{self.collection_name}' with source_id={self.source_id}"
+            f"'{self.collection_name}' with source_ids={self.source_ids}"
         )
 
         for i, chunk in enumerate(chunks):
@@ -180,7 +189,7 @@ class Retriever(Component):
                     if self.component_attributes.component_instance_id is not None
                     else None
                 ),
-                "source_id": str(self.source_id),
+                "source_ids": str(self.source_ids),
             })
 
             if len(chunks) > 30:
@@ -249,10 +258,7 @@ class Retriever(Component):
                 f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.tool_name": tool_name,
             })
 
-        chunks_output = build_context_from_source_chunks(
-            sources=chunks,
-            llm_metadata_keys=chunks[0].metadata.keys() if chunks else [],
-        )
+        chunks_output = build_context_from_source_chunks(sources=chunks)
 
         return RetrieverOutputs(formatted_content=chunks_output, artifacts={"sources": chunks})
 

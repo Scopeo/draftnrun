@@ -20,6 +20,7 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_MAX_CHUNKS = 10
 MAX_BATCH_SIZE_FOR_CHUNK_UPLOAD = 50
 DEFAULT_TIMEOUT = 20.0
+SOURCE_ID_COLUMN_NAME = "source_id"
 
 # Common datetime formats to try when parsing
 DATETIME_FORMATS = [
@@ -432,6 +433,7 @@ class QdrantService:
         default_penalty_rate: Optional[float] = None,
         metadata_date_key: Optional[list[str]] = None,
         max_retrieved_chunks_after_penalty: Optional[int] = None,
+        source_schemas: Optional[dict[str, "QdrantCollectionSchema"]] = None,
         **search_params,
     ) -> list[SourceChunk]:
         """
@@ -449,6 +451,7 @@ class QdrantService:
                 default_penalty_rate,
                 metadata_date_key,
                 max_retrieved_chunks_after_penalty,
+                source_schemas=source_schemas,
                 **search_params,
             )
         )
@@ -464,6 +467,7 @@ class QdrantService:
         default_penalty_rate: Optional[float] = None,
         metadata_date_key: Optional[list[str]] = None,
         max_retrieved_chunks_after_penalty: Optional[int] = None,
+        source_schemas: Optional[dict[str, "QdrantCollectionSchema"]] = None,
         **search_params,
     ) -> list[SourceChunk]:
         """
@@ -505,36 +509,45 @@ class QdrantService:
             if not (chunk_data := result.get("payload")):
                 continue
 
-            query_text = chunk_data.get(schema.content_field)
-            if not query_text:
+            chunk_schema = schema
+            if source_schemas:
+                source_id = chunk_data.get(SOURCE_ID_COLUMN_NAME)
+                if source_id:
+                    chunk_schema = source_schemas.get(source_id, schema)
+
+            content = chunk_data.get(chunk_schema.content_field)
+            if not content:
                 LOGGER.warning(f"Missing text for chunk: {chunk_data}")
                 continue
 
-            if schema.metadata_fields_to_keep:
-                metadata = {key: value for key, value in chunk_data.items() if key in schema.metadata_fields_to_keep}
+            if chunk_schema.metadata_fields_to_keep:
+                fields_to_keep = (
+                    chunk_schema.metadata_fields_to_keep
+                    if isinstance(chunk_schema.metadata_fields_to_keep, set)
+                    else set(chunk_schema.metadata_fields_to_keep)
+                )
+                metadata = {key: value for key, value in chunk_data.items() if key in fields_to_keep}
             else:
-                # TODO: refacto our metadata logic
                 standard_fields = set(
                     field
                     for field in (
-                        schema.chunk_id_field,
-                        schema.content_field,
-                        schema.file_id_field,
-                        schema.url_id_field,
-                        schema.last_edited_ts_field,
-                        schema.source_id_field,
+                        chunk_schema.chunk_id_field,
+                        chunk_schema.content_field,
+                        chunk_schema.file_id_field,
+                        chunk_schema.url_id_field,
+                        chunk_schema.last_edited_ts_field,
+                        chunk_schema.source_id_field,
                     )
                     if field is not None
                 )
 
                 metadata = {k: v for k, v in chunk_data.items() if k not in standard_fields}
-
             chunks.append(
                 SourceChunk(
-                    name=chunk_data.get(schema.chunk_id_field, ""),
-                    document_name=chunk_data.get(schema.file_id_field, ""),
-                    content=query_text,
-                    url=str(chunk_data.get(schema.url_id_field, "")),
+                    name=chunk_data.get(chunk_schema.chunk_id_field, ""),
+                    document_name=chunk_data.get(chunk_schema.file_id_field, ""),
+                    content=content,
+                    url=str(chunk_data.get(chunk_schema.url_id_field, "")),
                     metadata=metadata,
                 )
             )

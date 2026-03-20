@@ -371,38 +371,59 @@ class NonToolCallableBlockFactory(EntityFactory):
 
 def build_source_metadata_extractor_processor() -> ParameterProcessor:
     """
-    Extracts source_id, collection_name, embedding model info, and qdrant_schema from data_source
-    in a single database query. Leaves data_source intact for downstream processors.
+    Extracts source_ids, collection_name, embedding model info, and qdrant_schema from data_source.
+    data_source must be a list of dicts, each containing an 'id' field.
+    Leaves data_source intact for downstream processors.
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        data_source = params.get("data_source", None)
-        if data_source is None:
+        data_sources = params.get("data_source", None)
+        if data_sources is None:
             component_attrs = params.get("component_attributes")
             component_name = getattr(component_attrs, "component_instance_name", None)
             raise MissingDataSourceError(component_name)
 
-        if isinstance(data_source, str):
-            data_source = json.loads(data_source)
+        if isinstance(data_sources, str):
+            data_sources = json.loads(data_sources)
+        # If data_sources is a single dict, convert it to a list,
+        # done for old components that still use a single data source.
+        if isinstance(data_sources, dict):
+            data_sources = [data_sources]
 
-        source_id_str = data_source.get("id") if isinstance(data_source, dict) else None
-        if not source_id_str:
-            raise ValueError("data_source must contain an 'id' field")
-        source_id = UUID(source_id_str)
+        if not isinstance(data_sources, list):
+            raise ValueError("data_source must be a list of dicts")
+
+        if not data_sources:
+            raise ValueError("data_source must contain at least one entry")
+
+        source_ids: list[UUID] = []
+        collection_name = None
+        provider = None
+        model_name = None
+        qdrant_schemas: list[QdrantCollectionSchema] = []
 
         with get_db_session() as session:
-            source = get_data_source_by_id(session, source_id)
-            if source is None:
-                raise ValueError(f"Source with id {source_id} not found")
-            collection_name = source.qdrant_collection_name
-            provider, model_name = get_llm_provider_and_model(llm_model=source.embedding_model_reference)
-            qdrant_schema = QdrantCollectionSchema(**source.qdrant_schema)
+            for data_source in data_sources:
+                source_id_str = data_source.get("id") if isinstance(data_source, dict) else None
+                if not source_id_str:
+                    raise ValueError("Each data_source must contain an 'id' field")
+                source_id = UUID(source_id_str)
+                source_ids.append(source_id)
 
-        params["source_id"] = source_id
+                source = get_data_source_by_id(session, source_id)
+                if source is None:
+                    raise ValueError(f"Source with id {source_id} not found")
+                qdrant_schemas.append(QdrantCollectionSchema(**source.qdrant_schema))
+                if collection_name is None:
+                    collection_name = source.qdrant_collection_name
+                    provider, model_name = get_llm_provider_and_model(llm_model=source.embedding_model_reference)
+
+        params["source_ids"] = source_ids
         params["collection_name"] = collection_name
         params["embedding_provider"] = provider
         params["embedding_model_name"] = model_name
-        params["qdrant_schema"] = qdrant_schema
+        params["qdrant_schema"] = qdrant_schemas[0]
+        params["source_schemas"] = {str(source_id): schema for source_id, schema in zip(source_ids, qdrant_schemas)}
 
         return params
 
@@ -718,35 +739,49 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        source_id_str: str = params.pop("data_source")["id"]
-        if not source_id_str:
-            raise ValueError("data_source_id is required")
-        source_id = UUID(source_id_str)
+        data_source = params.pop("data_source")
+        data_sources = data_source if isinstance(data_source, list) else [data_source]
+
+        source_ids: list[UUID] = []
+        qdrant_schemas: list[QdrantCollectionSchema] = []
+        collection_name = None
+        provider = None
+        model_name = None
+        llm_api_key = params.pop("llm_api_key", None)
 
         # TODO: Temporary solution - needs proper session injection in future refactor.
         with get_db_session() as session:
-            source = get_data_source_by_id(session, source_id)
-            if source is None:
-                raise ValueError(f"Source with id {source_id} not found")
+            for ds in data_sources:
+                source_id_str: str = ds["id"] if isinstance(ds, dict) else None
+                if not source_id_str:
+                    raise ValueError("data_source_id is required")
+                source_id = UUID(source_id_str)
+                source_ids.append(source_id)
 
-            provider, model_name = get_llm_provider_and_model(llm_model=source.embedding_model_reference)
+                source = get_data_source_by_id(session, source_id)
+                if source is None:
+                    raise ValueError(f"Source with id {source_id} not found")
 
-            embedding_service = EmbeddingService(
-                trace_manager=get_trace_manager(),
-                api_key=params.pop("llm_api_key", None),
-                provider=provider,
-                model_name=model_name,
-            )
-            qdrant_schema = QdrantCollectionSchema(**source.qdrant_schema)
-            collection_name = source.qdrant_collection_name
+                qdrant_schemas.append(QdrantCollectionSchema(**source.qdrant_schema))
+                if collection_name is None:
+                    provider, model_name = get_llm_provider_and_model(llm_model=source.embedding_model_reference)
+                    collection_name = source.qdrant_collection_name
 
+        embedding_service = EmbeddingService(
+            trace_manager=get_trace_manager(),
+            api_key=llm_api_key,
+            provider=provider,
+            model_name=model_name,
+        )
+        # TODO: Fix qdrant schem we don't have a default collection schema for qdrant service
         qdrant_service = QdrantService.from_defaults(
             embedding_service=embedding_service,
-            default_collection_schema=qdrant_schema,
+            default_collection_schema=qdrant_schemas[0],
         )
 
         params[target_name] = qdrant_service
         params["collection_name"] = collection_name
+        params["source_schemas"] = {str(sid): schema for sid, schema in zip(source_ids, qdrant_schemas)}
 
         return params
 
@@ -883,11 +918,12 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         params = source_metadata_extractor(params, constructor_params)
-        source_id = params.pop("source_id")
+        source_ids = params.pop("source_ids")
         collection_name = params.pop("collection_name")
         provider = params.pop("embedding_provider")
         model_name = params.pop("embedding_model_name")
         qdrant_schema = params.pop("qdrant_schema")
+        source_schemas = params.pop("source_schemas", None)
         params.pop("data_source", None)
 
         embedding_service = EmbeddingService(
@@ -909,13 +945,13 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
             ParameterToValidate(argument="metadata_date_key", type=str, optional=True),
         ]
         validated_params = _pop_and_validate_parameters(list_of_params_to_pop, params)
-
         retriever = Retriever(
             trace_manager=get_trace_manager(),
             qdrant_service=qdrant_service,
             collection_name=collection_name,
             component_attributes=None,
-            source_id=source_id,
+            source_ids=source_ids,
+            source_schemas=source_schemas,
             **validated_params,
         )
 

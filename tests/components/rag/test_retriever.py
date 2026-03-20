@@ -60,4 +60,5 @@ async def test_get_chunks_(retriever, mock_qdrant_service):
         default_penalty_rate=None,
         metadata_date_key=[],
         max_retrieved_chunks_after_penalty=None,
+        source_schemas=None,
     )
