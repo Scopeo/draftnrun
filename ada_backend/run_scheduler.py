@@ -92,7 +92,7 @@ async def run_scheduler():
             "schedule": {"type": "interval", "value": 12, "unit": "hour"},
             "timezone": "UTC",
             "checkin_margin": 60,  # minutes grace period before flagging as missed
-            "max_runtime": 1440,   # minutes — process runs all day
+            "max_runtime": 1440,  # minutes — process runs all day
             "failure_issue_threshold": 1,
             "recovery_threshold": 1,
         },
