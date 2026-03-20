@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from typing import Iterable, Optional, Type
+from uuid import UUID
 
 import httpx
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -18,6 +19,10 @@ from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
+
+OUTLOOK_GROUP_EMAIL_CONTENT_ID = UUID("a3f1b2c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c")
+OUTLOOK_GROUP_RECIPIENTS_ID = UUID("b4c2d3e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e")
+OUTLOOK_GROUP_ATTACHMENTS_ID = UUID("c5d3e4f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f")
 
 OUTLOOK_SENDER_TOOL_DESCRIPTION = ToolDescription(
     name="Outlook Sender",
@@ -61,29 +66,63 @@ OUTLOOK_SENDER_TOOL_DESCRIPTION = ToolDescription(
 
 class OutlookSenderInputs(BaseModel):
     mail_subject: str = Field(
-        description="The subject of the email to be sent.", json_schema_extra={"is_tool_input": True}
+        description="The subject of the email to be sent.",
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 1,
+            "parameter_group_id": OUTLOOK_GROUP_EMAIL_CONTENT_ID,
+            "parameter_order_within_group": 1,
+        },
     )
-    mail_body: str = Field(description="The body of the email to be sent.", json_schema_extra={"is_tool_input": True})
+    mail_body: str = Field(
+        description="The body of the email to be sent.",
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 2,
+            "parameter_group_id": OUTLOOK_GROUP_EMAIL_CONTENT_ID,
+            "parameter_order_within_group": 2,
+        },
+    )
     email_recipients: Optional[list[str]] = Field(
         default=None,
-        description="""List of email addresses to send the email to.
-            If not provided, the email will be saved as a draft.""",
-        json_schema_extra={"is_tool_input": True},
+        description="List of email addresses to send the email to. "
+        "If not provided, the email will be saved as a draft.",
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 3,
+            "parameter_group_id": OUTLOOK_GROUP_RECIPIENTS_ID,
+            "parameter_order_within_group": 1,
+        },
     )
     cc: Optional[list[str]] = Field(
         default=None,
         description="List of CC email addresses to send the email to.",
-        json_schema_extra={"is_tool_input": True},
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 4,
+            "parameter_group_id": OUTLOOK_GROUP_RECIPIENTS_ID,
+            "parameter_order_within_group": 2,
+        },
     )
     bcc: Optional[list[str]] = Field(
         default=None,
         description="List of BCC email addresses to send the email to.",
-        json_schema_extra={"is_tool_input": True},
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 5,
+            "parameter_group_id": OUTLOOK_GROUP_RECIPIENTS_ID,
+            "parameter_order_within_group": 3,
+        },
     )
     email_attachments: Optional[list[str]] = Field(
         default=None,
         description="List of file paths to attach to the email.",
-        json_schema_extra={"is_tool_input": True},
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 6,
+            "parameter_group_id": OUTLOOK_GROUP_ATTACHMENTS_ID,
+            "parameter_order_within_group": 1,
+        },
     )
 
     @field_validator("email_recipients", mode="before")
