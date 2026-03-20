@@ -57,6 +57,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_retriever_tool_description": UUID("b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e"),
     "hubspot_mcp_tool_description": UUID("1d6ce8b3-44ae-4c3d-a14b-2837a3a5717e"),
     "hubspot_neverdrop_mcp_tool_description": UUID("a1e7f624-6c98-4546-b769-3607819ebad2"),
+    "google_calendar_mcp_tool_description": UUID("d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"),
     "outlook_sender_tool_description": UUID("31344b0e-4949-42b6-98a8-6b1dcec98f3c"),
     "default_sql_tool_description": UUID("7a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d"),
     "scorer_tool_description": UUID("8f9d4c3e-7a2b-4e1d-9c8f-5b6a3d2e1f0b"),
@@ -158,6 +159,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["hubspot_neverdrop_mcp_tool_description"],
         **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
     )
+    google_calendar_mcp_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["google_calendar_mcp_tool_description"],
+        **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
+    )
     outlook_sender_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["outlook_sender_tool_description"],
         **OUTLOOK_SENDER_TOOL_DESCRIPTION.model_dump(),
@@ -198,6 +203,7 @@ def seed_tool_description(session: Session):
             default_table_lookup_tool_description,
             hubspot_mcp_tool_description,
             hubspot_neverdrop_mcp_tool_description,
+            google_calendar_mcp_tool_description,
             outlook_sender_tool_description,
             default_sql_tool_description,
             scorer_tool_description,
