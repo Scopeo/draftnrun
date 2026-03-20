@@ -19,7 +19,7 @@ jobs:
       traces-schema-touched: ${{ steps.traces-schema-check.outputs.traces-schema-touched }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -58,7 +58,9 @@ jobs:
           fi
 
           # If any changed migration references the traces schema, include traces data.
-          if printf '%s\n' "$MIGRATION_FILES" | xargs -I{} sh -c 'test -f "{}" && rg -q "(schema[[:space:]]*=[[:space:]]*['"'"'\"]traces['"'"'\"]|\\btraces\\.)" "{}"' ; then
+          # Filter to files that still exist on disk, then let rg search them all at once.
+          EXISTING_FILES="$(printf '%s\n' "$MIGRATION_FILES" | while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\n' "$f"; fi; done)"
+          if [ -n "$EXISTING_FILES" ] && printf '%s\n' "$EXISTING_FILES" | xargs rg -ql '(schema[[:space:]]*=[[:space:]]*['"'"'"]traces['"'"'"]|\btraces\.)' ; then
             echo "traces-schema-touched=true" >> "$GITHUB_OUTPUT"
           else
             echo "traces-schema-touched=false" >> "$GITHUB_OUTPUT"
@@ -85,7 +87,7 @@ jobs:
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
 
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           lfs: true
 
