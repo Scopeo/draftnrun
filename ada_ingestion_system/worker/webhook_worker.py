@@ -114,7 +114,7 @@ class WebhookWorker(BaseWorker):
                                 while "\n" in stdout_buffer:
                                     line, stdout_buffer = stdout_buffer.split("\n", 1)
                                     if line.strip():
-                                        logger.info("script_live output=%s", line.strip())
+                                        logger.debug("script_live output=%s", line.strip())
                         except Exception:
                             pass
 
@@ -126,7 +126,7 @@ class WebhookWorker(BaseWorker):
                                 while "\n" in stderr_buffer:
                                     line, stderr_buffer = stderr_buffer.split("\n", 1)
                                     if line.strip():
-                                        logger.error("script_live_error output=%s", line.strip())
+                                        logger.debug("script_live_error output=%s", line.strip())
                         except Exception:
                             pass
 
@@ -145,12 +145,12 @@ class WebhookWorker(BaseWorker):
             if stdout_buffer.strip():
                 for line in stdout_buffer.strip().split("\n"):
                     if line.strip():
-                        logger.info("script_final output=%s", line.strip())
+                        logger.debug("script_final output=%s", line.strip())
 
             if stderr_buffer.strip():
                 for line in stderr_buffer.strip().split("\n"):
                     if line.strip():
-                        logger.error("script_final_error output=%s", line.strip())
+                        logger.debug("script_final_error output=%s", line.strip())
 
             if process.returncode != 0:
                 logger.error("script_failed return_code=%s", process.returncode)

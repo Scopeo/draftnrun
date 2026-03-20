@@ -31,7 +31,7 @@ if settings.SENTRY_DSN_REDIS:
         environment=settings.SENTRY_ENVIRONMENT,
         send_default_pii=False,
         enable_logs=True,
-        traces_sample_rate=1.0,
+        traces_sample_rate=0.1,
     )
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
@@ -128,16 +128,16 @@ class BaseWorker:
             redis_client.xadd(dl_stream, dl_entry)
             redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
             logger.error(
-                "message_dead_lettered",
-                stream=self.stream_name,
-                message_id=message_id,
-                delivery_count=delivery_count,
-                reason=reason,
-                dead_letter_stream=dl_stream,
+                "message_dead_lettered stream=%s message_id=%s delivery_count=%s reason=%s dead_letter_stream=%s",
+                self.stream_name,
+                message_id,
+                delivery_count,
+                reason,
+                dl_stream,
             )
         except Exception as e:
             # Last resort: ACK anyway to stop the crash loop
-            logger.error("dead_letter_failed_forcing_ack", message_id=message_id, error=str(e))
+            logger.error("dead_letter_failed_forcing_ack message_id=%s error=%s", message_id, str(e))
             try:
                 redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
             except Exception:
@@ -185,15 +185,12 @@ class BaseWorker:
                 safe_messages = [(mid, fields) for mid, fields in messages if mid not in poison_ids]
                 if safe_messages:
                     logger.info(
-                        "reclaimed_pending_messages",
-                        stream=self.stream_name,
-                        count=len(safe_messages),
+                        "reclaimed_pending_messages stream=%s count=%s",
+                        self.stream_name,
+                        len(safe_messages),
                     )
                     for message_id, fields in safe_messages:
                         self._dispatch(message_id, fields, consumer_name)
-                logger.info("reclaimed_pending_messages stream=%s count=%s", self.stream_name, len(messages))
-                for message_id, fields in messages:
-                    self._dispatch(message_id, fields, consumer_name)
         except redis.exceptions.ResponseError as e:
             # Stream or group may not exist yet on a completely fresh deployment.
             if "ERR" in str(e) or "NOGROUP" in str(e):

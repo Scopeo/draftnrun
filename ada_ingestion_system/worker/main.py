@@ -432,14 +432,14 @@ class Worker(BaseWorker):
             raw = fields.get("data", "")
             payload = json.loads(raw) if raw else {}
         except (json.JSONDecodeError, TypeError):
-            logger.error("dead_letter_unparseable", message_id=message_id)
+            logger.error("dead_letter_unparseable message_id=%s", message_id)
             return
 
         if not isinstance(payload, dict):
             logger.error(
-                "dead_letter_invalid_payload_shape",
-                message_id=message_id,
-                payload_type=type(payload).__name__,
+                "dead_letter_invalid_payload_shape message_id=%s payload_type=%s",
+                message_id,
+                type(payload).__name__,
             )
             return
 
@@ -450,15 +450,15 @@ class Worker(BaseWorker):
         ingestion_id = payload.get("ingestion_id", "unknown")
 
         if not organization_id or not task_id:
-            logger.error("dead_letter_missing_ids", message_id=message_id, payload_keys=list(payload.keys()))
+            logger.error("dead_letter_missing_ids message_id=%s payload_keys=%s", message_id, list(payload.keys()))
             return
 
         logger.error(
-            "dead_letter_marking_task_failed",
-            ingestion_id=ingestion_id,
-            task_id=task_id,
-            organization_id=organization_id,
-            source_name=source_name,
+            "dead_letter_marking_task_failed ingestion_id=%s task_id=%s organization_id=%s source_name=%s",
+            ingestion_id,
+            task_id,
+            organization_id,
+            source_name,
         )
 
         msg = f"Task failed after repeated crashes ({reason or 'unknown'}). Source: {source_name}, Type: {source_type}"
