@@ -10,7 +10,10 @@ from pydantic import BaseModel, Field, field_validator
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.integrations.outlook.errors import OutlookAPIError
-from engine.integrations.outlook.outlook_utils import GRAPH_API_BASE, build_graph_mail_payload, get_outlook_user_email
+from engine.integrations.outlook.outlook_utils import (
+    GRAPH_API_BASE,
+    build_graph_mail_payload,
+)
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
@@ -84,7 +87,8 @@ class OutlookSenderInputs(BaseModel):
     )
 
     @field_validator("email_recipients", mode="before")
-    def validate_email_recipients(self, v):
+    @classmethod
+    def validate_email_recipients(cls, v):
         if isinstance(v, str):
             return [v]
         return v
@@ -130,7 +134,7 @@ class OutlookSender(Component):
             component_attributes=component_attributes,
         )
         self.access_token = access_token
-        self.email_address = get_outlook_user_email(access_token)
+        self._email_address: Optional[str] = None
         self.save_as_draft = save_as_draft
 
     def _auth_headers(self) -> dict[str, str]:
@@ -139,7 +143,7 @@ class OutlookSender(Component):
             "Content-Type": "application/json",
         }
 
-    def outlook_create_draft(
+    async def outlook_create_draft(
         self,
         email_subject: str,
         email_body: str,
@@ -151,18 +155,18 @@ class OutlookSender(Component):
         message_payload = build_graph_mail_payload(
             subject=email_subject,
             body=email_body,
-            sender=self.email_address,
             recipients=email_recipients,
             cc=cc,
             bcc=bcc,
             attachments=attachments,
         )
-        response = httpx.post(
-            f"{GRAPH_API_BASE}/me/messages",
-            headers=self._auth_headers(),
-            json=message_payload,
-            timeout=30.0,
-        )
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{GRAPH_API_BASE}/me/messages",
+                headers=self._auth_headers(),
+                json=message_payload,
+                timeout=30.0,
+            )
         if response.status_code not in (200, 201):
             LOGGER.error("Failed to create Outlook draft: status=%s", response.status_code)
             raise OutlookAPIError("create Outlook draft", response.status_code)
@@ -170,7 +174,7 @@ class OutlookSender(Component):
         LOGGER.debug(f"Draft id: {draft['id']}")
         return draft
 
-    def outlook_send_email(
+    async def outlook_send_email(
         self,
         email_subject: str,
         email_body: str,
@@ -182,18 +186,18 @@ class OutlookSender(Component):
         message_payload = build_graph_mail_payload(
             subject=email_subject,
             body=email_body,
-            sender=self.email_address,
             recipients=email_recipients,
             cc=cc,
             bcc=bcc,
             attachments=attachments,
         )
-        response = httpx.post(
-            f"{GRAPH_API_BASE}/me/sendMail",
-            headers=self._auth_headers(),
-            json={"message": message_payload},
-            timeout=30.0,
-        )
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{GRAPH_API_BASE}/me/sendMail",
+                headers=self._auth_headers(),
+                json={"message": message_payload},
+                timeout=30.0,
+            )
         if response.status_code not in (200, 202):
             LOGGER.error("Failed to send Outlook email: status=%s", response.status_code)
             raise OutlookAPIError("send Outlook email", response.status_code)
@@ -218,7 +222,7 @@ class OutlookSender(Component):
         })
         if self.save_as_draft or not inputs.email_recipients:
             LOGGER.info("Creating Outlook draft email")
-            draft = self.outlook_create_draft(
+            draft = await self.outlook_create_draft(
                 email_subject=inputs.mail_subject,
                 email_body=inputs.mail_body,
                 email_recipients=inputs.email_recipients,
@@ -229,7 +233,7 @@ class OutlookSender(Component):
             status = f"Draft created successfully with ID: {draft['id']}"
             message_id = draft["id"]
         else:
-            self.outlook_send_email(
+            await self.outlook_send_email(
                 email_subject=inputs.mail_subject,
                 email_body=inputs.mail_body,
                 email_recipients=inputs.email_recipients,

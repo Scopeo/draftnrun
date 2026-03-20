@@ -58,7 +58,6 @@ def _build_attachments(attachments: Optional[Iterable[str | Path]]) -> list[dict
 def build_graph_mail_payload(
     subject: str,
     body: str,
-    sender: str,
     recipients: Optional[list[str]] = None,
     cc: Optional[list[str]] = None,
     bcc: Optional[list[str]] = None,
@@ -70,9 +69,6 @@ def build_graph_mail_payload(
         "body": {
             "contentType": "Text",
             "content": body,
-        },
-        "from": {
-            "emailAddress": {"address": sender},
         },
         "toRecipients": _build_recipients(recipients),
         "ccRecipients": _build_recipients(cc),
@@ -87,7 +83,7 @@ def build_graph_mail_payload(
 
 
 def get_outlook_user_email(access_token: str) -> str:
-    """Fetch the authenticated user's email address from Microsoft Graph."""
+    """Fetch the authenticated user's email address from Microsoft Graph (sync)."""
     response = httpx.get(
         f"{GRAPH_API_BASE}/me",
         headers={"Authorization": f"Bearer {access_token}"},
