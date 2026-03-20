@@ -13,7 +13,6 @@ import pandas as pd
 
 from engine.components.types import SourceChunk
 from engine.llm_services.llm_service import EmbeddingService
-from ingestion_script.utils import SOURCE_ID_COLUMN_NAME
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -21,6 +20,7 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_MAX_CHUNKS = 10
 MAX_BATCH_SIZE_FOR_CHUNK_UPLOAD = 50
 DEFAULT_TIMEOUT = 20.0
+SOURCE_ID_COLUMN_NAME = "source_id"
 
 # Common datetime formats to try when parsing
 DATETIME_FORMATS = [
