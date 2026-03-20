@@ -1,8 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
-import pandas as pd
-
 from engine.components.types import SourceChunk
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import FieldSchema, QdrantCollectionSchema, QdrantService
@@ -80,7 +78,7 @@ def test_qdrant_service():
     )
     assert retrieved_chunks[0] == correct_chunk
 
-    new_df_1 = pd.DataFrame([
+    new_rows_1 = [
         {
             "chunk_id": "1",
             "content": "chunk1",
@@ -95,15 +93,18 @@ def test_qdrant_service():
             "file_id": "file_id2",
             "last_edited_ts": "2025-01-2 10:40:40",
         },
-    ])
-    qdrant_agentic_service.sync_df_with_collection(new_df_1, TEST_COLLECTION_NAME)
+    ]
+    qdrant_agentic_service.sync_rows_with_collection(new_rows_1, TEST_COLLECTION_NAME)
     assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 2
-    synced_df = qdrant_agentic_service.get_collection_data(TEST_COLLECTION_NAME)
-    synced_df.sort_values(by="chunk_id", inplace=True)
-    synced_df.reset_index(drop=True, inplace=True)
-    assert synced_df.equals(new_df_1)
+    synced_rows = qdrant_agentic_service.get_collection_data_rows(TEST_COLLECTION_NAME)
+    synced_rows.sort(key=lambda r: r["chunk_id"])
+    expected_by_id = {r["chunk_id"]: r for r in new_rows_1}
+    for row in synced_rows:
+        expected = expected_by_id[row["chunk_id"]]
+        for key in expected:
+            assert row[key] == expected[key]
 
-    new_df_2 = pd.DataFrame([
+    new_rows_2 = [
         {
             "chunk_id": "1",
             "content": "chunk1",
@@ -118,13 +119,16 @@ def test_qdrant_service():
             "url": "https//www.dummy3.com",
             "last_edited_ts": "2025-01-2 10:40:40",
         },
-    ])
-    qdrant_agentic_service.sync_df_with_collection(new_df_2, TEST_COLLECTION_NAME)
+    ]
+    qdrant_agentic_service.sync_rows_with_collection(new_rows_2, TEST_COLLECTION_NAME)
     assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 2
-    synced_df = qdrant_agentic_service.get_collection_data(TEST_COLLECTION_NAME)
-    synced_df.sort_values(by="chunk_id", inplace=True)
-    synced_df.reset_index(drop=True, inplace=True)
-    assert synced_df.equals(new_df_2)
+    synced_rows = qdrant_agentic_service.get_collection_data_rows(TEST_COLLECTION_NAME)
+    synced_rows.sort(key=lambda r: r["chunk_id"])
+    expected_by_id = {r["chunk_id"]: r for r in new_rows_2}
+    for row in synced_rows:
+        expected = expected_by_id[row["chunk_id"]]
+        for key in expected:
+            assert row[key] == expected[key]
 
     assert qdrant_agentic_service.delete_collection(TEST_COLLECTION_NAME)
     assert not qdrant_agentic_service.collection_exists(TEST_COLLECTION_NAME)

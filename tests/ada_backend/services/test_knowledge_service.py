@@ -210,8 +210,8 @@ def test_chunk_operations_integration(
     mock_session = Mock()
 
     # ========== TEST DELETE CHUNK ==========
-    initial_collection_data = mock_qdrant_service.get_collection_data(test_source.qdrant_collection_name)
-    initial_chunk_ids = initial_collection_data["chunk_id"].tolist()
+    initial_rows = mock_qdrant_service.get_collection_data_rows(test_source.qdrant_collection_name)
+    initial_chunk_ids = [r["chunk_id"] for r in initial_rows]
     initial_count = len(initial_chunk_ids)
 
     asyncio.run(
@@ -223,11 +223,8 @@ def test_chunk_operations_integration(
         )
     )
 
-    final_collection_data = mock_qdrant_service.get_collection_data(test_source.qdrant_collection_name)
-    if final_collection_data.empty:
-        final_chunk_ids = []
-    else:
-        final_chunk_ids = final_collection_data["chunk_id"].tolist()
+    final_rows = mock_qdrant_service.get_collection_data_rows(test_source.qdrant_collection_name)
+    final_chunk_ids = [r["chunk_id"] for r in final_rows]
     assert dummy_chunk_id not in final_chunk_ids
     final_count = len(final_chunk_ids)
     assert final_count == initial_count - 1

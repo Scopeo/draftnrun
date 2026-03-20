@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import re
 import uuid
@@ -9,7 +8,6 @@ from enum import Enum
 from typing import Any, Optional
 
 import httpx
-import pandas as pd
 
 from engine.components.types import SourceChunk
 from engine.llm_services.llm_service import EmbeddingService
@@ -89,28 +87,6 @@ def map_internal_type_to_qdrant_field_schema(internal_type: str) -> FieldSchema:
         "ARRAY": FieldSchema.KEYWORD,
     }
     return type_mapping.get(internal_type, FieldSchema.KEYWORD)
-
-
-def map_pandas_dtype_to_qdrant_field_schema(pandas_dtype) -> FieldSchema:
-    """Map pandas dtype to Qdrant FieldSchema types."""
-    if pd.api.types.is_integer_dtype(pandas_dtype):
-        return FieldSchema.INTEGER
-
-    if pd.api.types.is_float_dtype(pandas_dtype):
-        return FieldSchema.FLOAT
-
-    if pd.api.types.is_bool_dtype(pandas_dtype):
-        return FieldSchema.BOOLEAN
-
-    if pd.api.types.is_datetime64_any_dtype(pandas_dtype):
-        return FieldSchema.DATETIME
-
-    if pd.api.types.is_string_dtype(pandas_dtype):
-        return FieldSchema.KEYWORD
-
-    # For object dtype and everything else, default to KEYWORD
-    # (covers VARIANT, ARRAY, JSONB, etc.)
-    return FieldSchema.KEYWORD
 
 
 @dataclass
@@ -1162,13 +1138,6 @@ class QdrantService:
         collections = response.get("result", {}).get("collections", [])
         return [collection["name"] for collection in collections]
 
-    def get_collection_data(
-        self,
-        collection_name: str,
-        query_filter_qdrant: Optional[dict] = None,
-    ) -> pd.DataFrame:
-        return asyncio.run(self.get_collection_data_async(collection_name, query_filter_qdrant))
-
     async def get_collection_data_rows_async(
         self,
         collection_name: str,
@@ -1208,16 +1177,12 @@ class QdrantService:
             rows.append(row)
         return rows
 
-    async def get_collection_data_async(
+    def get_collection_data_rows(
         self,
         collection_name: str,
         query_filter_qdrant: Optional[dict] = None,
-    ) -> pd.DataFrame:
-        """Legacy wrapper -- returns a pandas DataFrame."""
-        rows = await self.get_collection_data_rows_async(collection_name, query_filter_qdrant)
-        return pd.DataFrame(rows)
-
-    # ── sync methods (list[dict]) ──────────────────────────────────────
+    ) -> list[dict]:
+        return asyncio.run(self.get_collection_data_rows_async(collection_name, query_filter_qdrant))
 
     async def sync_rows_with_collection_async(
         self,
@@ -1298,23 +1263,3 @@ class QdrantService:
         query_filter_qdrant: Optional[dict] = None,
     ) -> bool:
         return asyncio.run(self.sync_rows_with_collection_async(rows, collection_name, query_filter_qdrant))
-
-    # ── Legacy DF wrappers ─────────────────────────────────────────────
-
-    def sync_df_with_collection(
-        self,
-        df: pd.DataFrame,
-        collection_name: str,
-        query_filter_qdrant: Optional[dict] = None,
-    ) -> bool:
-        return asyncio.run(self.sync_df_with_collection_async(df, collection_name, query_filter_qdrant))
-
-    async def sync_df_with_collection_async(
-        self,
-        df: pd.DataFrame,
-        collection_name: str,
-        query_filter_qdrant: Optional[dict] = None,
-    ) -> bool:
-        """Legacy wrapper that accepts a pandas DataFrame."""
-        rows = json.loads(df.to_json(orient="records", date_format="iso"))
-        return await self.sync_rows_with_collection_async(rows, collection_name, query_filter_qdrant)
