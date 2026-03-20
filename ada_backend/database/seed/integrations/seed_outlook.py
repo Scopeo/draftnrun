@@ -74,7 +74,7 @@ def seed_outlook_components(session: Session):
                 label="Outlook Connection",
                 description="Select your authorized Microsoft Outlook account connection",
                 provider=OAuthProvider.OUTLOOK.value,
-                icon="logos-microsoft-outlook",
+                icon="custom-microsoft-outlook",
             ).model_dump(exclude_unset=True, exclude_none=True),
         ),
         ComponentParameterDefinition(
