@@ -42,8 +42,8 @@ class DocumentSearch(CloseMixin):
 
     def get_documents_names(self) -> list[str]:
         query = f"SELECT DISTINCT {self.document_name_column} FROM {self.schema_name}.{self.table_name}"
-        df_document = self.db_service._fetch_sql_query_as_dataframe(query)
-        return df_document[self.document_name_column].tolist()
+        rows = self.db_service._fetch_sql_query_as_dicts(query)
+        return [row[self.document_name_column] for row in rows]
 
     def get_closest_documents_to_queried_documents_name(self, queried_documents):
         correct_documents = []
@@ -76,7 +76,7 @@ class DocumentSearch(CloseMixin):
             document_name_column=self.document_name_column,
             placeholders=placeholders,
         )
-        df_document = self.db_service._fetch_sql_query_as_dataframe(query)
+        rows = self.db_service._fetch_sql_query_as_dicts(query)
         return [
             SourceChunk(
                 name=row[self.document_name_column],
@@ -84,7 +84,7 @@ class DocumentSearch(CloseMixin):
                 content=row[self.content_document_column],
                 metadata={},
             )
-            for _, row in df_document.iterrows()
+            for row in rows
         ]
 
     def get_documents(

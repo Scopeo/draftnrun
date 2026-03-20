@@ -66,10 +66,12 @@ class DBService(CloseMixin, ABC):
         """Insert a list of row dicts into a table."""
         pass
 
-    @abstractmethod
     def insert_df_to_table(self, df, table_name: str, schema_name: Optional[str] = None) -> None:
-        """Legacy wrapper -- prefer insert_rows for new code."""
-        pass
+        """Convenience method that accepts a pandas DataFrame. Prefer insert_rows."""
+        if hasattr(df, "empty") and df.empty:
+            return
+        rows = df.to_dict(orient="records") if hasattr(df, "to_dict") else list(df)
+        self.insert_rows(rows, table_name, schema_name=schema_name)
 
     @abstractmethod
     def grant_select_on_table(
@@ -99,10 +101,12 @@ class DBService(CloseMixin, ABC):
         """Execute a SQL query and return the result as a list of dicts."""
         pass
 
-    @abstractmethod
     def _fetch_sql_query_as_dataframe(self, query: str):
-        """Legacy wrapper -- prefer _fetch_sql_query_as_dicts for new code."""
-        pass
+        """Convenience method that returns a pandas DataFrame. Prefer _fetch_sql_query_as_dicts."""
+        import pandas as pd
+
+        rows = self._fetch_sql_query_as_dicts(query)
+        return pd.DataFrame(rows)
 
     def update_table(
         self,
@@ -224,7 +228,6 @@ class DBService(CloseMixin, ABC):
     ) -> None:
         pass
 
-    @abstractmethod
     def _refresh_table_from_df(
         self,
         df,
@@ -233,8 +236,9 @@ class DBService(CloseMixin, ABC):
         table_definition: DBDefinition,
         schema_name: Optional[str] = None,
     ) -> None:
-        """Legacy wrapper -- prefer _refresh_table_from_rows for new code."""
-        pass
+        """Convenience method that accepts a pandas DataFrame. Prefer _refresh_table_from_rows."""
+        rows = df.to_dict(orient="records") if hasattr(df, "to_dict") else list(df)
+        self._refresh_table_from_rows(rows, table_name, id_column, table_definition, schema_name)
 
     @abstractmethod
     def delete_rows_from_table(

@@ -47,13 +47,6 @@ def prepare_rows_for_qdrant(rows: list[dict]) -> list[dict]:
     return prepared_rows
 
 
-def prepare_df_for_qdrant(df):
-    """Legacy wrapper that accepts a pandas DataFrame."""
-    rows = df.to_dict(orient="records")
-    import pandas as pd
-    return pd.DataFrame(prepare_rows_for_qdrant(rows))
-
-
 def sanitize_for_json(value):
     """Sanitize a value for JSON encoding, handling invalid UTF-8 and already-encoded JSON strings."""
     if value is None:

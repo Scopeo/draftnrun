@@ -339,17 +339,6 @@ class SQLLocalService(DBService):
             session.execute(table.insert(), rows)
             session.commit()
 
-    def insert_df_to_table(self, df, table_name: str, schema_name: Optional[str] = None) -> None:
-        """Legacy wrapper that accepts a pandas DataFrame."""
-        if hasattr(df, "empty") and df.empty:
-            LOGGER.info("Empty DataFrame provided, skipping insert")
-            return
-        if hasattr(df, "to_dict"):
-            rows = df.to_dict(orient="records")
-        else:
-            rows = list(df)
-        self.insert_rows(rows, table_name, schema_name=schema_name)
-
     def grant_select_on_table(
         self,
         table_name: str,
@@ -365,10 +354,6 @@ class SQLLocalService(DBService):
         with self.Session() as session:
             result = session.execute(text(query))
             return [dict(row._mapping) for row in result.fetchall()]
-
-    def _fetch_sql_query_as_dataframe(self, query: str):
-        """Legacy wrapper that returns a pandas DataFrame."""
-        return pd.read_sql(query, self.engine)
 
     def _fetch_column_as_set(
         self,
@@ -443,14 +428,6 @@ class SQLLocalService(DBService):
                 self.metadata.remove(temp_table)
             except Exception as e:
                 LOGGER.warning(f"Failed to cleanup temporary table: {str(e)}")
-
-    def _refresh_table_from_df(self, df, table_name, id_column, table_definition, schema_name=None):
-        """Legacy wrapper that accepts a pandas DataFrame."""
-        if hasattr(df, "to_dict"):
-            rows = df.to_dict(orient="records")
-        else:
-            rows = list(df)
-        self._refresh_table_from_rows(rows, table_name, id_column, table_definition, schema_name)
 
     def delete_rows_from_table(
         self,
