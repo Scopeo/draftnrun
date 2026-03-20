@@ -385,6 +385,10 @@ def build_source_metadata_extractor_processor() -> ParameterProcessor:
 
         if isinstance(data_sources, str):
             data_sources = json.loads(data_sources)
+        # If data_sources is a single dict, convert it to a list,
+        # done for old components that still use a single data source.
+        if isinstance(data_sources, dict):
+            data_sources = [data_sources]
 
         if not isinstance(data_sources, list):
             raise ValueError("data_source must be a list of dicts")
