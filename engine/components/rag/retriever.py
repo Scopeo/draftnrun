@@ -13,10 +13,9 @@ from engine.components.component import Component
 from engine.components.synthesizer_prompts import DEFAULT_INSTRUCTIONS_FEW_SHOT_LEARNING
 from engine.components.types import ComponentAttributes, SourceChunk, ToolDescription
 from engine.components.utils import merge_qdrant_filters_with_and_conditions
-from engine.qdrant_service import QdrantCollectionSchema, QdrantService
+from engine.qdrant_service import SOURCE_ID_COLUMN_NAME, QdrantCollectionSchema, QdrantService
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
-from ingestion_script.utils import SOURCE_ID_COLUMN_NAME
 
 LOGGER = logging.getLogger(__name__)
 
@@ -135,10 +134,7 @@ class Retriever(Component):
                 }
             else:
                 source_id_filter = {
-                    "should": [
-                        {"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(source_id)}}
-                        for source_id in self.source_ids
-                    ]
+                    "must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"any": [str(sid) for sid in self.source_ids]}}]
                 }
 
         final_filter = (

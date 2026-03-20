@@ -512,8 +512,8 @@ class QdrantService:
             chunk_schema = schema
             if source_schemas:
                 source_id = chunk_data.get(SOURCE_ID_COLUMN_NAME)
-                if source_id and source_id in source_schemas:
-                    chunk_schema = source_schemas[source_id]
+                if source_id:
+                    chunk_schema = source_schemas.get(source_id, schema)
 
             content = chunk_data.get(chunk_schema.content_field)
             if not content:
