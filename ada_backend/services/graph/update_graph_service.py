@@ -425,7 +425,11 @@ async def update_graph_service(
             )
 
             ref_node = get_pure_ref(ast)
-            if ref_node is not None:
+            # TODO(port-mapping-removal): remove this block entirely when port mappings are removed.
+            # HOTFIX: skip key-extraction refs (e.g. @{{uuid.port::key}}) — port mappings validate
+            # at the full-port type level and can't represent the type narrowing from ::key extraction,
+            # causing false "Cannot coerce" errors. Field expressions handle the wiring at runtime.
+            if ref_node is not None and not ref_node.key:
                 _create_port_mappings_for_pure_ref_expressions(
                     session=session,
                     graph_runner_id=graph_runner_id,
@@ -469,7 +473,7 @@ async def update_graph_service(
     )
 
 
-def _ensure_port_mappings_for_edges(
+def _ensure_port_mappings_for_edges(  # TODO(port-mapping-removal): delete when port mappings are removed
     session: Session,
     graph_runner_id: UUID,
     graph_project: GraphUpdateSchema,
@@ -602,10 +606,10 @@ def _create_port_mappings_for_pure_ref_expressions(
     field_name: str,
     ref_node: RefNode,
 ) -> None:
-    """
-    Create a port mapping when the expression is a pure reference.
-    Skip mapping creation for non-ref (literal/concat/multi-ref) expressions.
-    This will be harmonized with port mappings later.
+    """Create a port mapping when the expression is a pure reference.
+
+    TODO(port-mapping-removal): delete this function when port mappings are removed.
+    Field expressions already handle data wiring at runtime; this only adds save-time type checking.
     """
     source_component_version_id = resolve_component_version_id_from_instance_id(session, UUID(ref_node.instance))
     target_component_version_id = resolve_component_version_id_from_instance_id(session, component_instance_id)

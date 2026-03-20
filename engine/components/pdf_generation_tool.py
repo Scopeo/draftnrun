@@ -117,6 +117,7 @@ class PDFGenerationToolInputs(BaseModel):
         json_schema_extra={"ui_component": UIComponent.TEXTAREA, "is_tool_input": True},
     )
     filename: Optional[str] = Field(
+        default=None,
         description="The desired filename for the generated PDF file.",
         json_schema_extra={"is_tool_input": True},
     )

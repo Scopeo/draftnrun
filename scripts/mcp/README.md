@@ -1,6 +1,8 @@
 # MCP Testing Scripts
 
-Scripts for testing MCP (Model Context Protocol) integrations.
+Scripts for testing MCP (Model Context Protocol) integrations — the MCP tools that the **engine uses as components** (e.g. connecting to external MCP servers like Linear, HubSpot).
+
+> **Not to be confused with `mcp_server/`** (the MCP *server* that wraps Draft'n Run itself). See [`mcp_server/README.md`](../../mcp_server/README.md) for the Draft'n Run MCP server.
 
 ## Local MCP (stdio transport)
 

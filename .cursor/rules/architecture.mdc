@@ -1,0 +1,51 @@
+---
+alwaysApply: true
+---
+
+## Architecture Overview
+
+### Repo Structure
+
+- `ada_backend/` — API server (FastAPI). Routers in `routers/`, services in `services/`, repos in `repositories/`.
+- `engine/` — Graph execution engine. `graph_runner/` (DAG scheduler), `components/` (component implementations), `field_expressions/` (AST).
+- `mcp_server/` — Standalone MCP server wrapping the API. Separate process, no imports from `ada_backend/` or `engine/`.
+- `data_ingestion/` — Document ingestion logic.
+- `ada_ingestion_system/` — Ingestion + webhook worker processes.
+- `infra/k8s/` — Kustomize-based Kubernetes manifests.
+- `tests/` — Test suite.
+
+### Backend Pattern
+
+Router → Service → Repository (SQLAlchemy + PostgreSQL). Routers define HTTP endpoints and auth dependencies. Services encapsulate business logic. Repositories handle DB CRUD.
+
+### Auth Split
+
+Supabase owns users, organizations, memberships, roles. Backend owns projects, graphs, runs, components, and everything else. Backend validates Supabase JWTs via `supabase.auth.get_user()`. Organization roles are checked via Supabase Edge Functions (`check-org-access`, `check-super-admin`).
+
+### API Keys
+
+SHA-256 hashed (salted with `BACKEND_SECRET_KEY`), prefix `taylor_`, scoped to project or organization.
+
+### Graph Execution
+
+DAG of ComponentInstances connected via PortMappings. Data flows through FieldExpressions (JSON AST). See `ada_backend/docs/engine.md`.
+
+### Environments
+
+`draft` / `production` bound to specific GraphRunner versions via `ProjectEnvironmentBinding`.
+
+### Workers
+
+- Run queue: Redis BRPOPLPUSH in `ada_backend/workers/`, daemon thread in API process.
+- Webhook worker: Redis Stream consumer, separate process. Three patterns: provider webhooks (external → backend), user-triggered, internal (worker → API). See `ada_backend/docs/webhooks.md`.
+- Ingestion worker: Redis Stream consumer, separate process.
+- Scheduler: APScheduler + PostgreSQL job store, separate process. Registry-based cron types in `ada_backend/services/cron/`. See `ada_backend/services/cron/Readme.md`.
+
+### MCP Server
+
+`mcp_server/`: standalone pod calling the backend over HTTP + Supabase directly. See `mcp_server/README.md`.
+
+### Documentation
+
+- `ada_backend/docs/` for domain docs (auth, API reference, engine, webhooks, QA, credits).
+- `README.md` files for setup and overview.

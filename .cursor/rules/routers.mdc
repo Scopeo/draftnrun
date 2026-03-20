@@ -1,0 +1,14 @@
+---
+globs:
+  - ada_backend/routers/**
+---
+
+## Router Conventions
+
+- Every router uses `APIRouter(prefix=..., tags=[...])` and is registered in `main.py`.
+- Endpoints MUST use auth dependencies from `auth_router.py` — never manual token validation.
+- Input validation: manual checks, raise `HTTPException` with descriptive `detail`.
+- Pagination: use `page` (1-based) and `page_size` query params where applicable.
+- Error responses: always use `HTTPException` with specific status codes.
+- Secrets/credentials: never return in API responses.
+- When adding a new router: register in `main.py`, add to `ada_backend/docs/api-reference.md`, update cursor rules if new patterns emerge.

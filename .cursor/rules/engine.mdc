@@ -1,0 +1,17 @@
+---
+globs:
+  - engine/**
+---
+
+## Execution Engine Conventions
+
+- Components implement the `Runnable` protocol with typed Pydantic I/O schemas.
+- `_run_without_io_trace(inputs: BaseModel, ctx: dict) -> BaseModel` is the core execution method — this is what subclasses implement.
+- Port system: `PortDefinition` (catalogue schema) → `PortInstance` (per-graph-instance) → `PortMapping` (wiring) → `FieldExpression` (JSON AST transforms).
+- `GraphRunner` uses `networkx.DiGraph`, topological scheduling, `ExecutionDirective` for control flow (`CONTINUE`, `HALT`, `SELECTIVE_EDGE_INDICES`).
+- Field expressions: 5 AST node types (`literal`, `ref`, `var`, `concat`, `json_build`). Key files: `engine/field_expressions/ast.py` (AST), `parser.py`, `serializer.py`, `traversal.py`.
+- Variable resolution: defaults → layered set overrides. See `ada_backend/services/variable_resolution_service.py`.
+- `requires_tool_name = True` for components that need a `tool_name` input (MCP tools, API tools).
+- Legacy system: some components still use `AgentPayload` pattern (`migrated = False`). New components MUST use the multi-port `NodeData` system (`migrated = True`).
+- Adding a new component: create class in `engine/components/`, register in `ada_backend/services/registry.py`, add DB seed data (Component, ComponentVersion, PortDefinition, ComponentParameterDefinition rows). Always set `migrated = True`, define Pydantic I/O schemas, define canonical ports.
+- See `ada_backend/docs/engine.md` and `ada_backend/docs/payload-and-data-flow.md`.

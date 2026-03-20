@@ -23,6 +23,7 @@ from engine.llm_services.utils import wrap_str_content_into_chat_completion_mess
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_MAX_TOKENS_ANTHROPIC = 4096
+ANTHROPIC_HTTP_TIMEOUT = 120
 
 
 def _force_additional_properties_false_for_object_schemas(schema: object) -> None:
@@ -213,7 +214,7 @@ class AnthropicProvider(BaseProvider):
             body["system"] = system_prompt
 
         try:
-            async with httpx.AsyncClient(timeout=30) as h:
+            async with httpx.AsyncClient(timeout=ANTHROPIC_HTTP_TIMEOUT) as h:
                 r = await h.post(endpoint, headers=headers, json=body)
         except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPError) as e:
             raise ValueError(f"Anthropic completion request failed: {type(e).__name__}: {e}") from e
@@ -292,7 +293,7 @@ class AnthropicProvider(BaseProvider):
             body["system"] = system_prompt
 
         try:
-            async with httpx.AsyncClient(timeout=120) as h:
+            async with httpx.AsyncClient(timeout=ANTHROPIC_HTTP_TIMEOUT) as h:
                 r = await h.post(endpoint, headers=headers, json=body)
         except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPError) as e:
             raise ValueError(f"Anthropic structured output request failed: {type(e).__name__}: {e}") from e
@@ -365,7 +366,7 @@ class AnthropicProvider(BaseProvider):
             body["system"] = system_prompt
 
         try:
-            async with httpx.AsyncClient(timeout=120) as h:
+            async with httpx.AsyncClient(timeout=ANTHROPIC_HTTP_TIMEOUT) as h:
                 r = await h.post(endpoint, headers=headers, json=body)
         except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPError) as e:
             raise ValueError(f"Anthropic structured output request failed: {type(e).__name__}: {e}") from e
@@ -459,7 +460,7 @@ class AnthropicProvider(BaseProvider):
                 body["tool_choice"] = anthropic_tool_choice
 
         try:
-            async with httpx.AsyncClient(timeout=30) as h:
+            async with httpx.AsyncClient(timeout=ANTHROPIC_HTTP_TIMEOUT) as h:
                 r = await h.post(endpoint, headers=headers, json=body)
         except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPError) as e:
             raise ValueError(f"Anthropic function call request failed: {type(e).__name__}: {e}") from e
@@ -564,7 +565,7 @@ class AnthropicProvider(BaseProvider):
         }
 
         try:
-            async with httpx.AsyncClient(timeout=30) as h:
+            async with httpx.AsyncClient(timeout=ANTHROPIC_HTTP_TIMEOUT) as h:
                 r = await h.post(endpoint, headers=headers, json=body)
         except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPError) as e:
             raise ValueError(f"Anthropic vision request failed: {type(e).__name__}: {e}") from e

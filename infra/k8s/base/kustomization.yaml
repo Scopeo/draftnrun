@@ -12,6 +12,9 @@ resources:
   - nango-deployment.yaml
   - nango-service.yaml
   - nango-network-policy.yaml
+  - mcp-deployment.yaml
+  - mcp-service.yaml
+  - mcp-network-policy.yaml
 
 labels:
   - pairs:

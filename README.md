@@ -2,6 +2,65 @@
   <a href="https://draftnrun.com" target="_blank">Draft'n run</a>
 </h1>
 
+Backend repository for Draft'n Run — an AI workflow platform. Build, deploy, and monitor DAG-based pipelines of AI components.
+
+## Architecture
+
+```text
+                 ┌──────────────────┐
+                 │  back-office/    │
+                 │  (Vue frontend)  │
+                 └────────┬─────────┘
+                          │ Supabase JWT
+              ┌───────────┴───────────┐
+              ▼                       ▼
+    ┌───────────────┐       ┌──────────────┐
+    │   ada-api     │       │  Supabase    │
+    │  (FastAPI)    │       │ (Auth, Orgs) │
+    │  Port 8000    │       └──────────────┘
+    │  + run worker │              ▲
+    └──┬────┬───┬───┘              │
+       │    │   │          ┌───────┴───────┐
+       │    │   │          │  ada-mcp      │
+       │    │   │          │  (MCP Server) │
+       │    │   │          │  Port 8090    │
+       │    │   │          └───────────────┘
+       │    │   │
+       ▼    ▼   ▼
+    Redis  S3  PostgreSQL  Qdrant  Nango
+```
+
+| Service | Dockerfile | Port | Description |
+|---|---|---|---|
+| API Server | `Dockerfile.api` | 8000 | FastAPI + Gunicorn, includes run queue worker thread |
+| Scheduler | `Dockerfile.scheduler` | — | APScheduler cron jobs |
+| Webhook Worker | `Dockerfile.webhook-worker` | — | Redis Stream consumer for webhook events |
+| Ingestion Worker | — | — | Redis Stream consumer for data ingestion |
+| MCP Server | `mcp_server/Dockerfile` | 8090 | Standalone MCP interface for Cursor/Claude |
+
+### Directory Structure
+
+- `ada_backend/` — API server (routers, services, repositories, models). [README](ada_backend/README.md)
+- `engine/` — Graph execution engine (GraphRunner, components, field expressions)
+- `mcp_server/` — MCP server (standalone, wraps the API). [README](mcp_server/README.md)
+- `data_ingestion/` — Document ingestion logic
+- `ada_ingestion_system/` — Ingestion + webhook worker processes
+- `infra/k8s/` — Kubernetes manifests (Kustomize)
+- `scripts/` — Dev/test scripts
+- `tests/` — Test suite
+
+## MCP Server
+
+The MCP server at `mcp_server/` provides a Model Context Protocol interface to Draft'n Run. It runs as a standalone Kubernetes pod, authenticates via Supabase OAuth 2.1, and wraps 107 tools across 16 domains.
+
+- **Endpoint**: `https://mcp.draftnrun.com` (prod) / `https://mcp-staging.draftnrun.com` (staging)
+- **Transport**: Streamable HTTP
+- **Auth**: Supabase OAuth 2.1 with PKCE + consent page
+
+See [mcp_server/README.md](mcp_server/README.md) for setup and tool reference.
+
+# Local Setup Guide
+
 We provide here a guide on how to set up **locally** your Draft'n run backend application.
 
 # Prerequisites

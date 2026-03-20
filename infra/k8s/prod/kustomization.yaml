@@ -18,6 +18,8 @@ images:
     newTag: latest
   - name: ghcr.io/scopeo/draftnrun-scheduler
     newTag: latest
+  - name: ghcr.io/scopeo/draftnrun-mcp-server
+    newTag: latest
 
 patches:
   - path: api-resources-patch.yaml

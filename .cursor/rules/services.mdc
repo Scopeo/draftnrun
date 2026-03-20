@@ -1,0 +1,13 @@
+---
+globs:
+  - ada_backend/services/**
+---
+
+## Service Layer Conventions
+
+- Services encapsulate business logic between routers and repositories.
+- Services receive a `Session` from the router (via `Depends(get_db)`).
+- Heavy operations: use the Redis run queue (don't block the request).
+- External calls (Supabase Edge Functions, Nango, S3): always use `httpx.AsyncClient` with timeouts.
+- Secrets: encrypted with Fernet before storage, decrypted on read via `ada_backend/utils/encryption.py`.
+- See `ada_backend/docs/` for domain-specific documentation.
