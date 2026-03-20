@@ -769,6 +769,7 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
             provider=provider,
             model_name=model_name,
         )
+        # TODO: Fix qdrant schem we don't have a default collection schema for qdrant service
         qdrant_service = QdrantService.from_defaults(
             embedding_service=embedding_service,
             default_collection_schema=qdrant_schemas[0],
