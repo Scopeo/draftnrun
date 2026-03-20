@@ -17,15 +17,21 @@ def get_db_url() -> str:
     return settings.ADA_DB_URL
 
 
-engine = create_engine(
-    get_db_url(),
-    echo=False,
-    pool_size=settings.ADA_DB_POOL_SIZE,
-    max_overflow=settings.ADA_DB_MAX_OVERFLOW,
-    pool_timeout=settings.ADA_DB_POOL_TIMEOUT,
-    pool_recycle=settings.ADA_DB_POOL_RECYCLE,
-    pool_pre_ping=True,
-)
+def _build_engine():
+    url = get_db_url()
+    kwargs = {"echo": False}
+    if not url.startswith("sqlite"):
+        kwargs.update(
+            pool_size=settings.ADA_DB_POOL_SIZE,
+            max_overflow=settings.ADA_DB_MAX_OVERFLOW,
+            pool_timeout=settings.ADA_DB_POOL_TIMEOUT,
+            pool_recycle=settings.ADA_DB_POOL_RECYCLE,
+            pool_pre_ping=True,
+        )
+    return create_engine(url, **kwargs)
+
+
+engine = _build_engine()
 
 
 # Enable SQLite foreign key support
