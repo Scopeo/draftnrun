@@ -205,10 +205,13 @@ class OutlookSender(Component):
         span.set_attributes({
             SpanAttributes.INPUT_VALUE: serialize_to_json(
                 {
-                    "recipient_count": len(inputs.email_recipients or []),
-                    "cc_count": len(inputs.cc or []),
-                    "bcc_count": len(inputs.bcc or []),
-                    "attachment_count": len(inputs.email_attachments or []),
+                    "mail_subject": inputs.mail_subject,
+                    "mail_body": inputs.mail_body,
+                    "email_recipients": inputs.email_recipients,
+                    "cc": inputs.cc,
+                    "bcc": inputs.bcc,
+                    "email_attachments": inputs.email_attachments,
+                    "save_as_draft": self.save_as_draft,
                 },
                 shorten_string=True,
             ),
@@ -236,4 +239,10 @@ class OutlookSender(Component):
             )
             status = "Email sent successfully"
             message_id = None
+        span.set_attributes({
+            SpanAttributes.OUTPUT_VALUE: serialize_to_json(
+                {"status": status, "message_id": message_id},
+                shorten_string=True,
+            ),
+        })
         return OutlookSenderOutputs(status=status, message_id=message_id)
