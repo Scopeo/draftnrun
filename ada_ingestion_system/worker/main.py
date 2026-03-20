@@ -1,5 +1,7 @@
 import json
+import logging
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any, Dict
@@ -9,6 +11,30 @@ import requests
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, ResultType, TaskResultMetadata
 from ada_ingestion_system.worker.base_worker import BaseWorker, logger, redis_client
+
+_LEVEL_RE = re.compile(r"\b(DEBUG|INFO|WARNING|ERROR|CRITICAL)\b")
+_LEVEL_MAP = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
+}
+
+
+def _parse_log_level(line: str, default: int = logging.ERROR) -> int:
+    """Extract the first standard log-level token from *line*."""
+    m = _LEVEL_RE.search(line)
+    return _LEVEL_MAP[m.group(1)] if m else default
+
+
+def _is_real_error(line: str) -> bool:
+    """Return True if *line* is an actual error (not just an INFO/DEBUG log on stderr)."""
+    m = _LEVEL_RE.search(line)
+    if m is None:
+        return True  # no recognised level → treat as error (e.g. traceback, warning)
+    return _LEVEL_MAP[m.group(1)] >= logging.WARNING
+
 
 # Redis configuration
 STREAM_NAME = os.getenv("REDIS_INGESTION_STREAM", "ada_ingestion_stream")
@@ -76,7 +102,7 @@ class Worker(BaseWorker):
             ada_backend_path = Path(__file__).parents[2] / "ada_backend"
             script_path = ada_backend_path / "scripts" / "main.py"
             if not script_path.exists():
-                logger.error("script_not_found path=%s", str(script_path))
+                logger.debug("script_not_found path=%s", str(script_path))
                 # Try alternative path
                 alt_script_path = Path(__file__).parents[2] / "ingestion_script" / "main.py"
                 if alt_script_path.exists():
@@ -206,8 +232,9 @@ class Worker(BaseWorker):
                                 while "\n" in stderr_buffer:
                                     line, stderr_buffer = stderr_buffer.split("\n", 1)
                                     if line.strip():
-                                        stderr_lines.append(line.strip())
-                                        logger.error("script_live_error output=%s", line.strip())
+                                        if _is_real_error(line):
+                                            stderr_lines.append(line.strip())
+                                        logger.log(_parse_log_level(line), "script_live_error output=%s", line.strip())
                         except Exception:
                             pass
 
@@ -231,8 +258,9 @@ class Worker(BaseWorker):
             if stderr_buffer.strip():
                 for line in stderr_buffer.strip().split("\n"):
                     if line.strip():
-                        stderr_lines.append(line.strip())
-                        logger.error("script_final_error output=%s", line.strip())
+                        if _is_real_error(line):
+                            stderr_lines.append(line.strip())
+                        logger.log(_parse_log_level(line), "script_final_error output=%s", line.strip())
 
             # Generate error summary if we have stderr content
             if stderr_lines:
