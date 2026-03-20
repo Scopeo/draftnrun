@@ -41,7 +41,7 @@ def _build_attachments(attachments: Optional[Iterable[str | Path]]) -> list[dict
     result: list[dict[str, Any]] = []
     for path in _ensure_paths(attachments):
         file_size = path.stat().st_size
-        if file_size > _INLINE_ATTACHMENT_LIMIT_BYTES:
+        if file_size >= _INLINE_ATTACHMENT_LIMIT_BYTES:
             raise AttachmentTooLargeError(path.name, file_size, _INLINE_ATTACHMENT_LIMIT_BYTES)
         mime, _ = mimetypes.guess_type(path.name)
         content_type = mime or "application/octet-stream"
