@@ -12,7 +12,6 @@ from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.integrations.gmail.gmail_utils import create_raw_mail_message
 from engine.integrations.utils import get_gmail_sender_service, get_google_user_email, get_oauth_access_token
-from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
