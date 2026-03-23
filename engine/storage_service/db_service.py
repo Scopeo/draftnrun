@@ -2,6 +2,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Optional
 
+import pandas as pd
+
 from engine.components.close_mixin import CloseMixin
 from engine.components.component import ComponentAttributes
 from engine.storage_service.db_utils import CHUNK_ID_COLUMN, DBDefinition, cast_id_value
@@ -198,12 +200,14 @@ class DBService(CloseMixin, ABC):
                 LOGGER.info("No rows to update, skipping update operation")
 
             existing_count = sum(
-                1 for row in new_rows
+                1
+                for row in new_rows
                 if cast_id_value(row[id_column_name], id_column_name, table_definition) in all_existing_ids
             )
             LOGGER.info(f"Found {existing_count} existing rows in the table")
             rows_to_insert = [
-                row for row in new_rows
+                row
+                for row in new_rows
                 if cast_id_value(row[id_column_name], id_column_name, table_definition) not in all_existing_ids
             ]
             self.insert_rows(rows_to_insert, table_name, schema_name=schema_name)
@@ -245,6 +249,38 @@ class DBService(CloseMixin, ABC):
         rows = df.to_dict(orient="records") if hasattr(df, "to_dict") else list(df)
         self._refresh_table_from_rows(rows, table_name, id_column, table_definition, schema_name)
 
+    def delete_stale_rows(
+        self,
+        table_name: str,
+        id_column_name: str,
+        incoming_ids: set,
+        table_definition: DBDefinition,
+        schema_name: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
+        source_id: Optional[str] = None,
+    ) -> None:
+        """Delete rows in the scoped table whose IDs are not in incoming_ids."""
+        target_table_name = f"{schema_name}.{table_name}" if schema_name else table_name
+        query = f"SELECT {id_column_name} FROM {target_table_name}"
+        filters = []
+        if source_id is not None:
+            filters.append(f"source_id = '{source_id}'")
+        if sql_query_filter:
+            filters.append(f"({sql_query_filter})")
+        final_query = f"{query} WHERE {' AND '.join(filters)};" if filters else f"{query};"
+        existing_rows = self._fetch_sql_query_as_dicts(final_query)
+        existing_ids = {cast_id_value(row[id_column_name], id_column_name, table_definition) for row in existing_rows}
+        cast_incoming_ids = {cast_id_value(id_, id_column_name, table_definition) for id_ in incoming_ids}
+        ids_to_delete = existing_ids - cast_incoming_ids
+        LOGGER.info(f"Found {len(ids_to_delete)} stale rows to delete in the filtered scope")
+        if ids_to_delete:
+            self.delete_rows_from_table(
+                table_name=table_name,
+                ids=list(ids_to_delete),
+                id_column_name=id_column_name,
+                schema_name=schema_name,
+            )
+
     @abstractmethod
     def delete_rows_from_table(
         self,
@@ -260,7 +296,7 @@ class DBService(CloseMixin, ABC):
         pass
 
     @abstractmethod
-    def run_query(self, query: str):
+    def run_query(self, query: str) -> pd.DataFrame:
         pass
 
     @abstractmethod

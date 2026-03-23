@@ -251,11 +251,12 @@ async def upload_db_source(
     )
 
     source_id_str = str(source_id)
-    for row in rows:
-        row[SOURCE_ID_COLUMN_NAME] = source_id_str
-
+    incoming_ids: set[str] = set()
     for i in range(0, len(rows), settings.INGESTION_BATCH_SIZE):
         batch = rows[i : i + settings.INGESTION_BATCH_SIZE]
+        for row in batch:
+            row[SOURCE_ID_COLUMN_NAME] = source_id_str
+            incoming_ids.add(row[CHUNK_ID_COLUMN_NAME])
         LOGGER.info(f"Flushing DB-source batch {i // settings.INGESTION_BATCH_SIZE + 1} ({len(batch)} rows)")
         db_service.update_table(
             new_rows=batch,
@@ -270,13 +271,11 @@ async def upload_db_source(
         )
 
     if not update_existing:
-        db_service.update_table(
-            new_rows=rows,
+        db_service.delete_stale_rows(
             table_name=storage_table_name,
-            table_definition=db_definition,
             id_column_name=CHUNK_ID_COLUMN_NAME,
-            timestamp_column_name=TIMESTAMP_COLUMN_NAME,
-            append_mode=False,
+            incoming_ids=incoming_ids,
+            table_definition=db_definition,
             schema_name=storage_schema_name,
             sql_query_filter=combined_filter_sql_unified,
             source_id=source_id_str,

@@ -1143,7 +1143,7 @@ class QdrantService:
         collection_name: str,
         query_filter_qdrant: Optional[dict] = None,
     ) -> list[dict]:
-        """Return collection data as list[dict] without pandas."""
+        """Return collection data as list[dict]."""
         if not await self.collection_exists_async(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
 

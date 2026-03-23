@@ -22,6 +22,7 @@ from engine.storage_service.db_utils import (
     check_columns_matching_between_data_and_database_table,
 )
 from engine.storage_service.errors import RowNotFoundError
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -194,7 +195,7 @@ class SQLLocalService(DBService):
     def iter_table_rows(
         self,
         table_name: str,
-        batch_size: int = 100,
+        batch_size: Optional[int] = settings.INGESTION_BATCH_SIZE,
         schema_name: Optional[str] = None,
         sql_query_filter: Optional[str] = None,
     ) -> Iterator[list[dict]]:
@@ -218,10 +219,13 @@ class SQLLocalService(DBService):
         schema_name: Optional[str] = None,
         sql_query_filter: Optional[str] = None,
     ) -> list[dict]:
-        """Return all rows as list[dict] without pandas."""
+        """Return all rows as list[dict]."""
         all_rows: list[dict] = []
         for batch in self.iter_table_rows(
-            table_name, batch_size=500, schema_name=schema_name, sql_query_filter=sql_query_filter
+            table_name,
+            batch_size=settings.INGESTION_BATCH_SIZE,
+            schema_name=schema_name,
+            sql_query_filter=sql_query_filter,
         ):
             all_rows.extend(batch)
         return all_rows
@@ -553,7 +557,7 @@ class SQLLocalService(DBService):
             session.commit()
             LOGGER.info(f"Successfully updated row chunk_id='{chunk_id}' in table {table_name}")
 
-    def run_query(self, query: str):
+    def run_query(self, query: str) -> pd.DataFrame:
         query = query.strip()
         if query.lower().startswith("insert"):
             LOGGER.info(f"Running insert query: {query}")
