@@ -16,12 +16,7 @@ from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from ingestion_script.ingest_folder_source import ingest_local_folder_source
-from ingestion_script.utils import (
-    CHUNK_COLUMN_NAME,
-    FILE_ID_COLUMN_NAME,
-    SOURCE_ID_COLUMN_NAME,
-    get_sanitize_names,
-)
+from ingestion_script.utils import CHUNK_COLUMN_NAME, FILE_ID_COLUMN_NAME, SOURCE_ID_COLUMN_NAME, get_sanitize_names
 from settings import settings
 
 client = TestClient(app)
@@ -173,10 +168,14 @@ def test_ingest_local_folder_source():
     mock_qdrant_instance.create_collection_async.assert_called_once()
 
     db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
-    chunk_rows = db_service.get_table_rows(
-        table_name=database_table_name,
-        schema_name=database_schema,
-    )
+    chunk_rows = [
+        row
+        for row in db_service.get_table_rows(
+            table_name=database_table_name,
+            schema_name=database_schema,
+        )
+        if row.get(SOURCE_ID_COLUMN_NAME) == test_source_id
+    ]
     assert len(chunk_rows) > 0
     assert CHUNK_COLUMN_NAME in chunk_rows[0]
     assert FILE_ID_COLUMN_NAME in chunk_rows[0]
