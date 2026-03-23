@@ -174,7 +174,7 @@ def test_ingest_local_folder_source():
             table_name=database_table_name,
             schema_name=database_schema,
         )
-        if row.get(SOURCE_ID_COLUMN_NAME) == test_source_id
+        if str(row.get(SOURCE_ID_COLUMN_NAME)) == test_source_id
     ]
     assert len(chunk_rows) > 0
     assert CHUNK_COLUMN_NAME in chunk_rows[0]
@@ -203,7 +203,7 @@ def test_ingest_local_folder_source():
         table_name=database_table_name,
         schema_name=database_schema,
     )
-    source_rows = [r for r in remaining_rows if r.get(SOURCE_ID_COLUMN_NAME) == test_source_id]
+    source_rows = [r for r in remaining_rows if str(r.get(SOURCE_ID_COLUMN_NAME)) == test_source_id]
     assert len(source_rows) == 0, f"Expected no chunks for source {test_source_id}, but found {len(source_rows)}"
 
     assert not file_exists_in_bucket(s3_client=S3_CLIENT, bucket_name=settings.S3_BUCKET_NAME, key=sanitized_file_name)
