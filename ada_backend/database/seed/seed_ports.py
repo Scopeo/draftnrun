@@ -170,12 +170,6 @@ def seed_port_definitions(session: Session):
                     }
                 if port_description and "description" not in ui_component_properties:
                     ui_component_properties["description"] = port_description
-                # TODO: Temporary patch to ensure 'messages' input is readonly. Clean later.
-                if field_name == "messages":
-                    ui_component_properties["readonly"] = True
-                    ui_component_properties["alert_message"] = (
-                        "This field is automatically filled with the output of the previous component"
-                    )
             else:
                 LOGGER.info(f"  - Skipping UI component for non-migrated component: {agent_class.__name__}")
 

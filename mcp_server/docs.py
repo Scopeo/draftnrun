@@ -221,12 +221,14 @@ Edge `id` can be `null` — the MCP layer auto-generates a UUID before sending t
 
 Always create an edge between sequential nodes — the engine uses topological sort on edges.
 
-### Auto-canonical port mapping — edges are enough
+### Auto-canonical wiring — edges are enough
 
-When you create an edge, the backend auto-generates a `PortMapping` row using the \
-`is_canonical` flag on each component's port definitions: \
-`source.canonical_output → target.canonical_input`. This happens at save time in \
-`_ensure_port_mappings_for_edges`.
+When you create an edge, the backend auto-generates a `PortMapping` **and** a visible \
+RefNode field expression for each canonical input that has no user-provided expression. \
+This uses the `is_canonical` flag on port definitions: \
+`source.canonical_output → target.canonical_input`. The auto-generated expression \
+(e.g. `@{{<source_uuid>.output}}`) is saved on the target's `input_port_instances` and \
+returned in `auto_generated_field_expressions` so the frontend can display it immediately.
 
 | Component | Canonical output | Canonical input |
 |-----------|-----------------|-----------------|
@@ -238,31 +240,30 @@ When you create an edge, the backend auto-generates a `PortMapping` row using th
 | Gmail Sender | `status` | `mail_body` |
 | Code Execution | `output` | `python_code` |
 
-**Do NOT inject `input_port_instances` or field expressions for canonical inputs.** \
-The frontend never does this — it relies entirely on the backend auto-generated PortMapping \
-from the edge. The MCP must behave identically: just create the edge, the backend handles \
-the data routing. Adding redundant `input_port_instances` entries for canonical ports creates \
-inconsistency with the frontend behavior.
+**You do not need to inject `input_port_instances` or field expressions for canonical inputs.** \
+Just create the edge — the backend populates the wiring. If you provide your own field \
+expression for a canonical input, the backend respects it and skips auto-generation, so \
+user edits are never overwritten.
 
-`input_port_instances` are for **non-canonical** wiring only (concat expressions, key \
-extraction, cross-references to non-adjacent nodes, etc.).
+`input_port_instances` are still the right tool for **non-canonical** wiring (concat \
+expressions, key extraction, cross-references to non-adjacent nodes, etc.).
 
 ### Field expressions override port mappings
 
 When both an auto-mapped port mapping and a field expression target the same input port, \
-the field expression wins.
+the field expression wins. At runtime, `synthesize_default_mappings` skips creating a \
+default port mapping when a field expression already targets the canonical input field.
 
-### Readonly inputs — `messages` is auto-filled, never wire it manually
+### Canonical inputs are editable
 
-The `messages` input on AI Agent, AI (LLM Call), and Internet Search (OpenAI) is **readonly**. \
-It is automatically populated from the previous component's canonical output via the edge. \
-The frontend blocks editing this field; the MCP enforces the same constraint by stripping \
-any `input_port_instances` or `kind="input"` parameter targeting `messages` on a node that \
-has an incoming edge.
+Canonical inputs like `messages` on AI Agent are **visible and editable**. The backend \
+auto-generates a RefNode field expression when an edge is created, but users (and the MCP) \
+can replace it with a custom expression. The runtime coerces type mismatches automatically \
+(e.g. a `str` or `dict` expression result is converted to `list[ChatMessage]`).
 
-**Do not** write field expressions into `messages`. Instead, use `initial_prompt` to inject \
-context into the agent's system prompt. The `initial_prompt` parameter accepts field expressions \
-(concat, ref, literal) so you can combine static instructions with dynamic data from other nodes:
+To inject additional context into an agent without replacing its `messages` wiring, use \
+`initial_prompt`. It accepts field expressions (concat, ref, literal) so you can combine \
+static instructions with dynamic data from other nodes:
 
 ```json
 {
@@ -286,8 +287,8 @@ context into the agent's system prompt. The `initial_prompt` parameter accepts f
 }
 ```
 
-The user's message flows naturally through `messages` via the edge. The agent combines both to \
-produce its response.
+The user's message flows through `messages` via the edge (or a custom expression). The \
+agent combines both to produce its response.
 
 ### When to provide explicit port mappings
 
@@ -509,8 +510,8 @@ and `output_ports` for each matching component, with a `canonical: true` flag on
 | Component | Output Ports | Input Ports | Notes |
 |-----------|-------------|-------------|-------|
 | Start (v2) | `messages`, + dynamic from `payload_schema` | — | Dynamic ports match `payload_schema` keys |
-| AI Agent | `output` | `messages` (readonly, auto-filled) | Use `initial_prompt` for context injection |
-| AI (LLM Call) | `output` | `messages` (readonly, auto-filled) | |
+| AI Agent | `output` | `messages` (auto-wired, editable) | Use `initial_prompt` for context injection |
+| AI (LLM Call) | `output` | `messages` (auto-wired, editable) | |
 | PDF Generation | `output_message`, `artifacts` | `markdown_content` | `@{{uuid.artifacts::pdf_filename}}` |
 | Gmail Sender | `status` | `mail_body`, `mail_subject`, `recipients` | |
 | Slack Sender | `status` | `message`, `channel` | |

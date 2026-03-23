@@ -132,63 +132,6 @@ def _warn_unknown_graph_keys(graph_data: dict) -> list[str]:
     return warnings
 
 
-def _strip_readonly_messages_overrides(graph_data: dict) -> list[str]:
-    """Strip manual overrides of the readonly `messages` field.
-
-    The `messages` input on AI Agent, AI (LLM Call), and similar components
-    is readonly — it is auto-filled from the previous component via edge
-    canonical port mapping. The frontend blocks editing this field; this
-    function enforces the same constraint on the MCP side.
-
-    Specifically: for any non-start node that has an incoming edge, we strip
-    `input_port_instances` entries and `kind="input"` parameters targeting
-    `messages`. Returns a list of human-readable warnings about what was stripped.
-    """
-    instances = graph_data.get("component_instances", [])
-    edges = graph_data.get("edges", [])
-    if not instances or not edges:
-        return []
-
-    edge_destinations = {e["destination"] for e in edges if "destination" in e}
-    warnings: list[str] = []
-
-    for instance in instances:
-        instance_id = instance.get("id")
-        if instance.get("is_start_node") or instance_id not in edge_destinations:
-            continue
-
-        ipi_list = instance.get("input_port_instances", [])
-        original_len = len(ipi_list)
-        instance["input_port_instances"] = [
-            ipi for ipi in ipi_list if ipi.get("name") != "messages"
-        ]
-        if len(instance["input_port_instances"]) < original_len:
-            name = instance.get("name") or instance.get("ref") or instance_id
-            warnings.append(
-                f"Stripped input_port_instances override for 'messages' on "
-                f"'{name}': this field is readonly and auto-filled from the "
-                f"previous component via the edge."
-            )
-
-        params = instance.get("parameters", [])
-        cleaned_params = []
-        for p in params:
-            if p.get("name") == "messages" and p.get("kind") == "input":
-                name = instance.get("name") or instance.get("ref") or instance_id
-                warnings.append(
-                    f"Stripped kind='input' parameter 'messages' on '{name}': "
-                    f"this field is readonly and auto-filled via edge canonical mapping."
-                )
-                continue
-            cleaned_params.append(p)
-        instance["parameters"] = cleaned_params
-
-    for w in warnings:
-        logger.warning(w)
-
-    return warnings
-
-
 def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, PROXY_SPECS)
 
@@ -206,20 +149,17 @@ def register(mcp: FastMCP) -> None:
         new nodes (useful when you need to reference the ID in edges,
         relationships, or field expressions within the same update).
 
-        Readonly field enforcement: the `messages` input on AI Agent,
-        AI (LLM Call), and similar components is readonly — it is auto-filled
-        from the previous component's output via edge canonical port mapping.
-        Any manual override (input_port_instances or kind='input' parameter)
-        targeting `messages` on a node with an incoming edge is automatically
-        stripped. Use `initial_prompt` to inject context into agents instead.
-
-        Canonical port auto-mapping: the backend auto-generates PortMapping
-        rows for every edge that lacks an explicit port_mapping, using the
-        `is_canonical` flag on port_definitions. This means you do NOT need to
-        inject `input_port_instances` or field expressions for canonical inputs
-        like `markdown_content` (PDF), `query` (Retriever/Search), etc. —
-        just create the edge and the backend handles the rest, exactly like the
-        frontend does.
+        Canonical port auto-wiring: the backend auto-generates a PortMapping
+        **and** a visible RefNode field expression for every edge whose
+        canonical input has no user-provided expression. This means you do NOT
+        need to inject `input_port_instances` or field expressions for
+        canonical inputs like `messages` (AI Agent), `markdown_content` (PDF),
+        `query` (Retriever/Search), etc. — just create the edge and the
+        backend handles the rest. The auto-generated expression (e.g.
+        `@{{<source_uuid>.output}}`) is returned in
+        `auto_generated_field_expressions` and is visible and editable by the
+        user. If you provide your own field expression for a canonical input,
+        the backend respects it and skips auto-generation.
 
         Important constraints:
         - Save version creates an immutable snapshot and keeps the current draft.
@@ -237,15 +177,13 @@ def register(mcp: FastMCP) -> None:
         """
         jwt, _ = _get_auth()
         graph_data = _assign_missing_ids(graph_data)
-        key_warnings = _warn_unknown_graph_keys(graph_data)
-        readonly_warnings = _strip_readonly_messages_overrides(graph_data)
-        all_warnings = key_warnings + readonly_warnings
+        warnings = _warn_unknown_graph_keys(graph_data)
         result = await api.put(
             f"/projects/{project_id}/graph/{graph_runner_id}", jwt, json=graph_data
         )
-        if all_warnings:
+        if warnings:
             if isinstance(result, dict):
-                result["_mcp_warnings"] = all_warnings
+                result["_mcp_warnings"] = warnings
             else:
-                result = {"_mcp_response": result, "_mcp_warnings": all_warnings}
+                result = {"_mcp_response": result, "_mcp_warnings": warnings}
         return result
