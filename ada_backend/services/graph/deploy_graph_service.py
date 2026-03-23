@@ -73,7 +73,7 @@ def copy_component_instance(
     )
     LOGGER.info(f"Copying component instance {component_instance.name} with ID {component_instance.id}")
     parameters = [
-        PipelineParameterSchema(name=parameter.name, value=parameter.value, order=parameter.order)
+        PipelineParameterSchema(name=parameter.name, value=parameter.value, display_order=parameter.display_order)
         for parameter in component_instance.parameters
     ]
     LOGGER.info(f"Copied parameters: {parameters}")

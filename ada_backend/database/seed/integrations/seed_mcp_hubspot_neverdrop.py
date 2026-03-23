@@ -54,7 +54,7 @@ def seed_mcp_hubspot_neverdrop_components(session: Session):
             name="oauth_connection_id",
             type=ParameterType.STRING,
             nullable=True,
-            order=None,
+            display_order=None,
             parameter_order_within_group=0,
             ui_component=UIComponent.OAUTH_CONNECTION,
             ui_component_properties=UIComponentProperties(

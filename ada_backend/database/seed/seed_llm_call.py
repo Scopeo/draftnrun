@@ -184,4 +184,3 @@ def seed_llm_call_parameter_groups(session: Session):
     }
     build_components_parameters_assignments_to_parameter_groups(session, parameter_group_assignments)
 
-    session.commit()

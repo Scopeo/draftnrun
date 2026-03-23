@@ -59,53 +59,116 @@ def seed_db(session: Session):
     try:
         seed_integrations(session)
         seed_categories(session)
-        # First seed the available components
         seed_tool_description(session)
+        session.commit()
+
         seed_db_service_components(session)
+        session.commit()
+
         seed_ai_agent_components(session)
         seed_ai_agent_parameter_groups(session)
+        session.commit()
+
         seed_rag_components(session)
         seed_rag_v3_parameter_groups(session)
+        session.commit()
+
         seed_api_call_components(session)
+        session.commit()
+
         seed_python_code_runner_components(session)
+        session.commit()
+
         seed_terminal_command_runner_components(session)
+        session.commit()
+
         seed_pdf_generation_components(session)
+        session.commit()
+
         seed_docx_generation_components(session)
+        session.commit()
+
         seed_docx_template_components(session)
+        session.commit()
+
         seed_llm_call_components(session)
         seed_llm_call_parameter_groups(session)
+        session.commit()
+
         seed_categorizer_components(session)
         seed_categorizer_parameter_groups(session)
+        session.commit()
+
         seed_sql_tool_components(session)
+        session.commit()
+
         seed_react_sql_components(session)
+        session.commit()
+
         seed_smart_rag_components(session)
+        session.commit()
+
         seed_web_search_components(session)
+        session.commit()
+
         seed_ocr_call_components(session)
+        session.commit()
+
         seed_start_components(session)
+        session.commit()
+
         seed_filter_components(session)
+        session.commit()
+
         seed_if_else_components(session)
+        session.commit()
+
         seed_router_components(session)
+        session.commit()
+
         seed_gmail_components(session)
+        session.commit()
+
         seed_slack_components(session)
+        session.commit()
+
         seed_mcp_hubspot_components(session)
+        session.commit()
+
         seed_mcp_hubspot_neverdrop_components(session)
+        session.commit()
+
         seed_outlook_components(session)
         seed_outlook_parameter_groups(session)
+        session.commit()
+
         seed_project_reference_components(session)
+        session.commit()
+
         seed_chunk_processor_components(session)
+        session.commit()
+
         seed_linkup_tool_components(session)
         seed_linkup_tool_parameter_groups(session)
-        seed_retriever_tool_components(session)
-        seed_static_responder_components(session)
-        seed_table_lookup_components(session)
-        seed_remote_mcp_tool_components(session)
+        session.commit()
 
-        # Seed port definitions from code (with upsert)
+        seed_retriever_tool_components(session)
+        session.commit()
+
+        seed_static_responder_components(session)
+        session.commit()
+
+        seed_table_lookup_components(session)
+        session.commit()
+
+        seed_remote_mcp_tool_components(session)
+        session.commit()
+
         seed_port_definitions(session)
         seed_custom_llm_models(session)
         seed_anthropic_models(session)
+        session.commit()
 
-        # Verify components exist
         for name, uuid_value in COMPONENT_UUIDS.items():
             component = session.query(db.Component).filter_by(id=uuid_value).first()
             if not component:

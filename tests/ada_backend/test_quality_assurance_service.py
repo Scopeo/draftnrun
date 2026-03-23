@@ -348,7 +348,7 @@ def _create_dummy_agent_workflow_config():
                     {
                         "value": json.dumps(DEFAULT_FILTER_SCHEMA),
                         "name": "filtering_json_schema",
-                        "order": None,
+                        "display_order": None,
                         "id": "59443366-5b1f-5543-9fc5-57378f9aaf6e",
                         "type": "string",
                         "nullable": False,

@@ -22,7 +22,8 @@ def upsert_components(
     """
     for component in components:
         existing_component = (
-            session.query(db.Component)
+            session
+            .query(db.Component)
             .filter(
                 db.Component.id == component.id,
             )
@@ -41,7 +42,7 @@ def upsert_components(
         else:
             session.add(component)
             LOGGER.info(f"Component {component.name} inserted.")
-    session.commit()
+    session.flush()
 
 
 def upsert_component_versions(
@@ -60,7 +61,8 @@ def upsert_component_versions(
     """
     for component_version in component_versions:
         existing_component_version = (
-            session.query(db.ComponentVersion)
+            session
+            .query(db.ComponentVersion)
             .filter(
                 db.ComponentVersion.id == component_version.id,
             )
@@ -81,7 +83,7 @@ def upsert_component_versions(
         else:
             session.add(component_version)
             LOGGER.info(f"Component version {component_version.id} inserted.")
-    session.commit()
+    session.flush()
 
 
 def upsert_components_parameter_definitions(
@@ -96,7 +98,8 @@ def upsert_components_parameter_definitions(
     """
     for component_parameter_definition in component_parameter_definitions:
         existing_parameter_definition = (
-            session.query(db.ComponentParameterDefinition)
+            session
+            .query(db.ComponentParameterDefinition)
             .filter(
                 db.ComponentParameterDefinition.id == component_parameter_definition.id,
             )
@@ -114,7 +117,7 @@ def upsert_components_parameter_definitions(
         else:
             session.add(component_parameter_definition)
             LOGGER.info(f"Component parameter definition {component_parameter_definition.name} inserted.")
-    session.commit()
+    session.flush()
 
 
 def upsert_components_parameter_child_relationships(
@@ -130,7 +133,8 @@ def upsert_components_parameter_child_relationships(
 
     for component_parameter_child_relationship in component_parameter_child_relationships:
         existing_relationship = (
-            session.query(db.ComponentParameterChildRelationship)
+            session
+            .query(db.ComponentParameterChildRelationship)
             .filter(
                 db.ComponentParameterChildRelationship.id == component_parameter_child_relationship.id,
             )
@@ -153,7 +157,7 @@ def upsert_components_parameter_child_relationships(
             LOGGER.info(
                 f"Component parameter child relationship {component_parameter_child_relationship.id} inserted."
             )
-    session.commit()
+    session.flush()
 
 
 def upsert_tool_descriptions(
@@ -168,7 +172,8 @@ def upsert_tool_descriptions(
     """
     for tool_description in tool_descriptions:
         existing_tool_description = (
-            session.query(db.ToolDescription)
+            session
+            .query(db.ToolDescription)
             .filter(
                 db.ToolDescription.id == tool_description.id,
             )
@@ -183,7 +188,7 @@ def upsert_tool_descriptions(
         else:
             session.add(tool_description)
             LOGGER.info(f"Tool description {tool_description.name} inserted.")
-    session.commit()
+    session.flush()
 
 
 def upsert_integrations(session: Session, integrations: list[db.Integration]) -> None:
@@ -195,7 +200,8 @@ def upsert_integrations(session: Session, integrations: list[db.Integration]) ->
     """
     for integration in integrations:
         existing_integration = (
-            session.query(db.Integration)
+            session
+            .query(db.Integration)
             .filter(
                 db.Integration.id == integration.id,
             )
@@ -210,7 +216,7 @@ def upsert_integrations(session: Session, integrations: list[db.Integration]) ->
         else:
             session.add(integration)
             LOGGER.info(f"Integration {integration.name} inserted.")
-    session.commit()
+    session.flush()
 
 
 def upsert_categories(
@@ -225,7 +231,8 @@ def upsert_categories(
     """
     for category in categories:
         existing_category = (
-            session.query(db.Category)
+            session
+            .query(db.Category)
             .filter(
                 db.Category.id == category.id,
             )
@@ -240,7 +247,7 @@ def upsert_categories(
         else:
             session.add(category)
             LOGGER.info(f"Category {category.name} inserted.")
-    session.commit()
+    session.flush()
 
 
 def upsert_release_stage_to_current_version_mapping(
@@ -263,12 +270,13 @@ def upsert_release_stage_to_current_version_mapping(
         component_version_id: ID of the component version to set as current for this stage
     """
     upsert_release_stage_mapping_core(session, component_id, release_stage, component_version_id)
-    session.commit()
+    session.flush()
 
 
 def upsert_component_categories(session: Session, component_id: str, category_ids: list[UUID]) -> None:
     existing_component_categories = (
-        session.query(db.ComponentCategory)
+        session
+        .query(db.ComponentCategory)
         .filter(
             db.ComponentCategory.component_id == component_id,
         )
@@ -286,4 +294,4 @@ def upsert_component_categories(session: Session, component_id: str, category_id
             session.add(new_component_category)
             LOGGER.info(f"Component {component_id} added to category {category.name}.")
 
-    session.commit()
+    session.flush()

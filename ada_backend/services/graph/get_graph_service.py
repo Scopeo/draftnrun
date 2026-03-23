@@ -145,7 +145,7 @@ def get_graph_service(
                     ui_component_properties=input_port.ui_component_properties,
                     is_advanced=input_port.is_advanced,
                     drives_output_schema=input_port.drives_output_schema,
-                    order=input_port.display_order,
+                    display_order=input_port.display_order,
                     value=field_expression_by_name.get(input_port.name),
                 )
             )
@@ -154,7 +154,7 @@ def get_graph_service(
         comp_instance.parameters.sort(
             key=lambda p: (
                 0 if p.name == "messages" else 1,
-                p.order if p.order is not None else 999,
+                p.display_order if p.display_order is not None else 999,
                 p.name,
             )
         )

@@ -249,4 +249,3 @@ def seed_port_definitions(session: Session):
                 LOGGER.info(f"  - Deleting orphaned port: {port.name} ({port.port_type})")
                 session.delete(port)
 
-    session.commit()
