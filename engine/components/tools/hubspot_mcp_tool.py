@@ -12,6 +12,7 @@ from engine.components.types import ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 
 _DEFAULT_TOOLS = {
+    "auth_get_current_user",
     "crm_create_contact",
     "crm_update_contact",
     "crm_search_contacts",
@@ -32,7 +33,7 @@ class HubSpotMCPTool(LocalMCPTool):
     """Expose tools from the internal HubSpot FastMCP server via stdio subprocess."""
 
     @classmethod
-    def from_access_token(
+    async def from_access_token(
         cls,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
@@ -41,7 +42,7 @@ class HubSpotMCPTool(LocalMCPTool):
         timeout: int = 30,
     ) -> Self:
         allowed = allowed_tools if allowed_tools is not None else _DEFAULT_TOOLS
-        tool_descriptions = get_tool_descriptions(allowed)
+        tool_descriptions = await get_tool_descriptions(allowed)
 
         return cls(
             trace_manager=trace_manager,

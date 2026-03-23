@@ -15,10 +15,24 @@ class HubSpotClient:
     def __init__(self, access_token: str) -> None:
         if not access_token:
             raise HubSpotAccessTokenRequiredError("access_token is required")
+        self._access_token = access_token
         self._headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
         }
+
+    async def get_token_hubspot_metadata(self) -> dict:
+        async with httpx.AsyncClient(base_url=_BASE_URL, timeout=30.0) as client:
+            response = await client.get(f"/oauth/v1/access-tokens/{self._access_token}")
+
+        if not response.is_success:
+            try:
+                detail = response.json()
+            except Exception:
+                detail = response.text
+            raise RuntimeError(f"HubSpot API error {response.status_code}: {detail}")
+
+        return response.json()
 
     async def request(self, method: str, path: str, **kwargs) -> dict:
         async with httpx.AsyncClient(base_url=_BASE_URL, headers=self._headers, timeout=30.0) as client:
