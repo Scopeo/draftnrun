@@ -152,7 +152,12 @@ class DBService(CloseMixin, ABC):
                 if timestamp_column_name
                 else f"SELECT {id_column_name} FROM {target_table_name}"
             )
-            final_query = f"{query} WHERE {sql_query_filter};" if sql_query_filter else f"{query};"
+            filters = []
+            if source_id is not None:
+                filters.append(f"source_id = '{source_id}'")
+            if sql_query_filter:
+                filters.append(f"({sql_query_filter})")
+            final_query = f"{query} WHERE {' AND '.join(filters)};" if filters else f"{query};"
             existing_rows = self._fetch_sql_query_as_dicts(final_query)
 
             existing_rows_by_id: dict = {}

@@ -82,7 +82,7 @@ def _infer_qdrant_field_schema_from_sql_type(sql_type: str) -> FieldSchema:
     if any(x in type_upper for x in ["DOUBLE", "FLOAT", "NUMERIC", "DECIMAL", "REAL"]):
         return FieldSchema.FLOAT
     if "BOOL" in type_upper:
-        return FieldSchema.BOOL
+        return FieldSchema.BOOLEAN
     return FieldSchema.KEYWORD
 
 
@@ -263,7 +263,20 @@ async def upload_db_source(
             table_definition=db_definition,
             id_column_name=CHUNK_ID_COLUMN_NAME,
             timestamp_column_name=TIMESTAMP_COLUMN_NAME,
-            append_mode=update_existing,
+            append_mode=True,
+            schema_name=storage_schema_name,
+            sql_query_filter=combined_filter_sql_unified,
+            source_id=source_id_str,
+        )
+
+    if not update_existing:
+        db_service.update_table(
+            new_rows=rows,
+            table_name=storage_table_name,
+            table_definition=db_definition,
+            id_column_name=CHUNK_ID_COLUMN_NAME,
+            timestamp_column_name=TIMESTAMP_COLUMN_NAME,
+            append_mode=False,
             schema_name=storage_schema_name,
             sql_query_filter=combined_filter_sql_unified,
             source_id=source_id_str,

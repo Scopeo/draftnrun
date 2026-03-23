@@ -30,12 +30,12 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
 
     async def get_collection_data_rows_async(collection_name: str, **kwargs) -> list[dict]:
         if collection_name not in collection_data:
-            return []
+            raise ValueError(f"Collection '{collection_name}' does not exist")
         return [row.copy() for row in collection_data[collection_name]]
 
     async def add_chunks_async(list_chunks: list[dict], collection_name: str) -> bool:
         if collection_name not in collection_data:
-            collection_data[collection_name] = []
+            raise ValueError(f"Collection '{collection_name}' does not exist")
         collection_data[collection_name].extend(list_chunks)
         return True
 
@@ -61,12 +61,14 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
         )
 
     async def sync_rows_with_collection_async(rows: list[dict], collection_name: str, **kwargs) -> bool:
+        if collection_name not in collection_data:
+            raise ValueError(f"Collection '{collection_name}' does not exist")
         collection_data[collection_name] = [row.copy() for row in rows]
         return True
 
     async def count_points_async(collection_name: str, **kwargs) -> int:
         if collection_name not in collection_data:
-            return 0
+            raise ValueError(f"Collection '{collection_name}' does not exist")
         return len(collection_data[collection_name])
 
     mock_qdrant.collection_exists_async = AsyncMock(side_effect=collection_exists_async)

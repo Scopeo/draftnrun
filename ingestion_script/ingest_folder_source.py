@@ -119,11 +119,13 @@ async def sync_chunks_to_qdrant(
         await qdrant_service.create_collection_async(collection_name)
         await qdrant_service.create_index_if_needed_async(collection_name, SOURCE_ID_COLUMN_NAME, FieldSchema.KEYWORD)
         await qdrant_service.create_index_if_needed_async(collection_name, CHUNK_ID_COLUMN_NAME, FieldSchema.KEYWORD)
-    await qdrant_service.sync_rows_with_collection_async(
+    success = await qdrant_service.sync_rows_with_collection_async(
         rows=chunk_rows,
         collection_name=collection_name,
         query_filter_qdrant=combined_filter_qdrant,
     )
+    if not success:
+        raise RuntimeError(f"Qdrant sync failed for collection '{collection_name}': point count mismatch after sync")
 
 
 async def ingest_google_drive_source(

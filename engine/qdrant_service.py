@@ -1191,8 +1191,9 @@ class QdrantService:
         query_filter_qdrant: Optional[dict] = None,
     ) -> bool:
         """Diff-based sync using plain list[dict] instead of DataFrame."""
-        chunk_id_field = self.default_schema.chunk_id_field
-        timestamp_field = self.default_schema.last_edited_ts_field
+        schema = self._get_schema(collection_name)
+        chunk_id_field = schema.chunk_id_field
+        timestamp_field = schema.last_edited_ts_field
 
         collection_count = await self.count_points_async(
             collection_name=collection_name,
