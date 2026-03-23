@@ -195,11 +195,13 @@ class SQLLocalService(DBService):
     def iter_table_rows(
         self,
         table_name: str,
-        batch_size: Optional[int] = settings.INGESTION_BATCH_SIZE,
+        batch_size: Optional[int] = None,
         schema_name: Optional[str] = None,
         sql_query_filter: Optional[str] = None,
     ) -> Iterator[list[dict]]:
         """Yield batches of rows as list[dict] using server-side cursor."""
+        if batch_size is None:
+            batch_size = settings.INGESTION_BATCH_SIZE
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
             stmt = sqlalchemy.select(table)
@@ -219,11 +221,10 @@ class SQLLocalService(DBService):
         schema_name: Optional[str] = None,
         sql_query_filter: Optional[str] = None,
     ) -> list[dict]:
-        """Return all rows as list[dict]."""
+        """Return all rows as list[dict]. Prefer iter_table_rows for large tables."""
         all_rows: list[dict] = []
         for batch in self.iter_table_rows(
             table_name,
-            batch_size=settings.INGESTION_BATCH_SIZE,
             schema_name=schema_name,
             sql_query_filter=sql_query_filter,
         ):

@@ -59,7 +59,8 @@ class SnowflakeService(DBService):
     def schema_exists(self, schema_name: str) -> bool:
         """Check if a schema exists in the current database."""
         result = (
-            self.connector.cursor()
+            self.connector
+            .cursor()
             .execute(f"SELECT COUNT(*) FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '{schema_name}'")
             .fetchone()
         )

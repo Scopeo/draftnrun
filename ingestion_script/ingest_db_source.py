@@ -1,5 +1,6 @@
 import json
 import logging
+from collections.abc import AsyncGenerator
 from datetime import datetime
 from functools import partial
 from typing import Optional
@@ -33,7 +34,6 @@ from ingestion_script.utils import (
     resolve_sql_timestamp_filter,
     upload_source,
 )
-from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -100,7 +100,7 @@ async def get_db_source(
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
     sql_query_filter: Optional[str] = None,
-) -> list[dict]:
+) -> AsyncGenerator[list[dict], None]:
     sql_local_service = SQLLocalService(engine_url=db_url)
 
     column_info = sql_local_service.get_column_info(table_name, schema_name=source_schema_name)
@@ -121,12 +121,12 @@ async def get_db_source(
 
     if metadata_column_names:
         for metadata_col in metadata_column_names:
-            field_schema = _infer_qdrant_field_schema_from_sql_type(column_info.get(metadata_col, "VARCHAR"))
-            LOGGER.info(f"Creating index for metadata column '{metadata_col}' with qdrant type {field_schema}")
+            qdrant_field_schema = _infer_qdrant_field_schema_from_sql_type(column_info.get(metadata_col, "VARCHAR"))
+            LOGGER.info(f"Creating index for metadata column '{metadata_col}' with qdrant type {qdrant_field_schema}")
             await qdrant_service.create_index_if_needed_async(
                 collection_name=qdrant_collection_name,
                 field_name=metadata_col,
-                field_schema_type=field_schema,
+                field_schema_type=qdrant_field_schema,
             )
     if timestamp_column_name:
         await qdrant_service.create_index_if_needed_async(
@@ -136,16 +136,13 @@ async def get_db_source(
         )
 
     splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-    unified_rows: list[dict] = []
-    total_source_rows = 0
 
     for batch in sql_local_service.iter_table_rows(
         table_name=table_name,
-        batch_size=settings.INGESTION_BATCH_SIZE,
         schema_name=source_schema_name,
         sql_query_filter=sql_query_filter,
     ):
-        total_source_rows += len(batch)
+        batch_rows: list[dict] = []
         for source_row in batch:
             row_id = source_row[id_column_name]
             combined_text = " ".join(str(source_row.get(col) or "") for col in text_column_names)
@@ -172,7 +169,7 @@ async def get_db_source(
                             if metadata_value is not None:
                                 metadata[metadata_col_name] = _serialize_value(metadata_value)
 
-                unified_rows.append({
+                batch_rows.append({
                     CHUNK_ID_COLUMN_NAME: chunk_id,
                     CHUNK_COLUMN_NAME: chunk_text,
                     FILE_ID_COLUMN_NAME: file_id,
@@ -182,12 +179,8 @@ async def get_db_source(
                     URL_COLUMN_NAME: url_value,
                     METADATA_COLUMN_NAME: json.dumps(metadata) if metadata else json.dumps({}),
                 })
-
-    if total_source_rows == 0:
-        raise ValueError(f"The table '{table_name}' is empty. No data to ingest.")
-
-    LOGGER.info(f"Retrieved {total_source_rows} rows from the source table '{table_name}'.")
-    return unified_rows
+        if batch_rows:
+            yield batch_rows
 
 
 async def upload_db_source(
@@ -234,7 +227,12 @@ async def upload_db_source(
         timestamp_column_name=timestamp_column_name,
     )
 
-    rows = await get_db_source(
+    source_id_str = str(source_id)
+    incoming_ids: set[str] = set()
+    total_rows = 0
+    batch_number = 0
+
+    async for chunk_batch in get_db_source(
         db_url=source_db_url,
         table_name=source_table_name,
         id_column_name=id_column_name,
@@ -248,18 +246,15 @@ async def upload_db_source(
         sql_query_filter=combined_filter_sql,
         qdrant_service=qdrant_service,
         qdrant_collection_name=qdrant_collection_name,
-    )
-
-    source_id_str = str(source_id)
-    incoming_ids: set[str] = set()
-    for i in range(0, len(rows), settings.INGESTION_BATCH_SIZE):
-        batch = rows[i : i + settings.INGESTION_BATCH_SIZE]
-        for row in batch:
+    ):
+        batch_number += 1
+        for row in chunk_batch:
             row[SOURCE_ID_COLUMN_NAME] = source_id_str
             incoming_ids.add(row[CHUNK_ID_COLUMN_NAME])
-        LOGGER.info(f"Flushing DB-source batch {i // settings.INGESTION_BATCH_SIZE + 1} ({len(batch)} rows)")
+        total_rows += len(chunk_batch)
+        LOGGER.info(f"Flushing DB-source batch {batch_number} ({len(chunk_batch)} rows)")
         db_service.update_table(
-            new_rows=batch,
+            new_rows=chunk_batch,
             table_name=storage_table_name,
             table_definition=db_definition,
             id_column_name=CHUNK_ID_COLUMN_NAME,
@@ -269,6 +264,9 @@ async def upload_db_source(
             sql_query_filter=combined_filter_sql_unified,
             source_id=source_id_str,
         )
+
+    if total_rows == 0:
+        raise ValueError(f"The table '{source_table_name}' is empty. No data to ingest.")
 
     if not update_existing:
         db_service.delete_stale_rows(
@@ -281,14 +279,14 @@ async def upload_db_source(
             source_id=source_id_str,
         )
 
-    LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {len(rows)} rows.")
+    LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {total_rows} rows.")
     await sync_chunks_to_qdrant(
         storage_schema_name,
         storage_table_name,
         collection_name=qdrant_collection_name,
         db_service=db_service,
         qdrant_service=qdrant_service,
-        sql_query_filter=combined_filter_sql_unified,  # Use unified filter for sync
+        sql_query_filter=combined_filter_sql_unified,
         query_filter_qdrant=combined_filter_qdrant,
         source_id=source_id,
     )

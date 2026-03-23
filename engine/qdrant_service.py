@@ -10,6 +10,7 @@ from typing import Any, Optional
 import httpx
 
 from engine.components.types import SourceChunk
+from engine.datetime_utils import make_naive_utc, parse_datetime
 from engine.llm_services.llm_service import EmbeddingService
 from settings import settings
 
@@ -19,51 +20,6 @@ DEFAULT_MAX_CHUNKS = 10
 MAX_BATCH_SIZE_FOR_CHUNK_UPLOAD = 50
 DEFAULT_TIMEOUT = 20.0
 SOURCE_ID_COLUMN_NAME = "source_id"
-
-# Common datetime formats to try when parsing
-DATETIME_FORMATS = [
-    "%Y-%m-%d %H:%M:%S",
-    "%Y-%m-%d %H:%M:%S.%f",
-    "%Y-%m-%dT%H:%M:%S",
-    "%Y-%m-%dT%H:%M:%S.%f",
-    "%Y-%m-%dT%H:%M:%SZ",
-    "%Y-%m-%dT%H:%M:%S.%fZ",
-    "%Y-%m-%dT%H:%M:%S%z",
-    "%Y-%m-%dT%H:%M:%S.%f%z",
-    "%Y-%m-%d %H:%M:%S%z",
-    "%Y-%m-%d %H:%M:%S.%f%z",
-    "%Y-%m-%d",
-    "%d/%m/%Y",
-    "%m/%d/%Y",
-    "%Y/%m/%d",
-    "%d-%m-%Y",
-    "%m-%d-%Y",
-    "%Y-%m-%d %H:%M",
-    "%d/%m/%Y %H:%M:%S",
-    "%m/%d/%Y %H:%M:%S",
-    "%Y/%m/%d %H:%M:%S",
-    "%d-%m-%Y %H:%M:%S",
-    "%m-%d-%Y %H:%M:%S",
-]
-
-
-def parse_datetime(date_string: str) -> Optional[datetime]:
-    if not date_string:
-        return None
-
-    if isinstance(date_string, datetime):
-        return date_string
-
-    # Try each format until one works
-    for fmt in DATETIME_FORMATS:
-        try:
-            return datetime.strptime(date_string, fmt)
-        except ValueError:
-            continue
-
-    # If none of the formats work, log a warning and return None
-    LOGGER.warning(f"Could not parse datetime string: {date_string}")
-    return None
 
 
 class FieldSchema(Enum):
@@ -1221,11 +1177,15 @@ class QdrantService:
         elif timestamp_field:
             ids_to_update = set()
             for chunk_id in common_ids:
-                incoming_timestamp = incoming_rows_by_id[chunk_id].get(timestamp_field)
-                existing_timestamp = existing_rows_by_id[chunk_id].get(timestamp_field)
-                if incoming_timestamp is not None and existing_timestamp is not None:
-                    if str(incoming_timestamp) > str(existing_timestamp):
+                incoming_ts_raw = incoming_rows_by_id[chunk_id].get(timestamp_field)
+                existing_ts_raw = existing_rows_by_id[chunk_id].get(timestamp_field)
+                incoming_dt = parse_datetime(incoming_ts_raw)
+                existing_dt = parse_datetime(existing_ts_raw)
+                if incoming_dt is not None and existing_dt is not None:
+                    if make_naive_utc(incoming_dt) > make_naive_utc(existing_dt):
                         ids_to_update.add(chunk_id)
+                elif incoming_rows_by_id[chunk_id] != existing_rows_by_id[chunk_id]:
+                    ids_to_update.add(chunk_id)
         else:
             ids_to_update = common_ids
 

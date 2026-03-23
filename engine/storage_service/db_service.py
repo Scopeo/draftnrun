@@ -1,11 +1,12 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Iterator, Optional
 
 import pandas as pd
 
 from engine.components.close_mixin import CloseMixin
 from engine.components.component import ComponentAttributes
+from engine.datetime_utils import make_naive_utc, parse_datetime
 from engine.storage_service.db_utils import CHUNK_ID_COLUMN, DBDefinition, cast_id_value
 
 LOGGER = logging.getLogger(__name__)
@@ -46,6 +47,17 @@ class DBService(CloseMixin, ABC):
 
     @abstractmethod
     def get_table_df(self, table_name: str, schema_name: Optional[str] = None, sql_query_filter: Optional[str] = None):
+        pass
+
+    @abstractmethod
+    def iter_table_rows(
+        self,
+        table_name: str,
+        batch_size: Optional[int] = None,
+        schema_name: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
+    ) -> Iterator[list[dict]]:
+        """Yield batches of rows as list[dict]."""
         pass
 
     @abstractmethod
@@ -177,11 +189,13 @@ class DBService(CloseMixin, ABC):
             if timestamp_column_name and not sql_query_filter:
                 ids_to_update = set()
                 for shared_id in common_ids:
-                    incoming_timestamp = incoming_rows_by_id[shared_id].get(timestamp_column_name)
-                    existing_timestamp = existing_rows_by_id[shared_id].get(timestamp_column_name)
-                    if incoming_timestamp is not None and existing_timestamp is not None:
-                        if incoming_timestamp > existing_timestamp:
+                    incoming_dt = parse_datetime(incoming_rows_by_id[shared_id].get(timestamp_column_name))
+                    existing_dt = parse_datetime(existing_rows_by_id[shared_id].get(timestamp_column_name))
+                    if incoming_dt is not None and existing_dt is not None:
+                        if make_naive_utc(incoming_dt) > make_naive_utc(existing_dt):
                             ids_to_update.add(shared_id)
+                    elif incoming_rows_by_id[shared_id] != existing_rows_by_id[shared_id]:
+                        ids_to_update.add(shared_id)
             else:
                 ids_to_update = common_ids
 
