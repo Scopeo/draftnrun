@@ -14,7 +14,7 @@ class ParameterKind(StrEnum):
 
 class ParameterBase(BaseModel):
     name: str
-    order: Optional[int] = None
+    display_order: Optional[int] = None
     kind: ParameterKind = ParameterKind.PARAMETER
 
 

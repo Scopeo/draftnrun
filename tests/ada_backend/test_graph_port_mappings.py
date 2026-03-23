@@ -73,10 +73,10 @@ def test_get_put_roundtrip_port_mappings_migration():
                         {
                             "value": "openai:gpt-5-mini",
                             "name": "completion_model",
-                            "order": None,
-                            "type": "string",
-                            "nullable": False,
-                            "default": "openai:gpt-4.1-mini",
+            "display_order": None,
+            "type": "string",
+            "nullable": False,
+            "default": "openai:gpt-4.1-mini",
                             "ui_component": "Select",
                             "ui_component_properties": {
                                 "label": "Model Name",
@@ -93,8 +93,8 @@ def test_get_put_roundtrip_port_mappings_migration():
                         {
                             "value": 1,
                             "name": "default_temperature",
-                            "order": None,
-                            "id": "5bdece0d-bbc1-4cc7-a192-c4b7298dc163",
+            "display_order": None,
+            "id": "5bdece0d-bbc1-4cc7-a192-c4b7298dc163",
                             "type": "float",
                             "nullable": False,
                             "default": "1.0",
@@ -137,10 +137,10 @@ def test_get_put_roundtrip_port_mappings_migration():
                         {
                             "value": "openai:gpt-5-mini",
                             "name": "completion_model",
-                            "order": None,
-                            "type": "string",
-                            "nullable": False,
-                            "default": "openai:gpt-4.1-mini",
+            "display_order": None,
+            "type": "string",
+            "nullable": False,
+            "default": "openai:gpt-4.1-mini",
                             "ui_component": "Select",
                             "ui_component_properties": {
                                 "label": "Model Name",
@@ -157,8 +157,8 @@ def test_get_put_roundtrip_port_mappings_migration():
                         {
                             "value": 1,
                             "name": "default_temperature",
-                            "order": None,
-                            "id": "5bdece0d-bbc1-4cc7-a192-c4b7298dc163",
+            "display_order": None,
+            "id": "5bdece0d-bbc1-4cc7-a192-c4b7298dc163",
                             "type": "float",
                             "nullable": False,
                             "default": "1.0",
@@ -257,10 +257,10 @@ def test_deploy_graph_copies_port_mappings():
                         {
                             "value": "openai:gpt-5-mini",
                             "name": "completion_model",
-                            "order": None,
-                            "type": "string",
-                            "nullable": False,
-                            "default": "openai:gpt-4.1-mini",
+            "display_order": None,
+            "type": "string",
+            "nullable": False,
+            "default": "openai:gpt-4.1-mini",
                             "ui_component": "Select",
                             "ui_component_properties": {
                                 "label": "Model Name",
@@ -277,8 +277,8 @@ def test_deploy_graph_copies_port_mappings():
                         {
                             "value": 1,
                             "name": "default_temperature",
-                            "order": None,
-                            "id": "5bdece0d-bbc1-4cc7-a192-c4b7298dc163",
+            "display_order": None,
+            "id": "5bdece0d-bbc1-4cc7-a192-c4b7298dc163",
                             "type": "float",
                             "nullable": False,
                             "default": "1.0",
@@ -320,10 +320,10 @@ def test_deploy_graph_copies_port_mappings():
                         {
                             "value": "openai:gpt-5-mini",
                             "name": "completion_model",
-                            "order": None,
-                            "type": "string",
-                            "nullable": False,
-                            "default": "openai:gpt-4.1-mini",
+            "display_order": None,
+            "type": "string",
+            "nullable": False,
+            "default": "openai:gpt-4.1-mini",
                             "ui_component": "Select",
                             "ui_component_properties": {
                                 "label": "Model Name",
@@ -340,8 +340,8 @@ def test_deploy_graph_copies_port_mappings():
                         {
                             "value": 1,
                             "name": "default_temperature",
-                            "order": None,
-                            "id": "5bdece0d-bbc1-4cc7-a192-c4b7298dc163",
+            "display_order": None,
+            "id": "5bdece0d-bbc1-4cc7-a192-c4b7298dc163",
                             "type": "float",
                             "nullable": False,
                             "default": "1.0",

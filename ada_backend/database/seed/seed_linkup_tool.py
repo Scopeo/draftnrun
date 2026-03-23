@@ -107,5 +107,3 @@ def seed_linkup_tool_parameter_groups(session: Session):
         ),
     ]
     build_parameters_group_definitions(session, component_parameter_groups)
-
-    session.commit()

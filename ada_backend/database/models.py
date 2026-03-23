@@ -690,7 +690,7 @@ class ComponentParameterDefinition(Base):
     name = mapped_column(String, nullable=False)
     type = mapped_column(make_pg_enum(ParameterType), nullable=False)
     nullable = mapped_column(Boolean, nullable=False, default=False)
-    order = mapped_column(Integer, nullable=True)
+    display_order = mapped_column(Integer, nullable=True)
     default = mapped_column(String, nullable=True)
     ui_component = mapped_column(make_pg_enum(UIComponent), nullable=True)
     ui_component_properties = mapped_column(JSON, nullable=True)

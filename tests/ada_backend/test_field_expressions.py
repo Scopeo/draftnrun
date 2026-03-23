@@ -70,9 +70,14 @@ def _create_component_instance(
     input_expression: dict | None = None,
 ) -> dict:
     params = [
-        {"value": prompt_template_value, "name": "prompt_template", "order": None, "kind": ParameterKind.INPUT},
-        {"value": "openai:gpt-5-mini", "name": "completion_model", "order": None},
-        {"value": 0.2, "name": "default_temperature", "order": None},
+        {
+            "value": prompt_template_value,
+            "name": "prompt_template",
+            "display_order": None,
+            "kind": ParameterKind.INPUT,
+        },
+        {"value": "openai:gpt-5-mini", "name": "completion_model", "display_order": None},
+        {"value": 0.2, "name": "default_temperature", "display_order": None},
     ]
 
     if input_expression:
@@ -80,7 +85,7 @@ def _create_component_instance(
             "name": input_expression["field_name"],
             "value": input_expression["expression_text"],
             "kind": ParameterKind.INPUT,
-            "order": None,
+            "display_order": None,
         })
 
     instance = {
@@ -197,7 +202,7 @@ def test_field_expressions_e2e():
                         {
                             "value": "Hello world",
                             "name": "prompt_template",
-                            "order": None,
+                            "display_order": None,
                             "type": "string",
                             "nullable": False,
                             "kind": ParameterKind.INPUT,
@@ -209,7 +214,7 @@ def test_field_expressions_e2e():
                         {
                             "value": "openai:gpt-5-mini",
                             "name": "completion_model",
-                            "order": None,
+                            "display_order": None,
                             "type": "string",
                             "nullable": False,
                             "default": "openai:gpt-5-mini",
@@ -252,7 +257,7 @@ def test_field_expressions_e2e():
                         {
                             "value": "Process this: {input}",
                             "name": "prompt_template",
-                            "order": None,
+                            "display_order": None,
                             "type": "string",
                             "kind": ParameterKind.INPUT,
                             "nullable": False,
@@ -264,7 +269,7 @@ def test_field_expressions_e2e():
                         {
                             "value": "openai:gpt-5-mini",
                             "name": "completion_model",
-                            "order": None,
+                            "display_order": None,
                             "type": "string",
                             "nullable": False,
                             "default": "openai:gpt-5-mini",
@@ -276,7 +281,7 @@ def test_field_expressions_e2e():
                             "name": "messages",
                             "value": expression_text,
                             "kind": ParameterKind.INPUT,
-                            "order": None,
+                            "display_order": None,
                         },
                     ],
                 },
@@ -361,7 +366,7 @@ def test_invalid_reference_uuid_returns_error():
                     "is_start_node": True,
                     "component_id": COMPONENT_ID,
                     "component_version_id": COMPONENT_VERSION_ID,
-                    "parameters": [{"value": "openai:gpt-5-mini", "name": "completion_model", "order": None}],
+                    "parameters": [{"value": "openai:gpt-5-mini", "name": "completion_model", "display_order": None}],
                     "tool_description": {
                         "name": "Test Tool",
                         "description": "d",
@@ -397,9 +402,9 @@ def test_invalid_reference_uuid_returns_error():
                             "name": "prompt_template",
                             "value": expression_text,
                             "kind": ParameterKind.INPUT,
-                            "order": None,
+                            "display_order": None,
                         },
-                        {"value": "openai:gpt-5-mini", "name": "completion_model", "order": None},
+                        {"value": "openai:gpt-5-mini", "name": "completion_model", "display_order": None},
                     ],
                 },
             ],
@@ -601,7 +606,7 @@ def test_invalid_reference_unknown_port_returns_error():
                     "is_start_node": True,
                     "component_id": COMPONENT_ID,
                     "component_version_id": COMPONENT_VERSION_ID,
-                    "parameters": [{"value": "openai:gpt-5-mini", "name": "completion_model", "order": None}],
+                    "parameters": [{"value": "openai:gpt-5-mini", "name": "completion_model", "display_order": None}],
                     "tool_description": {
                         "name": "Test Tool",
                         "description": "d",
@@ -637,9 +642,9 @@ def test_invalid_reference_unknown_port_returns_error():
                             "name": "prompt_template",
                             "value": expression_text,
                             "kind": ParameterKind.INPUT,
-                            "order": None,
+                            "display_order": None,
                         },
-                        {"value": "openai:gpt-5-mini", "name": "completion_model", "order": None},
+                        {"value": "openai:gpt-5-mini", "name": "completion_model", "display_order": None},
                     ],
                 },
             ],

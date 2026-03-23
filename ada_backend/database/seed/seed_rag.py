@@ -272,9 +272,9 @@ def seed_rag_components(session: Session):
     )
 
     upsert_component_categories(
-        session=session, component_id=rag_agent.id, category_ids=[
-            CATEGORY_UUIDS["search_engine"], CATEGORY_UUIDS["most_used"]
-        ]
+        session=session,
+        component_id=rag_agent.id,
+        category_ids=[CATEGORY_UUIDS["search_engine"], CATEGORY_UUIDS["most_used"]],
     )
 
     rag_agent_v3_version = db.ComponentVersion(
@@ -1450,5 +1450,3 @@ def seed_rag_v3_parameter_groups(session: Session):
     }
 
     build_components_parameters_assignments_to_parameter_groups(session, parameter_group_assignments)
-
-    session.commit()

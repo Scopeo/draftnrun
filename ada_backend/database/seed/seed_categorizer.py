@@ -51,7 +51,7 @@ def seed_categorizer_components(session: Session):
         **DEFAULT_CATEGORIZER_TOOL_DESCRIPTION.model_dump(),
     )
     session.merge(categorizer_tool_description)
-    session.commit()
+    session.flush()
 
     categorizer = db.Component(
         id=COMPONENT_UUIDS["categorizer"],
@@ -157,5 +157,3 @@ def seed_categorizer_parameter_groups(session: Session):
         },
     }
     build_components_parameters_assignments_to_parameter_groups(session, parameter_group_assignments)
-
-    session.commit()

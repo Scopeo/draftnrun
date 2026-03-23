@@ -67,7 +67,7 @@ def seed_outlook_components(session: Session):
             name="oauth_connection_id",
             type=ParameterType.STRING,
             nullable=True,
-            order=0,
+            display_order=0,
             parameter_order_within_group=0,
             ui_component=UIComponent.OAUTH_CONNECTION,
             ui_component_properties=UIComponentProperties(
@@ -144,5 +144,3 @@ def seed_outlook_parameter_groups(session: Session):
         ),
     ]
     build_parameters_group_definitions(session, component_parameter_groups)
-
-    session.commit()

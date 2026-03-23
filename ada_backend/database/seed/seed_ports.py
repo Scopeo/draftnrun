@@ -130,7 +130,8 @@ def seed_port_definitions(session: Session):
                 continue
 
             port = (
-                session.query(db.PortDefinition)
+                session
+                .query(db.PortDefinition)
                 .filter_by(component_version_id=component_version.id, name=field_name, port_type=db.PortType.INPUT)
                 .first()
             )
@@ -213,7 +214,8 @@ def seed_port_definitions(session: Session):
         # Upsert output ports
         for field_name, field_info in outputs_schema.model_fields.items():
             port = (
-                session.query(db.PortDefinition)
+                session
+                .query(db.PortDefinition)
                 .filter_by(component_version_id=component_version.id, name=field_name, port_type=db.PortType.OUTPUT)
                 .first()
             )
@@ -248,5 +250,3 @@ def seed_port_definitions(session: Session):
             if port_key not in expected_ports:
                 LOGGER.info(f"  - Deleting orphaned port: {port.name} ({port.port_type})")
                 session.delete(port)
-
-    session.commit()

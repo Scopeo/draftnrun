@@ -73,7 +73,7 @@ def _process_components_with_ports(
                     ui_component_properties=input_port.ui_component_properties,
                     is_advanced=input_port.is_advanced,
                     drives_output_schema=input_port.drives_output_schema,
-                    order=input_port.display_order,
+                    display_order=input_port.display_order,
                     parameter_group_id=input_port.parameter_group_id,
                     parameter_order_within_group=input_port.parameter_order_within_group,
                     parameter_group_name=None,
@@ -85,7 +85,7 @@ def _process_components_with_ports(
         component.parameters.sort(
             key=lambda p: (
                 0 if p.name == "messages" else 1,
-                p.order if p.order is not None else 999,
+                p.display_order if p.display_order is not None else 999,
                 p.name,
             )
         )

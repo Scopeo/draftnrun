@@ -143,7 +143,7 @@ def seed_filter_components(session: Session):
                     description="Canonical output carrying chat messages",
                 )
             )
-        session.commit()
+        session.flush()
 
     # Create release stage mapping
     upsert_release_stage_to_current_version_mapping(

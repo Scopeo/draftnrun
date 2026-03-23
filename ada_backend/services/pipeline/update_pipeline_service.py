@@ -142,7 +142,7 @@ def create_or_update_component_instance(
                 component_instance_id=instance_id,
                 parameter_definition_id=param_def.id,
                 org_secret_id=param_secret.id,
-                order=param.order,
+                order=param.display_order,
             )
 
         elif param_def.type != db.ParameterType.LLM_API_KEY:
@@ -159,7 +159,7 @@ def create_or_update_component_instance(
                     value=(
                         json.dumps(param.value) if isinstance(param.value, (dict, list)) else str(param.value)
                     ),  # Convert to string for storage
-                    order=param.order,
+                    order=param.display_order,
                 )
 
     return instance_id
