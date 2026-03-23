@@ -140,7 +140,7 @@ Custom tools (validation, multi-step, client-side logic) are still defined as `@
 | Source creation | `create_source` validates type-specific required fields and only supports `website`/`database` (developer+ role). |
 | Knowledge mutation | `update_document_chunks` is blocked by default unless the caller explicitly confirms a full replacement. |
 | Graph null IDs | `update_graph` auto-generates UUIDs for component instances **and edges** with `id: null`. |
-| Readonly `messages` | `update_graph` strips `input_port_instances` and `kind="input"` parameters targeting `messages` on nodes with incoming edges. This field is auto-filled from the previous component; use `initial_prompt` to inject context. |
+| Canonical field expressions | The backend auto-generates a visible, editable RefNode field expression (e.g. `@{{<source_uuid>.output}}`) for canonical inputs when an edge exists and no user expression is set. User-provided expressions are never overwritten. The MCP should create edges and let the backend handle canonical wiring. |
 | Unknown graph keys | `update_graph` warns about unrecognised top-level keys (e.g. `ports_mappings` → `port_mappings`) before forwarding. |
 | Error detail | 403 and 404 backend errors now include the backend's error detail instead of generic messages. |
 | Docs sync | Any MCP behavior change must update `docs.py` resources and this README together. |
