@@ -45,6 +45,20 @@ def map_internal_type_to_qdrant_field_schema(internal_type: str) -> FieldSchema:
     return type_mapping.get(internal_type, FieldSchema.KEYWORD)
 
 
+def map_sql_type_to_qdrant_field_schema(sql_type: str) -> FieldSchema:
+    """Map a SQL column type string (e.g. from SQLAlchemy reflection) to a Qdrant FieldSchema."""
+    t = sql_type.upper()
+    if "TIMESTAMP" in t or "DATETIME" in t or t == "DATE":
+        return FieldSchema.DATETIME
+    if "INT" in t:
+        return FieldSchema.INTEGER
+    if any(x in t for x in ("DOUBLE", "FLOAT", "NUMERIC", "DECIMAL", "REAL")):
+        return FieldSchema.FLOAT
+    if "BOOL" in t:
+        return FieldSchema.BOOLEAN
+    return FieldSchema.KEYWORD
+
+
 @dataclass
 class QdrantCollectionSchema:
     """
