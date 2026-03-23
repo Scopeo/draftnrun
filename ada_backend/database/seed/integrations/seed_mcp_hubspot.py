@@ -69,7 +69,7 @@ def seed_mcp_hubspot_components(session: Session):
             name="allowed_tools",
             type=ParameterType.JSON,
             nullable=True,
-            order=None,
+            display_order=None,
             parameter_order_within_group=1,
             ui_component=UIComponent.MULTISELECT,
             ui_component_properties=UIComponentProperties(
