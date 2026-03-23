@@ -70,7 +70,12 @@ def _create_component_instance(
     input_expression: dict | None = None,
 ) -> dict:
     params = [
-        {"value": prompt_template_value, "name": "prompt_template", "display_order": None, "kind": ParameterKind.INPUT},
+        {
+            "value": prompt_template_value,
+            "name": "prompt_template",
+            "display_order": None,
+            "kind": ParameterKind.INPUT,
+        },
         {"value": "openai:gpt-5-mini", "name": "completion_model", "display_order": None},
         {"value": 0.2, "name": "default_temperature", "display_order": None},
     ]
