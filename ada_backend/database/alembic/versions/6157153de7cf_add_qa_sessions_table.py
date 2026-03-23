@@ -1,7 +1,7 @@
 """add_qa_sessions_table
 
 Revision ID: 6157153de7cf
-Revises: b4c5d6e7f8a9
+Revises: b1c2d3e4f5a7
 Create Date: 2026-03-23 00:00:00.000000
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "6157153de7cf"
-down_revision: Union[str, None] = "b4c5d6e7f8a9"
+down_revision: Union[str, None] = "b1c2d3e4f5a7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
