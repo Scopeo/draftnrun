@@ -8,11 +8,6 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
-from ada_backend.repositories.qa_session_repository import (
-    create_qa_session,
-    get_qa_session,
-    get_qa_sessions_by_project,
-)
 from ada_backend.routers.auth_router import UserRights, user_has_access_to_project_dependency
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.dataset_schema import (
@@ -56,14 +51,17 @@ from ada_backend.services.qa.qa_metadata_service import (
 from ada_backend.services.qa.quality_assurance_service import (
     create_datasets_service,
     create_inputs_groundtruths_service,
+    create_qa_session_service,
     delete_datasets_service,
     delete_inputs_groundtruths_service,
     export_qa_data_to_csv_service,
     get_datasets_by_project_service,
     get_inputs_groundtruths_with_version_outputs_service,
     get_outputs_by_graph_runner_service,
+    get_qa_session_service,
     get_version_output_ids_by_input_ids_and_graph_runner_service,
     import_qa_data_from_csv_service,
+    list_qa_sessions_service,
     resolve_qa_entries_and_environment,
     run_qa_service,
     save_conversation_to_groundtruth_service,
@@ -621,6 +619,8 @@ async def run_qa_endpoint(
 
     try:
         return await run_qa_service(session, project_id, dataset_id, run_request)
+    except QADatasetNotInProjectError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except GraphNotBoundToProjectError as e:
         LOGGER.error(
             f"Graph runner {run_request.graph_runner_id} is not bound to project {project_id} when running QA",
@@ -660,13 +660,15 @@ async def run_qa_async_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        resolve_qa_entries_and_environment(session, dataset_id, run_request)
+        resolve_qa_entries_and_environment(session, project_id, dataset_id, run_request)
+    except QADatasetNotInProjectError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except GraphNotBoundToProjectError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    qa_session = create_qa_session(
+    qa_session = create_qa_session_service(
         session,
         project_id=project_id,
         dataset_id=dataset_id,
@@ -693,7 +695,7 @@ def list_qa_sessions_endpoint(
 ) -> List[QASessionResponseSchema]:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    return get_qa_sessions_by_project(session, project_id, dataset_id)
+    return list_qa_sessions_service(session, project_id, dataset_id)
 
 
 @router.get(
@@ -713,10 +715,10 @@ def get_qa_session_endpoint(
 ) -> QASessionResponseSchema:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    qa_session = get_qa_session(session, qa_session_id)
-    if not qa_session or qa_session.project_id != project_id:
+    try:
+        return get_qa_session_service(session, qa_session_id, project_id)
+    except ValueError:
         raise HTTPException(status_code=404, detail="QA session not found")
-    return qa_session
 
 
 @router.post(

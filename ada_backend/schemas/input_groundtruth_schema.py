@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, field_validator
 
-from ada_backend.database.models import EnvType
+from ada_backend.database.models import EnvType, RunStatus
 
 
 class Pagination(BaseModel):
@@ -160,7 +160,7 @@ class InputGroundtruthResponseList(BaseModel):
 
 class QASessionAcceptedSchema(BaseModel):
     session_id: UUID
-    status: str = "pending"
+    status: RunStatus = RunStatus.PENDING
 
 
 class QASessionResponseSchema(BaseModel):
@@ -168,7 +168,7 @@ class QASessionResponseSchema(BaseModel):
     project_id: UUID
     dataset_id: UUID
     graph_runner_id: Optional[UUID] = None
-    status: str
+    status: RunStatus
     total: Optional[int] = None
     passed: Optional[int] = None
     failed: Optional[int] = None

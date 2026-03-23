@@ -62,7 +62,7 @@ def update_qa_session_status(
 ) -> Optional[QASession]:
     qa_session = get_qa_session(session, qa_session_id)
     if not qa_session:
-        LOGGER.error(f"QASession {qa_session_id} not found for status update")
+        LOGGER.error("QASession %s not found for status update", qa_session_id)
         return None
     qa_session.status = status
     if started_at is not None:

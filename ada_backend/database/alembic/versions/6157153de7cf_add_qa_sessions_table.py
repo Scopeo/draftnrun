@@ -45,16 +45,16 @@ def upgrade() -> None:
     )
 
     op.create_index(
-        op.f("ix_quality_assurance_qa_sessions_id"),
+        "ix_qa_sessions_project_created",
         "qa_sessions",
-        ["id"],
+        ["project_id", sa.text("created_at DESC")],
         unique=False,
         schema="quality_assurance",
     )
     op.create_index(
-        op.f("ix_quality_assurance_qa_sessions_project_id"),
+        "ix_qa_sessions_project_dataset_created",
         "qa_sessions",
-        ["project_id"],
+        ["project_id", "dataset_id", sa.text("created_at DESC")],
         unique=False,
         schema="quality_assurance",
     )
@@ -86,12 +86,12 @@ def downgrade() -> None:
         schema="quality_assurance",
     )
     op.drop_index(
-        op.f("ix_quality_assurance_qa_sessions_project_id"),
+        "ix_qa_sessions_project_dataset_created",
         table_name="qa_sessions",
         schema="quality_assurance",
     )
     op.drop_index(
-        op.f("ix_quality_assurance_qa_sessions_id"),
+        "ix_qa_sessions_project_created",
         table_name="qa_sessions",
         schema="quality_assurance",
     )

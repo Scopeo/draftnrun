@@ -11,11 +11,16 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import CallType, RunStatus
+from ada_backend.database.models import CallType, QASession, RunStatus
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.qa_evaluation_repository import delete_evaluations_for_input_ids
-from ada_backend.repositories.qa_session_repository import update_qa_session_status
+from ada_backend.repositories.qa_session_repository import (
+    create_qa_session,
+    get_qa_session,
+    get_qa_sessions_by_project,
+    update_qa_session_status,
+)
 from ada_backend.repositories.quality_assurance_repository import (
     check_dataset_belongs_to_project,
     clear_version_outputs_for_input_ids,
@@ -165,9 +170,13 @@ class QAEntry:
 
 def resolve_qa_entries_and_environment(
     session: Session,
+    project_id: UUID,
     dataset_id: UUID,
     run_request: QARunRequest,
 ) -> tuple[list[QAEntry], str]:
+    if not check_dataset_belongs_to_project(session, project_id, dataset_id):
+        raise QADatasetNotInProjectError(project_id, dataset_id)
+
     if run_request.run_all:
         number_of_dataset_inputs = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
         input_entries = get_inputs_groundtruths_by_dataset(
@@ -180,6 +189,11 @@ def resolve_qa_entries_and_environment(
         if not input_entries:
             raise ValueError("No input entries found for the provided input_ids")
 
+        returned_ids = {entry.id for entry in input_entries}
+        missing_ids = set(run_request.input_ids) - returned_ids
+        if missing_ids:
+            raise ValueError(f"Input IDs not found: {sorted(missing_ids)}")
+
         for entry in input_entries:
             if entry.dataset_id != dataset_id:
                 raise ValueError(f"Input {entry.id} does not belong to dataset {dataset_id}")
@@ -189,6 +203,12 @@ def resolve_qa_entries_and_environment(
     )
     if not env_relationship:
         raise GraphNotBoundToProjectError(run_request.graph_runner_id)
+    if env_relationship.project_id != project_id:
+        raise GraphNotBoundToProjectError(
+            run_request.graph_runner_id,
+            bound_project_id=env_relationship.project_id,
+            expected_project_id=project_id,
+        )
 
     qa_entries = [
         QAEntry(id=entry.id, input=entry.input, groundtruth=entry.groundtruth)
@@ -310,11 +330,13 @@ async def run_qa_service(
     run_request: QARunRequest,
 ) -> QARunResponse:
     try:
-        input_entries, environment = resolve_qa_entries_and_environment(session, dataset_id, run_request)
+        input_entries, environment = resolve_qa_entries_and_environment(session, project_id, dataset_id, run_request)
         return await _execute_qa_entries(project_id, run_request, input_entries, environment)
+    except (ValueError, GraphNotBoundToProjectError, QADatasetNotInProjectError):
+        raise
     except Exception as e:
         LOGGER.error(f"Error in run_qa_service: {str(e)}")
-        raise ValueError(f"Failed to run QA process: {str(e)}") from e
+        raise
 
 
 async def run_qa_background(
@@ -325,7 +347,9 @@ async def run_qa_background(
 ) -> None:
     try:
         with get_db_session() as session:
-            input_entries, environment = resolve_qa_entries_and_environment(session, dataset_id, run_request)
+            input_entries, environment = resolve_qa_entries_and_environment(
+                session, project_id, dataset_id, run_request,
+            )
             update_qa_session_status(
                 session, session_id,
                 status=RunStatus.RUNNING,
@@ -379,6 +403,37 @@ def schedule_qa_background(
     )
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
+
+
+def create_qa_session_service(
+    session: Session,
+    *,
+    project_id: UUID,
+    dataset_id: UUID,
+    graph_runner_id: UUID,
+) -> QASession:
+    return create_qa_session(
+        session, project_id=project_id, dataset_id=dataset_id, graph_runner_id=graph_runner_id,
+    )
+
+
+def list_qa_sessions_service(
+    session: Session,
+    project_id: UUID,
+    dataset_id: UUID | None = None,
+) -> list[QASession]:
+    return get_qa_sessions_by_project(session, project_id, dataset_id)
+
+
+def get_qa_session_service(
+    session: Session,
+    qa_session_id: UUID,
+    project_id: UUID,
+) -> QASession:
+    qa_session = get_qa_session(session, qa_session_id)
+    if not qa_session or qa_session.project_id != project_id:
+        raise ValueError(f"QA session {qa_session_id} not found in project {project_id}")
+    return qa_session
 
 
 def create_inputs_groundtruths_service(

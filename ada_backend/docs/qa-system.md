@@ -16,16 +16,17 @@ Datasets belong to a project and contain input/groundtruth entries. Each dataset
 
 `POST /projects/{project_id}/qa/datasets/{dataset_id}/run`
 
-1. Select specific entries or all entries in the dataset
-2. Execute the project's graph version against each entry's input
-3. Store results as `VersionOutput` records (keyed by input + graph_runner_id)
-4. Return all results in the HTTP response (blocks until complete)
+1. Verify dataset belongs to the project and graph runner is bound to the same project
+2. Select specific entries or all entries in the dataset
+3. Execute the project's graph version against each entry's input
+4. Store results as `VersionOutput` records (keyed by input + graph_runner_id)
+5. Return all results in the HTTP response (blocks until complete)
 
 ### Async (WebSocket streaming)
 
 `POST /projects/{project_id}/qa/datasets/{dataset_id}/run/async` → 202 `{session_id, status}`
 
-1. Validates entries and graph runner, creates a `QASession` record (status=pending), returns 202 immediately
+1. Validates entries, dataset ownership, and graph runner project binding; creates a `QASession` record (status=pending), returns 202 immediately
 2. A background asyncio task processes entries sequentially:
    - Updates `QASession` status to `running` on start
    - Publishes events to Redis Pub/Sub channel `qa:{session_id}`
@@ -35,7 +36,7 @@ Datasets belong to a project and contain input/groundtruth entries. Each dataset
    - `qa.entry.completed` `{input_id, output, success, error}` — entry done
    - `qa.completed` `{summary}` — all entries processed (terminal, closes WS)
    - `qa.failed` `{error}` — unrecoverable error (terminal, closes WS)
-4. Race-safe reconnect: the WS checks DB state on connect; if still in progress, it subscribes to Redis Pub/Sub then re-checks DB (with a fresh session) to catch completions that occurred during the subscription setup window
+4. Race-safe reconnect: the WS checks DB state on connect; if still in progress, it subscribes to Redis Pub/Sub then re-checks DB (with a fresh session) to catch completions that occurred during the subscription setup window. `stream_events` deduplicates `qa.entry.completed` events by `input_id` to handle the overlap between live Pub/Sub events and DB catch-up
 
 Fully decoupled from the `runs` table. Uses a dedicated `QASession` model in the `quality_assurance` schema.
 
@@ -86,8 +87,9 @@ Evaluates a judge against version outputs, storing results as `JudgeEvaluation` 
 ## Key Files
 
 - `routers/quality_assurance_router.py` — dataset + entry CRUD, run (sync + async), import/export
-- `routers/qa_stream_router.py` — WebSocket endpoint for async QA session streaming
+- `routers/qa_stream_router.py` — WebSocket endpoint for async QA session streaming (auth only; delegates to service)
 - `routers/llm_judges_router.py` — judge CRUD, defaults
 - `routers/qa_evaluation_router.py` — evaluation run, results
+- `services/qa/qa_stream_service.py` — session replay, Redis subscription, and event streaming logic for the QA WebSocket
 - `services/qa/qa_evaluation_service.py` — LLM evaluation logic
 - `schemas/llm_judges_schema.py` — Pydantic schemas
