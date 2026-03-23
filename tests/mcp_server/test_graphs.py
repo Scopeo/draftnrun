@@ -96,5 +96,3 @@ def test_warns_on_completely_unknown_key():
     warnings = _warn_unknown_graph_keys(graph_data)
     assert len(warnings) == 1
     assert "something_random" in warnings[0]
-
-

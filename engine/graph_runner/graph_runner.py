@@ -8,7 +8,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry import trace as trace_api
 
 from engine import legacy_compatibility
-from engine.coercion_matrix import CoercionMatrix, create_default_coercion_matrix
+from engine.coercion_matrix import CoercionError, CoercionMatrix, create_default_coercion_matrix
 from engine.components.types import AgentPayload, ExecutionDirective, ExecutionStrategy, NodeData
 from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.errors import FieldExpressionError
@@ -277,7 +277,12 @@ class GraphRunner:
         target_type = get_target_field_type(target_component, field_name)
         if target_type and self.coercion_matrix.should_attempt_coercion(target_type):
             source_type = type(evaluated_value)
-            coerced = self.coercion_matrix.coerce(evaluated_value, target_type, source_type)
+            try:
+                coerced = self.coercion_matrix.coerce(evaluated_value, target_type, source_type)
+            except CoercionError as e:
+                raise FieldExpressionError(
+                    f"Failed to coerce {source_type.__name__} to {target_type} for field {field_name}: {e}"
+                ) from e
             if coerced is not evaluated_value:
                 LOGGER.warning(
                     "Coercing expression result from %s to %s for field %s",
