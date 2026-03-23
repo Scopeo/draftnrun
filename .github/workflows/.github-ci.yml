@@ -16,9 +16,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       migration-or-seed-changed: ${{ steps.filter.outputs.migration-or-seed }}
+      traces-schema-touched: ${{ steps.traces-schema-check.outputs.traces-schema-touched }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Check for migration or seed changes
         uses: dorny/paths-filter@v2
@@ -27,6 +30,41 @@ jobs:
           filters: |
             migration-or-seed:
               - 'ada_backend/database/**'
+
+      - name: Detect traces schema changes in Alembic migrations
+        id: traces-schema-check
+        run: |
+          set -e
+
+          # For manual runs, keep full data to maximize debugging fidelity.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "traces-schema-touched=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Only run content checks when migration/seed files changed.
+          if [ "${{ steps.filter.outputs.migration-or-seed }}" != "true" ]; then
+            echo "traces-schema-touched=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          MIGRATION_FILES="$(git diff --name-only "$BASE_SHA...$HEAD_SHA" -- "ada_backend/database/**")"
+
+          if [ -z "$MIGRATION_FILES" ]; then
+            echo "traces-schema-touched=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # If any changed migration references the traces schema, include traces data.
+          # Filter to files that still exist on disk, then let rg search them all at once.
+          EXISTING_FILES="$(printf '%s\n' "$MIGRATION_FILES" | while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\n' "$f"; fi; done)"
+          if [ -n "$EXISTING_FILES" ] && printf '%s\n' "$EXISTING_FILES" | xargs rg -ql '(schema[[:space:]]*=[[:space:]]*['"'"'"]traces['"'"'"]|\btraces\.)' ; then
+            echo "traces-schema-touched=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "traces-schema-touched=false" >> "$GITHUB_OUTPUT"
+          fi
 
   ci-pipeline:
     needs: detect-changes
@@ -49,7 +87,7 @@ jobs:
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
 
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           lfs: true
 
@@ -271,8 +309,20 @@ jobs:
             # TTL cache for prod dumps
             CACHE_DIR="/home/ec2-user/ci-cache/db-dumps"
             mkdir -p "$CACHE_DIR"
-            DUMP_PATH="$CACHE_DIR/prod.latest.dump"
             TTL_MINUTES=1440  # 24 hours
+
+            INCLUDE_TRACES_DATA="false"
+            if [ "${{ needs.detect-changes.outputs.traces-schema-touched }}" = "true" ]; then
+              INCLUDE_TRACES_DATA="true"
+            fi
+
+            if [ "$INCLUDE_TRACES_DATA" = "true" ]; then
+              DUMP_PATH="$CACHE_DIR/prod.with_traces.latest.dump"
+              echo "===> Alembic changes touch traces schema: using full data dump"
+            else
+              DUMP_PATH="$CACHE_DIR/prod.no_traces_data.latest.dump"
+              echo "===> Alembic changes do not touch traces schema: excluding traces table data"
+            fi
 
             # Helper function to check dump age and TTL
             check_dump_ttl() {
@@ -302,7 +352,11 @@ jobs:
             echo "===> Checking main DB dump cache at $DUMP_PATH (TTL 24h)"
             if ! check_dump_ttl "$DUMP_PATH" "Main DB"; then
               echo "===> Refreshing prod dump"
-              pg_dump -Fc "$PROD_DB_URL" -f "$DUMP_PATH"
+              if [ "$INCLUDE_TRACES_DATA" = "true" ]; then
+                pg_dump -Fc "$PROD_DB_URL" -f "$DUMP_PATH"
+              else
+                pg_dump -Fc "$PROD_DB_URL" --exclude-table-data='traces.*' -f "$DUMP_PATH"
+              fi
               echo "===> Main DB dump refreshed successfully"
             else
               echo "===> Using cached prod dump"
