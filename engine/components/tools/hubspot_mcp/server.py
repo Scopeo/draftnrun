@@ -261,15 +261,14 @@ async def crm_list_association_types(
 
 async def get_tool_descriptions(allowed: set[str]) -> list[ToolDescription]:
     result = []
-    tools = await mcp.get_tools()
-    for name, tool in tools.items():
-        if name not in allowed:
+    for tool in await mcp.list_tools():
+        if tool.name not in allowed:
             continue
         params = tool.parameters or {}
         resolved_params = resolve_schema_refs(params) if isinstance(params, dict) else params
         result.append(
             ToolDescription(
-                name=name,
+                name=tool.name,
                 description=tool.description or "",
                 tool_properties=resolved_params.get("properties", {}),
                 required_tool_properties=resolved_params.get("required", []),
