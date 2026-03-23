@@ -428,3 +428,23 @@ def publish_run_event(run_id: UUID, event: Dict[str, Any]) -> bool:
     except Exception as e:
         LOGGER.error("Failed to publish run event for %s: %s", run_id, e)
         return False
+
+
+def publish_qa_event(session_id: UUID, event: Dict[str, Any]) -> bool:
+    client = get_redis_client()
+    if not client:
+        LOGGER.debug("Redis client unavailable. Cannot publish QA event for session %s", session_id)
+        return False
+    try:
+        channel = f"qa:{session_id}"
+        message = json.dumps(event)
+        count = client.publish(channel, message)
+        LOGGER.debug("Published QA event to %s (%s subscribers)", channel, count)
+        return True
+    except _RECONNECT_ERRORS as e:
+        LOGGER.error("Redis connection error publishing QA event for session %s: %s", session_id, e)
+        reset_redis_client()
+        return False
+    except Exception as e:
+        LOGGER.error("Failed to publish QA event for session %s: %s", session_id, e)
+        return False

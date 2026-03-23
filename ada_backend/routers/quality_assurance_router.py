@@ -8,6 +8,11 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
+from ada_backend.repositories.qa_session_repository import (
+    create_qa_session,
+    get_qa_session,
+    get_qa_sessions_by_project,
+)
 from ada_backend.routers.auth_router import UserRights, user_has_access_to_project_dependency
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.dataset_schema import (
@@ -25,6 +30,8 @@ from ada_backend.schemas.input_groundtruth_schema import (
     PaginatedInputGroundtruthResponse,
     QARunRequest,
     QARunResponse,
+    QASessionAcceptedSchema,
+    QASessionResponseSchema,
 )
 from ada_backend.schemas.qa_metadata_schema import QAColumnResponse
 from ada_backend.services.errors import GraphNotBoundToProjectError
@@ -57,8 +64,10 @@ from ada_backend.services.qa.quality_assurance_service import (
     get_outputs_by_graph_runner_service,
     get_version_output_ids_by_input_ids_and_graph_runner_service,
     import_qa_data_from_csv_service,
+    resolve_qa_entries_and_environment,
     run_qa_service,
     save_conversation_to_groundtruth_service,
+    schedule_qa_background,
     update_dataset_service,
     update_inputs_groundtruths_service,
 )
@@ -628,6 +637,86 @@ async def run_qa_endpoint(
             f"Failed to run QA process on dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post(
+    "/projects/{project_id}/qa/datasets/{dataset_id}/run/async",
+    response_model=QASessionAcceptedSchema,
+    status_code=202,
+    summary="Run QA Process Async (WebSocket streaming)",
+    tags=["Quality Assurance"],
+)
+async def run_qa_async_endpoint(
+    project_id: UUID,
+    dataset_id: UUID,
+    run_request: QARunRequest,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> QASessionAcceptedSchema:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        resolve_qa_entries_and_environment(session, dataset_id, run_request)
+    except GraphNotBoundToProjectError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    qa_session = create_qa_session(
+        session,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        graph_runner_id=run_request.graph_runner_id,
+    )
+    schedule_qa_background(qa_session.id, project_id, dataset_id, run_request)
+    return QASessionAcceptedSchema(session_id=qa_session.id)
+
+
+@router.get(
+    "/projects/{project_id}/qa/sessions",
+    response_model=List[QASessionResponseSchema],
+    summary="List QA Sessions",
+    tags=["Quality Assurance"],
+)
+def list_qa_sessions_endpoint(
+    project_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+    dataset_id: Optional[UUID] = Query(None, description="Filter by dataset"),
+) -> List[QASessionResponseSchema]:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    return get_qa_sessions_by_project(session, project_id, dataset_id)
+
+
+@router.get(
+    "/projects/{project_id}/qa/sessions/{qa_session_id}",
+    response_model=QASessionResponseSchema,
+    summary="Get QA Session",
+    tags=["Quality Assurance"],
+)
+def get_qa_session_endpoint(
+    project_id: UUID,
+    qa_session_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> QASessionResponseSchema:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    qa_session = get_qa_session(session, qa_session_id)
+    if not qa_session or qa_session.project_id != project_id:
+        raise HTTPException(status_code=404, detail="QA session not found")
+    return qa_session
 
 
 @router.post(

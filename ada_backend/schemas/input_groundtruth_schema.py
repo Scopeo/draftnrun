@@ -156,3 +156,27 @@ class InputGroundtruthResponseList(BaseModel):
     """Schema for multiple input-groundtruth responses."""
 
     inputs_groundtruths: List[InputGroundtruthResponse]
+
+
+class QASessionAcceptedSchema(BaseModel):
+    session_id: UUID
+    status: str = "pending"
+
+
+class QASessionResponseSchema(BaseModel):
+    id: UUID
+    project_id: UUID
+    dataset_id: UUID
+    graph_runner_id: Optional[UUID] = None
+    status: str
+    total: Optional[int] = None
+    passed: Optional[int] = None
+    failed: Optional[int] = None
+    error: Optional[dict] = None
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

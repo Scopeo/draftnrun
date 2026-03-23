@@ -1938,6 +1938,50 @@ class JudgeEvaluation(Base):
         return f"JudgeEvaluation(judge_id={self.judge_id}, version_output_id={self.version_output_id})"
 
 
+class QASession(Base):
+    __tablename__ = "qa_sessions"
+    __table_args__ = {"schema": "quality_assurance"}
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    dataset_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.dataset_project.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    graph_runner_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("graph_runners.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status = mapped_column(
+        SQLAlchemyEnum(
+            RunStatus,
+            name="run_status",
+            values_callable=lambda x: [e.value for e in x],
+            native_enum=True,
+            create_type=False,
+        ),
+        nullable=False,
+        default=RunStatus.PENDING,
+    )
+    total = mapped_column(Integer, nullable=True)
+    passed = mapped_column(Integer, nullable=True)
+    failed = mapped_column(Integer, nullable=True)
+    error = mapped_column(JSONB, nullable=True)
+    started_at = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    project = relationship("Project")
+    dataset = relationship("DatasetProject")
+
+    def __str__(self):
+        return f"QASession(id={self.id}, project_id={self.project_id}, status={self.status})"
+
+
 class LLMModel(Base):
     __tablename__ = "llm_models"
 

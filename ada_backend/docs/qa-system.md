@@ -12,12 +12,41 @@ Datasets belong to a project and contain input/groundtruth entries. Each dataset
 
 ## QA Run Process
 
+### Sync
+
 `POST /projects/{project_id}/qa/datasets/{dataset_id}/run`
 
 1. Select specific entries or all entries in the dataset
 2. Execute the project's graph version against each entry's input
 3. Store results as `VersionOutput` records (keyed by input + graph_runner_id)
+4. Return all results in the HTTP response (blocks until complete)
 
+### Async (WebSocket streaming)
+
+`POST /projects/{project_id}/qa/datasets/{dataset_id}/run/async` → 202 `{session_id, status}`
+
+1. Validates entries and graph runner, creates a `QASession` record (status=pending), returns 202 immediately
+2. A background asyncio task processes entries sequentially:
+   - Updates `QASession` status to `running` on start
+   - Publishes events to Redis Pub/Sub channel `qa:{session_id}`
+   - Updates `QASession` status to `completed`/`failed` with summary stats on finish
+3. Connect to `WS /ws/qa/{project_id}/{session_id}` to receive real-time events:
+   - `qa.entry.started` `{input_id, index, total}` — entry processing begins
+   - `qa.entry.completed` `{input_id, output, success, error}` — entry done
+   - `qa.completed` `{summary}` — all entries processed (terminal, closes WS)
+   - `qa.failed` `{error}` — unrecoverable error (terminal, closes WS)
+4. Race-safe reconnect: the WS checks DB state on connect; if still in progress, it subscribes to Redis Pub/Sub then re-checks DB (with a fresh session) to catch completions that occurred during the subscription setup window
+
+Fully decoupled from the `runs` table. Uses a dedicated `QASession` model in the `quality_assurance` schema.
+
+### QA Session History
+
+- `GET /projects/{project_id}/qa/sessions` — list all QA sessions (optionally filtered by `dataset_id`)
+- `GET /projects/{project_id}/qa/sessions/{qa_session_id}` — get a specific session's status and results
+
+### Data Model
+
+- **`QASession`** (`quality_assurance.qa_sessions`): `project_id`, `dataset_id`, `graph_runner_id`, `status` (pending/running/completed/failed), `total`, `passed`, `failed`, `error`, timestamps
 - **`VersionOutput`** (`quality_assurance.version_output`): actual output for a given (input, graph_runner_id) pair
 
 ## LLM Judges
@@ -56,7 +85,8 @@ Evaluates a judge against version outputs, storing results as `JudgeEvaluation` 
 
 ## Key Files
 
-- `routers/quality_assurance_router.py` — dataset + entry CRUD, run, import/export
+- `routers/quality_assurance_router.py` — dataset + entry CRUD, run (sync + async), import/export
+- `routers/qa_stream_router.py` — WebSocket endpoint for async QA session streaming
 - `routers/llm_judges_router.py` — judge CRUD, defaults
 - `routers/qa_evaluation_router.py` — evaluation run, results
 - `services/qa/qa_evaluation_service.py` — LLM evaluation logic

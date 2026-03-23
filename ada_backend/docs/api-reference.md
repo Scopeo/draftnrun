@@ -121,7 +121,11 @@ Complete endpoint reference for the Draft'n Run backend.
 | POST | `.../datasets/{dataset_id}/entries` | JWT(Developer) | Create entries |
 | PATCH | `.../datasets/{dataset_id}/entries` | JWT(Developer) | Update entries |
 | DELETE | `.../datasets/{dataset_id}/entries` | JWT(Developer) | Delete entries |
-| POST | `.../datasets/{dataset_id}/run` | JWT(Member) | Run QA |
+| POST | `.../datasets/{dataset_id}/run` | JWT(Member) | Run QA (sync) |
+| POST | `.../datasets/{dataset_id}/run/async` | JWT(Member) | Run QA async (202 → session_id) |
+| GET | `/projects/{project_id}/qa/sessions` | JWT(Member) | List QA sessions |
+| GET | `.../qa/sessions/{qa_session_id}` | JWT(Member) | Get QA session |
+| WS | `/ws/qa/{project_id}/{session_id}` | JWT(Member) | Stream QA session events |
 | POST | `.../entries/from-history` | JWT(Developer) | Trace → QA entry |
 | GET | `.../datasets/{dataset_id}/export` | JWT(Member) | Export CSV |
 | POST | `.../datasets/{dataset_id}/import` | JWT(Developer) | Import CSV |
