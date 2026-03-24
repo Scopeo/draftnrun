@@ -10,6 +10,7 @@ from engine.components.component import Component
 from engine.components.errors import CategorizationError
 from engine.components.llm_call import LLMCallAgent, LLMCallInputs
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
+from engine.constants import DEFAULT_MODEL
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 
@@ -75,7 +76,7 @@ def _build_output_format(categories: dict[str, str]) -> str:
 
 class CategorizerInputs(BaseModel):
     completion_model: str = Field(
-        default="anthropic:claude-haiku-4-5",
+        default=DEFAULT_MODEL,
         json_schema_extra={
             "is_tool_input": False,
             "parameter_type": ParameterType.LLM_MODEL,

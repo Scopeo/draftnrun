@@ -16,6 +16,7 @@ from engine.components.rag.vocabulary_search import VocabularySearch
 from engine.components.synthesizer import Synthesizer
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.components.utils import extract_source_ranks, merge_qdrant_filters_with_and_conditions
+from engine.constants import DEFAULT_MODEL
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
@@ -27,7 +28,7 @@ FILTERING_CONDITION_WITH_METADATA_QDRANT = "AND"
 
 class RAGInputs(BaseModel):
     completion_model: str = Field(
-        default="anthropic:claude-haiku-4-5",
+        default=DEFAULT_MODEL,
         json_schema_extra={
             "is_tool_input": False,
             "parameter_type": ParameterType.LLM_MODEL,
@@ -131,8 +132,8 @@ class RAG(Component):
         sourced_response = self._formatter.format(sourced_response)
 
         if sourced_response.sources:
-            original_retrieval_ranks, original_reranker_ranks, total_retrieved, total_reranked = (
-                extract_source_ranks(sourced_response.sources)
+            original_retrieval_ranks, original_reranker_ranks, total_retrieved, total_reranked = extract_source_ranks(
+                sourced_response.sources
             )
             trace_attrs = {
                 "original_retrieval_rank": json.dumps(original_retrieval_ranks),

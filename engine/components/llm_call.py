@@ -12,6 +12,7 @@ from engine.components.component import Component
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
 from engine.components.utils import load_str_to_json, merge_constrained_output_to_root, parse_openai_message_format
 from engine.components.utils_prompt import fill_prompt_template
+from engine.constants import DEFAULT_MODEL
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
@@ -101,7 +102,7 @@ class LLMCallInputs(BaseModel):
         description="The input messages",
     )
     completion_model: str = Field(
-        default="anthropic:claude-haiku-4-5",
+        default=DEFAULT_MODEL,
         json_schema_extra={
             "is_tool_input": False,
             "parameter_type": ParameterType.LLM_MODEL,

@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database.seed.constants import (
-    COMPLETION_MODEL_IN_DB,
     EMBEDDING_MODEL_IN_DB,
     REASONING_IN_DB,
     TEMPERATURE_IN_DB,
@@ -123,10 +122,8 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "scorer": UUID("f1a2b3c4-d5e6-7890-abcd-ef1234567892"),
 }
 
-DEFAULT_MODEL_WEB_SEARCH = "openai:gpt-5-mini"
-DEFAULT_MODEL = "anthropic:claude-haiku-4-5"
 DEFAULT_EMBEDDING_MODEL = "openai:text-embedding-3-large"
-DEFAULT_OCR_MODEL = "mistral:mistral-ocr-latest"
+
 ANTHROPIC_MODELS = [
     {"display_name": "Claude Haiku 4.5", "model_name": "claude-haiku-4-5"},
     {"display_name": "Claude Opus 4.5", "model_name": "claude-opus-4-5"},
@@ -148,28 +145,11 @@ def build_completion_service_config_definitions(
     Simple helper function to avoid code duplication.
     params_to_seed is a list of parameters to seed for the given component.
     options: [
-        "completion_model",
         "temperature",
         "api_key",
     ]
     """
     for param in params_to_seed:
-        if param.param_name == COMPLETION_MODEL_IN_DB:
-            definitions.append(
-                db.ComponentParameterDefinition(
-                    id=param.param_id,
-                    component_version_id=component_version_id,
-                    name=COMPLETION_MODEL_IN_DB,
-                    type=ParameterType.LLM_MODEL,
-                    nullable=False,
-                    default=DEFAULT_MODEL,
-                    ui_component=UIComponent.SELECT,
-                    ui_component_properties=UIComponentProperties(
-                        label="Model Name",
-                    ).model_dump(exclude_unset=True, exclude_none=True),
-                    model_capabilities=[ModelCapabilityEnum.COMPLETION.value],
-                )
-            )
         if param.param_name == TEMPERATURE_IN_DB:
             definitions.append(
                 db.ComponentParameterDefinition(
@@ -259,7 +239,6 @@ def build_function_calling_service_config_definitions(
     Simple helper function to avoid code duplication.
     params_to_seed is a list of parameters to seed for the given component.
     options: [
-        "completion_model",
         "temperature",
         "verbosity",
         "reasoning",
@@ -268,22 +247,6 @@ def build_function_calling_service_config_definitions(
     """
     definitions: list[db.ComponentParameterDefinition] = []
     for param in params_to_seed:
-        if param.param_name == COMPLETION_MODEL_IN_DB:
-            definitions.append(
-                db.ComponentParameterDefinition(
-                    id=param.param_id,
-                    component_version_id=component_version_id,
-                    name=COMPLETION_MODEL_IN_DB,
-                    type=ParameterType.LLM_MODEL,
-                    nullable=False,
-                    default=DEFAULT_MODEL,
-                    ui_component=UIComponent.SELECT,
-                    ui_component_properties=UIComponentProperties(
-                        label="Model Name",
-                    ).model_dump(exclude_unset=True, exclude_none=True),
-                    model_capabilities=[ModelCapabilityEnum.FUNCTION_CALLING.value],
-                )
-            )
         if param.param_name == TEMPERATURE_IN_DB:
             definitions.append(
                 db.ComponentParameterDefinition(
@@ -415,28 +378,11 @@ def build_web_service_config_definitions(
     Simple helper function to avoid code duplication.
     params_to_seed is a list of parameters to seed for the given component.
     options: [
-        "completion_model",
         "api_key",
     ]
     """
     definitions: list[db.ComponentParameterDefinition] = []
     for param in params_to_seed:
-        if param.param_name == COMPLETION_MODEL_IN_DB:
-            definitions.append(
-                db.ComponentParameterDefinition(
-                    id=param.param_id,
-                    component_version_id=component_version_id,
-                    name=COMPLETION_MODEL_IN_DB,
-                    type=ParameterType.LLM_MODEL,
-                    nullable=False,
-                    default=DEFAULT_MODEL_WEB_SEARCH,
-                    ui_component=UIComponent.SELECT,
-                    ui_component_properties=UIComponentProperties(
-                        label="Model Name",
-                    ).model_dump(exclude_unset=True, exclude_none=True),
-                    model_capabilities=[ModelCapabilityEnum.WEB_SEARCH.value],
-                )
-            )
         if param.param_name == "api_key":
             definitions.append(
                 db.ComponentParameterDefinition(
@@ -458,28 +404,11 @@ def build_ocr_service_config_definitions(
     Simple helper function to avoid code duplication.
     params_to_seed is a list of parameters to seed for the given component.
     options: [
-        "completion_model",
         "api_key",
     ]
     """
     definitions: list[db.ComponentParameterDefinition] = []
     for param in params_to_seed:
-        if param.param_name == COMPLETION_MODEL_IN_DB:
-            definitions.append(
-                db.ComponentParameterDefinition(
-                    id=param.param_id,
-                    component_version_id=component_version_id,
-                    name=COMPLETION_MODEL_IN_DB,
-                    type=ParameterType.LLM_MODEL,
-                    nullable=False,
-                    default=DEFAULT_OCR_MODEL,
-                    ui_component=UIComponent.SELECT,
-                    ui_component_properties=UIComponentProperties(
-                        label="Model Name",
-                    ).model_dump(exclude_unset=True, exclude_none=True),
-                    model_capabilities=[ModelCapabilityEnum.OCR.value],
-                )
-            )
         if param.param_name == "api_key":
             definitions.append(
                 db.ComponentParameterDefinition(

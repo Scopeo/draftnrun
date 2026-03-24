@@ -17,6 +17,7 @@ from engine.components.rag.retriever import RETRIEVER_CITATION_INSTRUCTION, RETR
 from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, SourcedResponse, ToolDescription
 from engine.components.utils import extract_source_ranks, load_str_to_json, merge_constrained_output_to_root
 from engine.components.utils_prompt import fill_prompt_template
+from engine.constants import DEFAULT_MODEL
 from engine.graph_runner.runnable import Runnable
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.serializer import serialize_to_json
@@ -43,7 +44,7 @@ class AIAgentInputs(BaseModel):
         description="The history of messages in the conversation.",
     )
     completion_model: str = Field(
-        default="anthropic:claude-haiku-4-5",
+        default=DEFAULT_MODEL,
         json_schema_extra={
             "is_tool_input": False,
             "parameter_type": ParameterType.LLM_MODEL,

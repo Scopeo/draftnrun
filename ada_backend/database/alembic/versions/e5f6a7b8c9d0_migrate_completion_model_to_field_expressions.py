@@ -49,19 +49,44 @@ CAP_WEB_SEARCH = "web_search"
 CAP_OCR = "ocr"
 
 COMPONENT_VERSIONS = [
-    ("22292e7f-a3ba-4c63-a4c7-dd5c0c75cdaa", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5f6", DEFAULT_MODEL, CAP_FUNCTION_CALLING),
+    (
+        "22292e7f-a3ba-4c63-a4c7-dd5c0c75cdaa",
+        "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5f6",
+        DEFAULT_MODEL,
+        CAP_FUNCTION_CALLING,
+    ),
     ("7a039611-49b3-4bfd-b09b-c0f93edf3b79", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5f7", DEFAULT_MODEL, CAP_COMPLETION),
     ("c4a1e2f3-5d6b-4c7a-8e9f-1a2b3c4d5e6f", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5f8", DEFAULT_MODEL, CAP_COMPLETION),
-    ("d6020df0-a7e0-4d82-b731-0a653beef2e5", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5f9", DEFAULT_MODEL_WEB_SEARCH, CAP_WEB_SEARCH),
+    (
+        "d6020df0-a7e0-4d82-b731-0a653beef2e5",
+        "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5f9",
+        DEFAULT_MODEL_WEB_SEARCH,
+        CAP_WEB_SEARCH,
+    ),
     ("f7ddbfcb-6843-4ae9-a15b-40aa565b955b", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5fa", DEFAULT_MODEL, CAP_COMPLETION),
     ("a3b4c5d6-e7f8-9012-3456-789abcdef012", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5fb", DEFAULT_MODEL_OCR, CAP_OCR),
-    ("d0e83ab2-fed1-4e32-9347-0c41353f3eb8", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5fc", DEFAULT_MODEL, CAP_FUNCTION_CALLING),
+    (
+        "d0e83ab2-fed1-4e32-9347-0c41353f3eb8",
+        "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5fc",
+        DEFAULT_MODEL,
+        CAP_FUNCTION_CALLING,
+    ),
     ("f1a5b6c7-d8e9-4f0a-1b2c-3d4e5f6a7b8c", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5fd", DEFAULT_MODEL, CAP_COMPLETION),
     ("6f790dd1-06f6-4489-a655-1a618763a114", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5fe", DEFAULT_MODEL, CAP_COMPLETION),
     ("303ff9a5-3264-472c-b69f-c2da5be3bac8", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5ff", DEFAULT_MODEL, CAP_COMPLETION),
     ("9870dd91-53fd-426b-aa99-7639da706f45", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e600", DEFAULT_MODEL, CAP_COMPLETION),
-    ("1c2fdf5b-4a8d-4788-acb6-86b00124c7ce", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e601", DEFAULT_MODEL, CAP_FUNCTION_CALLING),
-    ("e2b30000-3333-4444-5555-666666666666", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e602", DEFAULT_MODEL, CAP_FUNCTION_CALLING),
+    (
+        "1c2fdf5b-4a8d-4788-acb6-86b00124c7ce",
+        "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e601",
+        DEFAULT_MODEL,
+        CAP_FUNCTION_CALLING,
+    ),
+    (
+        "e2b30000-3333-4444-5555-666666666666",
+        "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e602",
+        DEFAULT_MODEL,
+        CAP_FUNCTION_CALLING,
+    ),
 ]
 
 PORT_DEF_IDS = [pd_id for _, pd_id, _, _ in COMPONENT_VERSIONS]
@@ -171,7 +196,9 @@ def upgrade() -> None:
     any_cv_exists = bind.execute(
         sa.text(
             "SELECT EXISTS(SELECT 1 FROM component_versions WHERE id = ANY("
-            + "ARRAY[" + ", ".join(f"'{cv}'::uuid" for cv, _, _ in COMPONENT_VERSIONS) + "]"
+            + "ARRAY["
+            + ", ".join(f"'{cv}'::uuid" for cv, _, _, _ in COMPONENT_VERSIONS)
+            + "]"
             + "))"
         ),
     ).scalar()
@@ -242,6 +269,7 @@ def downgrade() -> None:
             WITH source AS (
                 SELECT
                     ipi.id                          AS ipi_id,
+                    ipi.field_expression_id          AS fe_id,
                     pi.component_instance_id,
                     fe.expression_json->>'value'    AS literal_value,
                     ci.component_version_id
@@ -264,9 +292,13 @@ def downgrade() -> None:
                 FROM source
                 JOIN cpd_lookup ON cpd_lookup.component_version_id = source.component_version_id
                 ON CONFLICT DO NOTHING
+            ),
+            delete_ports AS (
+                DELETE FROM port_instances
+                WHERE id IN (SELECT ipi_id FROM source)
             )
-            DELETE FROM port_instances
-            WHERE id IN (SELECT ipi_id FROM source)
+            DELETE FROM field_expressions
+            WHERE id IN (SELECT fe_id FROM source)
         """),
     )
 

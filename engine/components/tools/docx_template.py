@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, create_model
 from ada_backend.database.models import ParameterType
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
+from engine.constants import DEFAULT_MODEL
 from engine.llm_services.llm_service import CompletionService
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.serializer import serialize_to_json
@@ -411,7 +412,7 @@ DOCX_TEMPLATE_TOOL_DESCRIPTION = ToolDescription(
 
 class DocxTemplateInputs(BaseModel):
     completion_model: str = Field(
-        default="anthropic:claude-haiku-4-5",
+        default=DEFAULT_MODEL,
         json_schema_extra={
             "is_tool_input": False,
             "parameter_type": ParameterType.LLM_MODEL,

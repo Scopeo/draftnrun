@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from ada_backend.database.models import ParameterType
 from engine.components.component import Component
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
+from engine.constants import DEFAULT_MODEL_WEB_SEARCH
 from engine.llm_services.llm_service import WebSearchService
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
@@ -49,7 +50,7 @@ class SearchFilters(BaseModel):
 
 class WebSearchOpenAIToolInputs(BaseModel):
     completion_model: str = Field(
-        default="openai:gpt-5-mini",
+        default=DEFAULT_MODEL_WEB_SEARCH,
         json_schema_extra={
             "is_tool_input": False,
             "parameter_type": ParameterType.LLM_MODEL,

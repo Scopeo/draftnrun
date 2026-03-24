@@ -5,25 +5,19 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import ParameterType, PortType
-from ada_backend.utils.component_utils import get_ui_component_properties_with_llm_options
 from ada_backend.repositories.component_repository import get_port_definitions_for_component_version_ids
 from ada_backend.repositories.edge_repository import get_edges
-from ada_backend.repositories.graph_runner_repository import (
-    get_component_nodes,
-    get_latest_modification_history,
-)
+from ada_backend.repositories.graph_runner_repository import get_component_nodes, get_latest_modification_history
 from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
 from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterReadSchema
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionReadSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphGetResponse
 from ada_backend.services.graph.graph_validation_utils import validate_graph_runner_belongs_to_project
-from ada_backend.services.graph.playground_utils import (
-    classify_schema_fields,
-    extract_payload_schema_from_instance,
-)
+from ada_backend.services.graph.playground_utils import classify_schema_fields, extract_payload_schema_from_instance
 from ada_backend.services.parameter_synthesis_utils import filter_conflicting_parameters
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 from ada_backend.services.tag_service import compose_tag_name
+from ada_backend.utils.component_utils import get_ui_component_properties_with_llm_options
 from engine.field_expressions.parser import unparse_expression
 from engine.field_expressions.serializer import from_json as expr_from_json
 
@@ -118,7 +112,10 @@ def get_graph_service(
             if input_port.parameter_type == ParameterType.LLM_MODEL:
                 caps = (props or {}).get("model_capabilities")
                 props = get_ui_component_properties_with_llm_options(
-                    session, caps, props, llm_options_cache,
+                    session,
+                    caps,
+                    props,
+                    llm_options_cache,
                 )
             comp_instance.parameters.append(
                 PipelineParameterReadSchema(
