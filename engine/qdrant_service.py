@@ -170,6 +170,14 @@ class QdrantService:
         """
         return self._schemas.get(collection_name, self.default_schema)
 
+    @staticmethod
+    def _should_update(incoming_ts_raw, existing_ts_raw) -> bool:
+        incoming_dt = parse_datetime(incoming_ts_raw)
+        existing_dt = parse_datetime(existing_ts_raw)
+        if incoming_dt is not None and existing_dt is not None:
+            return make_naive_utc(incoming_dt) > make_naive_utc(existing_dt)
+        return True
+
     @classmethod
     def from_defaults(
         cls,
@@ -903,47 +911,47 @@ class QdrantService:
         )
         return response.get("result", {}).get("points", [])
 
-    async def scroll_payload_fields_async(
+    async def _scroll_existing_ids_async(
         self,
         collection_name: str,
-        fields: list[str],
+        id_field: str,
+        timestamp_field: Optional[str] = None,
         filter: Optional[dict] = None,
         batch_size: int = 500,
-    ) -> list[dict]:
-        """Scroll through a collection returning only the requested payload fields."""
-        all_points: list[dict] = []
+    ) -> dict[str, Optional[str]]:
+        """Scroll a collection and return {id: timestamp} dict directly.
+
+        Only fetches the id and timestamp payload fields — no content, metadata, or vectors.
+        """
+        fields = [id_field] + ([timestamp_field] if timestamp_field else [])
+        chunk_id_to_timestamp: dict[str, Optional[str]] = {}
         offset = None
         while True:
-            payload: dict[str, Any] = {
+            request_body: dict[str, Any] = {
                 "limit": batch_size,
                 "with_payload": {"include": fields},
                 "with_vector": False,
             }
             if offset is not None:
-                payload["offset"] = offset
+                request_body["offset"] = offset
             if filter:
-                payload["filter"] = filter
+                request_body["filter"] = filter
             response = await self._send_request_async(
                 method="POST",
                 endpoint=f"collections/{collection_name}/points/scroll?wait=true",
-                payload=payload,
+                payload=request_body,
             )
             result = response.get("result", {})
             points = result.get("points", [])
-            all_points.extend(points)
+            for pt in points:
+                p = pt.get("payload", {})
+                cid = p.get(id_field)
+                if cid is not None:
+                    chunk_id_to_timestamp[cid] = p.get(timestamp_field) if timestamp_field else None
             offset = result.get("next_page_offset")
             if not offset or not points:
                 break
-        return all_points
-
-    def scroll_payload_fields(
-        self,
-        collection_name: str,
-        fields: list[str],
-        filter: Optional[dict] = None,
-        batch_size: int = 500,
-    ) -> list[dict]:
-        return asyncio.run(self.scroll_payload_fields_async(collection_name, fields, filter, batch_size))
+        return chunk_id_to_timestamp
 
     def collection_exists(self, collection_name: str) -> bool:
         """
@@ -1216,47 +1224,29 @@ class QdrantService:
             LOGGER.info(f"Qdrant collection is empty. Added {len(rows)} chunks to Qdrant")
             return True
 
-        fields_to_fetch = [chunk_id_field]
-        if timestamp_field:
-            fields_to_fetch.append(timestamp_field)
-
-        existing_points = await self.scroll_payload_fields_async(
-            collection_name=collection_name,
-            fields=fields_to_fetch,
+        chunk_id_to_timestamp = await self._scroll_existing_ids_async(
+            collection_name,
+            chunk_id_field,
+            timestamp_field,
             filter=query_filter_qdrant,
         )
+        incoming_rows_by_chunk_id = {row[chunk_id_field]: row for row in rows}
 
-        existing_ts_by_id: dict[str, Optional[str]] = {}
-        for point in existing_points:
-            payload = point.get("payload", {})
-            cid = payload.get(chunk_id_field)
-            if cid is not None:
-                existing_ts_by_id[cid] = payload.get(timestamp_field) if timestamp_field else None
+        ids_to_add = incoming_rows_by_chunk_id.keys() - chunk_id_to_timestamp.keys()
+        ids_to_delete = chunk_id_to_timestamp.keys() - incoming_rows_by_chunk_id.keys()
+        common_ids = incoming_rows_by_chunk_id.keys() & chunk_id_to_timestamp.keys()
 
-        incoming_rows_by_id = {row[chunk_id_field]: row for row in rows}
-        incoming_ids = set(incoming_rows_by_id.keys())
-        existing_ids = set(existing_ts_by_id.keys())
-
-        ids_to_delete = existing_ids - incoming_ids
-        ids_to_add = incoming_ids - existing_ids
-        common_ids = incoming_ids & existing_ids
-
-        if query_filter_qdrant:
+        if query_filter_qdrant or not timestamp_field:
             ids_to_update = common_ids
-        elif timestamp_field:
-            ids_to_update = set()
-            for chunk_id in common_ids:
-                incoming_ts_raw = incoming_rows_by_id[chunk_id].get(timestamp_field)
-                existing_ts_raw = existing_ts_by_id[chunk_id]
-                incoming_dt = parse_datetime(incoming_ts_raw)
-                existing_dt = parse_datetime(existing_ts_raw)
-                if incoming_dt is not None and existing_dt is not None:
-                    if make_naive_utc(incoming_dt) > make_naive_utc(existing_dt):
-                        ids_to_update.add(chunk_id)
-                else:
-                    ids_to_update.add(chunk_id)
         else:
-            ids_to_update = common_ids
+            ids_to_update = {
+                cid
+                for cid in common_ids
+                if self._should_update(
+                    incoming_rows_by_chunk_id[cid].get(timestamp_field),
+                    chunk_id_to_timestamp[cid],
+                )
+            }
 
         ids_to_delete = ids_to_delete | ids_to_update
         ids_to_upsert = ids_to_add | ids_to_update
@@ -1269,8 +1259,10 @@ class QdrantService:
             )
             LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
         if ids_to_upsert:
-            rows_to_upsert = [incoming_rows_by_id[chunk_id] for chunk_id in ids_to_upsert]
-            await self.add_chunks_async(rows_to_upsert, collection_name)
+            await self.add_chunks_async(
+                [incoming_rows_by_chunk_id[cid] for cid in ids_to_upsert],
+                collection_name,
+            )
             LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
 
         point_count = await self.count_points_async(

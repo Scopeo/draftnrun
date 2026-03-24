@@ -33,14 +33,20 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
             raise ValueError(f"Collection '{collection_name}' does not exist")
         return [row.copy() for row in collection_data[collection_name]]
 
-    async def scroll_payload_fields_async(
-        collection_name: str, fields: list[str], filter: Optional[dict] = None, **kwargs
-    ) -> list[dict]:
+    async def _scroll_existing_ids_async(
+        collection_name: str,
+        id_field: str,
+        timestamp_field: Optional[str] = None,
+        filter: Optional[dict] = None,
+        **kwargs,
+    ) -> dict[str, Optional[str]]:
         if collection_name not in collection_data:
             raise ValueError(f"Collection '{collection_name}' does not exist")
-        return [
-            {"payload": {f: row.get(f) for f in fields}} for row in collection_data[collection_name]
-        ]
+        return {
+            row[id_field]: row.get(timestamp_field) if timestamp_field else None
+            for row in collection_data[collection_name]
+            if id_field in row
+        }
 
     async def add_chunks_async(list_chunks: list[dict], collection_name: str) -> bool:
         if collection_name not in collection_data:
@@ -84,7 +90,7 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
     mock_qdrant.create_collection_async = AsyncMock(side_effect=create_collection_async)
     mock_qdrant.delete_collection_async = AsyncMock(side_effect=delete_collection_async)
     mock_qdrant.get_collection_data_rows_async = AsyncMock(side_effect=get_collection_data_rows_async)
-    mock_qdrant.scroll_payload_fields_async = AsyncMock(side_effect=scroll_payload_fields_async)
+    mock_qdrant._scroll_existing_ids_async = AsyncMock(side_effect=_scroll_existing_ids_async)
     mock_qdrant.add_chunks_async = AsyncMock(side_effect=add_chunks_async)
     mock_qdrant.delete_chunks_async = AsyncMock(side_effect=delete_chunks_async)
     mock_qdrant._get_schema = Mock(side_effect=_get_schema)
