@@ -96,13 +96,13 @@ def test_qdrant_service():
     ]
     qdrant_agentic_service.sync_rows_with_collection(new_rows_1, TEST_COLLECTION_NAME)
     assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 2
-    synced_rows = qdrant_agentic_service.get_collection_data_rows(TEST_COLLECTION_NAME)
-    synced_rows.sort(key=lambda r: r["chunk_id"])
+    synced_points = qdrant_agentic_service.get_points(TEST_COLLECTION_NAME)
+    synced_payloads = sorted([p["payload"] for p in synced_points], key=lambda r: r["chunk_id"])
     expected_by_id = {r["chunk_id"]: r for r in new_rows_1}
-    for row in synced_rows:
-        expected = expected_by_id[row["chunk_id"]]
+    for payload in synced_payloads:
+        expected = expected_by_id[payload["chunk_id"]]
         for key in expected:
-            assert row[key] == expected[key]
+            assert payload[key] == expected[key]
 
     new_rows_2 = [
         {
@@ -122,13 +122,13 @@ def test_qdrant_service():
     ]
     qdrant_agentic_service.sync_rows_with_collection(new_rows_2, TEST_COLLECTION_NAME)
     assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 2
-    synced_rows = qdrant_agentic_service.get_collection_data_rows(TEST_COLLECTION_NAME)
-    synced_rows.sort(key=lambda r: r["chunk_id"])
+    synced_points = qdrant_agentic_service.get_points(TEST_COLLECTION_NAME)
+    synced_payloads = sorted([p["payload"] for p in synced_points], key=lambda r: r["chunk_id"])
     expected_by_id = {r["chunk_id"]: r for r in new_rows_2}
-    for row in synced_rows:
-        expected = expected_by_id[row["chunk_id"]]
+    for payload in synced_payloads:
+        expected = expected_by_id[payload["chunk_id"]]
         for key in expected:
-            assert row[key] == expected[key]
+            assert payload[key] == expected[key]
 
     assert qdrant_agentic_service.delete_collection(TEST_COLLECTION_NAME)
     assert not qdrant_agentic_service.collection_exists(TEST_COLLECTION_NAME)

@@ -28,25 +28,10 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
             return True
         return False
 
-    async def get_collection_data_rows_async(collection_name: str, **kwargs) -> list[dict]:
+    async def get_points_async(collection_name: str, filter: Optional[dict] = None, **kwargs) -> list[dict]:
         if collection_name not in collection_data:
             raise ValueError(f"Collection '{collection_name}' does not exist")
-        return [row.copy() for row in collection_data[collection_name]]
-
-    async def _scroll_existing_ids_async(
-        collection_name: str,
-        id_field: str,
-        timestamp_field: Optional[str] = None,
-        filter: Optional[dict] = None,
-        **kwargs,
-    ) -> dict[str, Optional[str]]:
-        if collection_name not in collection_data:
-            raise ValueError(f"Collection '{collection_name}' does not exist")
-        return {
-            row[id_field]: row.get(timestamp_field) if timestamp_field else None
-            for row in collection_data[collection_name]
-            if id_field in row
-        }
+        return [{"payload": row.copy()} for row in collection_data[collection_name]]
 
     async def add_chunks_async(list_chunks: list[dict], collection_name: str) -> bool:
         if collection_name not in collection_data:
@@ -89,8 +74,7 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
     mock_qdrant.collection_exists_async = AsyncMock(side_effect=collection_exists_async)
     mock_qdrant.create_collection_async = AsyncMock(side_effect=create_collection_async)
     mock_qdrant.delete_collection_async = AsyncMock(side_effect=delete_collection_async)
-    mock_qdrant.get_collection_data_rows_async = AsyncMock(side_effect=get_collection_data_rows_async)
-    mock_qdrant._scroll_existing_ids_async = AsyncMock(side_effect=_scroll_existing_ids_async)
+    mock_qdrant.get_points_async = AsyncMock(side_effect=get_points_async)
     mock_qdrant.add_chunks_async = AsyncMock(side_effect=add_chunks_async)
     mock_qdrant.delete_chunks_async = AsyncMock(side_effect=delete_chunks_async)
     mock_qdrant._get_schema = Mock(side_effect=_get_schema)
@@ -110,10 +94,10 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
         collection_name = kwargs.get("collection_name") or (args[0] if args else None)
         return asyncio.run(delete_collection_async(collection_name))
 
-    def sync_get_collection_data_rows(*args, **kwargs):
+    def sync_get_points(*args, **kwargs):
         collection_name = kwargs.get("collection_name") or (args[0] if args else None)
         filtered_kwargs = {k: v for k, v in kwargs.items() if k != "collection_name"}
-        return asyncio.run(get_collection_data_rows_async(collection_name, **filtered_kwargs))
+        return asyncio.run(get_points_async(collection_name, **filtered_kwargs))
 
     def sync_add_chunks(*args, **kwargs):
         list_chunks = kwargs.get("list_chunks") or (args[0] if args else None)
@@ -140,7 +124,7 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
     mock_qdrant.collection_exists = Mock(side_effect=sync_collection_exists)
     mock_qdrant.create_collection = Mock(side_effect=sync_create_collection)
     mock_qdrant.delete_collection = Mock(side_effect=sync_delete_collection)
-    mock_qdrant.get_collection_data_rows = Mock(side_effect=sync_get_collection_data_rows)
+    mock_qdrant.get_points = Mock(side_effect=sync_get_points)
     mock_qdrant.add_chunks = Mock(side_effect=sync_add_chunks)
     mock_qdrant.delete_chunks = Mock(side_effect=sync_delete_chunks)
     mock_qdrant.sync_rows_with_collection = Mock(side_effect=sync_sync_rows_with_collection)

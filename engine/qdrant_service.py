@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import httpx
 
@@ -886,50 +886,23 @@ class QdrantService:
         self,
         collection_name: str,
         filter: Optional[dict] = None,
+        with_payload: Union[bool, dict] = True,
     ) -> list[dict]:
-        return asyncio.run(self.get_points_async(collection_name, filter))
+        return asyncio.run(self.get_points_async(collection_name, filter, with_payload))
 
     async def get_points_async(
         self,
         collection_name: str,
         filter: Optional[dict] = None,
-    ) -> list[dict]:
-        payload = {
-            "offset": None,
-            "limit": max(
-                await self.count_points_async(
-                    filter=filter,
-                    collection_name=collection_name,
-                ),
-                1,
-            ),
-        }
-        if filter:
-            payload["filter"] = filter
-        response = await self._send_request_async(
-            method="POST", endpoint=f"collections/{collection_name}/points/scroll?wait=true", payload=payload
-        )
-        return response.get("result", {}).get("points", [])
-
-    async def _scroll_existing_ids_async(
-        self,
-        collection_name: str,
-        id_field: str,
-        timestamp_field: Optional[str] = None,
-        filter: Optional[dict] = None,
+        with_payload: Union[bool, dict] = True,
         batch_size: int = 500,
-    ) -> dict[str, Optional[str]]:
-        """Scroll a collection and return {id: timestamp} dict directly.
-
-        Only fetches the id and timestamp payload fields — no content, metadata, or vectors.
-        """
-        fields = [id_field] + ([timestamp_field] if timestamp_field else [])
-        chunk_id_to_timestamp: dict[str, Optional[str]] = {}
+    ) -> list[dict]:
+        all_points: list[dict] = []
         offset = None
         while True:
             request_body: dict[str, Any] = {
                 "limit": batch_size,
-                "with_payload": {"include": fields},
+                "with_payload": with_payload,
                 "with_vector": False,
             }
             if offset is not None:
@@ -943,15 +916,11 @@ class QdrantService:
             )
             result = response.get("result", {})
             points = result.get("points", [])
-            for pt in points:
-                p = pt.get("payload", {})
-                cid = p.get(id_field)
-                if cid is not None:
-                    chunk_id_to_timestamp[cid] = p.get(timestamp_field) if timestamp_field else None
+            all_points.extend(points)
             offset = result.get("next_page_offset")
             if not offset or not points:
                 break
-        return chunk_id_to_timestamp
+        return all_points
 
     def collection_exists(self, collection_name: str) -> bool:
         """
@@ -1158,52 +1127,6 @@ class QdrantService:
         collections = response.get("result", {}).get("collections", [])
         return [collection["name"] for collection in collections]
 
-    async def get_collection_data_rows_async(
-        self,
-        collection_name: str,
-        query_filter_qdrant: Optional[dict] = None,
-    ) -> list[dict]:
-        """Return collection data as list[dict]."""
-        if not await self.collection_exists_async(collection_name):
-            raise ValueError(f"Collection {collection_name} does not exist.")
-
-        schema = self._get_schema(collection_name)
-        all_points = await self.get_points_async(
-            collection_name=collection_name,
-            filter=query_filter_qdrant,
-        )
-
-        rows: list[dict] = []
-        for point in all_points:
-            payload = point.get("payload", {})
-            row = {
-                schema.chunk_id_field: payload.get(schema.chunk_id_field),
-                schema.content_field: payload.get(schema.content_field),
-                schema.file_id_field: payload.get(schema.file_id_field),
-            }
-            if schema.url_id_field:
-                row[schema.url_id_field] = payload.get(schema.url_id_field)
-            if schema.file_id_field:
-                row[schema.file_id_field] = payload.get(schema.file_id_field)
-            if schema.last_edited_ts_field:
-                row[schema.last_edited_ts_field] = payload.get(schema.last_edited_ts_field)
-            if schema.source_id_field:
-                row[schema.source_id_field] = payload.get(schema.source_id_field)
-
-            metadata_fields = schema.metadata_fields_to_keep or payload.keys()
-            for field in metadata_fields:
-                if field not in row:
-                    row[field] = payload.get(field)
-            rows.append(row)
-        return rows
-
-    def get_collection_data_rows(
-        self,
-        collection_name: str,
-        query_filter_qdrant: Optional[dict] = None,
-    ) -> list[dict]:
-        return asyncio.run(self.get_collection_data_rows_async(collection_name, query_filter_qdrant))
-
     async def sync_rows_with_collection_async(
         self,
         rows: list[dict],
@@ -1224,27 +1147,32 @@ class QdrantService:
             LOGGER.info(f"Qdrant collection is empty. Added {len(rows)} chunks to Qdrant")
             return True
 
-        chunk_id_to_timestamp = await self._scroll_existing_ids_async(
-            collection_name,
-            chunk_id_field,
-            timestamp_field,
+        fields = [chunk_id_field] + ([timestamp_field] if timestamp_field else [])
+        points = await self.get_points_async(
+            collection_name=collection_name,
             filter=query_filter_qdrant,
+            with_payload={"include": fields},
         )
+        existing_ids_with_timestamp: dict[str, Optional[str]] = {
+            pt["payload"][chunk_id_field]: pt["payload"].get(timestamp_field) if timestamp_field else None
+            for pt in points
+            if chunk_id_field in pt.get("payload", {})
+        }
         incoming_rows_by_chunk_id = {row[chunk_id_field]: row for row in rows}
 
-        ids_to_add = incoming_rows_by_chunk_id.keys() - chunk_id_to_timestamp.keys()
-        ids_to_delete = chunk_id_to_timestamp.keys() - incoming_rows_by_chunk_id.keys()
-        common_ids = incoming_rows_by_chunk_id.keys() & chunk_id_to_timestamp.keys()
+        ids_to_add = incoming_rows_by_chunk_id.keys() - existing_ids_with_timestamp.keys()
+        ids_to_delete = existing_ids_with_timestamp.keys() - incoming_rows_by_chunk_id.keys()
+        common_ids = incoming_rows_by_chunk_id.keys() & existing_ids_with_timestamp.keys()
 
         if query_filter_qdrant or not timestamp_field:
             ids_to_update = common_ids
         else:
             ids_to_update = {
-                cid
-                for cid in common_ids
+                chunk_id
+                for chunk_id in common_ids
                 if self._should_update(
-                    incoming_rows_by_chunk_id[cid].get(timestamp_field),
-                    chunk_id_to_timestamp[cid],
+                    incoming_rows_by_chunk_id[chunk_id].get(timestamp_field),
+                    existing_ids_with_timestamp[chunk_id],
                 )
             }
 
@@ -1260,7 +1188,7 @@ class QdrantService:
             LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
         if ids_to_upsert:
             await self.add_chunks_async(
-                [incoming_rows_by_chunk_id[cid] for cid in ids_to_upsert],
+                [incoming_rows_by_chunk_id[chunk_id] for chunk_id in ids_to_upsert],
                 collection_name,
             )
             LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
