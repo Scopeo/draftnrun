@@ -6,7 +6,7 @@ from pydantic import SecretStr
 from sqlalchemy.orm import Session
 
 from ada_backend.context import set_current_project_id
-from ada_backend.database.models import ParameterType, PortDefinition, PortSetupMode, PortType
+from ada_backend.database.models import PortSetupMode
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 from ada_backend.repositories.component_repository import (
     get_base_component_from_version,
@@ -22,6 +22,7 @@ from ada_backend.repositories.integration_repository import (
     get_integration_from_component,
 )
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
+from ada_backend.repositories.port_mapping_repository import get_build_time_port_defaults
 from ada_backend.repositories.tool_port_configuration_repository import get_tool_port_configurations
 from ada_backend.services.errors import MissingDataSourceError, MissingIntegrationError
 from ada_backend.services.registry import FACTORY_REGISTRY
@@ -97,24 +98,6 @@ def get_component_params(
         params[name] = [v for _, v in sorted(values, key=lambda x: x[0])]
 
     return params
-
-
-BUILD_TIME_PARAMETER_TYPES = frozenset({ParameterType.LLM_MODEL})
-
-
-def _get_build_time_port_names(session: Session, component_version_id: UUID) -> set[str]:
-    """Return port names that should be resolved at build time (e.g. completion_model)."""
-    rows = (
-        session
-        .query(PortDefinition.name)
-        .filter(
-            PortDefinition.component_version_id == component_version_id,
-            PortDefinition.port_type == PortType.INPUT,
-            PortDefinition.parameter_type.in_(BUILD_TIME_PARAMETER_TYPES),
-        )
-        .all()
-    )
-    return {row[0] for row in rows}
 
 
 def _resolve_literal_field_expressions(

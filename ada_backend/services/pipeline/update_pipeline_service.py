@@ -18,6 +18,7 @@ from ada_backend.repositories.integration_repository import (
     upsert_component_instance_integration,
 )
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
+from ada_backend.repositories.port_mapping_repository import get_port_definition_default
 from ada_backend.repositories.tool_port_configuration_repository import (
     delete_tool_port_configurations_for_instance,
     upsert_tool_port_configuration,
@@ -37,16 +38,7 @@ def _resolve_completion_model_name(session: Session, instance_data: ComponentIns
     param = next((p for p in instance_data.parameters if p.name == COMPLETION_MODEL_PORT_NAME), None)
     if param is not None:
         return str(param.value) if param.value is not None else None
-    port_def = (
-        session.query(db.PortDefinition.default)
-        .filter(
-            db.PortDefinition.component_version_id == instance_data.component_version_id,
-            db.PortDefinition.name == COMPLETION_MODEL_PORT_NAME,
-            db.PortDefinition.port_type == db.PortType.INPUT,
-        )
-        .scalar()
-    )
-    return port_def
+    return get_port_definition_default(session, instance_data.component_version_id, COMPLETION_MODEL_PORT_NAME)
 
 
 def _normalize_expression_json(raw: object) -> dict | None:
