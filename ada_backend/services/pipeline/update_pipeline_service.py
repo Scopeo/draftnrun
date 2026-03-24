@@ -1,11 +1,11 @@
 import json
 from logging import getLogger
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 from ada_backend.repositories.component_repository import (
     delete_component_instance_parameters,
     get_component_by_id,
@@ -28,6 +28,25 @@ from engine.field_expressions.parser import parse_expression_flexible
 from engine.field_expressions.serializer import to_json as expression_to_json
 
 LOGGER = getLogger(__name__)
+
+COMPLETION_MODEL_PORT_NAME = "completion_model"
+
+
+def _resolve_completion_model_name(session: Session, instance_data: ComponentInstanceSchema) -> Optional[str]:
+    """Resolve the completion_model value from parameters or the port definition default."""
+    param = next((p for p in instance_data.parameters if p.name == COMPLETION_MODEL_PORT_NAME), None)
+    if param is not None:
+        return str(param.value) if param.value is not None else None
+    port_def = (
+        session.query(db.PortDefinition.default)
+        .filter(
+            db.PortDefinition.component_version_id == instance_data.component_version_id,
+            db.PortDefinition.name == COMPLETION_MODEL_PORT_NAME,
+            db.PortDefinition.port_type == db.PortType.INPUT,
+        )
+        .scalar()
+    )
+    return port_def
 
 
 def _normalize_expression_json(raw: object) -> dict | None:
@@ -94,12 +113,14 @@ def create_or_update_component_instance(
                 )
                 continue
 
-            model_name_param = next((p for p in instance_data.parameters if p.name == COMPLETION_MODEL_IN_DB), None)
-            if model_name_param is None:
-                raise ValueError(
-                    f"LLM Model name parameter not found in component definitions for component {component_name}"
+            model_name = _resolve_completion_model_name(session, instance_data)
+            if model_name is None:
+                LOGGER.warning(
+                    f"Could not resolve completion_model for component '{component_name}'. "
+                    "Skipping LLM API key parameter creation."
                 )
-            provider, _ = get_llm_provider_and_model(model_name_param.value)
+                continue
+            provider, _ = get_llm_provider_and_model(model_name)
             param_secret = next((s for s in organization_secrets if s.key == f"{provider}_api_key"), None)
             if param_secret is None:
                 LOGGER.info(
