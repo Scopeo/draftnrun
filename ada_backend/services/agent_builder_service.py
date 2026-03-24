@@ -114,7 +114,7 @@ def _get_build_time_port_names(session: Session, component_version_id: UUID) -> 
         )
         .all()
     )
-    return {r[0] for r in rows}
+    return {row[0] for row in rows}
 
 
 def _resolve_literal_field_expressions(
