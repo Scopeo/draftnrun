@@ -1957,11 +1957,15 @@ class JudgeEvaluation(Base):
 
 class QASession(Base):
     __tablename__ = "qa_sessions"
-    __table_args__ = {"schema": "quality_assurance"}
+    __table_args__ = (
+        Index("ix_qa_sessions_project_created", "project_id", sa.text("created_at DESC")),
+        Index("ix_qa_sessions_project_dataset_created", "project_id", "dataset_id", sa.text("created_at DESC")),
+        {"schema": "quality_assurance"},
+    )
 
-    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     project_id = mapped_column(
-        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
     )
     dataset_id = mapped_column(
         UUID(as_uuid=True),
