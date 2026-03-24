@@ -903,6 +903,48 @@ class QdrantService:
         )
         return response.get("result", {}).get("points", [])
 
+    async def scroll_payload_fields_async(
+        self,
+        collection_name: str,
+        fields: list[str],
+        filter: Optional[dict] = None,
+        batch_size: int = 500,
+    ) -> list[dict]:
+        """Scroll through a collection returning only the requested payload fields."""
+        all_points: list[dict] = []
+        offset = None
+        while True:
+            payload: dict[str, Any] = {
+                "limit": batch_size,
+                "with_payload": {"include": fields},
+                "with_vector": False,
+            }
+            if offset is not None:
+                payload["offset"] = offset
+            if filter:
+                payload["filter"] = filter
+            response = await self._send_request_async(
+                method="POST",
+                endpoint=f"collections/{collection_name}/points/scroll?wait=true",
+                payload=payload,
+            )
+            result = response.get("result", {})
+            points = result.get("points", [])
+            all_points.extend(points)
+            offset = result.get("next_page_offset")
+            if not offset or not points:
+                break
+        return all_points
+
+    def scroll_payload_fields(
+        self,
+        collection_name: str,
+        fields: list[str],
+        filter: Optional[dict] = None,
+        batch_size: int = 500,
+    ) -> list[dict]:
+        return asyncio.run(self.scroll_payload_fields_async(collection_name, fields, filter, batch_size))
+
     def collection_exists(self, collection_name: str) -> bool:
         """
         Check if a collection exists in Qdrant.
@@ -1160,7 +1202,7 @@ class QdrantService:
         collection_name: str,
         query_filter_qdrant: Optional[dict] = None,
     ) -> bool:
-        """Diff-based sync using plain list[dict] instead of DataFrame."""
+        """Diff-based sync fetching only IDs + timestamps from Qdrant for comparison."""
         schema = self._get_schema(collection_name)
         chunk_id_field = schema.chunk_id_field
         timestamp_field = schema.last_edited_ts_field
@@ -1174,13 +1216,26 @@ class QdrantService:
             LOGGER.info(f"Qdrant collection is empty. Added {len(rows)} chunks to Qdrant")
             return True
 
-        existing_rows = await self.get_collection_data_rows_async(collection_name, query_filter_qdrant)
+        fields_to_fetch = [chunk_id_field]
+        if timestamp_field:
+            fields_to_fetch.append(timestamp_field)
+
+        existing_points = await self.scroll_payload_fields_async(
+            collection_name=collection_name,
+            fields=fields_to_fetch,
+            filter=query_filter_qdrant,
+        )
+
+        existing_ts_by_id: dict[str, Optional[str]] = {}
+        for point in existing_points:
+            payload = point.get("payload", {})
+            cid = payload.get(chunk_id_field)
+            if cid is not None:
+                existing_ts_by_id[cid] = payload.get(timestamp_field) if timestamp_field else None
 
         incoming_rows_by_id = {row[chunk_id_field]: row for row in rows}
-        existing_rows_by_id = {row[chunk_id_field]: row for row in existing_rows}
-
         incoming_ids = set(incoming_rows_by_id.keys())
-        existing_ids = set(existing_rows_by_id.keys())
+        existing_ids = set(existing_ts_by_id.keys())
 
         ids_to_delete = existing_ids - incoming_ids
         ids_to_add = incoming_ids - existing_ids
@@ -1192,13 +1247,13 @@ class QdrantService:
             ids_to_update = set()
             for chunk_id in common_ids:
                 incoming_ts_raw = incoming_rows_by_id[chunk_id].get(timestamp_field)
-                existing_ts_raw = existing_rows_by_id[chunk_id].get(timestamp_field)
+                existing_ts_raw = existing_ts_by_id[chunk_id]
                 incoming_dt = parse_datetime(incoming_ts_raw)
                 existing_dt = parse_datetime(existing_ts_raw)
                 if incoming_dt is not None and existing_dt is not None:
                     if make_naive_utc(incoming_dt) > make_naive_utc(existing_dt):
                         ids_to_update.add(chunk_id)
-                elif incoming_rows_by_id[chunk_id] != existing_rows_by_id[chunk_id]:
+                else:
                     ids_to_update.add(chunk_id)
         else:
             ids_to_update = common_ids
