@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from ada_backend.database.models import EnvType, RunStatus
 
@@ -62,19 +62,13 @@ class QARunRequest(BaseModel):
     input_ids: Optional[List[UUID]] = None
     run_all: bool = False
 
-    @field_validator("input_ids")
-    @classmethod
-    def validate_input_ids(cls, v, info):
-        """Validate that either input_ids is provided or run_all is True."""
-        run_all = info.data.get("run_all", False)
-
-        if run_all and v:
+    @model_validator(mode="after")
+    def validate_input_ids_or_run_all(self):
+        if self.run_all and self.input_ids:
             raise ValueError("Cannot specify both run_all=True and input_ids. Choose one option.")
-
-        if not run_all and not v:
+        if not self.run_all and not self.input_ids:
             raise ValueError("Must specify either input_ids or set run_all=True.")
-
-        return v
+        return self
 
 
 class QARunResult(BaseModel):

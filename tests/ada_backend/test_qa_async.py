@@ -2,10 +2,32 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from ada_backend.database.models import RunStatus
 from ada_backend.schemas.input_groundtruth_schema import QARunRequest
 from ada_backend.services.qa.quality_assurance_service import run_qa_background
+
+
+class TestQARunRequestValidation:
+    def test_run_all_true_without_input_ids_is_valid(self):
+        req = QARunRequest(graph_runner_id=uuid4(), run_all=True)
+        assert req.run_all is True
+        assert req.input_ids is None
+
+    def test_input_ids_without_run_all_is_valid(self):
+        ids = [uuid4(), uuid4()]
+        req = QARunRequest(graph_runner_id=uuid4(), input_ids=ids)
+        assert req.input_ids == ids
+        assert req.run_all is False
+
+    def test_neither_input_ids_nor_run_all_raises(self):
+        with pytest.raises(ValidationError, match="Must specify either input_ids or set run_all=True"):
+            QARunRequest(graph_runner_id=uuid4())
+
+    def test_both_input_ids_and_run_all_raises(self):
+        with pytest.raises(ValidationError, match="Cannot specify both run_all=True and input_ids"):
+            QARunRequest(graph_runner_id=uuid4(), run_all=True, input_ids=[uuid4()])
 
 
 @pytest.mark.asyncio
