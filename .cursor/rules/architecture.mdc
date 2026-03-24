@@ -43,6 +43,10 @@ DAG of ComponentInstances connected via PortMappings. Data flows through FieldEx
 - Ingestion worker: Redis Stream consumer, separate process.
 - Scheduler: APScheduler + PostgreSQL job store, separate process. Registry-based cron types in `ada_backend/services/cron/`. See `ada_backend/services/cron/Readme.md`.
 
+### Analytics
+
+Mixpanel Python SDK (`mixpanel_analytics.py`). `non_breaking_track` decorator wraps every tracking function with try/except internally — never add try/except at call sites. Only active when `ENV == "production"` **and** `MIXPANEL_TOKEN` is set; otherwise all calls silently no-op (no errors). Events cover: identity, project/agent lifecycle, deployment, run completion, ingestion, cron, API keys, OAuth, and observability page views. New user-facing actions should get a corresponding `track_*` call in the **service layer** (not routers).
+
 ### MCP Server
 
 `mcp_server/`: standalone pod calling the backend over HTTP + Supabase directly. See `mcp_server/README.md`.

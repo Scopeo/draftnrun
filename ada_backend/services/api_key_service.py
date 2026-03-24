@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import ApiKeyType, OrgApiKey, ProjectApiKey
+from ada_backend.mixpanel_analytics import track_api_key_generated
 from ada_backend.repositories.api_key_repository import (
     create_api_key,
     deactivate_api_key,
@@ -82,6 +83,8 @@ def generate_scoped_api_key(
     scope_id: UUID,
     key_name: str,
     creator_user_id: UUID,
+    organization_id: UUID | None = None,
+    scope: str = "",
 ) -> ApiKeyCreatedResponse:
     api_key = _generate_api_key()
     hashed_key = _hash_key(api_key)
@@ -94,6 +97,10 @@ def generate_scoped_api_key(
         hashed_key=hashed_key,
         creator_user_id=creator_user_id,
     )
+
+    if organization_id and scope:
+        track_api_key_generated(creator_user_id, organization_id, scope=scope)
+
     return ApiKeyCreatedResponse(
         private_key=api_key,
         key_id=key_id,

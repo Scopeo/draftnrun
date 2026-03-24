@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType, RunStatus
 from ada_backend.database.setup_db import get_db_session
+from ada_backend.mixpanel_analytics import track_run_completed
 from ada_backend.repositories import run_repository
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.schemas.project_schema import ChatResponse
@@ -101,6 +102,8 @@ async def run_with_tracking(
         )
     try:
         result = await runner_coro
+        finished_at = datetime.now(timezone.utc)
+        duration_ms = int((finished_at - now).total_seconds() * 1000)
         result_id = _upload_result_to_s3(result, project_id=project_id, run_id=run_id)
         with get_db_session() as session:
             update_run_status(
@@ -110,10 +113,16 @@ async def run_with_tracking(
                 status=RunStatus.COMPLETED,
                 trace_id=result.trace_id,
                 result_id=result_id,
-                finished_at=datetime.now(timezone.utc),
+                finished_at=finished_at,
             )
+        track_run_completed(
+            user_id=None, project_id=project_id,
+            status="completed", trigger=trigger.value, duration_ms=duration_ms,
+        )
         return result
     except Exception as e:
+        finished_at = datetime.now(timezone.utc)
+        duration_ms = int((finished_at - now).total_seconds() * 1000)
         with get_db_session() as session:
             update_run_status(
                 session,
@@ -121,8 +130,12 @@ async def run_with_tracking(
                 project_id=project_id,
                 status=RunStatus.FAILED,
                 error={"message": str(e), "type": type(e).__name__},
-                finished_at=datetime.now(timezone.utc),
+                finished_at=finished_at,
             )
+        track_run_completed(
+            user_id=None, project_id=project_id,
+            status="failed", trigger=trigger.value, duration_ms=duration_ms,
+        )
         raise
 
 

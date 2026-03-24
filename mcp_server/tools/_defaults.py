@@ -1,4 +1,4 @@
-"""Default values for entity creation — mirrors back-office randomNameGenerator.ts."""
+"""Default values for entity creation and model format utilities."""
 
 import random
 import uuid

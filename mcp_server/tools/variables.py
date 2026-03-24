@@ -3,6 +3,8 @@
 All tools in this module require admin or super_admin role.
 """
 
+from uuid import UUID
+
 from fastmcp import FastMCP
 
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
@@ -10,7 +12,7 @@ from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
 ADMIN_ROLES = ("admin", "super_admin")
 
 _VAR_NAME = Param("name", str, description="Variable name (unique within org).")
-_SET_ID = Param("set_id", str, description="Variable set ID.")
+_SET_ID = Param("set_id", UUID, description="Variable set ID (from list_variable_sets).")
 _SECRET_KEY = Param("key", str, description="Secret key name.")
 
 SPECS: list[ToolSpec] = [

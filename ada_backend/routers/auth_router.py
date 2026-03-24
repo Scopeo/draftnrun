@@ -252,16 +252,24 @@ async def create_api_key(
     # Check if user has access to project. If not, a 403 is raised
     user = await _is_user(project_id=api_key_create.project_id, user=user, session=session)
 
+    project = get_project(session, api_key_create.project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     try:
-        return generate_scoped_api_key(
+        result = generate_scoped_api_key(
             session=session,
             scope_type=ApiKeyType.PROJECT.value,
             scope_id=api_key_create.project_id,
             key_name=api_key_create.key_name,
             creator_user_id=user.id,
+            organization_id=project.organization_id,
+            scope="project",
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to create API key") from e
+
+    return result
 
 
 @router.get("/org-api-key", summary="Get Organization API Keys")
@@ -315,15 +323,19 @@ async def create_org_api_key(
     user = await _is_user(organization_id=org_api_key_create.org_id, user=user)
 
     try:
-        return generate_scoped_api_key(
+        result = generate_scoped_api_key(
             session=session,
             scope_type=ApiKeyType.ORGANIZATION.value,
             scope_id=org_api_key_create.org_id,
             key_name=org_api_key_create.key_name,
             creator_user_id=user.id,
+            organization_id=org_api_key_create.org_id,
+            scope="organization",
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to create Organization API key") from e
+
+    return result
 
 
 @router.delete("/org-api-key", summary="Delete Organization API Key")

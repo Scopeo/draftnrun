@@ -1,6 +1,8 @@
 import asyncio
 import uuid
 
+import pytest
+
 from ada_backend.database.models import ParameterType
 from ada_backend.schemas.agent_schema import AgentUpdateSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema, PipelineParameterSchema
@@ -19,10 +21,11 @@ class DummyAgent:
 
 
 class DummyProject:
-    def __init__(self, id, name, organization_id):
+    def __init__(self, id, name, organization_id, type="agent"):
         self.id = id
         self.name = name
         self.organization_id = organization_id
+        self.type = type
         self.created_at = "2025-01-01T00:00:00"
         self.updated_at = "2025-01-01T00:00:00"
         self.description = None
@@ -109,9 +112,8 @@ def test_get_agent_by_id_service_project_not_found(monkeypatch):
 
     monkeypatch.setattr(agents_service, "get_project", fake_get_project)
 
-    res = agents_service.get_agent_by_id_service(session, agent_id, graph_runner_id)
-    # Should return ProjectNotFound exception instance
-    assert isinstance(res, agents_service.ProjectNotFound)
+    with pytest.raises(agents_service.ProjectNotFound):
+        agents_service.get_agent_by_id_service(session, agent_id, graph_runner_id)
 
 
 def test_get_agent_by_id_service_with_components(monkeypatch):
@@ -201,6 +203,8 @@ def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
         # no-op, just validates arguments are passed
         pass
 
+    proj = DummyProject(agent_id, "AgentName", uuid.uuid4(), type="agent")
+    monkeypatch.setattr(agents_service, "get_project", lambda s, project_id: proj)
     monkeypatch.setattr(agents_service, "update_graph_with_history_service", fake_update_graph_service)
     monkeypatch.setattr(
         agents_service, "create_or_update_component_instance", fake_create_or_update_component_instance

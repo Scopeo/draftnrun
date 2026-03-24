@@ -8,6 +8,7 @@ have important limitations; see `docs://file-management`.
 from __future__ import annotations
 
 from typing import Optional
+from uuid import UUID
 
 from fastmcp import FastMCP
 
@@ -21,8 +22,8 @@ _VALID_SOURCE_TYPES = ("website", "database")
 _WEBSITE_REQUIRED = ("url",)
 _DATABASE_REQUIRED = ("source_db_url", "source_table_name", "id_column_name", "text_column_names")
 
-_SOURCE_ID = Param("source_id", str, description="The source ID.")
-_DOC_ID = Param("document_id", str, description="The document ID.")
+_SOURCE_ID = Param("source_id", UUID, description="The source ID (from list_sources).")
+_DOC_ID = Param("document_id", UUID, description="The document ID (from list_documents).")
 
 PROXY_SPECS: list[ToolSpec] = [
     # --- Sources ---
@@ -247,8 +248,8 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def update_document_chunks(
-        source_id: str,
-        document_id: str,
+        source_id: UUID,
+        document_id: UUID,
         chunks: list[dict],
         confirm_full_replacement: bool = False,
     ) -> dict:
@@ -261,8 +262,8 @@ def register(mcp: FastMCP) -> None:
         `confirm_full_replacement=True`.
 
         Args:
-            source_id: The source ID.
-            document_id: The document ID.
+            source_id: The source ID (from list_sources).
+            document_id: The document ID (from list_documents).
             chunks: List of chunk objects. Each chunk should have:
                 - content (str): The text content.
                 - metadata (dict, optional): Arbitrary metadata.

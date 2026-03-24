@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.database.models import EnvType
+from ada_backend.mixpanel_analytics import track_project_saved
 from ada_backend.repositories.component_repository import (
     get_canonical_ports_for_component_versions,
     get_component_instance_by_id,
@@ -56,9 +57,8 @@ from ada_backend.schemas.pipeline.graph_schema import (
     GraphUpdateResponse,
     GraphUpdateSchema,
 )
-from ada_backend.segment_analytics import track_project_saved
 from ada_backend.services.agent_runner_service import get_agent_for_project
-from ada_backend.services.errors import GraphNotBoundToProjectError
+from ada_backend.services.errors import GraphConflictError, GraphNotBoundToProjectError
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
 from ada_backend.services.graph.output_port_instance_sync import sync_output_port_instances_from_schema
 from ada_backend.services.graph.playground_utils import extract_playground_configuration
@@ -97,7 +97,7 @@ def _sort_dict_keys_recursively(obj):
 
 
 def _calculate_graph_hash(graph_project: GraphUpdateSchema) -> str:
-    graph_dict = graph_project.model_dump(mode="json", exclude={"port_mappings"})
+    graph_dict = graph_project.model_dump(mode="json", exclude={"port_mappings", "last_edited_time"})
     sorted_dict = _sort_dict_keys_recursively(graph_dict)
     json_str = json.dumps(sorted_dict, sort_keys=True, separators=(",", ":"))
     hash_obj = hashlib.sha256(json_str.encode("utf-8"))
@@ -206,6 +206,10 @@ async def update_graph_with_history_service(
     latest_history = get_latest_modification_history(session, graph_runner_id)
     previous_hash = latest_history.modification_hash if latest_history else None
 
+    if graph_project.last_edited_time and latest_history and latest_history.created_at:
+        if latest_history.created_at > graph_project.last_edited_time:
+            raise GraphConflictError(graph_runner_id)
+
     has_changed = previous_hash is None or current_hash != previous_hash
 
     if not has_changed:
@@ -213,6 +217,8 @@ async def update_graph_with_history_service(
         playground_input_schema, playground_field_types = extract_playground_configuration(session, graph_runner_id)
         return GraphUpdateResponse(
             graph_id=graph_runner_id,
+            last_edited_time=latest_history.created_at if latest_history else None,
+            last_edited_user_id=latest_history.user_id if latest_history else None,
             playground_input_schema=playground_input_schema,
             playground_field_types=playground_field_types,
         )
@@ -570,14 +576,20 @@ def _ensure_port_mappings_for_edges(  # TODO(port-mapping-removal): delete when 
                 session, pm_schema.target_instance_id
             )
 
-            # Resolve port names to port definition IDs
             source_port_def_id = get_output_port_definition_id(
                 session, source_component_version_id, pm_schema.source_port_name
             )
+            source_output_port_instance_id = None
             if not source_port_def_id:
-                raise ValueError(
-                    f"Output port '{pm_schema.source_port_name}' not found for component {source_component_version_id}"
+                dynamic_port = get_output_port_instance_by_name(
+                    session, pm_schema.source_instance_id, pm_schema.source_port_name
                 )
+                if not dynamic_port:
+                    raise ValueError(
+                        f"Output port '{pm_schema.source_port_name}' not found for component "
+                        f"{source_component_version_id} (checked static definitions and dynamic instances)"
+                    )
+                source_output_port_instance_id = dynamic_port.id
 
             target_port_def_id = get_input_port_definition_id(
                 session, target_component_version_id, pm_schema.target_port_name
@@ -587,13 +599,15 @@ def _ensure_port_mappings_for_edges(  # TODO(port-mapping-removal): delete when 
                     f"Input port '{pm_schema.target_port_name}' not found for component {target_component_version_id}"
                 )
 
-            validate_port_definition_types(session, source_port_def_id, target_port_def_id)
+            if source_port_def_id:
+                validate_port_definition_types(session, source_port_def_id, target_port_def_id)
 
             new_mappings.append(
                 db.PortMapping(
                     graph_runner_id=graph_runner_id,
                     source_instance_id=pm_schema.source_instance_id,
                     source_port_definition_id=source_port_def_id,
+                    source_output_port_instance_id=source_output_port_instance_id,
                     target_instance_id=pm_schema.target_instance_id,
                     target_port_definition_id=target_port_def_id,
                     dispatch_strategy=pm_schema.dispatch_strategy or "direct",

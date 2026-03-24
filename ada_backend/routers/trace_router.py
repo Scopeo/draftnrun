@@ -3,8 +3,11 @@ from typing import Annotated, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType, EnvType
+from ada_backend.database.setup_db import get_db
+from ada_backend.repositories.project_repository import get_project
 from ada_backend.routers.auth_router import (
     UserRights,
     get_user_from_supabase_token,
@@ -36,9 +39,12 @@ async def get_root_traces(
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     page_size: int = Query(20, ge=1, le=1000, description="Number of items per page"),
     graph_runner_id: Optional[UUID] = None,
+    session: Session = Depends(get_db),
 ) -> PaginatedRootTracesResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
+    project = get_project(session, project_id)
+    organization_id = project.organization_id if project else None
     try:
         response = get_root_traces_by_project(
             user.id,
@@ -49,6 +55,7 @@ async def get_root_traces(
             page,
             page_size,
             graph_runner_id,
+            organization_id=organization_id,
         )
         return response
     except ValueError as e:

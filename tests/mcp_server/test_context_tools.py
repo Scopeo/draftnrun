@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from mcp_server.tools import context_tools
+from tests.mcp_server.conftest import FAKE_ORG_ID
 
 
 class FakeMCP:
@@ -23,7 +24,7 @@ async def test_invite_org_member_checks_role_in_target_org(monkeypatch):
     list_orgs_mock = AsyncMock(
         return_value=[
             {"id": "org-active", "name": "Active Org", "role": "admin"},
-            {"id": "org-target", "name": "Target Org", "role": "member"},
+            {"id": FAKE_ORG_ID, "name": "Target Org", "role": "member"},
         ]
     )
     invite_mock = AsyncMock(return_value={"status": "ok"})
@@ -35,7 +36,7 @@ async def test_invite_org_member_checks_role_in_target_org(monkeypatch):
     context_tools.register(mcp)
 
     with pytest.raises(ValueError, match="role there is 'member'"):
-        await mcp.tools["invite_org_member"]("org-target", "person@example.com")
+        await mcp.tools["invite_org_member"](FAKE_ORG_ID, "person@example.com")
 
     invite_mock.assert_not_awaited()
 
@@ -45,7 +46,7 @@ async def test_invite_org_member_invites_when_target_org_role_is_admin(monkeypat
     mcp = FakeMCP()
     list_orgs_mock = AsyncMock(
         return_value=[
-            {"id": "org-target", "name": "Target Org", "role": "admin"},
+            {"id": FAKE_ORG_ID, "name": "Target Org", "role": "admin"},
         ]
     )
     invite_mock = AsyncMock(return_value={"status": "ok"})
@@ -56,7 +57,7 @@ async def test_invite_org_member_invites_when_target_org_role_is_admin(monkeypat
 
     context_tools.register(mcp)
 
-    result = await mcp.tools["invite_org_member"]("org-target", "person@example.com", "developer")
+    result = await mcp.tools["invite_org_member"](FAKE_ORG_ID, "person@example.com", "developer")
 
     assert result == {"status": "ok"}
-    invite_mock.assert_awaited_once_with("jwt-token", "org-target", "person@example.com", "developer")
+    invite_mock.assert_awaited_once_with("jwt-token", FAKE_ORG_ID, "person@example.com", "developer")

@@ -1,11 +1,17 @@
 """API key management tools (project-scoped and org-scoped)."""
 
+from uuid import UUID
+
 from fastmcp import FastMCP
 
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
 
-_PROJECT_ID = Param("project_id", str, description="The project ID.")
-_KEY_ID = Param("key_id", str, description="The API key ID to revoke.")
+_PROJECT_ID = Param("project_id", UUID, description="The project ID (from list_projects or get_project_overview).")
+_KEY_ID = Param(
+    "key_id",
+    UUID,
+    description="The API key ID to revoke (from list_project_api_keys or list_org_api_keys).",
+)
 _KEY_NAME = Param("key_name", str, default="", description="Optional friendly name for the key.")
 
 SPECS: list[ToolSpec] = [

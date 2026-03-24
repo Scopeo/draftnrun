@@ -5,6 +5,8 @@ requires a browser and must be completed in the web UI with explicit user
 permission.
 """
 
+from uuid import UUID
+
 from fastmcp import FastMCP
 
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
@@ -21,7 +23,9 @@ SPECS: list[ToolSpec] = [
         roles=("developer", "admin", "super_admin"),
         query_params=(
             Param(
-                "provider_config_key", str, default=None,
+                "provider_config_key",
+                str,
+                default=None,
                 description="Optional provider filter (e.g. 'google-mail', 'slack').",
             ),
         ),
@@ -36,7 +40,9 @@ SPECS: list[ToolSpec] = [
         roles=("developer", "admin", "super_admin"),
         query_params=(
             Param("provider_config_key", str, description="Provider key (e.g. 'google-mail', 'slack')."),
-            Param("connection_id", str, description="The OAuth connection ID to check."),
+            Param(
+                "connection_id", UUID, description="The OAuth connection ID to check (from list_oauth_connections)."
+            ),
         ),
     ),
     ToolSpec(
@@ -49,7 +55,7 @@ SPECS: list[ToolSpec] = [
         path=f"{_BASE}/{{connection_id}}",
         scope="role",
         roles=("developer", "admin", "super_admin"),
-        path_params=(Param("connection_id", str, description="The connection ID."),),
+        path_params=(Param("connection_id", UUID, description="The connection ID (from list_oauth_connections)."),),
         query_params=(Param("provider_config_key", str, description="Provider key (e.g. 'google-mail', 'slack')."),),
     ),
 ]

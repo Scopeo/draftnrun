@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from mcp_server.tools import knowledge
+from tests.mcp_server.conftest import FAKE_DOC_ID, FAKE_SOURCE_ID
 
 
 @pytest.mark.asyncio
@@ -11,8 +12,8 @@ async def test_update_document_chunks_requires_explicit_full_replacement_acknowl
 
     with pytest.raises(ValueError, match="blocked by default"):
         await fake_mcp.tools["update_document_chunks"](
-            "source-123",
-            "document-456",
+            FAKE_SOURCE_ID,
+            FAKE_DOC_ID,
             [{"content": "replacement"}],
         )
 
@@ -29,8 +30,8 @@ async def test_update_document_chunks_calls_backend_when_explicitly_confirmed(mo
     knowledge.register(fake_mcp)
 
     result = await fake_mcp.tools["update_document_chunks"](
-        "source-123",
-        "document-456",
+        FAKE_SOURCE_ID,
+        FAKE_DOC_ID,
         [{"content": "replacement"}],
         confirm_full_replacement=True,
     )
@@ -38,7 +39,7 @@ async def test_update_document_chunks_calls_backend_when_explicitly_confirmed(mo
     assert result == {"status": "ok"}
     require_role_mock.assert_awaited_once_with("user-123", "developer", "admin", "super_admin")
     put_mock.assert_awaited_once_with(
-        "/knowledge/organizations/org-123/sources/source-123/documents/document-456",
+        f"/knowledge/organizations/org-123/sources/{FAKE_SOURCE_ID}/documents/{FAKE_DOC_ID}",
         "jwt-token",
         json=[{"content": "replacement"}],
     )
@@ -55,8 +56,8 @@ async def test_update_document_chunks_requires_developer_role(monkeypatch, fake_
 
     with pytest.raises(ValueError, match="not allowed"):
         await fake_mcp.tools["update_document_chunks"](
-            "source-123",
-            "document-456",
+            FAKE_SOURCE_ID,
+            FAKE_DOC_ID,
             [{"content": "replacement"}],
             confirm_full_replacement=True,
         )

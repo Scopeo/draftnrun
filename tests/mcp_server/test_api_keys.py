@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from mcp_server.tools import _factory, api_keys
+from tests.mcp_server.conftest import FAKE_KEY_ID, FAKE_PROJECT_ID
 
 
 @pytest.mark.asyncio
@@ -17,7 +18,7 @@ async def test_revoke_org_api_key_sends_delete_body(monkeypatch, fake_mcp):
 
     api_keys.register(mcp)
 
-    result = await mcp.tools["revoke_org_api_key"]("key-456")
+    result = await mcp.tools["revoke_org_api_key"](FAKE_KEY_ID)
 
     assert result == {"status": "ok"}
     require_org_context_mock.assert_awaited_once_with("user-123")
@@ -25,7 +26,7 @@ async def test_revoke_org_api_key_sends_delete_body(monkeypatch, fake_mcp):
         "/auth/org-api-key",
         "jwt-token",
         trim=True,
-        json={"key_id": "key-456"},
+        json={"key_id": FAKE_KEY_ID},
         organization_id="org-123",
     )
 
@@ -40,14 +41,14 @@ async def test_create_project_api_key_sends_correct_body(monkeypatch, fake_mcp):
 
     api_keys.register(mcp)
 
-    result = await mcp.tools["create_project_api_key"]("proj-123", "my-key")
+    result = await mcp.tools["create_project_api_key"](FAKE_PROJECT_ID, "my-key")
 
     assert result == {"api_key": "sk-abc"}
     post_mock.assert_awaited_once_with(
         "/auth/api-key",
         "jwt-token",
         trim=True,
-        json={"project_id": "proj-123", "key_name": "my-key"},
+        json={"project_id": FAKE_PROJECT_ID, "key_name": "my-key"},
     )
 
 

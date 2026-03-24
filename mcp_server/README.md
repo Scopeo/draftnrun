@@ -75,21 +75,21 @@ All domain content lives in `docs.py` (single source of truth).
 
 ## Tool Reference
 
-~87 tools across 14 modules. Use `get_guide(domain)` or the docs:// resources above for detailed usage.
+~90 tools across 14 modules. Use `get_guide(domain)` or the docs:// resources above for detailed usage.
 
 | Module | Tools | Highlights |
 |---|---|---|
 | Context | 5 | `list_my_organizations`, `select_organization`, `get_current_context` |
-| Projects | 7 | `create_project` (auto ID/icon), `get_project_overview` |
-| Agents | 3 | `create_agent` (auto ID/icon) |
+| Projects | 7 | `create_workflow` (auto ID/icon), `get_project_overview` |
+| Agents | 3 | `create_agent` (auto ID/icon — single AI node; use `create_workflow` for DAGs) |
 | Agent Config | 3 | `configure_agent`, `add_tool_to_agent`, `remove_tool_from_agent` |
-| Graphs | 5 | `get_graph`, `update_graph`, `save_graph_version`, `publish_to_production` |
+| Graphs | 6 | `get_graph`, `update_graph`, `update_component_parameters`, `save_graph_version`, `publish_to_production` |
 | Components | 2 | `list_components` (auto-filtered by release stage), `search_components` |
-| Runs | 4 | `run_agent` (messages-only async + polling), `list_runs`, `get_run`, `get_run_result` |
+| Runs | 4 | `run` (payload dict, async + polling), `list_runs`, `get_run`, `get_run_result` |
 | API Keys | 6 | Project + org level keys |
 | Variables | 9 | Admin only — definitions, sets, secrets |
 | Knowledge | 9 | `create_source` (website/database), sources, documents, chunks |
-| QA | 17 | Datasets, entries, judges, evaluations |
+| QA | 20 | Datasets, entries, custom columns, CSV export/import, judges, evaluations |
 | Monitoring | 5 | Traces, charts, KPIs, credits |
 | Crons | 8 | Create, pause/resume, execution history |
 | OAuth | 3 | List, check status, revoke |
@@ -142,6 +142,10 @@ Custom tools (validation, multi-step, client-side logic) are still defined as `@
 | Graph null IDs | `update_graph` auto-generates UUIDs for component instances **and edges** with `id: null`. |
 | Canonical field expressions | The backend auto-generates a visible, editable RefNode field expression (e.g. `@{{<source_uuid>.output}}`) for canonical inputs when an edge exists and no user expression is set. User-provided expressions are never overwritten. The MCP should create edges and let the backend handle canonical wiring. |
 | Unknown graph keys | `update_graph` warns about unrecognised top-level keys (e.g. `ports_mappings` → `port_mappings`) before forwarding. |
+| Graph guide warning | `update_graph` tool description warns callers to `get_guide('graphs')` first and to close the browser tab before API edits. |
+| Optimistic locking | `update_graph` accepts optional `last_edited_time` for conflict detection (409 Conflict if the graph was modified since that timestamp). |
+| Edge format coercion | Edge `origin`/`destination` accept both plain UUID strings and dicts like `{"instance_id": "uuid"}` — the backend normalizes. |
+| JSON param coercion | JSON-typed parameters (e.g. If/Else `conditions`) accept native lists — the backend serializes them automatically. |
 | Error detail | 403 and 404 backend errors now include the backend's error detail instead of generic messages. |
 | Docs sync | Any MCP behavior change must update `docs.py` resources and this README together. |
 
@@ -159,7 +163,7 @@ Custom tools (validation, multi-step, client-side logic) are still defined as `@
 
 - Fetch `docs://file-management` before mutating knowledge documents or building file-centric workflows.
 - Knowledge documents are logical groups of ingested chunks, not a general binary file store and not guaranteed to be downloadable originals.
-- MCP does not currently expose an end-to-end file upload/download workflow. The `run_agent` tool accepts `messages` only, and generated files usually come back as `files[].s3_key`.
+- MCP does not currently expose an end-to-end file upload/download workflow. The `run` tool accepts a `payload` dict (containing `messages` and optional custom Start fields), and generated files usually come back as `files[].s3_key`.
 - `create_source` supports `website` and `database` types. For `local` (file upload) and `google_drive` (OAuth), use the web product.
 - `update_source` re-triggers ingestion with the stored source definition. It does NOT accept config changes — `source_data` is ignored.
 - `update_document_chunks` and `delete_document` are sharp tools. Only use them with explicit user confirmation and a fully understood desired end state.
@@ -243,10 +247,16 @@ Any Streamable-HTTP-compatible MCP client can connect to `https://mcp.draftnrun.
 
 ## Troubleshooting
 
-**"No organization selected"** — Call `list_my_organizations` then `select_organization` first.
+**"Not authenticated" / no tools visible** — The MCP client hasn't completed the OAuth flow. Check your client's MCP server status and reconnect. After auth, call `get_current_context()` to verify your session.
 
-**"This operation requires one of ('admin', 'super_admin') role"** — Your org role doesn't allow this operation.
+**"No organization selected"** — Call `list_my_organizations` then `select_organization` **sequentially** (not in parallel). All org-scoped tools fail until an org is selected. Parallel calls with `select_organization` will race and fail. Use `get_current_context()` to verify session state.
 
-**401 on tool calls** — Token expired. The MCP client should handle token refresh via Supabase.
+**"This operation requires one of ('admin', 'super_admin') role"** — Your org role doesn't allow this operation. Check with `get_current_context()`.
+
+**401 on tool calls** — Token expired. The MCP client should handle token refresh via Supabase. Reconnect if refresh fails.
 
 **Tools returning 403** — Your role in the organization may not have sufficient permissions, or the org's release stage may not include the requested resource. Check with `get_current_context`. The error message now includes the backend's detail when available.
+
+**"access_token is required" on `update_graph`** — The graph contains an integration-backed component (e.g. Gmail, Slack, HubSpot) whose OAuth connection is not set up. The backend validates integration dependencies at save time, not just at run time. Fix: connect the integration in the web UI first, or save the graph without the integration component and add it later. See `docs://integrations` preflight checklist.
+
+**"Resource not found" on graph/project operations** — IDs may have changed after a publish (which creates a fresh draft with new instance UUIDs). Re-fetch with `get_project_overview` and `get_graph` before retrying. Never reuse IDs across projects or orgs.

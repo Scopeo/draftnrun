@@ -180,7 +180,7 @@ jobs:
           echo "S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}" >> credentials.env
           echo "S3_REGION_NAME=eu-west-3" >> credentials.env
           echo "ENABLE_OBSERVABILITY_STACK=false" >> credentials.env
-          echo "SEGMENT_API_KEY=${{ secrets.SEGMENT_API_KEY }}" >> credentials.env
+          echo "MIXPANEL_TOKEN=${{ secrets.MIXPANEL_TOKEN }}" >> credentials.env
           echo "ENV=${{ secrets.ENV }}" >> credentials.env
           echo "PAGE_RESOLUTION_ZOOM=3.0" >> credentials.env
           echo "NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE=5" >> credentials.env

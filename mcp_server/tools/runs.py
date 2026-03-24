@@ -1,11 +1,12 @@
 """Run management tools.
 
-The MCP execution surface currently exposes only `messages` for async runs.
-It does not expose arbitrary Start payload fields or file download helpers.
+The `run` tool sends a full payload dict to the backend's async endpoint and
+polls for the result.  It does not expose file download helpers.
 """
 
 import asyncio
 import time
+from uuid import UUID
 
 from fastmcp import FastMCP
 
@@ -16,15 +17,15 @@ from mcp_server.tools.context_tools import _get_auth
 DEFAULT_POLL_INTERVAL = 2
 MAX_POLL_INTERVAL = 10
 
-_P_PROJECT = Param("project_id", str, description="The project ID.")
-_P_RUN = Param("run_id", str, description="The run ID.")
+_P_PROJECT = Param("project_id", UUID, description="The project ID (from list_projects or get_project_overview).")
+_P_RUN = Param("run_id", UUID, description="The run ID (from list_runs or run).")
 
 PROXY_SPECS: list[ToolSpec] = [
     ToolSpec(
         name="get_run",
         description=(
             "Get details of a specific run.\n\n"
-            "Use this after `run_agent` timeouts or when you need to inspect status "
+            "Use this after `run` timeouts or when you need to inspect status "
             "transitions before fetching the final result."
         ),
         method="get",
@@ -50,11 +51,11 @@ def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, PROXY_SPECS)
 
     @mcp.tool()
-    async def list_runs(project_id: str, page: int = 1, page_size: int = 50) -> dict:
+    async def list_runs(project_id: UUID, page: int = 1, page_size: int = 50) -> dict:
         """List runs for a project with pagination.
 
         Args:
-            project_id: The project ID.
+            project_id: The project ID (from list_projects or get_project_overview).
             page: Page number (1-based). Defaults to 1.
             page_size: Results per page (max 100). Defaults to 50.
         """
@@ -72,41 +73,51 @@ def register(mcp: FastMCP) -> None:
         )
 
     @mcp.tool()
-    async def run_agent(
-        project_id: str,
-        graph_runner_id: str,
-        messages: list[dict],
+    async def run(
+        project_id: UUID,
+        graph_runner_id: UUID,
+        payload: dict,
         timeout: int = 60,
     ) -> dict:
-        """Run an agent with messages and wait for the result.
+        """Run an agent or workflow and wait for the result.
 
-        Sends only the `messages` payload, then polls for completion up to
-        `timeout` seconds. Returns the final result directly — no need to
-        manually poll. This wrapper does not expose arbitrary Start-node fields
-        or a file download helper.
+        `payload` is the full request body sent to the backend.  It must
+        contain a `messages` key and may include any additional Start-node
+        fields defined in the graph's `payload_schema`.
+
+        Example — agent (messages only):
+            payload={"messages": [{"role": "user", "content": "Hello"}]}
+
+        Example — workflow with custom Start fields:
+            payload={"messages": [{"role": "user", "content": "Hello"}],
+                     "name": "Ada", "language": "fr"}
+
+        The backend extracts `messages` for the execution pipeline and injects
+        remaining keys into `ctx` as Start-node output ports.
 
         Safety reminders:
-        - Choose the `graph_runner_id` deliberately. Draft is for iterative
+        - Choose the `graph_runner_id` deliberately.  Draft is for iterative
           testing; production is for live-behavior checks.
-        - The backend can use `conversation_id`, `set_id`, and extra Start
-          payload fields, but this MCP wrapper does not expose them.
         - If the run times out here, continue with `get_run` and
           `get_run_result` rather than assuming failure.
 
         Args:
-            project_id: The project ID.
-            graph_runner_id: The graph runner version ID.
-            messages: List of message objects (e.g. [{"role": "user", "content": "Hello"}]).
+            project_id: The project ID (from list_projects or get_project_overview).
+            graph_runner_id: The graph runner version ID (from get_project_overview).
+            payload: Request body dict — must contain "messages", may contain
+                     additional Start-node fields.
             timeout: Max seconds to wait for completion. Defaults to 60.
         """
         if not isinstance(timeout, int) or timeout <= 0:
             raise ValueError("timeout must be a positive integer")
+        if "messages" not in payload:
+            raise ValueError("payload must contain a 'messages' key")
 
         jwt, _ = _get_auth()
         response = await api.post(
             f"/projects/{project_id}/graphs/{graph_runner_id}/chat/async",
             jwt,
-            json={"messages": messages},
+            json=payload,
         )
 
         if "message" in response and "run_id" not in response:

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.database.models import EnvType
+from ada_backend.mixpanel_analytics import track_deployed_to_production, track_version_tagged
 from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,
     get_component_parameter_definition_by_component_version,
@@ -318,6 +319,8 @@ def deploy_graph_service(
     session: Session,
     graph_runner_id: UUID,
     project_id: UUID,
+    user_id: UUID | None = None,
+    organization_id: UUID | None = None,
 ):
     previous_production_graph = _bind_graph_to_env_helper(
         session=session,
@@ -348,6 +351,9 @@ def deploy_graph_service(
     )
 
     session.commit()
+
+    if user_id and organization_id:
+        track_deployed_to_production(user_id, organization_id, project_id)
 
     return GraphDeployResponse(
         project_id=project_id,
@@ -409,6 +415,8 @@ def save_graph_version_service(
     session: Session,
     graph_runner_id: UUID,
     project_id: UUID,
+    user_id: UUID | None = None,
+    organization_id: UUID | None = None,
 ) -> GraphSaveVersionResponse:
     """
     Create a versioned snapshot from a draft graph runner.
@@ -450,6 +458,9 @@ def save_graph_version_service(
     LOGGER.info(
         f"Bound versioned graph runner {versioned_graph_runner_id} to project {project_id} with None environment"
     )
+
+    if user_id and organization_id:
+        track_version_tagged(user_id, organization_id, project_id)
 
     return GraphSaveVersionResponse(
         project_id=project_id,

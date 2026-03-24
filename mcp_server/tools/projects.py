@@ -1,14 +1,18 @@
 """Project management tools."""
 
+import logging
 from typing import Optional
+from uuid import UUID
 
 from fastmcp import FastMCP
 
 from mcp_server.client import api
-from mcp_server.context import require_org_context
+from mcp_server.context import require_org_context, require_role
 from mcp_server.tools._defaults import generate_entity_defaults
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
 from mcp_server.tools.context_tools import _get_auth
+
+logger = logging.getLogger(__name__)
 
 PROXY_SPECS: list[ToolSpec] = [
     ToolSpec(
@@ -16,7 +20,13 @@ PROXY_SPECS: list[ToolSpec] = [
         description="Get details of a specific project by ID.",
         method="get",
         path="/projects/{project_id}",
-        path_params=(Param("project_id", str, description="The project ID."),),
+        path_params=(
+            Param(
+                "project_id",
+                UUID,
+                description="The project ID (from list_projects or get_project_overview).",
+            ),
+        ),
     ),
     ToolSpec(
         name="delete_project",
@@ -27,7 +37,13 @@ PROXY_SPECS: list[ToolSpec] = [
         ),
         method="delete",
         path="/projects/{project_id}",
-        path_params=(Param("project_id", str, description="The project ID."),),
+        path_params=(
+            Param(
+                "project_id",
+                UUID,
+                description="The project ID (from list_projects or get_project_overview).",
+            ),
+        ),
     ),
     ToolSpec(
         name="list_templates",
@@ -70,13 +86,18 @@ def register(mcp: FastMCP) -> None:
         )
 
     @mcp.tool()
-    async def create_project(name: str, description: str = "") -> dict:
+    async def create_workflow(name: str, description: str = "") -> dict:
         """Create a new workflow project in the active organization.
 
-        Always creates a **workflow** project. Agent projects are created via
-        `create_agent` instead. Auto-generates a unique ID, icon, and color.
+        Creates a **workflow** — a multi-step DAG with a Start node, custom
+        input fields, and multiple components.  If the user only needs a
+        single AI agent with optional tools, use `create_agent` instead.
 
-        Requires active org context — call `select_organization` first.
+        Auto-generates a unique ID, icon, and color.  Requires active org
+        context — call `select_organization` first.
+
+        Authorization: caller must have one of the roles ``developer``,
+        ``admin``, or ``super_admin``.  Raises if not authorized.
 
         Args:
             name: Project name.
@@ -87,7 +108,7 @@ def register(mcp: FastMCP) -> None:
             raise ValueError("name must not be empty")
 
         jwt, user_id = _get_auth()
-        org = await require_org_context(user_id)
+        org = await require_role(user_id, "developer", "admin", "super_admin")
         defaults = generate_entity_defaults()
         return await api.post(
             f"/projects/{org['org_id']}",
@@ -102,11 +123,25 @@ def register(mcp: FastMCP) -> None:
         )
 
     @mcp.tool()
-    async def update_project(project_id: str, name: Optional[str] = None, description: Optional[str] = None) -> dict:
+    async def create_project(name: str, description: str = "") -> dict:
+        """Deprecated: use ``create_workflow`` instead.
+
+        Creates a new workflow project. This tool is a compatibility shim
+        that forwards to ``create_workflow``.
+
+        Args:
+            name: Project name.
+            description: Optional description.
+        """
+        logger.warning("create_project is deprecated — use create_workflow instead")
+        return await create_workflow(name=name, description=description)
+
+    @mcp.tool()
+    async def update_project(project_id: UUID, name: Optional[str] = None, description: Optional[str] = None) -> dict:
         """Update a project's name or description.
 
         Args:
-            project_id: The project to update.
+            project_id: The project to update (from list_projects or get_project_overview).
             name: New name (optional).
             description: New description (optional).
         """
@@ -124,7 +159,7 @@ def register(mcp: FastMCP) -> None:
         return await api.patch(f"/projects/{project_id}", jwt, json=body)
 
     @mcp.tool()
-    async def get_project_overview(project_id: str) -> dict:
+    async def get_project_overview(project_id: UUID) -> dict:
         """Get a comprehensive overview of a project in a single call.
 
         Returns the project details, identifies the editable draft and current
@@ -133,7 +168,7 @@ def register(mcp: FastMCP) -> None:
         agents, publishing, scheduling, or reasoning about live behavior.
 
         Args:
-            project_id: The project ID.
+            project_id: The project ID (from list_projects or create_workflow/create_agent).
         """
         jwt, _ = _get_auth()
         project = await api.get(f"/projects/{project_id}", jwt)

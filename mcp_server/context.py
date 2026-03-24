@@ -144,8 +144,12 @@ async def require_org_context(user_id: str) -> dict[str, Any]:
     if not org:
         raise ValueError(
             "No organization selected. "
-            "Call list_my_organizations to see your orgs, "
-            "then select_organization to pick one."
+            "These steps MUST be sequential (not parallel): "
+            "1) list_my_organizations — see your orgs and roles, "
+            "2) select_organization(organization_id) — set the active org "
+            "(wait for success before calling other tools), "
+            "3) get_current_context() — verify session state. "
+            "Parallel calls with select_organization will race and fail."
         )
     return org
 

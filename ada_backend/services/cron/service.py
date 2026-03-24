@@ -9,6 +9,7 @@ from croniter import croniter
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CronJob
+from ada_backend.mixpanel_analytics import track_cron_job_created, track_cron_job_deleted, track_cron_job_toggled
 from ada_backend.repositories.cron_repository import (
     delete_cron_job,
     get_cron_job,
@@ -221,6 +222,10 @@ def create_cron_job(
         **kwargs,
     )
 
+    user_id = kwargs.get("user_id")
+    if user_id:
+        track_cron_job_created(user_id, organization_id, entrypoint=cron_data.entrypoint)
+
     return CronJobResponse.model_validate(cron_job)
 
 
@@ -276,16 +281,16 @@ def delete_cron_job_service(
     session: Session,
     cron_id: UUID,
     organization_id: UUID,
+    user_id: UUID | None = None,
 ) -> Optional[CronJobDeleteResponse]:
-    """
-    Delete a cron job from the database after asserting org ownership.
-    """
     _assert_cron_in_org(session, cron_id, organization_id)
 
     success = delete_cron_job(session, cron_id)
 
     if success:
         LOGGER.info(f"Deleted cron job {cron_id}.")
+        if user_id:
+            track_cron_job_deleted(user_id, organization_id)
         return CronJobDeleteResponse(id=cron_id)
 
     return None
@@ -309,12 +314,16 @@ def permanently_delete_cron_jobs_by_project_service(session: Session, project_id
         LOGGER.info(f"Deleted {deleted_cron_jobs} cron jobs for project {project_id}")
 
 
-def pause_cron_job(session: Session, cron_id: UUID, organization_id: UUID) -> Optional[CronJobPauseResponse]:
-    """Set cron job to inactive in the database."""
+def pause_cron_job(
+    session: Session, cron_id: UUID, organization_id: UUID, user_id: UUID | None = None,
+) -> Optional[CronJobPauseResponse]:
     _assert_cron_in_org(session, cron_id, organization_id)
     updated_cron = update_cron_job(session, cron_id, is_enabled=False)
     if not updated_cron:
         return None
+
+    if user_id:
+        track_cron_job_toggled(user_id, organization_id, enabled=False)
 
     return CronJobPauseResponse(
         id=cron_id,
@@ -323,12 +332,16 @@ def pause_cron_job(session: Session, cron_id: UUID, organization_id: UUID) -> Op
     )
 
 
-def resume_cron_job(session: Session, cron_id: UUID, organization_id: UUID) -> Optional[CronJobPauseResponse]:
-    """Set cron job to active in the database."""
+def resume_cron_job(
+    session: Session, cron_id: UUID, organization_id: UUID, user_id: UUID | None = None,
+) -> Optional[CronJobPauseResponse]:
     _assert_cron_in_org(session, cron_id, organization_id)
     updated_cron = update_cron_job(session, cron_id, is_enabled=True)
     if not updated_cron:
         return None
+
+    if user_id:
+        track_cron_job_toggled(user_id, organization_id, enabled=True)
 
     return CronJobPauseResponse(
         id=cron_id,

@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from engine.field_expressions.ast import ConcatNode, LiteralNode, RefNode
@@ -160,19 +162,26 @@ def test_from_json_with_plain_dict_raises_error():
     assert "serialized field expression AST" in str(exc_info.value)
 
 
-def test_parse_expression_flexible_with_list_raises_error():
-    """Test that parse_expression_flexible raises error for list input."""
-    with pytest.raises(FieldExpressionParseError) as exc_info:
-        parse_expression_flexible([1, 2, 3])
-    assert "Expected str or dict, got list" in str(exc_info.value)
-    assert "[1, 2, 3]" in str(exc_info.value)
+def test_parse_expression_flexible_with_list_returns_literal():
+    """Test that parse_expression_flexible serializes a list as a JSON literal."""
+    result = parse_expression_flexible([1, 2, 3])
+    assert isinstance(result, LiteralNode)
+    assert result.value == "[1, 2, 3]"
+
+
+def test_parse_expression_flexible_with_conditions_list():
+    """Regression: If/Else conditions passed as a list should be accepted."""
+    conditions = [{"value_a": "@{{uuid.output}}", "operator": "text_contains", "value_b": "invoice"}]
+    result = parse_expression_flexible(conditions)
+    assert isinstance(result, LiteralNode)
+    assert json.loads(result.value) == conditions
 
 
 def test_parse_expression_flexible_with_int_raises_error():
     """Test that parse_expression_flexible raises error for int input."""
     with pytest.raises(FieldExpressionParseError) as exc_info:
         parse_expression_flexible(42)
-    assert "Expected str or dict, got int" in str(exc_info.value)
+    assert "Expected str, dict, or list, got int" in str(exc_info.value)
     assert "42" in str(exc_info.value)
 
 
@@ -180,4 +189,4 @@ def test_parse_expression_flexible_with_none_raises_error():
     """Test that parse_expression_flexible raises error for None input."""
     with pytest.raises(FieldExpressionParseError) as exc_info:
         parse_expression_flexible(None)
-    assert "Expected str or dict, got NoneType" in str(exc_info.value)
+    assert "Expected str, dict, or list, got NoneType" in str(exc_info.value)

@@ -6,8 +6,8 @@ from uuid import UUID
 import pandas as pd
 
 from ada_backend.database.models import CallType
+from ada_backend.mixpanel_analytics import track_monitoring_loaded
 from ada_backend.schemas.monitor_schema import KPI, CostKPI, KPISResponse, TraceKPIS
-from ada_backend.segment_analytics import track_projects_monitoring_loaded
 from ada_backend.services.metrics.utils import QUERY_COSTS_BASIS, SQL_COST_KPIS_ROUNDED_TAIL
 from engine.trace.sql_exporter import get_session_trace
 
@@ -179,13 +179,13 @@ def get_monitoring_kpis_by_projects(
 ) -> KPISResponse:
     trace_kpis = get_trace_metrics(project_ids, duration_days, call_type)
     cost_kpis = get_trace_cost_kpis(project_ids, duration_days, call_type)
-    project_ids_for_tracking = ", ".join([str(project_id) for project_id in project_ids])
-    track_projects_monitoring_loaded(user_id, project_ids_for_tracking, organization_id)
-    project_ids_for_log = project_ids_for_tracking
+    track_monitoring_loaded(user_id, project_count=len(project_ids), organization_id=organization_id)
+    project_ids_for_log = ", ".join([str(project_id) for project_id in project_ids])
     if len(project_ids) > 2:
         project_ids_for_log = f"{project_ids[0]}, {project_ids[1]} and {len(project_ids) - 2} projects"
     LOGGER.info(
-        f"Trace metrics for projects {project_ids_for_log} and duration {duration_days} days retrieved successfully."
+        f"Trace metrics for projects {project_ids_for_log} "
+        f"and duration {duration_days} days retrieved successfully."
     )
     return KPISResponse(
         kpis=[

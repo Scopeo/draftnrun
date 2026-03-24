@@ -1,12 +1,14 @@
 """Cron job management tools."""
 
+from uuid import UUID
+
 from fastmcp import FastMCP
 
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
 
 _BASE = "/organizations/{org_id}/crons"
 _ITEM = f"{_BASE}/{{cron_id}}"
-_CRON_ID = Param("cron_id", str, description="The cron job ID.")
+_CRON_ID = Param("cron_id", UUID, description="The cron job ID (from list_crons or create_cron).")
 
 SPECS: list[ToolSpec] = [
     ToolSpec(

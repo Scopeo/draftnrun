@@ -109,8 +109,10 @@ def test_create_project(db_session: Session, test_organization, test_user_id):
             project_schema=project_schema,
         )
 
-        # Verify tracking was called
-        mock_track.assert_called_once_with(test_user_id, test_organization, project_id, project_schema.project_name)
+        mock_track.assert_called_once_with(
+            test_user_id, test_organization, project_id, project_schema.project_name,
+            project_type="workflow", from_template=False,
+        )
 
     # Verify project was created
     assert isinstance(result, dict) or hasattr(result, "project_id")

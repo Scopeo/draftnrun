@@ -334,3 +334,14 @@ class OAuthSetProtectedError(Exception):
     def __init__(self, set_id: str):
         self.set_id = set_id
         super().__init__(f"OAuth set '{set_id}' is managed by OAuth and cannot be modified directly")
+
+
+class GraphConflictError(Exception):
+    """Raised when a graph update conflicts with a more recent modification."""
+
+    def __init__(self, graph_runner_id: UUID):
+        self.graph_runner_id = graph_runner_id
+        super().__init__(
+            f"Graph {graph_runner_id} was modified by another client since you last fetched it. "
+            "Refresh the graph and retry your changes."
+        )
