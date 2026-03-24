@@ -355,7 +355,7 @@ jobs:
               if [ "$INCLUDE_TRACES_DATA" = "true" ]; then
                 pg_dump -Fc "$PROD_DB_URL" -f "$DUMP_PATH"
               else
-                pg_dump -Fc "$PROD_DB_URL" --exclude-table-data='traces.*' -f "$DUMP_PATH"
+                pg_dump -Fc "$PROD_DB_URL" --exclude-table-data='traces.*' --exclude-table-data='credits.span_usages' -f "$DUMP_PATH"
               fi
               echo "===> Main DB dump refreshed successfully"
             else
