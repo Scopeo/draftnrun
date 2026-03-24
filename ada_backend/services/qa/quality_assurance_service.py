@@ -1,4 +1,3 @@
-import asyncio
 import csv
 import io
 import json
@@ -79,8 +78,6 @@ from ada_backend.services.qa.qa_metadata_service import create_qa_column_service
 from ada_backend.utils.redis_client import publish_qa_event
 
 LOGGER = logging.getLogger(__name__)
-
-_background_tasks: set[asyncio.Task] = set()
 
 MAX_CSV_EXPORT_SIZE_MB = 10
 MAX_CSV_EXPORT_SIZE_BYTES = MAX_CSV_EXPORT_SIZE_MB * 1024 * 1024
@@ -168,6 +165,49 @@ class QAEntry:
     groundtruth: str | None
 
 
+def _validate_env_binding(
+    session: Session,
+    project_id: UUID,
+    graph_runner_id: UUID,
+):
+    env_relationship = get_env_relationship_by_graph_runner_id(
+        session=session, graph_runner_id=graph_runner_id
+    )
+    if not env_relationship:
+        raise GraphNotBoundToProjectError(graph_runner_id)
+    if env_relationship.project_id != project_id:
+        raise GraphNotBoundToProjectError(
+            graph_runner_id,
+            bound_project_id=env_relationship.project_id,
+            expected_project_id=project_id,
+        )
+    return env_relationship
+
+
+def validate_qa_run_request(
+    session: Session,
+    project_id: UUID,
+    dataset_id: UUID,
+    run_request: QARunRequest,
+) -> None:
+    if not check_dataset_belongs_to_project(session, project_id, dataset_id):
+        raise QADatasetNotInProjectError(project_id, dataset_id)
+
+    if not run_request.run_all:
+        input_entries = get_inputs_groundtruths_by_ids(session, run_request.input_ids)
+        if not input_entries:
+            raise ValueError("No input entries found for the provided input_ids")
+        returned_ids = {entry.id for entry in input_entries}
+        missing_ids = set(run_request.input_ids) - returned_ids
+        if missing_ids:
+            raise ValueError(f"Input IDs not found: {sorted(missing_ids)}")
+        for entry in input_entries:
+            if entry.dataset_id != dataset_id:
+                raise ValueError(f"Input {entry.id} does not belong to dataset {dataset_id}")
+
+    _validate_env_binding(session, project_id, run_request.graph_runner_id)
+
+
 def resolve_qa_entries_and_environment(
     session: Session,
     project_id: UUID,
@@ -198,17 +238,7 @@ def resolve_qa_entries_and_environment(
             if entry.dataset_id != dataset_id:
                 raise ValueError(f"Input {entry.id} does not belong to dataset {dataset_id}")
 
-    env_relationship = get_env_relationship_by_graph_runner_id(
-        session=session, graph_runner_id=run_request.graph_runner_id
-    )
-    if not env_relationship:
-        raise GraphNotBoundToProjectError(run_request.graph_runner_id)
-    if env_relationship.project_id != project_id:
-        raise GraphNotBoundToProjectError(
-            run_request.graph_runner_id,
-            bound_project_id=env_relationship.project_id,
-            expected_project_id=project_id,
-        )
+    env_relationship = _validate_env_binding(session, project_id, run_request.graph_runner_id)
 
     qa_entries = [
         QAEntry(id=entry.id, input=entry.input, groundtruth=entry.groundtruth)
@@ -229,80 +259,84 @@ async def _execute_qa_entries(
     failed_runs = 0
     total = len(input_entries)
 
-    for index, input_entry in enumerate(input_entries):
-        if session_id:
-            publish_qa_event(session_id, {
-                "type": "qa.entry.started",
-                "input_id": str(input_entry.id),
-                "index": index,
-                "total": total,
-            })
+    with get_db_session() as db_session:
+        for index, input_entry in enumerate(input_entries):
+            if session_id:
+                publish_qa_event(session_id, {
+                    "type": "qa.entry.started",
+                    "input_id": str(input_entry.id),
+                    "index": index,
+                    "total": total,
+                })
 
-        try:
-            chat_response = await run_agent(
-                project_id=project_id,
-                graph_runner_id=run_request.graph_runner_id,
-                input_data=input_entry.input,
-                environment=environment,
-                call_type=CallType.QA,
-            )
+            try:
+                chat_response = await run_agent(
+                    project_id=project_id,
+                    graph_runner_id=run_request.graph_runner_id,
+                    input_data=input_entry.input,
+                    environment=environment,
+                    call_type=CallType.QA,
+                )
 
-            output_content = chat_response.message
-            if chat_response.error:
-                output_content = f"Error: {chat_response.error}"
+                output_content = chat_response.message
+                if chat_response.error:
+                    output_content = f"Error: {chat_response.error}"
 
-            with get_db_session() as session:
                 upsert_version_output(
-                    session=session,
+                    session=db_session,
                     input_id=input_entry.id,
                     output=output_content,
                     graph_runner_id=run_request.graph_runner_id,
+                    qa_session_id=session_id,
                 )
+                db_session.commit()
 
-            result = QARunResult(
-                input_id=input_entry.id,
-                input=input_entry.input,
-                groundtruth=input_entry.groundtruth,
-                output=output_content,
-                graph_runner_id=run_request.graph_runner_id,
-                success=True,
-                error=None,
-            )
-            successful_runs += 1
+                result = QARunResult(
+                    input_id=input_entry.id,
+                    input=input_entry.input,
+                    groundtruth=input_entry.groundtruth,
+                    output=output_content,
+                    graph_runner_id=run_request.graph_runner_id,
+                    success=True,
+                    error=None,
+                )
+                successful_runs += 1
 
-        except Exception as e:
-            LOGGER.error(f"Error processing input {input_entry.id}: {str(e)}")
+            except Exception as e:
+                db_session.rollback()
+                LOGGER.error(f"Error processing input {input_entry.id}: {str(e)}")
 
-            error_output = f"Error: {str(e)}"
-            with get_db_session() as session:
+                error_output = f"Error: {str(e)}"
                 upsert_version_output(
-                    session=session,
+                    session=db_session,
                     input_id=input_entry.id,
                     output=error_output,
                     graph_runner_id=run_request.graph_runner_id,
+                    qa_session_id=session_id,
                 )
+                db_session.commit()
 
-            result = QARunResult(
-                input_id=input_entry.id,
-                input=input_entry.input,
-                groundtruth=input_entry.groundtruth,
-                output=error_output,
-                graph_runner_id=run_request.graph_runner_id,
-                success=False,
-                error=str(e),
-            )
-            failed_runs += 1
+                result = QARunResult(
+                    input_id=input_entry.id,
+                    input=input_entry.input,
+                    groundtruth=input_entry.groundtruth,
+                    output=error_output,
+                    graph_runner_id=run_request.graph_runner_id,
+                    success=False,
+                    error=str(e),
+                )
+                failed_runs += 1
 
-        results.append(result)
+            results.append(result)
 
-        if session_id:
-            publish_qa_event(session_id, {
-                "type": "qa.entry.completed",
-                "input_id": str(input_entry.id),
-                "output": result.output,
-                "success": result.success,
-                "error": result.error,
-            })
+            if session_id:
+                publish_qa_event(session_id, {
+                    "type": "qa.entry.completed",
+                    "input_id": str(input_entry.id),
+                    "output": result.output,
+                    "success": result.success,
+                    "error": result.error,
+                })
 
     total_processed = len(results)
     success_rate = (successful_runs / total_processed * 100) if total_processed > 0 else 0.0
@@ -390,19 +424,6 @@ async def run_qa_background(
             "type": "qa.failed",
             "error": {"message": str(e), "type": type(e).__name__},
         })
-
-
-def schedule_qa_background(
-    session_id: UUID,
-    project_id: UUID,
-    dataset_id: UUID,
-    run_request: QARunRequest,
-) -> None:
-    task = asyncio.create_task(
-        run_qa_background(session_id, project_id, dataset_id, run_request)
-    )
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
 
 
 def create_qa_session_service(

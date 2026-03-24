@@ -1,7 +1,7 @@
 """add_qa_sessions_table
 
 Revision ID: 6157153de7cf
-Revises: b1c2d3e4f5a7
+Revises: a9c3d2e1f0b4
 Create Date: 2026-03-23 00:00:00.000000
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "6157153de7cf"
-down_revision: Union[str, None] = "b1c2d3e4f5a7"
+down_revision: Union[str, None] = "a9c3d2e1f0b4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -73,8 +73,83 @@ def upgrade() -> None:
         schema="quality_assurance",
     )
 
+    op.add_column(
+        "version_output",
+        sa.Column("qa_session_id", sa.UUID(), nullable=True),
+        schema="quality_assurance",
+    )
+    op.create_foreign_key(
+        "fk_version_output_qa_session",
+        "version_output",
+        "qa_sessions",
+        ["qa_session_id"],
+        ["id"],
+        source_schema="quality_assurance",
+        referent_schema="quality_assurance",
+        ondelete="SET NULL",
+    )
+    op.create_index(
+        op.f("ix_quality_assurance_version_output_qa_session_id"),
+        "version_output",
+        ["qa_session_id"],
+        unique=False,
+        schema="quality_assurance",
+    )
+
+    op.drop_constraint(
+        "uq_version_output_input_graph_runner",
+        "version_output",
+        schema="quality_assurance",
+        type_="unique",
+    )
+    op.create_index(
+        "uq_version_output_input_session",
+        "version_output",
+        ["input_id", "qa_session_id"],
+        unique=True,
+        schema="quality_assurance",
+        postgresql_where=sa.text("qa_session_id IS NOT NULL"),
+    )
+    op.create_index(
+        "uq_version_output_input_graph_runner_no_session",
+        "version_output",
+        ["input_id", "graph_runner_id"],
+        unique=True,
+        schema="quality_assurance",
+        postgresql_where=sa.text("qa_session_id IS NULL"),
+    )
+
 
 def downgrade() -> None:
+    op.drop_index(
+        "uq_version_output_input_graph_runner_no_session",
+        table_name="version_output",
+        schema="quality_assurance",
+    )
+    op.drop_index(
+        "uq_version_output_input_session",
+        table_name="version_output",
+        schema="quality_assurance",
+    )
+    op.create_unique_constraint(
+        "uq_version_output_input_graph_runner",
+        "version_output",
+        ["input_id", "graph_runner_id"],
+        schema="quality_assurance",
+    )
+    op.drop_index(
+        op.f("ix_quality_assurance_version_output_qa_session_id"),
+        table_name="version_output",
+        schema="quality_assurance",
+    )
+    op.drop_constraint(
+        "fk_version_output_qa_session",
+        "version_output",
+        schema="quality_assurance",
+        type_="foreignkey",
+    )
+    op.drop_column("version_output", "qa_session_id", schema="quality_assurance")
+
     op.drop_index(
         op.f("ix_quality_assurance_qa_sessions_graph_runner_id"),
         table_name="qa_sessions",

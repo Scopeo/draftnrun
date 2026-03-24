@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import QASession, RunStatus
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.qa_session_repository import get_qa_session
-from ada_backend.repositories.quality_assurance_repository import get_outputs_by_graph_runner
+from ada_backend.repositories.quality_assurance_repository import get_outputs_by_session
 from ada_backend.utils.redis_client import get_redis_client
 
 LOGGER = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ def build_catchup_events(db_session: Session, qa_session: QASession) -> list[str
         return []
     if not qa_session.graph_runner_id or not qa_session.dataset_id:
         return []
-    outputs = get_outputs_by_graph_runner(db_session, qa_session.dataset_id, qa_session.graph_runner_id)
+    outputs = get_outputs_by_session(db_session, qa_session.id)
     events: list[str] = []
     for input_id, output in outputs:
         is_error = bool(output and output.startswith("Error: "))

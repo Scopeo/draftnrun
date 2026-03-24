@@ -36,7 +36,9 @@ DAG of ComponentInstances connected via PortMappings. Data flows through FieldEx
 
 ### Workers
 
-- Run queue: Redis BRPOPLPUSH in `ada_backend/workers/`, daemon thread in API process.
+- Queue workers share a `BaseQueueWorker` ABC in `ada_backend/workers/base_queue_worker.py` (heartbeat, per-worker processing list, orphan recovery, drain). Concrete subclasses only implement payload processing and entity recovery.
+- Run queue: `RunQueueWorker` in `ada_backend/workers/run_queue_worker.py`, daemon thread in API process.
+- QA queue: `QAQueueWorker` in `ada_backend/workers/qa_queue_worker.py`, daemon thread in API process. See `ada_backend/docs/qa-system.md`.
 - Webhook worker: Redis Stream consumer, separate process. Three patterns: provider webhooks (external → backend), user-triggered, internal (worker → API). See `ada_backend/docs/webhooks.md`.
 - Ingestion worker: Redis Stream consumer, separate process.
 - Scheduler: APScheduler + PostgreSQL job store, separate process. Registry-based cron types in `ada_backend/services/cron/`. See `ada_backend/services/cron/Readme.md`.

@@ -1848,7 +1848,18 @@ class QADatasetMetadata(Base):
 class VersionOutput(Base):
     __tablename__ = "version_output"
     __table_args__ = (
-        sa.UniqueConstraint("input_id", "graph_runner_id", name="uq_version_output_input_graph_runner"),
+        sa.Index(
+            "uq_version_output_input_session",
+            "input_id", "qa_session_id",
+            unique=True,
+            postgresql_where=sa.text("qa_session_id IS NOT NULL"),
+        ),
+        sa.Index(
+            "uq_version_output_input_graph_runner_no_session",
+            "input_id", "graph_runner_id",
+            unique=True,
+            postgresql_where=sa.text("qa_session_id IS NULL"),
+        ),
         {"schema": "quality_assurance"},
     )
 
@@ -1866,12 +1877,18 @@ class VersionOutput(Base):
         nullable=False,
         index=True,
     )
+    qa_session_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.qa_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # Relationships
     input_groundtruth = relationship("InputGroundtruth", back_populates="version_outputs")
     graph_runner = relationship("GraphRunner")
+    qa_session = relationship("QASession")
     evaluations = relationship("JudgeEvaluation", back_populates="version_output", cascade="all, delete-orphan")
 
     def __str__(self):

@@ -1,6 +1,5 @@
 import json
 import logging
-import urllib.parse
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -19,24 +18,11 @@ from ada_backend.services.qa.qa_stream_service import (
     stream_events,
     subscribe_to_session_stream,
 )
+from ada_backend.utils.websocket_auth import get_bearer_token_from_websocket
 
 LOGGER = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ws", tags=["QA stream"])
-
-
-def _get_bearer_token_from_websocket(websocket: WebSocket) -> str | None:
-    headers = websocket.scope.get("headers") or []
-    for name, value in headers:
-        if name.lower() == b"authorization" and value.lower().startswith(b"bearer "):
-            return value[7:].decode().strip()
-    query_string = websocket.scope.get("query_string", b"").decode()
-    params = urllib.parse.parse_qs(query_string)
-    token_list = params.get("token") or params.get("authorization") or []
-    token = token_list[0] if token_list else None
-    if token and token.lower().startswith("bearer "):
-        return token[7:].strip()
-    return token if token else None
 
 
 async def _verify_ws_auth(
@@ -44,7 +30,7 @@ async def _verify_ws_auth(
     project_id: UUID,
     session: Session,
 ) -> bool:
-    bearer_token = _get_bearer_token_from_websocket(websocket)
+    bearer_token = get_bearer_token_from_websocket(websocket)
     if not bearer_token:
         await websocket.close(
             code=4401,

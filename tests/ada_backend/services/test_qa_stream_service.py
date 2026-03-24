@@ -80,7 +80,7 @@ class TestBuildCatchupEvents:
         input_id = uuid.uuid4()
         qa = _qa_session(status=RunStatus.COMPLETED)
         with patch(
-            "ada_backend.services.qa.qa_stream_service.get_outputs_by_graph_runner",
+            "ada_backend.services.qa.qa_stream_service.get_outputs_by_session",
             return_value=[(input_id, "some output")],
         ):
             events = build_catchup_events(MagicMock(), qa)
@@ -95,7 +95,7 @@ class TestBuildCatchupEvents:
         input_id = uuid.uuid4()
         qa = _qa_session(status=RunStatus.COMPLETED)
         with patch(
-            "ada_backend.services.qa.qa_stream_service.get_outputs_by_graph_runner",
+            "ada_backend.services.qa.qa_stream_service.get_outputs_by_session",
             return_value=[(input_id, "Error: something went wrong")],
         ):
             events = build_catchup_events(MagicMock(), qa)
@@ -151,7 +151,7 @@ class TestReconstructSessionReplay:
         input_id = uuid.uuid4()
         db = MagicMock()
         with patch(
-            "ada_backend.services.qa.qa_stream_service.get_outputs_by_graph_runner",
+            "ada_backend.services.qa.qa_stream_service.get_outputs_by_session",
             return_value=[(input_id, "ok")],
         ):
             catchup, terminal = reconstruct_session_replay(db, qa)

@@ -7,7 +7,9 @@ from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Upload
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from ada_backend.database.models import RunStatus
 from ada_backend.database.setup_db import get_db
+from ada_backend.repositories.qa_session_repository import update_qa_session_status
 from ada_backend.routers.auth_router import UserRights, user_has_access_to_project_dependency
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.dataset_schema import (
@@ -62,13 +64,13 @@ from ada_backend.services.qa.quality_assurance_service import (
     get_version_output_ids_by_input_ids_and_graph_runner_service,
     import_qa_data_from_csv_service,
     list_qa_sessions_service,
-    resolve_qa_entries_and_environment,
     run_qa_service,
     save_conversation_to_groundtruth_service,
-    schedule_qa_background,
     update_dataset_service,
     update_inputs_groundtruths_service,
+    validate_qa_run_request,
 )
+from ada_backend.utils.redis_client import push_qa_task
 
 router = APIRouter(tags=["Quality Assurance"])
 LOGGER = logging.getLogger(__name__)
@@ -660,7 +662,7 @@ async def run_qa_async_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        resolve_qa_entries_and_environment(session, project_id, dataset_id, run_request)
+        validate_qa_run_request(session, project_id, dataset_id, run_request)
     except QADatasetNotInProjectError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except GraphNotBoundToProjectError as e:
@@ -674,7 +676,21 @@ async def run_qa_async_endpoint(
         dataset_id=dataset_id,
         graph_runner_id=run_request.graph_runner_id,
     )
-    schedule_qa_background(qa_session.id, project_id, dataset_id, run_request)
+    if not push_qa_task(
+        session_id=qa_session.id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        run_request_data=run_request.model_dump(mode="json"),
+    ):
+        update_qa_session_status(
+            session, qa_session.id,
+            status=RunStatus.FAILED,
+            error={"message": "Failed to enqueue QA run; Redis unavailable.", "type": "EnqueueError"},
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="QA session created but could not be enqueued. Try again.",
+        )
     return QASessionAcceptedSchema(session_id=qa_session.id)
 
 
