@@ -9,7 +9,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry import trace as trace_api
 from pydantic import BaseModel, Field
 
-from ada_backend.database.models import UIComponent, UIComponentProperties
+from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from engine.components.component import Component
 from engine.components.history_message_handling import HistoryMessageHandler
 from engine.components.rag.formatter import Formatter
@@ -41,6 +41,15 @@ class AIAgentInputs(BaseModel):
     messages: Optional[list[ChatMessage]] = Field(
         default_factory=list,
         description="The history of messages in the conversation.",
+    )
+    completion_model: str = Field(
+        default="anthropic:claude-haiku-4-5",
+        json_schema_extra={
+            "is_tool_input": False,
+            "parameter_type": ParameterType.LLM_MODEL,
+            "ui_component": "Select",
+            "ui_component_properties": {"label": "Model Name", "model_capabilities": ["function_calling"]},
+        },
     )
     initial_prompt: Optional[str] = Field(
         default=SYSTEM_PROMPT_DEFAULT,

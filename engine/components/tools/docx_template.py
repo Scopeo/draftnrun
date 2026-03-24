@@ -12,6 +12,7 @@ from opentelemetry.trace import get_current_span
 from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
+from ada_backend.database.models import ParameterType
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService
@@ -409,6 +410,15 @@ DOCX_TEMPLATE_TOOL_DESCRIPTION = ToolDescription(
 
 
 class DocxTemplateInputs(BaseModel):
+    completion_model: str = Field(
+        default="anthropic:claude-haiku-4-5",
+        json_schema_extra={
+            "is_tool_input": False,
+            "parameter_type": ParameterType.LLM_MODEL,
+            "ui_component": "Select",
+            "ui_component_properties": {"label": "Model Name", "model_capabilities": ["function_calling"]},
+        },
+    )
     template_input_path: Optional[str] = Field(
         default=None,
         json_schema_extra={"disabled_as_input": True},

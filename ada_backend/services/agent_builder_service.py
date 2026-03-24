@@ -6,7 +6,7 @@ from pydantic import SecretStr
 from sqlalchemy.orm import Session
 
 from ada_backend.context import set_current_project_id
-from ada_backend.database.models import PortSetupMode
+from ada_backend.database.models import ParameterType, PortDefinition, PortSetupMode, PortType
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 from ada_backend.repositories.component_repository import (
     get_base_component_from_version,
@@ -99,6 +99,24 @@ def get_component_params(
     return params
 
 
+BUILD_TIME_PARAMETER_TYPES = frozenset({ParameterType.LLM_MODEL})
+
+
+def _get_build_time_port_names(session: Session, component_version_id: UUID) -> set[str]:
+    """Return port names that should be resolved at build time (e.g. completion_model)."""
+    rows = (
+        session
+        .query(PortDefinition.name)
+        .filter(
+            PortDefinition.component_version_id == component_version_id,
+            PortDefinition.port_type == PortType.INPUT,
+            PortDefinition.parameter_type.in_(BUILD_TIME_PARAMETER_TYPES),
+        )
+        .all()
+    )
+    return {r[0] for r in rows}
+
+
 def _resolve_literal_field_expressions(
     session: Session,
     component_instance_id: UUID,
@@ -144,9 +162,7 @@ def _resolve_literal_field_expressions(
             resolved_values[ipi.name] = expr_ast.value
         elif isinstance(expr_ast, (VarNode, JsonBuildNode, ConcatNode)) and variables is not None:
             try:
-                resolved_values[ipi.name] = evaluate_expression(
-                    expr_ast, ipi.name, tasks={}, variables=variables
-                )
+                resolved_values[ipi.name] = evaluate_expression(expr_ast, ipi.name, tasks={}, variables=variables)
             except Exception as exc:
                 LOGGER.warning("Failed to evaluate field expression for port %s: %s", ipi.name, exc)
 

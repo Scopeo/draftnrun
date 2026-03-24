@@ -12,7 +12,6 @@ from ada_backend.database.component_definition_seeding import (
 )
 from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from ada_backend.database.seed.constants import (
-    COMPLETION_MODEL_IN_DB,
     REASONING_IN_DB,
     TEMPERATURE_IN_DB,
     VERBOSITY_IN_DB,
@@ -39,7 +38,6 @@ AI_MODEL_PARAMETER_IDS = {
     "date_in_system_prompt": UUID("f7dbbe12-e6ff-5bfe-b006-f6bf0e9cbf4d"),
     "allow_tool_shortcuts": UUID("3f8aa317-215a-4075-80ba-efca2a3d83ca"),
     "first_history_messages": UUID("4ca78b43-4484-4a9d-bdab-e6dbdaff6da1"),
-    COMPLETION_MODEL_IN_DB: UUID("e2d157b4-f26d-41b4-9e47-62b5b041a9ff"),
     "last_history_messages": UUID("e6caae01-d5ee-4afd-a995-e5ae9dbf3fbc"),
     "skip_tools_with_missing_oauth": UUID("928839bb-84a7-4d6b-adda-fdf77d3df670"),
 }
@@ -207,10 +205,6 @@ def seed_ai_agent_components(session: Session):
             *build_function_calling_service_config_definitions(
                 component_version_id=base_ai_agent_version.id,
                 params_to_seed=[
-                    ParameterLLMConfig(
-                        param_name=COMPLETION_MODEL_IN_DB,
-                        param_id=AI_MODEL_PARAMETER_IDS[COMPLETION_MODEL_IN_DB],
-                    ),
                     ParameterLLMConfig(
                         param_name="api_key",
                         param_id=UUID("78d5d921-9501-44b3-9939-7d7ebf063513"),

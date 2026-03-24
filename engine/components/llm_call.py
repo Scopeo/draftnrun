@@ -7,7 +7,7 @@ from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 
-from ada_backend.database.models import UIComponent, UIComponentProperties
+from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from engine.components.component import Component
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
 from engine.components.utils import load_str_to_json, merge_constrained_output_to_root, parse_openai_message_format
@@ -99,6 +99,15 @@ class LLMCallInputs(BaseModel):
     messages: Optional[list[ChatMessage]] = Field(
         default_factory=list,
         description="The input messages",
+    )
+    completion_model: str = Field(
+        default="anthropic:claude-haiku-4-5",
+        json_schema_extra={
+            "is_tool_input": False,
+            "parameter_type": ParameterType.LLM_MODEL,
+            "ui_component": "Select",
+            "ui_component_properties": {"label": "Model Name", "model_capabilities": ["completion"]},
+        },
     )
     prompt_template: Optional[str] = Field(
         default=DEFAULT_PROMPT_TEMPLATE,

@@ -74,6 +74,15 @@ def _build_output_format(categories: dict[str, str]) -> str:
 
 
 class CategorizerInputs(BaseModel):
+    completion_model: str = Field(
+        default="anthropic:claude-haiku-4-5",
+        json_schema_extra={
+            "is_tool_input": False,
+            "parameter_type": ParameterType.LLM_MODEL,
+            "ui_component": "Select",
+            "ui_component_properties": {"label": "Model Name", "model_capabilities": ["completion"]},
+        },
+    )
     content_to_categorize: str = Field(
         default="",
         description="The content to categorize",

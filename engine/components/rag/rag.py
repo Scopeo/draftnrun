@@ -6,6 +6,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 
+from ada_backend.database.models import ParameterType
 from engine.components.build_context import build_context_from_vocabulary_chunks
 from engine.components.component import Component
 from engine.components.rag.formatter import Formatter
@@ -25,6 +26,15 @@ FILTERING_CONDITION_WITH_METADATA_QDRANT = "AND"
 
 
 class RAGInputs(BaseModel):
+    completion_model: str = Field(
+        default="anthropic:claude-haiku-4-5",
+        json_schema_extra={
+            "is_tool_input": False,
+            "parameter_type": ParameterType.LLM_MODEL,
+            "ui_component": "Select",
+            "ui_component_properties": {"label": "Model Name", "model_capabilities": ["completion"]},
+        },
+    )
     query_text: str = Field(
         description="The search query for the knowledge base.", json_schema_extra={"is_tool_input": True}
     )

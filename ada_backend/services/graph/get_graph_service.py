@@ -5,6 +5,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import ParameterType, PortType
+from ada_backend.utils.component_utils import get_ui_component_properties_with_llm_options
 from ada_backend.repositories.component_repository import get_port_definitions_for_component_version_ids
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.repositories.graph_runner_repository import (
@@ -98,6 +99,7 @@ def get_graph_service(
         comp_instance.field_expressions = field_expressions_by_instance.get(comp_instance.id, [])
 
     # Synthesize input ports as parameters
+    llm_options_cache: dict[frozenset, list] = {}
     component_version_ids = list({ci.component_version_id for ci in component_instances_with_definitions})
     all_port_definitions = get_port_definitions_for_component_version_ids(session, component_version_ids)
     input_ports_by_component_version: dict[UUID, list] = defaultdict(list)
@@ -112,6 +114,12 @@ def get_graph_service(
         comp_instance.parameters = filter_conflicting_parameters(comp_instance.parameters or [], input_ports)
 
         for input_port in input_ports:
+            props = input_port.ui_component_properties
+            if input_port.parameter_type == ParameterType.LLM_MODEL:
+                caps = (props or {}).get("model_capabilities")
+                props = get_ui_component_properties_with_llm_options(
+                    session, caps, props, llm_options_cache,
+                )
             comp_instance.parameters.append(
                 PipelineParameterReadSchema(
                     kind=ParameterKind.INPUT,
@@ -122,7 +130,7 @@ def get_graph_service(
                     nullable=input_port.nullable,
                     default=input_port.get_default() if input_port.default is not None else None,
                     ui_component=input_port.ui_component,
-                    ui_component_properties=input_port.ui_component_properties,
+                    ui_component_properties=props,
                     is_advanced=input_port.is_advanced,
                     drives_output_schema=input_port.drives_output_schema,
                     display_order=input_port.display_order,

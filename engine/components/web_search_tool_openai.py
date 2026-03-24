@@ -5,6 +5,7 @@ from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 
+from ada_backend.database.models import ParameterType
 from engine.components.component import Component
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import WebSearchService
@@ -47,6 +48,15 @@ class SearchFilters(BaseModel):
 
 
 class WebSearchOpenAIToolInputs(BaseModel):
+    completion_model: str = Field(
+        default="openai:gpt-5-mini",
+        json_schema_extra={
+            "is_tool_input": False,
+            "parameter_type": ParameterType.LLM_MODEL,
+            "ui_component": "Select",
+            "ui_component_properties": {"label": "Model Name", "model_capabilities": ["web_search"]},
+        },
+    )
     query: Optional[str] = Field(
         default=None,
         description="The standalone question to be answered using web search.",
