@@ -53,6 +53,7 @@ class ComponentParamDefDTO(ParameterDefinition):
     """Represents a parameter definition for a component"""
 
     component_version_id: UUID
+    is_tool_input: bool = False
     parameter_group_id: Optional[UUID] = None
     parameter_order_within_group: Optional[int] = None
     parameter_group_name: Optional[str] = None
