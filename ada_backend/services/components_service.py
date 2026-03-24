@@ -76,6 +76,7 @@ def _process_components_with_ports(
                     display_order=input_port.display_order,
                     parameter_group_id=input_port.parameter_group_id,
                     parameter_order_within_group=input_port.parameter_order_within_group,
+                    is_tool_input=input_port.is_tool_input,
                     parameter_group_name=None,
                     kind=ParameterKind.INPUT,
                 )
