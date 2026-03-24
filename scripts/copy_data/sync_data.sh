@@ -140,22 +140,17 @@ echo "===> Restoring ada_ingestion"
 pg_restore -d "$TARGET_INGESTION_DB_URL" --no-owner --no-privileges --single-transaction --verbose -Fc "$INGESTION_DUMP_PATH"
 
 # Sync Qdrant collections (if configured)
-if command -v uv >/dev/null 2>&1; then
-  if [ -n "$SOURCE_QDRANT_CLUSTER_URL" ] && [ -n "$SOURCE_QDRANT_API_KEY" ] && \
-     [ -n "$TARGET_QDRANT_CLUSTER_URL" ] && [ -n "$TARGET_QDRANT_API_KEY" ]; then
-    echo "===> Syncing Qdrant collections"
-    # Use SOURCE_DB_URL to read collections from source database (prod)
-    uv run scripts/copy_data/copy_qdrant_collections.py \
-      --source-url="$SOURCE_QDRANT_CLUSTER_URL" \
-      --source-key="$SOURCE_QDRANT_API_KEY" \
-      --target-url="$TARGET_QDRANT_CLUSTER_URL" \
-      --target-key="$TARGET_QDRANT_API_KEY" \
-      --source-db-url="$SOURCE_DB_URL"
-  else
-    echo "===> Qdrant flags not fully set, skipping Qdrant sync"
-  fi
+if [ -n "$SOURCE_QDRANT_CLUSTER_URL" ] && [ -n "$SOURCE_QDRANT_API_KEY" ] && \
+   [ -n "$TARGET_QDRANT_CLUSTER_URL" ] && [ -n "$TARGET_QDRANT_API_KEY" ]; then
+  echo "===> Syncing Qdrant collections"
+  python scripts/copy_data/copy_qdrant_collections.py \
+    --source-url="$SOURCE_QDRANT_CLUSTER_URL" \
+    --source-key="$SOURCE_QDRANT_API_KEY" \
+    --target-url="$TARGET_QDRANT_CLUSTER_URL" \
+    --target-key="$TARGET_QDRANT_API_KEY" \
+    --source-db-url="$SOURCE_DB_URL"
 else
-  echo "===> uv not found in PATH, skipping Qdrant sync"
+  echo "===> Qdrant flags not fully set, skipping Qdrant sync"
 fi
 
 echo "===> Sync completed"
