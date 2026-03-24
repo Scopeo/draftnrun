@@ -7,6 +7,7 @@ from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.qa_session_repository import get_qa_session, update_qa_session_status
 from ada_backend.schemas.input_groundtruth_schema import QARunRequest
 from ada_backend.services.qa.quality_assurance_service import run_qa_background
+from ada_backend.utils.redis_client import publish_qa_event
 from ada_backend.workers.base_queue_worker import BaseQueueWorker
 from settings import settings
 
@@ -45,25 +46,42 @@ class QAQueueWorker(BaseQueueWorker):
         session_id = UUID(payload["session_id"])
         project_id = UUID(payload["project_id"])
         dataset_id = UUID(payload["dataset_id"])
-        run_request = QARunRequest(**payload["run_request"])
 
-        with get_db_session() as session:
-            qa_session = get_qa_session(session, session_id)
-            if not qa_session:
-                LOGGER.warning("QA session %s not found, skipping", session_id)
-                return
-            current = (
-                qa_session.status if isinstance(qa_session.status, RunStatus) else RunStatus(str(qa_session.status))
-            )
-            if current != RunStatus.PENDING:
-                LOGGER.debug("QA session %s already %s, skipping", session_id, current)
-                return
+        try:
+            run_request = QARunRequest(**payload["run_request"])
 
-        async def execute():
-            await run_qa_background(session_id, project_id, dataset_id, run_request)
+            with get_db_session() as session:
+                qa_session = get_qa_session(session, session_id)
+                if not qa_session:
+                    LOGGER.warning("QA session %s not found, skipping", session_id)
+                    return
+                current = (
+                    qa_session.status
+                    if isinstance(qa_session.status, RunStatus)
+                    else RunStatus(str(qa_session.status))
+                )
+                if current != RunStatus.PENDING:
+                    LOGGER.debug("QA session %s already %s, skipping", session_id, current)
+                    return
 
-        loop.run_until_complete(execute())
-        LOGGER.info("QA session %s completed via worker", session_id)
+            async def execute():
+                await run_qa_background(session_id, project_id, dataset_id, run_request)
+
+            loop.run_until_complete(execute())
+            LOGGER.info("QA session %s completed via worker", session_id)
+        except Exception as e:
+            LOGGER.exception("QA session %s failed: %s", session_id, e)
+            error_payload = {"message": str(e), "type": type(e).__name__}
+            try:
+                with get_db_session() as session:
+                    update_qa_session_status(session, session_id, status=RunStatus.FAILED, error=error_payload)
+            except Exception as status_exc:
+                LOGGER.exception("Failed to update QA session %s to FAILED: %s", session_id, status_exc)
+
+            try:
+                publish_qa_event(session_id, {"type": "qa.failed", "error": error_payload})
+            except Exception as event_exc:
+                LOGGER.exception("Failed to publish qa.failed event for %s: %s", session_id, event_exc)
 
 
 _worker = QAQueueWorker()
