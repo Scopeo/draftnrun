@@ -1,9 +1,8 @@
 from uuid import UUID, uuid4
 
-from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
+from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import (
     ComponentInstanceSchema,
-    PipelineParameterSchema,
 )
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
 from settings import settings
@@ -62,7 +61,9 @@ def build_react_sql_agent_chatbot(components: dict[str, UUID], graph_runner_id: 
             component_version_id=components["react_sql_agent_v2"],
             is_start_node=True,
             parameters=[
-                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-5-mini"),
+                PipelineParameterSchema(
+                    name="completion_model", value="openai:gpt-5-mini", kind=ParameterKind.INPUT
+                ),
                 PipelineParameterSchema(
                     name="additional_db_description",
                     value=ADDITIONAL_DB_DESCRIPTION,

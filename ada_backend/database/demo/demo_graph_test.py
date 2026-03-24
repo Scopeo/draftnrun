@@ -2,7 +2,6 @@ import json
 from uuid import UUID, uuid4
 
 from ada_backend.database import models as db
-from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import (
     ComponentInstanceSchema,
@@ -59,7 +58,9 @@ def build_graph_test_chatbot(
                     value="Reformulate the question as a customer service query :\n{input}",
                     kind=ParameterKind.INPUT,
                 ),
-                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-5-mini"),
+                PipelineParameterSchema(
+                    name="completion_model", value="openai:gpt-5-mini", kind=ParameterKind.INPUT
+                ),
             ],
             tool_description_override="Graph Test for Revaline",
         ),
@@ -78,7 +79,9 @@ def build_graph_test_chatbot(
             name="Synthesizer",
             ref=f"{agent_name}_synthesizer_instance",
             parameters=[
-                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-5-mini"),
+                PipelineParameterSchema(
+                    name="completion_model", value="openai:gpt-5-mini", kind=ParameterKind.INPUT
+                ),
             ],
         ),
         ComponentInstanceSchema(
@@ -106,7 +109,9 @@ def build_graph_test_chatbot(
                     value="Evaluate the pertinence of the following answer:\n{input}",
                     kind=ParameterKind.INPUT,
                 ),
-                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-5-mini"),
+                PipelineParameterSchema(
+                    name="completion_model", value="openai:gpt-5-mini", kind=ParameterKind.INPUT
+                ),
             ],
             tool_description_override="Graph Test for Revaline",
         ),
