@@ -240,12 +240,12 @@ def _assert_upgrade_succeeded(bind, rows_before: int, any_cv_exists: bool) -> No
 def downgrade() -> None:
     bind = op.get_bind()
 
-    for cpd_id, (cv_id, pd_id, default_model, _cap) in zip(COMPLETION_MODEL_CPD_IDS, COMPONENT_VERSIONS):
+    for cpd_id, (cv_id, pd_id, default_model, cap) in zip(COMPLETION_MODEL_CPD_IDS, COMPONENT_VERSIONS):
         bind.execute(
             sa.text(f"""
                 INSERT INTO component_parameter_definitions
                     (id, component_version_id, name, type, nullable, "default",
-                     ui_component, ui_component_properties, is_advanced)
+                     ui_component, ui_component_properties, is_advanced, model_capabilities)
                 SELECT
                     '{cpd_id}'::uuid,
                     '{cv_id}'::uuid,
@@ -255,13 +255,18 @@ def downgrade() -> None:
                     :default_model,
                     'Select'::ui_component,
                     CAST(:ui_props AS jsonb),
-                    false
+                    false,
+                    CAST(:model_caps AS jsonb)
                 WHERE EXISTS (
                     SELECT 1 FROM component_versions WHERE id = '{cv_id}'::uuid
                 )
                 ON CONFLICT (id) DO NOTHING
             """),
-            {"default_model": default_model, "ui_props": json.dumps({"label": "Model Name"})},
+            {
+                "default_model": default_model,
+                "ui_props": json.dumps({"label": "Model Name"}),
+                "model_caps": json.dumps([cap]),
+            },
         )
 
     bind.execute(
