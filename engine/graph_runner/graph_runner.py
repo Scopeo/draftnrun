@@ -235,14 +235,14 @@ class GraphRunner:
         for pm in self.port_mappings:
             src = pm.source_instance_id
             dst = pm.target_instance_id
-            if not self.graph.has_edge(src, dst):
+            if not self.graph.has_edge(src, dst) and not nx.has_path(self.graph, src, dst):
                 self.graph.add_edge(src, dst)
 
         for (target, _field), expr_ast in self._expressions_by_target_ast.items():
             ref_nodes: Iterator[RefNode] = select_nodes(expr_ast, lambda n: isinstance(n, RefNode))
             src_instances = {ref_node.instance for ref_node in ref_nodes}
             for src in src_instances:
-                if not self.graph.has_edge(src, target):
+                if not self.graph.has_edge(src, target) and not nx.has_path(self.graph, src, target):
                     self.graph.add_edge(src, target)
 
         if not nx.is_directed_acyclic_graph(self.graph):
