@@ -59,7 +59,7 @@ def _build_source_filter(source_id: str, sql_query_filter: Optional[str]) -> str
     return source_scope_filter
 
 
-def _is_source_row_newer(source_timestamp, existing_timestamp) -> bool:
+def _is_source_newer(source_timestamp, existing_timestamp) -> bool:
     incoming_dt = parse_datetime(source_timestamp)
     existing_dt = parse_datetime(existing_timestamp)
 
@@ -88,7 +88,7 @@ async def get_db_source(
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
     sql_query_filter: Optional[str] = None,
-    include_row_ids: Optional[set[Any]] = None,
+    row_ids_to_fetch: set[Any] = frozenset(),
 ) -> AsyncGenerator[list[dict], None]:
     sql_local_service = SQLLocalService(engine_url=db_url)
 
@@ -124,23 +124,16 @@ async def get_db_source(
 
     splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
-    if include_row_ids is not None:
-        source_batches = (
-            sql_local_service.get_rows_by_ids(
-                table_name=table_name,
-                chunk_ids=id_batch,
-                schema_name=source_schema_name,
-                id_column_name=id_column_name,
-                sql_query_filter=sql_query_filter,
-            )
-            for id_batch in _iter_batches(list(include_row_ids), settings.INGESTION_BATCH_SIZE)
-        )
-    else:
-        source_batches = sql_local_service.iter_table_rows(
+    source_batches = (
+        sql_local_service.get_rows_by_ids(
             table_name=table_name,
+            chunk_ids=row_id_batch,
             schema_name=source_schema_name,
+            id_column_name=id_column_name,
             sql_query_filter=sql_query_filter,
         )
+        for row_id_batch in _iter_batches(list(row_ids_to_fetch), settings.INGESTION_BATCH_SIZE)
+    )
 
     for batch in source_batches:
         batch_rows: list[dict] = []
@@ -242,67 +235,57 @@ async def upload_db_source(
     if not source_id_timestamp_rows:
         raise ValueError(f"The table '{source_table_name}' is empty. No data to ingest.")
 
-    row_ids_to_process: set[Any] = set()
-    incoming_file_ids: set[str] = set()
-    incoming_timestamp_by_file_id: dict[str, Optional[str]] = {}
+    incoming_ids_with_timestamp: dict[str, Optional[str]] = {}
+    file_id_prefix = f"{source_table_name}_"
     for source_row in source_id_timestamp_rows:
-        file_id = f"{source_table_name}_{source_row[id_column_name]}"
-        incoming_file_ids.add(file_id)
+        file_id = f"{file_id_prefix}{source_row[id_column_name]}"
         timestamp_value = source_row.get(timestamp_column_name) if timestamp_column_name else None
-        incoming_timestamp_by_file_id[file_id] = _serialize_value(timestamp_value)
+        incoming_ids_with_timestamp[file_id] = _serialize_value(timestamp_value)
 
     scoped_unified_filter = _build_source_filter(
         source_id=source_id_str,
         sql_query_filter=combined_filter_sql_unified,
     )
-    existing_unified_rows = db_service.get_column_values(
-        table_name=storage_table_name,
-        columns=[CHUNK_ID_COLUMN_NAME, FILE_ID_COLUMN_NAME, TIMESTAMP_COLUMN_NAME],
-        schema_name=storage_schema_name,
-        sql_query_filter=scoped_unified_filter,
-    )
-    existing_timestamp_by_file_id: dict[str, Optional[str]] = {}
+    if db_service.table_exists(storage_table_name, schema_name=storage_schema_name):
+        existing_id_timestamp_data = db_service.get_column_values(
+            table_name=storage_table_name,
+            columns=[CHUNK_ID_COLUMN_NAME, FILE_ID_COLUMN_NAME, TIMESTAMP_COLUMN_NAME],
+            schema_name=storage_schema_name,
+            sql_query_filter=scoped_unified_filter,
+        )
+    else:
+        existing_id_timestamp_data = []
+    existing_ids_with_timestamp: dict[str, Optional[str]] = {}
     existing_chunk_ids_by_file_id: dict[str, set[str]] = {}
-    for unified_row in existing_unified_rows:
-        unified_file_id = unified_row[FILE_ID_COLUMN_NAME]
-        unified_chunk_id = unified_row[CHUNK_ID_COLUMN_NAME]
-        existing_chunk_ids_by_file_id.setdefault(unified_file_id, set()).add(unified_chunk_id)
-        if unified_file_id not in existing_timestamp_by_file_id:
-            existing_timestamp_by_file_id[unified_file_id] = _serialize_value(
-                unified_row.get(TIMESTAMP_COLUMN_NAME)
-            )
+    for entry in existing_id_timestamp_data:
+        file_id = entry[FILE_ID_COLUMN_NAME]
+        existing_chunk_ids_by_file_id.setdefault(file_id, set()).add(entry[CHUNK_ID_COLUMN_NAME])
+        if file_id not in existing_ids_with_timestamp:
+            existing_ids_with_timestamp[file_id] = _serialize_value(entry.get(TIMESTAMP_COLUMN_NAME))
 
-    existing_file_ids = set(existing_chunk_ids_by_file_id.keys())
-    new_file_ids = incoming_file_ids - existing_file_ids
-    deleted_file_ids = existing_file_ids - incoming_file_ids
-    common_file_ids = incoming_file_ids & existing_file_ids
+    ids_to_add = incoming_ids_with_timestamp.keys() - existing_ids_with_timestamp.keys()
+    ids_to_delete = existing_ids_with_timestamp.keys() - incoming_ids_with_timestamp.keys()
+    common_ids = incoming_ids_with_timestamp.keys() & existing_ids_with_timestamp.keys()
 
     if timestamp_column_name:
-        updated_file_ids = {
-            file_id for file_id in common_file_ids
-            if _is_source_row_newer(
-                incoming_timestamp_by_file_id[file_id],
-                existing_timestamp_by_file_id[file_id],
+        ids_to_update = {
+            file_id
+            for file_id in common_ids
+            if _is_source_newer(
+                incoming_ids_with_timestamp[file_id],
+                existing_ids_with_timestamp[file_id],
             )
         }
     else:
-        updated_file_ids = common_file_ids
+        ids_to_update = common_ids
 
-    changed_file_ids = new_file_ids | updated_file_ids
-    file_id_prefix = f"{source_table_name}_"
-    for file_id in changed_file_ids:
-        row_ids_to_process.add(file_id.removeprefix(file_id_prefix))
+    file_ids_to_delete = ids_to_update | (ids_to_delete if not update_existing else set())
+    file_ids_to_upsert = ids_to_add | ids_to_update
 
-    chunks_to_delete_for_update: set[str] = set()
-    for file_id in updated_file_ids:
-        chunks_to_delete_for_update.update(existing_chunk_ids_by_file_id.get(file_id, set()))
+    chunk_ids_to_delete: set[str] = set()
+    for file_id in file_ids_to_delete:
+        chunk_ids_to_delete.update(existing_chunk_ids_by_file_id.get(file_id, set()))
 
-    chunks_to_delete_for_stale: set[str] = set()
-    if not update_existing:
-        for file_id in deleted_file_ids:
-            chunks_to_delete_for_stale.update(existing_chunk_ids_by_file_id.get(file_id, set()))
-
-    chunk_ids_to_delete = chunks_to_delete_for_update | chunks_to_delete_for_stale
     if chunk_ids_to_delete:
         db_service.delete_rows_from_table(
             table_name=storage_table_name,
@@ -311,53 +294,52 @@ async def upload_db_source(
             id_column_name=CHUNK_ID_COLUMN_NAME,
         )
 
-    total_rows = 0
-    batch_number = 0
+    row_ids_to_fetch = {file_id.removeprefix(file_id_prefix) for file_id in file_ids_to_upsert}
 
-    async for chunk_batch in get_db_source(
-        db_url=source_db_url,
-        table_name=source_table_name,
-        id_column_name=id_column_name,
-        text_column_names=text_column_names,
-        source_schema_name=source_schema_name,
-        metadata_column_names=metadata_column_names,
-        timestamp_column_name=timestamp_column_name,
-        url_pattern=url_pattern,
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        sql_query_filter=combined_filter_sql,
-        include_row_ids=row_ids_to_process,
-        qdrant_service=qdrant_service,
-        qdrant_collection_name=qdrant_collection_name,
-    ):
-        batch_number += 1
-        for row in chunk_batch:
-            row[SOURCE_ID_COLUMN_NAME] = source_id_str
-        total_rows += len(chunk_batch)
-        LOGGER.info(f"Flushing DB-source batch {batch_number} ({len(chunk_batch)} rows)")
-        db_service.update_table(
-            new_rows=chunk_batch,
-            table_name=storage_table_name,
-            table_definition=db_definition,
-            id_column_name=CHUNK_ID_COLUMN_NAME,
-            timestamp_column_name=TIMESTAMP_COLUMN_NAME,
-            append_mode=True,
-            schema_name=storage_schema_name,
+    if row_ids_to_fetch:
+        total_rows = 0
+        batch_number = 0
+        async for chunk_batch in get_db_source(
+            db_url=source_db_url,
+            table_name=source_table_name,
+            id_column_name=id_column_name,
+            text_column_names=text_column_names,
+            source_schema_name=source_schema_name,
+            metadata_column_names=metadata_column_names,
+            timestamp_column_name=timestamp_column_name,
+            url_pattern=url_pattern,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            sql_query_filter=combined_filter_sql,
+            row_ids_to_fetch=row_ids_to_fetch,
+            qdrant_service=qdrant_service,
+            qdrant_collection_name=qdrant_collection_name,
+        ):
+            batch_number += 1
+            for row in chunk_batch:
+                row[SOURCE_ID_COLUMN_NAME] = source_id_str
+            total_rows += len(chunk_batch)
+            LOGGER.info(f"Inserting DB-source batch {batch_number} ({len(chunk_batch)} rows)")
+            db_service.insert_rows(
+                rows=chunk_batch,
+                table_name=storage_table_name,
+                schema_name=storage_schema_name,
+            )
+        LOGGER.info(f"Inserted {total_rows} rows into '{storage_table_name}' in schema '{storage_schema_name}'.")
+
+    if chunk_ids_to_delete or row_ids_to_fetch:
+        await sync_chunks_to_qdrant(
+            storage_schema_name,
+            storage_table_name,
+            collection_name=qdrant_collection_name,
+            db_service=db_service,
+            qdrant_service=qdrant_service,
             sql_query_filter=combined_filter_sql_unified,
-            source_id=source_id_str,
+            query_filter_qdrant=combined_filter_qdrant,
+            source_id=source_id,
         )
-
-    LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {total_rows} rows.")
-    await sync_chunks_to_qdrant(
-        storage_schema_name,
-        storage_table_name,
-        collection_name=qdrant_collection_name,
-        db_service=db_service,
-        qdrant_service=qdrant_service,
-        sql_query_filter=combined_filter_sql_unified,
-        query_filter_qdrant=combined_filter_qdrant,
-        source_id=source_id,
-    )
+    else:
+        LOGGER.info("No changes detected, skipping Qdrant sync.")
 
 
 async def ingestion_database(
