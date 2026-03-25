@@ -517,7 +517,13 @@ class GraphRunner:
             self._mappings_by_target.setdefault(pm.target_instance_id, []).append(pm)
 
     def _halt_downstream_execution(self, source_node_id: str) -> None:
-        """Mark all downstream nodes from source as halted without execution."""
+        """Mark source node and all its downstream nodes as halted without execution.
+        Nodes already COMPLETED are left unchanged."""
+        root_task = self.tasks[source_node_id]
+        if root_task.state not in (TaskState.COMPLETED, TaskState.HALTED):
+            LOGGER.debug(f"Halting execution for root node '{source_node_id}'")
+            root_task.state = TaskState.HALTED
+            root_task.result = NodeData(data={}, ctx=self.run_context)
         visited = set()
         queue = [source_node_id]
 

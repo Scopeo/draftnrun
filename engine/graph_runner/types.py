@@ -28,7 +28,9 @@ class Task:
 
     def decrement_pending_deps(self):
         """Decrement pending dependencies, marking the task as ready
-        if dependencies are now satisfied."""
+        if dependencies are now satisfied. No-op if already halted."""
+        if self.state == TaskState.HALTED:
+            return
         if self.state != TaskState.NOT_READY:
             raise ValueError("Cannot decrement pending dependencies for a non-ready task")
 

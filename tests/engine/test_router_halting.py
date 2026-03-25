@@ -134,6 +134,7 @@ class TestRouterHalting:
         gr = _build_two_layer_router_graph(tm)
         asyncio.run(gr.run({"input": "hello"}))
 
+        assert gr.tasks["router2"].state == TaskState.HALTED
         assert gr.tasks["fixed_b"].state == TaskState.HALTED
         assert gr.tasks["fixed_c"].state == TaskState.HALTED
         assert gr.tasks["fixed_a"].state == TaskState.COMPLETED
