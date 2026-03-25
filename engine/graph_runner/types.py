@@ -15,6 +15,7 @@ class TaskState(StrEnum):
     NOT_READY = "not_ready"
     READY = "ready"
     COMPLETED = "completed"
+    HALTED = "halted"
 
 
 @dataclass
