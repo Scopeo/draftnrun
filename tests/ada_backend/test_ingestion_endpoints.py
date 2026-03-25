@@ -123,7 +123,7 @@ def test_ingest_local_folder_source():
     mock_qdrant_instance.collection_exists_async = AsyncMock(return_value=False)  # Collection doesn't exist initially
     mock_qdrant_instance.create_collection_async = AsyncMock()
     mock_qdrant_instance.create_index_if_needed_async = AsyncMock()
-    mock_qdrant_instance.sync_rows_with_collection_async = AsyncMock()
+    mock_qdrant_instance.sync_batched_with_collection_async = AsyncMock()
     mock_qdrant_instance.count_points = MagicMock(return_value=0)
 
     with (
@@ -163,8 +163,7 @@ def test_ingest_local_folder_source():
             break
     assert found_source
 
-    # sync_rows_with_collection_async is called once after all files are processed (batch sync)
-    mock_qdrant_instance.sync_rows_with_collection_async.assert_called_once()
+    mock_qdrant_instance.sync_batched_with_collection_async.assert_called_once()
     mock_qdrant_instance.create_collection_async.assert_called_once()
 
     db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)

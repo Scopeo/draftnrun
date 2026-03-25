@@ -14,10 +14,7 @@ from engine.qdrant_service import FieldSchema, QdrantService, map_sql_type_to_qd
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import DBDefinition
 from engine.storage_service.local_service import SQLLocalService
-from ingestion_script.ingest_folder_source import (
-    TIMESTAMP_COLUMN_NAME,
-    sync_chunks_to_qdrant,
-)
+from ingestion_script.ingest_folder_source import TIMESTAMP_COLUMN_NAME, sync_chunks_to_qdrant
 from ingestion_script.utils import (
     CHUNK_COLUMN_NAME,
     CHUNK_ID_COLUMN_NAME,
@@ -36,31 +33,6 @@ from ingestion_script.utils import (
 )
 
 LOGGER = logging.getLogger(__name__)
-
-
-def _map_sqlalchemy_type_to_internal(type_str: str) -> str:
-    """
-    Map SQLAlchemy/reflected type string to internal type used by DBDefinition/SQLLocalService.
-    Falls back to VARCHAR when unknown; prefers DATETIME for date-like types.
-    """
-    type_upper = type_str.upper()
-    if "TIMESTAMP" in type_upper or "DATETIME" in type_upper or type_upper == "DATE":
-        return "DATETIME"
-    if type_upper.startswith("VARCHAR") or "CHAR" in type_upper:
-        return "VARCHAR"
-    if "TEXT" in type_upper:
-        return "TEXT"
-    if "INT" in type_upper:
-        return "INTEGER"
-    if any(x in type_upper for x in ["DOUBLE", "FLOAT", "NUMERIC", "DECIMAL", "REAL"]):
-        return "FLOAT"
-    if "BOOL" in type_upper:
-        return "BOOLEAN"
-    if "JSON" in type_upper or "VARIANT" in type_upper:
-        return "VARIANT"
-    if "ARRAY" in type_upper:
-        return "ARRAY"
-    return "VARCHAR"
 
 
 def _serialize_value(value):
@@ -97,9 +69,7 @@ async def get_db_source(
     if not set(text_column_names).issubset(column_names):
         raise ValueError(f"Text columns {text_column_names} not found in the columns: {sorted(column_names)}")
     if metadata_column_names is not None and not set(metadata_column_names).issubset(column_names):
-        raise ValueError(
-            f"Metadata columns {metadata_column_names} not found in the columns: {sorted(column_names)}"
-        )
+        raise ValueError(f"Metadata columns {metadata_column_names} not found in the columns: {sorted(column_names)}")
     if timestamp_column_name and timestamp_column_name not in column_names:
         raise ValueError(
             f"Timestamp column '{timestamp_column_name}' not found in the columns: {sorted(column_names)}"

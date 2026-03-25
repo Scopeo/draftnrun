@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import httpx
 
@@ -176,7 +176,7 @@ class QdrantService:
         existing_dt = parse_datetime(existing_ts_raw)
         if incoming_dt is not None and existing_dt is not None:
             return make_naive_utc(incoming_dt) > make_naive_utc(existing_dt)
-        return True
+        return False
 
     @classmethod
     def from_defaults(
@@ -895,8 +895,10 @@ class QdrantService:
         collection_name: str,
         filter: Optional[dict] = None,
         with_payload: Union[bool, dict] = True,
-        batch_size: int = 500,
+        batch_size: Optional[int] = None,
     ) -> list[dict]:
+        if batch_size is None:
+            batch_size = settings.INGESTION_BATCH_SIZE
         all_points: list[dict] = []
         offset = None
         while True:
@@ -1127,13 +1129,22 @@ class QdrantService:
         collections = response.get("result", {}).get("collections", [])
         return [collection["name"] for collection in collections]
 
-    async def sync_rows_with_collection_async(
+    async def sync_batched_with_collection_async(
         self,
-        rows: list[dict],
+        incoming_ids_with_timestamp: dict[str, Optional[str]],
+        fetch_rows: Callable[[list[str]], list[dict]],
         collection_name: str,
         query_filter_qdrant: Optional[dict] = None,
+        batch_size: Optional[int] = None,
     ) -> bool:
-        """Diff-based sync fetching only IDs + timestamps from Qdrant for comparison."""
+        """Diff-based sync that fetches full rows only for chunks that need insert/update.
+
+        Phase 1: diff incoming IDs+timestamps against Qdrant existing IDs+timestamps.
+        Phase 2: delete stale chunks.
+        Phase 3: fetch full rows via fetch_rows in batches and insert them.
+        """
+        if batch_size is None:
+            batch_size = settings.INGESTION_BATCH_SIZE
         schema = self._get_schema(collection_name)
         chunk_id_field = schema.chunk_id_field
         timestamp_field = schema.last_edited_ts_field
@@ -1143,73 +1154,66 @@ class QdrantService:
             filter=query_filter_qdrant,
         )
         if collection_count == 0:
-            await self.add_chunks_async(rows, collection_name)
-            LOGGER.info(f"Qdrant collection is empty. Added {len(rows)} chunks to Qdrant")
-            return True
-
-        fields = [chunk_id_field] + ([timestamp_field] if timestamp_field else [])
-        points = await self.get_points_async(
-            collection_name=collection_name,
-            filter=query_filter_qdrant,
-            with_payload={"include": fields},
-        )
-        existing_ids_with_timestamp: dict[str, Optional[str]] = {
-            pt["payload"][chunk_id_field]: pt["payload"].get(timestamp_field) if timestamp_field else None
-            for pt in points
-            if chunk_id_field in pt.get("payload", {})
-        }
-        incoming_rows_by_chunk_id = {row[chunk_id_field]: row for row in rows}
-
-        ids_to_add = incoming_rows_by_chunk_id.keys() - existing_ids_with_timestamp.keys()
-        ids_to_delete = existing_ids_with_timestamp.keys() - incoming_rows_by_chunk_id.keys()
-        common_ids = incoming_rows_by_chunk_id.keys() & existing_ids_with_timestamp.keys()
-
-        if query_filter_qdrant or not timestamp_field:
-            ids_to_update = common_ids
+            ids_to_upsert = set(incoming_ids_with_timestamp.keys())
         else:
-            ids_to_update = {
-                chunk_id
-                for chunk_id in common_ids
-                if self._should_update(
-                    incoming_rows_by_chunk_id[chunk_id].get(timestamp_field),
-                    existing_ids_with_timestamp[chunk_id],
-                )
+            fields = [chunk_id_field] + ([timestamp_field] if timestamp_field else [])
+            points = await self.get_points_async(
+                collection_name=collection_name,
+                filter=query_filter_qdrant,
+                with_payload={"include": fields},
+            )
+            existing_ids_with_timestamp: dict[str, Optional[str]] = {
+                point["payload"][chunk_id_field]: point["payload"].get(timestamp_field) if timestamp_field else None
+                for point in points
+                if chunk_id_field in point.get("payload", {})
             }
 
-        ids_to_delete = ids_to_delete | ids_to_update
-        ids_to_upsert = ids_to_add | ids_to_update
+            ids_to_add = incoming_ids_with_timestamp.keys() - existing_ids_with_timestamp.keys()
+            ids_to_delete = existing_ids_with_timestamp.keys() - incoming_ids_with_timestamp.keys()
+            common_ids = incoming_ids_with_timestamp.keys() & existing_ids_with_timestamp.keys()
 
-        if ids_to_delete:
-            await self.delete_chunks_async(
-                point_ids=list(ids_to_delete),
-                id_field=chunk_id_field,
-                collection_name=collection_name,
-            )
-            LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
+            if query_filter_qdrant or not timestamp_field:
+                ids_to_update = common_ids
+            else:
+                ids_to_update = {
+                    chunk_id
+                    for chunk_id in common_ids
+                    if self._should_update(
+                        incoming_ids_with_timestamp[chunk_id],
+                        existing_ids_with_timestamp[chunk_id],
+                    )
+                }
+
+            ids_to_delete = ids_to_delete | ids_to_update
+            ids_to_upsert = ids_to_add | ids_to_update
+
+            if ids_to_delete:
+                await self.delete_chunks_async(
+                    point_ids=list(ids_to_delete),
+                    id_field=chunk_id_field,
+                    collection_name=collection_name,
+                )
+                LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
+
         if ids_to_upsert:
-            await self.add_chunks_async(
-                [incoming_rows_by_chunk_id[chunk_id] for chunk_id in ids_to_upsert],
-                collection_name,
-            )
-            LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
+            upsert_list = list(ids_to_upsert)
+            for i in range(0, len(upsert_list), batch_size):
+                batch_ids = upsert_list[i : i + batch_size]
+                batch_rows = fetch_rows(batch_ids)
+                if batch_rows:
+                    await self.add_chunks_async(batch_rows, collection_name)
+                LOGGER.info(f"Inserted batch {i // batch_size + 1} ({len(batch_rows)} rows) to Qdrant")
 
+        total_incoming = len(incoming_ids_with_timestamp)
         point_count = await self.count_points_async(
             collection_name=collection_name,
             filter=query_filter_qdrant,
         )
-        if point_count != len(rows):
+        if point_count != total_incoming:
             LOGGER.error(
                 f"Sync failed : number of points in Qdrant ({point_count}) is not equal to "
-                f"the number of incoming rows ({len(rows)})"
+                f"the number of incoming rows ({total_incoming})"
             )
             return False
         LOGGER.info(f"Sync successful : number of points in Qdrant is {point_count}")
         return True
-
-    def sync_rows_with_collection(
-        self,
-        rows: list[dict],
-        collection_name: str,
-        query_filter_qdrant: Optional[dict] = None,
-    ) -> bool:
-        return asyncio.run(self.sync_rows_with_collection_async(rows, collection_name, query_filter_qdrant))

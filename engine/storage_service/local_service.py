@@ -215,6 +215,24 @@ class SQLLocalService(DBService):
                     break
                 yield [dict(zip(keys, row)) for row in rows]
 
+    def get_column_values(
+        self,
+        table_name: str,
+        columns: list[str],
+        schema_name: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
+    ) -> list[dict]:
+        """Return rows containing only the specified columns."""
+        table = self.get_table(table_name, schema_name)
+        selected_cols = [table.c[col] for col in columns]
+        with self.Session() as session:
+            stmt = sqlalchemy.select(*selected_cols)
+            if sql_query_filter:
+                stmt = stmt.where(text(sql_query_filter))
+            result = session.execute(stmt)
+            keys = list(result.keys())
+            return [dict(zip(keys, row)) for row in result.fetchall()]
+
     def get_table_rows(
         self,
         table_name: str,

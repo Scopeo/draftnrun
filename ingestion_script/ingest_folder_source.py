@@ -91,17 +91,18 @@ async def sync_chunks_to_qdrant(
     else:
         combined_filter = sql_query_filter
 
-    chunk_rows: list[dict] = []
-    for batch in db_service.iter_table_rows(
+    id_rows = db_service.get_column_values(
         table_name,
-        batch_size=settings.INGESTION_BATCH_SIZE,
+        columns=[CHUNK_ID_COLUMN_NAME, TIMESTAMP_COLUMN_NAME],
         schema_name=table_schema,
         sql_query_filter=combined_filter,
-    ):
-        chunk_rows.extend(prepare_rows_for_qdrant(batch))
+    )
+    incoming_ids_with_timestamp: dict[str, Optional[str]] = {
+        row[CHUNK_ID_COLUMN_NAME]: row.get(TIMESTAMP_COLUMN_NAME) for row in id_rows
+    }
 
     LOGGER.info(
-        f"Found {len(chunk_rows)} chunks to sync to Qdrant from table {table_name} "
+        f"Found {len(incoming_ids_with_timestamp)} chunks to sync to Qdrant from table {table_name} "
         f"in schema {table_schema} with filter {combined_filter}"
     )
 
@@ -114,13 +115,19 @@ async def sync_chunks_to_qdrant(
     else:
         combined_filter_qdrant = query_filter_qdrant
 
-    LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunk_rows)} rows")
+    LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(incoming_ids_with_timestamp)} rows")
     if not await qdrant_service.collection_exists_async(collection_name):
         await qdrant_service.create_collection_async(collection_name)
+        # TODO: Remove because create collection creates indexes
         await qdrant_service.create_index_if_needed_async(collection_name, SOURCE_ID_COLUMN_NAME, FieldSchema.KEYWORD)
         await qdrant_service.create_index_if_needed_async(collection_name, CHUNK_ID_COLUMN_NAME, FieldSchema.KEYWORD)
-    success = await qdrant_service.sync_rows_with_collection_async(
-        rows=chunk_rows,
+    success = await qdrant_service.sync_batched_with_collection_async(
+        incoming_ids_with_timestamp=incoming_ids_with_timestamp,
+        fetch_rows=lambda ids: prepare_rows_for_qdrant(
+            db_service.get_rows_by_ids(
+                table_name=table_name, chunk_ids=ids, schema_name=table_schema, sql_query_filter=combined_filter,
+            )
+        ),
         collection_name=collection_name,
         query_filter_qdrant=combined_filter_qdrant,
     )

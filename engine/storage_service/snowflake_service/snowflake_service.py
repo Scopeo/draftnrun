@@ -1,19 +1,24 @@
 import logging
 import threading
-from typing import Optional
+from typing import Iterator, Optional
 
 import pandas as pd
 from snowflake.connector.pandas_tools import write_pandas
 
 from engine.components.types import ComponentAttributes, SourceChunk
 from engine.storage_service.db_service import DBService
-from engine.storage_service.db_utils import DBDefinition, check_columns_matching_between_data_and_database_table
+from engine.storage_service.db_utils import (
+    CHUNK_ID_COLUMN,
+    DBDefinition,
+    check_columns_matching_between_data_and_database_table,
+)
 from engine.storage_service.snowflake_service.snowflake_utils import (
     connect_to_snowflake,
     dict_to_object_construct,
     escape_sql_string,
     format_json,
 )
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -135,6 +140,63 @@ class SnowflakeService(DBService):
         df = df.rename(columns={col: col.lower() for col in df.columns})
         return df
 
+    def iter_table_rows(
+        self,
+        table_name: str,
+        batch_size: Optional[int] = None,
+        schema_name: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
+    ) -> Iterator[list[dict]]:
+        if batch_size is None:
+            batch_size = settings.INGESTION_BATCH_SIZE
+        if not self.table_exists(table_name, schema_name):
+            raise ValueError(f"Table {table_name} does not exist in schema {schema_name}")
+        query = f"SELECT * FROM {schema_name}.{table_name}"
+        if sql_query_filter:
+            query += f" WHERE {sql_query_filter}"
+        with self._lock:
+            cursor = self.connector.cursor()
+            cursor.execute(query)
+            columns = [desc[0].lower() for desc in cursor.description]
+            while True:
+                rows = cursor.fetchmany(batch_size)
+                if not rows:
+                    break
+                yield [dict(zip(columns, row)) for row in rows]
+
+    def get_column_values(
+        self,
+        table_name: str,
+        columns: list[str],
+        schema_name: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
+    ) -> list[dict]:
+        cols_str = ", ".join(columns)
+        query = f"SELECT {cols_str} FROM {schema_name}.{table_name}"
+        if sql_query_filter:
+            query += f" WHERE {sql_query_filter}"
+        return self._fetch_sql_query_as_dicts(query)
+
+    def get_rows_by_ids(
+        self,
+        table_name: str,
+        chunk_ids: list[str],
+        schema_name: Optional[str] = None,
+        id_column_name: str = CHUNK_ID_COLUMN,
+        sql_query_filter: Optional[str] = None,
+    ) -> list[dict]:
+        if not chunk_ids:
+            return []
+        placeholders = ",".join(["%s"] * len(chunk_ids))
+        query = f"SELECT * FROM {schema_name}.{table_name} WHERE {id_column_name} IN ({placeholders})"
+        if sql_query_filter:
+            query += f" AND ({sql_query_filter})"
+        with self._lock:
+            cursor = self.connector.cursor()
+            cursor.execute(query, chunk_ids)
+            columns = [desc[0].lower() for desc in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
     def describe_table(self, table_name: str, schema_name: str) -> list[dict]:
         """
         Return a list of dict with the columns description of the table
@@ -202,9 +264,28 @@ class SnowflakeService(DBService):
             quote_identifiers=False,
         )
 
+    def insert_rows(self, rows: list[dict], table_name: str, schema_name: Optional[str] = None) -> None:
+        if not rows:
+            return
+        df = pd.DataFrame(rows)
+        self.insert_df_to_table(df, table_name, schema_name)
+
     def grant_select_on_table(self, table_name: str, schema_name: str, role: str) -> None:
         self.connector.cursor().execute(f"GRANT USAGE ON SCHEMA {schema_name} TO ROLE {role}")
         self.connector.cursor().execute(f"GRANT SELECT ON {schema_name}.{table_name} TO ROLE {role}")
+
+    def _refresh_table_from_rows(
+        self,
+        rows: list[dict],
+        table_name: str,
+        id_column: str,
+        table_definition: DBDefinition,
+        schema_name: Optional[str] = None,
+    ) -> None:
+        if not rows:
+            return
+        df = pd.DataFrame(rows)
+        self._refresh_table_from_df(df, table_name, schema_name, id_column, table_definition)
 
     def _refresh_table_from_df(
         self,
@@ -214,11 +295,6 @@ class SnowflakeService(DBService):
         id_column: str,
         table_definition: DBDefinition,
     ) -> None:
-        """
-        Update a table on Snowflake based on the `id_column` column.
-        It only updates ids that already exist in the table on Snowflake.
-        df is the DataFrame with the updated values.
-        """
         table_definition_str = self.convert_table_definition_to_string(table_definition)
         query_temporary = f"CREATE TEMPORARY TABLE {schema_name}.updated_values ({table_definition_str});"
         self.connector.cursor().execute(query_temporary)
@@ -239,6 +315,13 @@ class SnowflakeService(DBService):
         )
         self.connector.cursor().execute(query)
         self.connector.cursor().execute(f"DROP TABLE {schema_name}.updated_values;")
+
+    def _fetch_sql_query_as_dicts(self, query: str) -> list[dict]:
+        with self._lock:
+            cursor = self.connector.cursor()
+            cursor.execute(query)
+            columns = [desc[0].lower() for desc in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     def _fetch_sql_query_as_dataframe(self, query: str) -> pd.DataFrame:
         with self._lock:

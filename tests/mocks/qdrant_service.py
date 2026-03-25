@@ -1,7 +1,7 @@
 """Mock Qdrant service for testing."""
 
 import asyncio
-from typing import Iterator, Optional
+from typing import Callable, Iterator, Optional
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
@@ -60,9 +60,16 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
             metadata_fields_to_keep={"metadata_to_keep_by_qdrant_field"},
         )
 
-    async def sync_rows_with_collection_async(rows: list[dict], collection_name: str, **kwargs) -> bool:
+    async def sync_batched_with_collection_async(
+        incoming_ids_with_timestamp: dict[str, Optional[str]],
+        fetch_rows: Callable[[list[str]], list[dict]],
+        collection_name: str,
+        **kwargs,
+    ) -> bool:
         if collection_name not in collection_data:
             raise ValueError(f"Collection '{collection_name}' does not exist")
+        all_ids = list(incoming_ids_with_timestamp.keys())
+        rows = fetch_rows(all_ids) if all_ids else []
         collection_data[collection_name] = [row.copy() for row in rows]
         return True
 
@@ -78,7 +85,7 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
     mock_qdrant.add_chunks_async = AsyncMock(side_effect=add_chunks_async)
     mock_qdrant.delete_chunks_async = AsyncMock(side_effect=delete_chunks_async)
     mock_qdrant._get_schema = Mock(side_effect=_get_schema)
-    mock_qdrant.sync_rows_with_collection_async = AsyncMock(side_effect=sync_rows_with_collection_async)
+    mock_qdrant.sync_batched_with_collection_async = AsyncMock(side_effect=sync_batched_with_collection_async)
     mock_qdrant.count_points_async = AsyncMock(side_effect=count_points_async)
 
     def sync_collection_exists(*args, **kwargs):
@@ -110,12 +117,6 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
         collection_name = kwargs.get("collection_name") or (args[2] if len(args) > 2 else None)
         return asyncio.run(delete_chunks_async(point_ids, id_field, collection_name))
 
-    def sync_sync_rows_with_collection(*args, **kwargs):
-        rows = kwargs.get("rows") or (args[0] if args else None)
-        collection_name = kwargs.get("collection_name") or (args[1] if len(args) > 1 else None)
-        other_kwargs = {k: v for k, v in kwargs.items() if k not in ("rows", "collection_name")}
-        return asyncio.run(sync_rows_with_collection_async(rows, collection_name, **other_kwargs))
-
     def sync_count_points(*args, **kwargs):
         collection_name = kwargs.get("collection_name") or (args[0] if args else None)
         filtered_kwargs = {k: v for k, v in kwargs.items() if k != "collection_name"}
@@ -127,7 +128,6 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
     mock_qdrant.get_points = Mock(side_effect=sync_get_points)
     mock_qdrant.add_chunks = Mock(side_effect=sync_add_chunks)
     mock_qdrant.delete_chunks = Mock(side_effect=sync_delete_chunks)
-    mock_qdrant.sync_rows_with_collection = Mock(side_effect=sync_sync_rows_with_collection)
     mock_qdrant.count_points = Mock(side_effect=sync_count_points)
 
     mock_qdrant._collection_data = collection_data

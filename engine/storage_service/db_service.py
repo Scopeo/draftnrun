@@ -61,6 +61,29 @@ class DBService(CloseMixin, ABC):
         pass
 
     @abstractmethod
+    def get_column_values(
+        self,
+        table_name: str,
+        columns: list[str],
+        schema_name: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
+    ) -> list[dict]:
+        """Return rows containing only the specified columns."""
+        pass
+
+    @abstractmethod
+    def get_rows_by_ids(
+        self,
+        table_name: str,
+        chunk_ids: list[str],
+        schema_name: Optional[str] = None,
+        id_column_name: str = CHUNK_ID_COLUMN,
+        sql_query_filter: Optional[str] = None,
+    ) -> list[dict]:
+        """Get multiple rows by their chunk IDs."""
+        pass
+
+    @abstractmethod
     def describe_table(self, table_name: str, schema_name: Optional[str] = None) -> list[dict]:
         """
         Return a list of dict with the columns description of the table

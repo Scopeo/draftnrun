@@ -46,7 +46,7 @@ from ada_backend.services.knowledge.errors import (
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.trace.trace_context import get_trace_manager
-from ingestion_script.utils import CHUNK_ID_COLUMN_NAME, SOURCE_ID_COLUMN_NAME
+from ingestion_script.utils import CHUNK_ID_COLUMN_NAME, SOURCE_ID_COLUMN_NAME, TIMESTAMP_COLUMN_NAME
 
 LOGGER = logging.getLogger(__name__)
 
@@ -291,8 +291,13 @@ async def update_document_chunks_service(
     )
 
     try:
-        await qdrant_service.sync_rows_with_collection_async(
-            rows=chunks_dict,
+        rows_by_chunk_id = {row[CHUNK_ID_COLUMN_NAME]: row for row in chunks_dict}
+        incoming_ids_with_timestamp = {
+            row[CHUNK_ID_COLUMN_NAME]: row.get(TIMESTAMP_COLUMN_NAME) for row in chunks_dict
+        }
+        await qdrant_service.sync_batched_with_collection_async(
+            incoming_ids_with_timestamp=incoming_ids_with_timestamp,
+            fetch_rows=lambda ids: [rows_by_chunk_id[chunk_id] for chunk_id in ids if chunk_id in rows_by_chunk_id],
             collection_name=source.qdrant_collection_name,
             query_filter_qdrant={"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(source_id)}}]},
         )
