@@ -349,11 +349,13 @@ async def update_graph_service(
     )
 
     db_port_instances_by_instance: dict[UUID, dict[str, UUID]] = defaultdict(dict)
+    db_field_expr_port_names: dict[UUID, set[str]] = defaultdict(set)
     for instance_id in instance_ids:
         port_instances = get_input_port_instances_for_component_instance(session, instance_id)
         for port in port_instances:
+            db_port_instances_by_instance[instance_id][port.name] = port.id
             if port.field_expression_id:
-                db_port_instances_by_instance[instance_id][port.name] = port.id
+                db_field_expr_port_names[instance_id].add(port.name)
 
     # Create/update auto-generated canonical field expressions so the user can
     # see canonical wiring in the UI.  Must run before field-expression processing
@@ -493,9 +495,8 @@ async def update_graph_service(
                 )
 
     for instance_id, incoming_fields in incoming_field_expressions_by_instance.items():
-        if instance_id in db_port_instances_by_instance:
-            existing_fields = set(db_port_instances_by_instance[instance_id].keys())
-            fields_to_delete = existing_fields - incoming_fields
+        if instance_id in db_field_expr_port_names:
+            fields_to_delete = db_field_expr_port_names[instance_id] - incoming_fields
             for field_name in fields_to_delete:
                 port_id = db_port_instances_by_instance[instance_id][field_name]
                 delete_input_port_instance(session, port_id)

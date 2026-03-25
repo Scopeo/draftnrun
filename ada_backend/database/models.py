@@ -161,6 +161,7 @@ class UIComponent(StrEnum):
     SWITCH = "Switch"
     TEXTAREA = "Textarea"
     TEXTFIELD = "Textfield"
+    JSON_TEXTAREA = "JsonTextarea"
     FILE_UPLOAD = "FileUpload"
     JSON_BUILDER = "JSON Builder"
     CONDITION_BUILDER = "ConditionBuilder"

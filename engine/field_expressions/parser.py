@@ -75,12 +75,12 @@ def parse_expression_flexible(value: Union[str, dict, list]) -> ExpressionNode:
     """Parse an expression from either text or JSON format.
 
     This is a unified entry point that handles both text expressions
-    (e.g., "@{{comp.port}}") and JSON/dict structures (e.g., {"type": "ref", ...}).
+    (e.g., "@{{comp.port}}") and serialized AST dicts (e.g., {"type": "ref", ...}).
 
     Args:
-        value: Either a string expression, a dict/JSON structure, or a list
-            (lists are serialized as literal JSON — common for json-typed params
-            like If/Else conditions)
+        value: Either a string expression, a serialized AST dict, or a list.
+            The frontend is responsible for building json_build AST nodes for
+            JSON-typed parameters that contain @{{}} refs/vars.
 
     Returns:
         The parsed ExpressionNode

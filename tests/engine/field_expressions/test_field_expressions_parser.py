@@ -170,11 +170,11 @@ def test_parse_expression_flexible_with_list_returns_literal():
 
 
 def test_parse_expression_flexible_with_conditions_list():
-    """Regression: If/Else conditions passed as a list should be accepted."""
+    """Lists are serialized as JSON literals — the frontend builds json_build AST when needed."""
     conditions = [{"value_a": "@{{uuid.output}}", "operator": "text_contains", "value_b": "invoice"}]
     result = parse_expression_flexible(conditions)
     assert isinstance(result, LiteralNode)
-    assert json.loads(result.value) == conditions
+    assert result.value == json.dumps(conditions)
 
 
 def test_parse_expression_flexible_with_int_raises_error():
@@ -190,3 +190,43 @@ def test_parse_expression_flexible_with_none_raises_error():
     with pytest.raises(FieldExpressionParseError) as exc_info:
         parse_expression_flexible(None)
     assert "Expected str, dict, or list, got NoneType" in str(exc_info.value)
+
+
+def test_parse_expression_flexible_raw_dict_with_tokens_returns_literal():
+    """Raw dicts (non-AST) are serialized as JSON literals — the frontend builds json_build AST."""
+    headers = {"Authorization": "Bearer @{{hubspot_token}}"}
+    ast = parse_expression_flexible(headers)
+    assert isinstance(ast, LiteralNode)
+    assert ast.value == json.dumps(headers)
+
+
+def test_parse_expression_flexible_nested_dict_with_tokens_returns_literal():
+    """Nested raw dicts are serialized as JSON literals — the frontend builds json_build AST."""
+    params = {"properties": {"name": "@{{abc123.output}}"}}
+    ast = parse_expression_flexible(params)
+    assert isinstance(ast, LiteralNode)
+    assert ast.value == json.dumps(params)
+
+
+def test_parse_expression_flexible_dict_without_tokens_returns_literal():
+    """Plain dicts without @{{}} tokens should still produce LiteralNode."""
+    plain = {"Content-Type": "application/json"}
+    ast = parse_expression_flexible(plain)
+    assert isinstance(ast, LiteralNode)
+    assert ast.value == json.dumps(plain)
+
+
+def test_parse_expression_flexible_list_with_var_returns_literal():
+    """Lists with @{{}} tokens are serialized as JSON literals — the frontend builds json_build AST."""
+    conditions = [{"value": "@{{my_var}}", "op": "eq"}]
+    ast = parse_expression_flexible(conditions)
+    assert isinstance(ast, LiteralNode)
+    assert ast.value == json.dumps(conditions)
+
+
+def test_parse_expression_flexible_list_without_tokens_returns_literal():
+    """Plain lists without @{{}} tokens should still produce LiteralNode."""
+    items = [{"value": "hello", "op": "eq"}]
+    ast = parse_expression_flexible(items)
+    assert isinstance(ast, LiteralNode)
+    assert ast.value == json.dumps(items)

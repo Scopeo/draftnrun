@@ -7,7 +7,7 @@ import httpx
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field
 
-from ada_backend.database.models import UIComponent, UIComponentProperties
+from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from engine.components.component import Component
 from engine.components.types import (
     ComponentAttributes,
@@ -52,8 +52,9 @@ class APICallToolInputs(BaseModel):
         default_factory=dict,
         description="The headers to send with the request.",
         json_schema_extra={
+            "parameter_type": ParameterType.JSON,
             "is_tool_input": False,
-            "ui_component": UIComponent.TEXTAREA,
+            "ui_component": UIComponent.JSON_TEXTAREA,
             "ui_component_properties": UIComponentProperties(
                 label="Headers",
                 placeholder='{"Content-Type": "application/json"}',
@@ -64,8 +65,9 @@ class APICallToolInputs(BaseModel):
         default_factory=dict,
         description="The parameters to send with the request.",
         json_schema_extra={
+            "parameter_type": ParameterType.JSON,
             "is_tool_input": False,
-            "ui_component": UIComponent.TEXTAREA,
+            "ui_component": UIComponent.JSON_TEXTAREA,
             "ui_component_properties": UIComponentProperties(
                 label="Parameters",
                 placeholder='{"api_version": "v2", "format": "json"}',
