@@ -225,6 +225,28 @@ class GraphRunner:
                 start_node,
             )
 
+    def _add_dependency_edge_if_needed(self, src: str, dst: str) -> None:
+        """Add a dependency edge src → dst unless execution ordering is already guaranteed.
+
+        Skips the edge when a transitive path already exists — adding it would be redundant
+        and would cause selective-routing nodes (Routers) to treat the extra edge as an
+        unmatched route and halt the destination unnecessarily.
+
+        Always adds the edge when:
+        - src == dst  (self-loop must be preserved so the DAG check can raise)
+        - either node is not yet in the graph  (unknown nodes must reach _validate_graph)
+        """
+        if self.graph.has_edge(src, dst):
+            return
+        already_reachable = (
+            src != dst
+            and src in self.graph
+            and dst in self.graph
+            and nx.has_path(self.graph, src, dst)
+        )
+        if not already_reachable:
+            self.graph.add_edge(src, dst)
+
     def _augment_graph_with_dependencies(self) -> None:
         """Augment the graph with edges derived from port mappings and expressions, then validate DAG.
 
@@ -233,17 +255,12 @@ class GraphRunner:
         - Forbid self-loops; raise on cycles.
         """
         for pm in self.port_mappings:
-            src = pm.source_instance_id
-            dst = pm.target_instance_id
-            if not self.graph.has_edge(src, dst) and not nx.has_path(self.graph, src, dst):
-                self.graph.add_edge(src, dst)
+            self._add_dependency_edge_if_needed(pm.source_instance_id, pm.target_instance_id)
 
         for (target, _field), expr_ast in self._expressions_by_target_ast.items():
             ref_nodes: Iterator[RefNode] = select_nodes(expr_ast, lambda n: isinstance(n, RefNode))
-            src_instances = {ref_node.instance for ref_node in ref_nodes}
-            for src in src_instances:
-                if not self.graph.has_edge(src, target) and not nx.has_path(self.graph, src, target):
-                    self.graph.add_edge(src, target)
+            for src in {ref_node.instance for ref_node in ref_nodes}:
+                self._add_dependency_edge_if_needed(src, target)
 
         if not nx.is_directed_acyclic_graph(self.graph):
             raise ValueError(
