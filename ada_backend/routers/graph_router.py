@@ -27,6 +27,7 @@ from ada_backend.schemas.pipeline.graph_schema import (
     GraphUpdateSchema,
 )
 from ada_backend.services.errors import (
+    GraphConflictError,
     GraphNotBoundToProjectError,
     GraphNotFound,
     GraphRunnerAlreadyInEnvironmentError,
@@ -178,6 +179,8 @@ async def update_project_pipeline(
             project_id=project_id,
             user_id=user.id,
         )
+    except GraphConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except GraphNotBoundToProjectError as e:
         LOGGER.error(
             f"Graph runner {graph_runner_id} is not bound to project {project_id} when updating graph",
@@ -286,10 +289,12 @@ def deploy_graph(
         raise HTTPException(status_code=404, detail="Project not found")
 
     try:
-        return deploy_graph_service(
+        result = deploy_graph_service(
             session=session,
             graph_runner_id=graph_runner_id,
             project_id=project_id,
+            user_id=user.id,
+            organization_id=project.organization_id,
         )
     except GraphNotFound as e:
         LOGGER.error(
@@ -321,6 +326,8 @@ def deploy_graph(
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
 
+    return result
+
 
 @router.post(
     "/{graph_runner_id}/save-version",
@@ -341,10 +348,12 @@ def save_graph_version(
         raise HTTPException(status_code=404, detail="Project not found")
 
     try:
-        return save_graph_version_service(
+        result = save_graph_version_service(
             session=session,
             graph_runner_id=graph_runner_id,
             project_id=project_id,
+            user_id=user.id,
+            organization_id=project.organization_id,
         )
     except GraphNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -360,6 +369,7 @@ def save_graph_version(
         LOGGER.error(
             f"Database connection failed for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
         )
+        raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
     except ValueError as e:
         LOGGER.error(
             f"Failed to save version for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
@@ -370,6 +380,8 @@ def save_graph_version(
             f"Failed to save version for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+    return result
 
 
 @router.get(

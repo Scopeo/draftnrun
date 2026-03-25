@@ -10,10 +10,11 @@ corrupts the write-back (empty model_parameters / tools).
 """
 
 from typing import Optional
+from uuid import UUID
 
 from fastmcp import FastMCP
 
-from mcp_server.client import api
+from mcp_server.client import ToolError, api
 from mcp_server.context import require_org_context
 from mcp_server.tools._defaults import ensure_provider_model_format
 from mcp_server.tools.context_tools import _get_auth
@@ -128,6 +129,18 @@ def _validate_agent_tool_component(component: dict, existing_tools: list[dict]) 
         )
 
 
+async def _require_agent_project(jwt: str, project_id: UUID) -> None:
+    overview = await api.get(f"/projects/{project_id}/overview", jwt, trim=False)
+    project_type = overview.get("project_type", "unknown")
+    if project_type != "agent":
+        raise ToolError(
+            f"This tool only works for AGENT projects, but project {project_id} is "
+            f"of type '{project_type}'. For WORKFLOW projects, use "
+            f"update_component_parameters to modify a component's parameters, or "
+            f"get_graph + update_graph for full graph edits."
+        )
+
+
 def _build_tool_entry(component: dict, tool_parameters: dict) -> dict:
     """Build a tool entry for the agent from a component definition."""
     params = []
@@ -162,8 +175,8 @@ def _build_tool_entry(component: dict, tool_parameters: dict) -> dict:
 def register(mcp: FastMCP) -> None:
     @mcp.tool()
     async def configure_agent(
-        agent_id: str,
-        graph_runner_id: str,
+        agent_id: UUID,
+        graph_runner_id: UUID,
         system_prompt: Optional[str] = None,
         model: Optional[str] = None,
         temperature: Optional[float] = None,
@@ -172,6 +185,10 @@ def register(mcp: FastMCP) -> None:
         description: Optional[str] = None,
     ) -> dict:
         """Configure an agent's model settings and system prompt.
+
+        ⚠️ AGENT projects only. For WORKFLOW projects, use
+        ``update_component_parameters`` to change a component's parameters
+        (e.g. the AI Agent's ``initial_prompt``).
 
         Only provided fields are updated — everything else is preserved.
         Handles the model provider prefix automatically (e.g. 'gpt-4.1'
@@ -183,8 +200,8 @@ def register(mcp: FastMCP) -> None:
         ``model`` argument to keep the current model.
 
         Args:
-            agent_id: The agent (project) ID.
-            graph_runner_id: The graph runner version ID.
+            agent_id: The agent (project) ID (from list_agents or create_agent).
+            graph_runner_id: The graph runner version ID (from get_project_overview).
             system_prompt: The agent's instructions / system prompt.
             model: LLM model identifier exactly as listed in the agent's
                 completion_model options (e.g. 'gpt-4.1',
@@ -196,6 +213,7 @@ def register(mcp: FastMCP) -> None:
             description: Update the agent's description.
         """
         jwt, _ = _get_auth()
+        await _require_agent_project(jwt, agent_id)
         current = await api.get(f"/agents/{agent_id}/versions/{graph_runner_id}", jwt, trim=False)
 
         updates = {
@@ -247,20 +265,24 @@ def register(mcp: FastMCP) -> None:
 
         return {
             "status": "ok",
-            "agent_id": agent_id,
+            "agent_id": str(agent_id),
             "applied": applied,
             "warnings": warnings,
-            "hint": "Test with run_agent, or add tools with add_tool_to_agent.",
+            "hint": "Test with run, or add tools with add_tool_to_agent.",
         }
 
     @mcp.tool()
     async def add_tool_to_agent(
-        agent_id: str,
-        graph_runner_id: str,
+        agent_id: UUID,
+        graph_runner_id: UUID,
         component_name: str,
         tool_parameters: Optional[dict] = None,
     ) -> dict:
         """Add a tool to an agent by component name.
+
+        ⚠️ This tool is for **agent-type projects only** (created with
+        `create_agent`). For **workflow-type projects**, attach tools via
+        `relationships` in `update_graph` — see `docs://graphs` for details.
 
         Looks up the component in the catalog, builds the tool entry with
         default parameters (overridden by tool_parameters), and appends it.
@@ -276,8 +298,8 @@ def register(mcp: FastMCP) -> None:
           the required integration relationship automatically
 
         Args:
-            agent_id: The agent (project) ID.
-            graph_runner_id: The graph runner version ID.
+            agent_id: The agent (project) ID (from list_agents or create_agent).
+            graph_runner_id: The graph runner version ID (from get_project_overview).
             component_name: Component display name from search_components()
                 (e.g. 'Internet Search (Linkup)', 'Internet Search (OpenAI)').
             tool_parameters: Optional overrides for tool parameters
@@ -287,6 +309,7 @@ def register(mcp: FastMCP) -> None:
             tool_parameters = {}
 
         jwt, user_id = _get_auth()
+        await _require_agent_project(jwt, agent_id)
         org = await require_org_context(user_id)
         release_stage = org.get("release_stage") or "public"
 
@@ -315,18 +338,19 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def remove_tool_from_agent(
-        agent_id: str,
-        graph_runner_id: str,
+        agent_id: UUID,
+        graph_runner_id: UUID,
         component_name: str,
     ) -> dict:
         """Remove a tool from an agent by component name.
 
         Args:
-            agent_id: The agent (project) ID.
-            graph_runner_id: The graph runner version ID.
+            agent_id: The agent (project) ID (from list_agents or create_agent).
+            graph_runner_id: The graph runner version ID (from get_project_overview).
             component_name: Name of the component to remove.
         """
         jwt, _ = _get_auth()
+        await _require_agent_project(jwt, agent_id)
         current = await api.get(f"/agents/{agent_id}/versions/{graph_runner_id}", jwt, trim=False)
 
         existing_tools = current.get("tools", [])

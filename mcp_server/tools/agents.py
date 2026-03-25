@@ -1,5 +1,7 @@
 """Agent management tools."""
 
+from uuid import UUID
+
 from fastmcp import FastMCP
 
 from mcp_server.client import api
@@ -23,8 +25,8 @@ PROXY_SPECS: list[ToolSpec] = [
         method="get",
         path="/agents/{agent_id}/versions/{graph_runner_id}",
         path_params=(
-            Param("agent_id", str, description="The agent (project) ID."),
-            Param("graph_runner_id", str, description="The graph runner version ID."),
+            Param("agent_id", UUID, description="The agent (project) ID (from list_agents or create_agent)."),
+            Param("graph_runner_id", UUID, description="The graph runner version ID (from get_project_overview)."),
         ),
     ),
 ]
@@ -37,8 +39,13 @@ def register(mcp: FastMCP) -> None:
     async def create_agent(name: str, description: str = "") -> dict:
         """Create a new agent in the active organization.
 
+        An agent is a single AI node that is also the start node.  It receives
+        messages and optionally uses tools.  If the user needs a separate Start
+        node, custom payload fields, or a multi-step DAG, use
+        `create_workflow` instead.
+
         Requires developer role or above. Auto-generates a unique ID, icon,
-        and color. Use configure_agent afterwards to set the system prompt,
+        and color. Use `configure_agent` afterwards to set the system prompt,
         model, and tools.
 
         Args:

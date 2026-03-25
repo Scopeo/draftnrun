@@ -23,7 +23,13 @@ from mcp_server.tools import register_all_tools
 INSTRUCTIONS_HEADER = """\
 Draft'n Run — no-code AI agent builder (DAGs of components).
 
-First: list_my_organizations → select_organization to set your working context.
+CRITICAL: Never invent, guess, or fabricate UUIDs. Every ID you pass to a tool \
+MUST come from a previous tool response in this session (list_*, get_*, create_*, search_*). \
+If you don't have the ID, call the appropriate discovery tool first. \
+Never reuse IDs or graph JSON from another project/org — re-fetch current state with \
+get_graph, list_components, search_components, list_sources, etc.
+
+First (sequential, not parallel): list_my_organizations → select_organization → wait for success before other tools.
 
 Domain model:
   Organization

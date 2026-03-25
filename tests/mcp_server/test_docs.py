@@ -47,3 +47,8 @@ class TestDocSync:
 
     def test_knowledge_doc_mentions_developer_role(self):
         assert "developer" in docs.KNOWLEDGE.lower()
+
+    def test_graph_and_qa_docs_embed_pinned_example_uuids(self):
+        for node_id in docs._GRAPH_DOC_THREE_NODE_EXAMPLE_IDS:
+            assert node_id in docs.GRAPHS
+        assert docs._GRAPH_DOC_QA_CUSTOM_COLUMN_EXAMPLE_ID in docs.QA

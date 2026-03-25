@@ -7,13 +7,13 @@ from uuid import UUID
 import pandas as pd
 
 from ada_backend.database.models import CallType, EnvType
+from ada_backend.mixpanel_analytics import track_monitoring_loaded, track_trace_viewed
 from ada_backend.schemas.trace_schema import (
     PaginatedRootTracesResponse,
     Pagination,
     RootTraceSpan,
     TraceSpan,
 )
-from ada_backend.segment_analytics import track_project_observability_loaded, track_span_observability_loaded
 from ada_backend.services.metrics.utils import (
     query_root_trace_duration,
     query_trace_by_trace_id,
@@ -168,12 +168,11 @@ def build_root_spans(rows: List[dict]) -> List[RootTraceSpan]:
 
 def get_span_trace_service(user_id: UUID, trace_id: UUID) -> TraceSpan:
     df_span = query_trace_by_trace_id(trace_id)
-    track_span_observability_loaded(user_id, trace_id)
-
     span_trees = build_span_trees(df_span)
     if len(span_trees) == 0:
         raise ValueError(f"No spans found for trace_id {trace_id}")
 
+    track_trace_viewed(user_id, trace_id)
     return span_trees[0]
 
 
@@ -186,6 +185,7 @@ def get_root_traces_by_project(
     page: int = 1,
     page_size: int = 20,
     graph_runner_id: Optional[UUID] = None,
+    organization_id: Optional[UUID] = None,
 ) -> PaginatedRootTracesResponse:
     if page_size <= 0:
         page_size = 20
@@ -201,7 +201,7 @@ def get_root_traces_by_project(
         page=page,
         page_size=page_size,
     )
-    track_project_observability_loaded(user_id, project_id)
+    track_monitoring_loaded(user_id, project_count=1, organization_id=organization_id)
     LOGGER.info(f"Querying root spans for project {project_id} with duration {duration} days")
 
     traces = build_root_spans(rows)

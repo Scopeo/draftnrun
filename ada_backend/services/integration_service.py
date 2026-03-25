@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.database.models import VariableType
+from ada_backend.mixpanel_analytics import track_oauth_connection_completed
 from ada_backend.repositories import integration_repository, oauth_connection_repository
 from ada_backend.repositories.variable_definitions_repository import (
     delete_oauth_definitions_for_connection,
@@ -206,6 +207,8 @@ async def confirm_oauth_connection(
     LOGGER.info(
         f"Created new OAuth connection {new_connection.id} (definition={definition_id}) for org {organization_id}"
     )
+    if created_by_user_id:
+        track_oauth_connection_completed(created_by_user_id, organization_id, provider=provider_key)
     return new_connection, definition_id
 
 

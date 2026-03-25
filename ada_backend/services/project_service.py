@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import EnvType, ProjectType
+from ada_backend.mixpanel_analytics import track_project_created, track_project_saved
 from ada_backend.repositories.env_repository import bind_graph_runner_to_project
 from ada_backend.repositories.graph_runner_repository import (
     get_graph_runners_by_project,
@@ -31,7 +32,6 @@ from ada_backend.schemas.project_schema import (
     ProjectWithGraphRunnersSchema,
 )
 from ada_backend.schemas.template_schema import InputTemplate
-from ada_backend.segment_analytics import track_project_created, track_project_saved, track_user_get_project_list
 from ada_backend.services.cron.service import permanently_delete_cron_jobs_by_project_service
 from ada_backend.services.errors import ProjectNotFound
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
@@ -64,10 +64,7 @@ def get_project_service(session: Session, project_id: UUID) -> ProjectWithGraphR
 def get_workflows_by_organization_service(
     session: Session,
     organization_id: UUID,
-    user_id: UUID = None,
 ) -> list[ProjectResponse]:
-    if user_id:
-        track_user_get_project_list(user_id, organization_id)
     projects = get_workflows_by_organization(session, organization_id)
 
     return [
@@ -86,12 +83,9 @@ def get_workflows_by_organization_service(
 def get_projects_by_organization_with_details_service(
     session: Session,
     organization_id: UUID,
-    user_id: UUID = None,
     type: Optional[ProjectType] = ProjectType.WORKFLOW,
     include_templates: Optional[bool] = False,
 ) -> list[ProjectWithGraphRunnersSchema]:
-    if user_id:
-        track_user_get_project_list(user_id, organization_id)
     return get_projects_by_organization_with_details(session, organization_id, type, include_templates)
 
 
@@ -190,7 +184,10 @@ def create_workflow(
         icon_color=project_schema.icon_color,
     )
 
-    track_project_created(user_id, organization_id, project.id, project.name)
+    track_project_created(
+        user_id, organization_id, project.id, project.name,
+        project_type="workflow", from_template=project_schema.template is not None,
+    )
     return ProjectWithGraphRunnersSchema(
         project_id=project.id,
         project_name=project.name,

@@ -6,6 +6,7 @@ import pytest
 
 from mcp_server.tools import _factory
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
+from tests.mcp_server.conftest import FAKE_KEY_ID, FAKE_PROJECT_ID
 
 
 class FakeMCP:
@@ -48,10 +49,10 @@ async def test_auth_only_get(monkeypatch, mcp):
         ),
     ])
 
-    result = await mcp.tools["get_thing"]("abc-123")
+    result = await mcp.tools["get_thing"](FAKE_PROJECT_ID)
 
     assert result == {"ok": True}
-    get_mock.assert_awaited_once_with("/things/abc-123", "jwt-tok", trim=True)
+    get_mock.assert_awaited_once_with(f"/things/{FAKE_PROJECT_ID}", "jwt-tok", trim=True)
 
 
 # --- Org-scoped ---
@@ -174,9 +175,9 @@ async def test_body_fields_assembled(monkeypatch, mcp):
         ),
     ])
 
-    await mcp.tools["revoke_key"]("k-1")
+    await mcp.tools["revoke_key"](FAKE_KEY_ID)
 
-    del_mock.assert_awaited_once_with("/keys", "jwt-tok", trim=True, json={"key_id": "k-1"})
+    del_mock.assert_awaited_once_with("/keys", "jwt-tok", trim=True, json={"key_id": FAKE_KEY_ID})
 
 
 # --- body_org_key (org_id injected into body) ---
@@ -324,6 +325,25 @@ def test_validate_spec_rejects_role_scope_without_roles(mcp):
         ])
 
 
+# --- UUID type annotation ---
+
+
+def test_uuid_param_annotation_propagated(mcp):
+    from uuid import UUID
+    register_proxy_tools(mcp, [
+        ToolSpec(
+            name="get_widget",
+            description="Get.",
+            method="get",
+            path="/widgets/{widget_id}",
+            path_params=(Param("widget_id", UUID),),
+        ),
+    ])
+
+    fn = mcp.tools["get_widget"]
+    assert fn.__annotations__["widget_id"] is UUID
+
+
 # --- None-stripping in body fields ---
 
 
@@ -388,5 +408,5 @@ async def test_trim_false_passed_to_api(monkeypatch, mcp):
         ),
     ])
 
-    await mcp.tools["get_full"]("abc")
-    get_mock.assert_awaited_once_with("/things/abc", "jwt-tok", trim=False)
+    await mcp.tools["get_full"](FAKE_PROJECT_ID)
+    get_mock.assert_awaited_once_with(f"/things/{FAKE_PROJECT_ID}", "jwt-tok", trim=False)

@@ -80,7 +80,7 @@ def get_projects_by_organization_endpoint(
 ):
     try:
         return get_projects_by_organization_with_details_service(
-            session, organization_id, auth.user_id, type, include_templates
+            session, organization_id, type, include_templates
         )
     except ValueError as e:
         LOGGER.error(

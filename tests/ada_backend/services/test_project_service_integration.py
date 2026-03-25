@@ -10,7 +10,6 @@ These tests use PostgreSQL to support regex constraints in GraphRunner models.
 
 import os
 import uuid
-from unittest.mock import patch
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -190,28 +189,6 @@ class TestGetWorkflowsByOrganizationService:
         # All test projects should be present
         for project_data in test_projects_with_versions:
             assert project_data["project"].id in result_ids
-
-    def test_tracks_user_analytics_when_user_id_provided(self, db_session: Session, test_organization):
-        """
-        Test that user analytics tracking is called when user_id is provided.
-        """
-        user_id = uuid.uuid4()
-
-        with patch("ada_backend.services.project_service.track_user_get_project_list") as mock_track:
-            get_workflows_by_organization_service(db_session, test_organization, user_id=user_id)
-
-            # Should call tracking with correct parameters
-            mock_track.assert_called_once_with(user_id, test_organization)
-
-    def test_skips_analytics_when_no_user_id(self, db_session: Session, test_organization):
-        """
-        Test that analytics tracking is skipped when user_id is None.
-        """
-        with patch("ada_backend.services.project_service.track_user_get_project_list") as mock_track:
-            get_workflows_by_organization_service(db_session, test_organization, user_id=None)
-
-            # Should not call tracking
-            mock_track.assert_not_called()
 
     def test_returns_correct_project_data(self, db_session: Session, test_projects_with_versions, test_organization):
         """

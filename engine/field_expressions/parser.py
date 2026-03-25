@@ -1,10 +1,15 @@
 import json
+import logging
 import re
 from typing import Union
+
+import sentry_sdk
 
 from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode, VarNode
 from engine.field_expressions.errors import FieldExpressionParseError
 from engine.field_expressions.serializer import from_json, is_serialized_expression_ast
+
+LOGGER = logging.getLogger(__name__)
 
 # Matches @{{instance.port}} (RefNode) or @{{var_name}} (VarNode).
 # group(1) = first identifier, group(2) = port (if dot present), group(3) = key (if :: present)
@@ -66,14 +71,16 @@ def parse_expression(expression_text: str) -> ExpressionNode:
     return ConcatNode(parts=parts)
 
 
-def parse_expression_flexible(value: Union[str, dict]) -> ExpressionNode:
+def parse_expression_flexible(value: Union[str, dict, list]) -> ExpressionNode:
     """Parse an expression from either text or JSON format.
 
     This is a unified entry point that handles both text expressions
     (e.g., "@{{comp.port}}") and JSON/dict structures (e.g., {"type": "ref", ...}).
 
     Args:
-        value: Either a string expression or a dict/JSON structure
+        value: Either a string expression, a dict/JSON structure, or a list
+            (lists are serialized as literal JSON — common for json-typed params
+            like If/Else conditions)
 
     Returns:
         The parsed ExpressionNode
@@ -81,17 +88,21 @@ def parse_expression_flexible(value: Union[str, dict]) -> ExpressionNode:
     Raises:
         FieldExpressionParseError: If parsing fails
     """
+    if isinstance(value, list):
+        return LiteralNode(value=json.dumps(value))
     if isinstance(value, dict):
         try:
             if not is_serialized_expression_ast(value):
                 return LiteralNode(value=json.dumps(value))
             return from_json(value)
-        except Exception as e:
+        except (ValueError, TypeError) as e:
+            LOGGER.error(f"Failed to parse dict expression: {e}", exc_info=True)
+            sentry_sdk.capture_exception(e)
             raise FieldExpressionParseError(f"Invalid JSON expression structure: {e}") from e
     elif isinstance(value, str):
         return parse_expression(value)
     else:
-        raise FieldExpressionParseError(f"Expected str or dict, got {type(value).__name__}: {value!r}")
+        raise FieldExpressionParseError(f"Expected str, dict, or list, got {type(value).__name__}: {value!r}")
 
 
 def unparse_expression(expression: ExpressionNode) -> str:

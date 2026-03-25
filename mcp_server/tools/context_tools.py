@@ -4,6 +4,8 @@ These tools manage the user's active organization session and provide
 access to org membership data via direct Supabase queries.
 """
 
+from uuid import UUID
+
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_access_token
 
@@ -21,10 +23,16 @@ def _get_auth() -> tuple[str, str]:
     """Return (raw_jwt, user_id) from the current MCP request."""
     token = get_access_token()
     if token is None:
-        raise ValueError("Not authenticated.")
+        raise ValueError(
+            "Not authenticated. The MCP client may need to complete the OAuth flow — "
+            "check your client's MCP server status and reconnect if needed."
+        )
     user_id = token.claims.get("sub", "")
     if not user_id:
-        raise ValueError("Token missing user identity (sub claim).")
+        raise ValueError(
+            "Token missing user identity (sub claim). "
+            "This usually means the OAuth token is malformed — reconnect to the MCP server."
+        )
     return token.token, user_id
 
 
@@ -50,18 +58,18 @@ def register(mcp: FastMCP) -> None:
         return await list_user_organizations(jwt, user_id)
 
     @mcp.tool()
-    async def select_organization(organization_id: str) -> dict:
+    async def select_organization(organization_id: UUID) -> dict:
         """Set your active organization for this session.
 
         All subsequent org-scoped tools will operate on this organization.
         Use list_my_organizations first to see available orgs.
 
         Args:
-            organization_id: The organization ID (from list_my_organizations).
+            organization_id: The organization ID (from list_my_organizations). Never invent this value.
         """
         jwt, user_id = _get_auth()
         orgs = await list_user_organizations(jwt, user_id)
-        match = next((o for o in orgs if o["id"] == organization_id), None)
+        match = next((o for o in orgs if o["id"] == str(organization_id)), None)
         if not match:
             raise ValueError(f"Organization {organization_id} not found in your memberships.")
         release_stage = await fetch_org_release_stage(jwt, match["id"])
@@ -96,25 +104,26 @@ def register(mcp: FastMCP) -> None:
         }
 
     @mcp.tool()
-    async def list_org_members(organization_id: str) -> list[dict]:
+    async def list_org_members(organization_id: UUID) -> list[dict]:
         """List members of an organization with their roles.
 
         Args:
-            organization_id: The organization ID.
+            organization_id: The organization ID (from list_my_organizations).
         """
         jwt, user_id = _get_auth()
+        org_id_str = str(organization_id)
         await _require_target_org_role(
-            jwt, user_id, organization_id, "member", "developer", "admin", "super_admin",
+            jwt, user_id, org_id_str, "member", "developer", "admin", "super_admin",
             action="Listing members",
         )
-        return await get_org_members(jwt, organization_id)
+        return await get_org_members(jwt, org_id_str)
 
     @mcp.tool()
-    async def invite_org_member(organization_id: str, email: str, role: str = "member") -> dict:
+    async def invite_org_member(organization_id: UUID, email: str, role: str = "member") -> dict:
         """Invite a user to an organization by email. Requires admin role.
 
         Args:
-            organization_id: Target organization ID.
+            organization_id: Target organization ID (from list_my_organizations).
             email: Email address of the person to invite.
             role: Role to assign (member, developer, admin). Defaults to member.
         """
@@ -124,7 +133,8 @@ def register(mcp: FastMCP) -> None:
                 f"Invalid role '{role}'. Allowed roles: {sorted(_ALLOWED_INVITE_ROLES)}"
             )
         jwt, user_id = _get_auth()
+        org_id_str = str(organization_id)
         await _require_target_org_role(
-            jwt, user_id, organization_id, "admin", "super_admin", action="Inviting members",
+            jwt, user_id, org_id_str, "admin", "super_admin", action="Inviting members",
         )
-        return await invite_member(jwt, organization_id, email, role)
+        return await invite_member(jwt, org_id_str, email, role)

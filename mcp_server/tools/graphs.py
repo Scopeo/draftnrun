@@ -5,18 +5,18 @@ edit draft, save a version snapshot, publish to production, view history.
 """
 
 import logging
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastmcp import FastMCP
 
-from mcp_server.client import api
+from mcp_server.client import ToolError, api
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
 from mcp_server.tools.context_tools import _get_auth
 
 logger = logging.getLogger(__name__)
 
-_P_PROJECT = Param("project_id", str, description="The project ID.")
-_P_RUNNER = Param("graph_runner_id", str, description="The graph runner version ID.")
+_P_PROJECT = Param("project_id", UUID, description="The project ID (from list_projects or get_project_overview).")
+_P_RUNNER = Param("graph_runner_id", UUID, description="The graph runner version ID (from get_project_overview).")
 _GRAPH_BASE = "/projects/{project_id}/graph/{graph_runner_id}"
 
 PROXY_SPECS: list[ToolSpec] = [
@@ -132,12 +132,46 @@ def _warn_unknown_graph_keys(graph_data: dict) -> list[str]:
     return warnings
 
 
+_OAUTH_KEYWORDS = ("access_token", "oauth", "integration", "credentials")
+
+
+def _enrich_graph_update_error(message: str) -> str:
+    # TODO: temporary keyword matching on error strings — replace with structured error codes from the backend
+    """Add actionable next-step guidance to update_graph backend errors."""
+    lower = message.lower()
+    if any(kw in lower for kw in _OAUTH_KEYWORDS):
+        return (
+            f"{message} | This usually means the graph contains an integration-backed "
+            "component (e.g. Gmail, Slack, HubSpot) whose OAuth connection is not set up. "
+            "Next steps: 1) list_oauth_connections() — check which connections exist, "
+            "2) the user must connect the integration in the Draft'n Run web UI "
+            "(MCP cannot initiate OAuth flows), "
+            "3) retry update_graph once the connection is active. "
+            "See docs://integrations for details."
+        )
+    if "not found" in lower or "does not exist" in lower:
+        return (
+            f"{message} | Next step: verify IDs with get_project_overview(project_id) "
+            "and get_graph(project_id, graph_runner_id) — the draft runner may have "
+            "changed after a publish."
+        )
+    return message
+
+
 def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, PROXY_SPECS)
 
     @mcp.tool()
-    async def update_graph(project_id: str, graph_runner_id: str, graph_data: dict) -> dict:
+    async def update_graph(project_id: UUID, graph_runner_id: UUID, graph_data: dict) -> dict:
         """Replace the full graph definition (PUT semantics).
+
+        ⚠️ REQUIRED: Call `get_guide('graphs')` before using this tool for the
+        first time in a session. The guide contains edge format, field expression
+        format, and canonical port rules that are critical for a successful call.
+
+        ⚠️ CONCURRENT EDIT WARNING: If the project is open in the Draft'n Run
+        web UI, the browser may overwrite API changes (last-write-wins, no
+        conflict detection). Close the browser tab before calling this tool.
 
         Safe pattern: `get_project_overview` -> `get_graph` -> modify -> `update_graph`.
         The `graph_runner_id` must be the true editable draft runner
@@ -169,21 +203,121 @@ def register(mcp: FastMCP) -> None:
           change detection excludes `port_mappings`.
         - Key-extraction refs like `@{{uuid.port::key}}` are safest through
           `input_port_instances`.
+        - `get_graph` returns `field_expressions` (normalized read format).
+          When writing, use `input_port_instances` on component instances —
+          do NOT copy `field_expressions` from `get_graph` into `update_graph`.
 
         Args:
-            project_id: The project ID.
-            graph_runner_id: The graph runner version ID (must be a draft).
+            project_id: The project ID (from list_projects or get_project_overview).
+            graph_runner_id: The graph runner version ID — must be a draft (from get_project_overview).
             graph_data: Complete graph definition.
         """
         jwt, _ = _get_auth()
         graph_data = _assign_missing_ids(graph_data)
         warnings = _warn_unknown_graph_keys(graph_data)
-        result = await api.put(
-            f"/projects/{project_id}/graph/{graph_runner_id}", jwt, json=graph_data
-        )
+        try:
+            result = await api.put(
+                f"/projects/{project_id}/graph/{graph_runner_id}", jwt, json=graph_data
+            )
+        except ToolError as exc:
+            raise ToolError(_enrich_graph_update_error(str(exc))) from exc
         if warnings:
             if isinstance(result, dict):
                 result["_mcp_warnings"] = warnings
             else:
                 result = {"_mcp_response": result, "_mcp_warnings": warnings}
         return result
+
+    @mcp.tool()
+    async def update_component_parameters(
+        project_id: UUID,
+        graph_runner_id: UUID,
+        component_instance_id: UUID,
+        parameters: dict,
+    ) -> dict:
+        """Update specific parameters on a single component instance within a graph.
+
+        Performs a server-side read-modify-write: fetches the current graph,
+        merges the provided parameters into the target component, and saves
+        the full graph back. Only the parameter keys you provide are changed —
+        all other parameters and the rest of the graph are preserved.
+
+        This is the recommended tool for single-parameter changes on workflow
+        components (e.g. updating an AI Agent's ``initial_prompt`` or a
+        Retriever's ``prompt_template``). It avoids the need to send the full
+        graph payload through ``update_graph``.
+
+        ⚠️ Do NOT use this tool to modify fields with ``drives_output_schema``
+        (e.g. ``payload_schema`` on Start, ``output_format`` on AI Agent)
+        unless you intend to change the component's dynamic output ports.
+        Changing these fields will delete and recreate output port instances,
+        which may break downstream field expressions.
+
+        Args:
+            project_id: The project ID (from list_projects or get_project_overview).
+            graph_runner_id: The graph runner version ID — must be a draft
+                (from get_project_overview).
+            component_instance_id: The ID of the component instance to update
+                (from get_graph — each node has an ``id`` field).
+            parameters: Dict of parameter names to new values. Only provided
+                keys are updated. Example: ``{"initial_prompt": "You are a
+                helpful assistant."}``.
+        """
+        jwt, _ = _get_auth()
+
+        graph = await api.get(
+            f"/projects/{project_id}/graph/{graph_runner_id}", jwt, trim=False
+        )
+
+        instances = graph.get("component_instances", [])
+        target = None
+        cid_str = str(component_instance_id)
+        for inst in instances:
+            if inst.get("id") == cid_str:
+                target = inst
+                break
+        if not target:
+            instance_ids = [inst.get("id") for inst in instances]
+            raise ToolError(
+                f"Component instance '{component_instance_id}' not found in graph. "
+                f"Available instance IDs: {instance_ids}"
+            )
+
+        existing_params = target.get("parameters", [])
+        updated_names = set()
+        for param in existing_params:
+            if param.get("name") in parameters:
+                param["value"] = parameters[param["name"]]
+                updated_names.add(param["name"])
+
+        missing = set(parameters.keys()) - updated_names
+        if missing:
+            available = [p.get("name") for p in existing_params]
+            raise ToolError(
+                f"Parameter(s) {sorted(missing)} not found on component "
+                f"'{target.get('name', component_instance_id)}'. "
+                f"Available parameters: {available}"
+            )
+
+        graph_data = {
+            "component_instances": instances,
+            "edges": graph.get("edges", []),
+            "port_mappings": graph.get("port_mappings", []),
+            "relationships": graph.get("relationships", []),
+        }
+        if graph.get("playground_input_schema") is not None:
+            graph_data["playground_input_schema"] = graph["playground_input_schema"]
+        if graph.get("playground_field_types") is not None:
+            graph_data["playground_field_types"] = graph["playground_field_types"]
+        try:
+            await api.put(
+                f"/projects/{project_id}/graph/{graph_runner_id}", jwt, json=graph_data
+            )
+        except ToolError as exc:
+            raise ToolError(_enrich_graph_update_error(str(exc))) from exc
+
+        return {
+            "status": "ok",
+            "component": target.get("name", component_instance_id),
+            "updated_parameters": sorted(updated_names),
+        }

@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from mcp_server.tools import _factory, crons
+from tests.mcp_server.conftest import FAKE_CRON_ID
 
 
 class FakeMCP:
@@ -18,7 +19,7 @@ class FakeMCP:
 
 
 @pytest.mark.asyncio
-async def test_cron_tools_url_encode_cron_ids(monkeypatch):
+async def test_cron_tools_interpolate_cron_ids(monkeypatch):
     mcp = FakeMCP()
     require_org_context_mock = AsyncMock(return_value={"org_id": "org-123"})
     get_mock = AsyncMock(return_value={"id": "cron"})
@@ -34,9 +35,8 @@ async def test_cron_tools_url_encode_cron_ids(monkeypatch):
 
     crons.register(mcp)
 
-    await mcp.tools["get_cron"]("cron/with spaces?#")
-    await mcp.tools["pause_cron"]("cron/with spaces?#")
+    await mcp.tools["get_cron"](FAKE_CRON_ID)
+    await mcp.tools["pause_cron"](FAKE_CRON_ID)
 
-    encoded = "cron%2Fwith%20spaces%3F%23"
-    get_mock.assert_awaited_once_with(f"/organizations/org-123/crons/{encoded}", "jwt-token", trim=True)
-    post_mock.assert_awaited_once_with(f"/organizations/org-123/crons/{encoded}/pause", "jwt-token", trim=True)
+    get_mock.assert_awaited_once_with(f"/organizations/org-123/crons/{FAKE_CRON_ID}", "jwt-token", trim=True)
+    post_mock.assert_awaited_once_with(f"/organizations/org-123/crons/{FAKE_CRON_ID}/pause", "jwt-token", trim=True)

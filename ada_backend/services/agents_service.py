@@ -11,6 +11,7 @@ from ada_backend.database.seed.seed_ai_agent import (
     AI_MODEL_PARAMETER_IDS,
 )
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
+from ada_backend.mixpanel_analytics import track_agent_created
 from ada_backend.repositories.agent_repository import fetch_agents_with_graph_runners_by_organization
 from ada_backend.repositories.graph_runner_repository import upsert_component_node
 from ada_backend.repositories.project_repository import get_project
@@ -25,7 +26,6 @@ from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParamete
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
 from ada_backend.schemas.project_schema import GraphRunnerEnvDTO, ProjectWithGraphRunnersSchema
-from ada_backend.segment_analytics import track_agent_created
 from ada_backend.services.errors import InvalidAgentTemplate, ProjectNotFound
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_with_history_service
@@ -96,7 +96,13 @@ def _extract_system_prompt_and_model_params(
 def get_agent_by_id_service(session: Session, agent_id: UUID, graph_runner_id: UUID) -> AgentInfoSchema:
     agent_project = get_project(session, project_id=agent_id)
     if not agent_project:
-        return ProjectNotFound(agent_id)
+        raise ProjectNotFound(agent_id)
+    if agent_project.type != db.ProjectType.AGENT:
+        raise ValueError(
+            f"Project {agent_id} is of type '{agent_project.type}', not 'agent'. "
+            f"configure_agent only works for AGENT projects. For WORKFLOW projects, "
+            f"use update_graph to modify component parameters directly."
+        )
 
     graph_data = get_graph_service(session, project_id=agent_id, graph_runner_id=graph_runner_id)
 
@@ -192,7 +198,10 @@ def create_new_agent_service(
                 agent_data.template.template_project_id, agent_data.template.template_graph_runner_id
             )
 
-    track_agent_created(user_id, organization_id, project.id, project.name)
+    track_agent_created(
+        user_id, organization_id, project.id, project.name, from_template=agent_data.template is not None,
+    )
+
     return ProjectWithGraphRunnersSchema(
         project_id=project.id,
         project_name=project.name,
@@ -259,6 +268,16 @@ def _build_tool_relationships(
 async def update_agent_service(
     session: Session, user_id: UUID, agent_id: UUID, graph_runner_id: UUID, agent_data: AgentUpdateSchema
 ) -> GraphUpdateResponse:
+    agent_project = get_project(session, project_id=agent_id)
+    if not agent_project:
+        raise ProjectNotFound(agent_id)
+    if agent_project.type != db.ProjectType.AGENT:
+        raise ValueError(
+            f"Project {agent_id} is of type '{agent_project.type}', not 'agent'. "
+            f"update_agent only works for AGENT projects. For WORKFLOW projects, "
+            f"use update_graph to modify the graph directly."
+        )
+
     ai_agent_component = build_ai_agent_component(
         ai_agent_instance_id=graph_runner_id,
         model_parameters=agent_data.model_parameters,

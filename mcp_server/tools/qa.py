@@ -1,17 +1,25 @@
 """Quality assurance tools (datasets, entries, judges, evaluations)."""
 
+import csv
+import io
+import json
+from uuid import UUID
+
 from fastmcp import FastMCP
 
+from mcp_server.client import api
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
+from mcp_server.tools.context_tools import _get_auth
 
-_P_PROJECT = Param("project_id", str, description="The project ID.")
-_P_DATASET = Param("dataset_id", str, description="The dataset ID.")
-_P_JUDGE = Param("judge_id", str, description="The judge ID.")
+_P_PROJECT = Param("project_id", UUID, description="The project ID (from list_projects or get_project_overview).")
+_P_DATASET = Param("dataset_id", UUID, description="The dataset ID (from list_datasets or create_dataset).")
+_P_JUDGE = Param("judge_id", UUID, description="The judge ID (from list_judges or create_judge).")
 
 _QA = "/projects/{project_id}/qa"
 _DS = f"{_QA}/datasets"
 _DS_ITEM = f"{_DS}/{{dataset_id}}"
 _ENTRIES = f"{_DS_ITEM}/entries"
+_CUSTOM_COLS = f"{_DS_ITEM}/custom-columns"
 _JUDGES = f"{_QA}/llm-judges"
 _JUDGE_ITEM = f"{_JUDGES}/{{judge_id}}"
 
@@ -63,7 +71,11 @@ SPECS: list[ToolSpec] = [
             "List entries in a QA dataset (paginated).\n\n"
             "Returns `{pagination: {page, size, total_items, total_pages}, "
             "inputs_groundtruths: [...]}`. Each entry has `id`, `input`, "
-            "`groundtruth`, `position`, `custom_columns`, `created_at`, `updated_at`."
+            "`groundtruth`, `position`, `custom_columns`, `created_at`, `updated_at`.\n\n"
+            "Truncation caveat: responses over 50KB are trimmed (`_truncated: true`). "
+            "For datasets with large inputs or many custom columns, use a smaller "
+            "`page_size` (e.g. 10–20) to avoid truncation. For full dataset export, "
+            "prefer `export_dataset_csv`."
         ),
         method="get",
         path=_ENTRIES,
@@ -79,7 +91,10 @@ SPECS: list[ToolSpec] = [
             "Add entries to a QA dataset.\n\n"
             "Each entry requires `input` (dict, e.g. {\"role\": \"user\", \"content\": \"hello\"}) "
             "and optionally `groundtruth` (str), `position` (int >= 1), "
-            "and `custom_columns` (dict)."
+            "and `custom_columns` (dict).\n\n"
+            "Custom columns: keys MUST be the column UUID (not the display name). "
+            "Call `list_custom_columns` first to get the `column_id` → `column_name` mapping. "
+            "Example: `{\"1b39fa0b-...\": \"my value\"}`, NOT `{\"my column\": \"my value\"}`."
         ),
         method="post",
         path=_ENTRIES,
@@ -94,7 +109,11 @@ SPECS: list[ToolSpec] = [
         description=(
             "Update entries in a QA dataset.\n\n"
             "Each object requires `id` (UUID). Optional fields: `input` (dict), "
-            "`groundtruth` (str), `custom_columns` (dict)."
+            "`groundtruth` (str), `custom_columns` (dict).\n\n"
+            "Custom columns use merge semantics: only specified keys are updated. "
+            "Pass `null` as a value to remove a key. Keys MUST be column UUIDs — "
+            "call `list_custom_columns` to get the mapping. "
+            "Warning: changing `input` clears existing outputs and evaluations for that entry."
         ),
         method="patch",
         path=_ENTRIES,
@@ -123,7 +142,23 @@ SPECS: list[ToolSpec] = [
         method="post",
         path=f"{_ENTRIES}/from-history",
         path_params=(_P_PROJECT, _P_DATASET),
-        query_params=(Param("trace_id", str, description="The trace ID to save as a QA entry."),),
+        query_params=(Param("trace_id", UUID, description="The trace ID to save as a QA entry (from list_traces)."),),
+    ),
+    # --- Custom Columns ---
+    ToolSpec(
+        name="list_custom_columns",
+        description=(
+            "List custom column definitions for a QA dataset.\n\n"
+            "Returns the column schema: each column has `column_id` (UUID — the key used "
+            "in entry `custom_columns` dicts), `column_name` (human-readable label), "
+            "and `column_display_position` (ordering).\n\n"
+            "Call this before `create_entries` or `update_entries` when working with "
+            "custom columns — you need the `column_id` UUIDs, not the display names."
+        ),
+        method="get",
+        path=_CUSTOM_COLS,
+        path_params=(_P_PROJECT, _P_DATASET),
+        return_annotation=list,
     ),
     ToolSpec(
         name="run_qa",
@@ -204,7 +239,13 @@ SPECS: list[ToolSpec] = [
         method="post",
         path=f"{_JUDGE_ITEM}/evaluations/run",
         path_params=(_P_PROJECT, _P_JUDGE),
-        body_fields=(Param("version_output_id", str, description="The version output ID to evaluate."),),
+        body_fields=(
+            Param(
+                "version_output_id",
+                UUID,
+                description="The version output ID to evaluate (from run_qa results).",
+            ),
+        ),
     ),
     ToolSpec(
         name="get_evaluations",
@@ -213,7 +254,7 @@ SPECS: list[ToolSpec] = [
         path=f"{_QA}/version-outputs/{{version_output_id}}/evaluations",
         path_params=(
             _P_PROJECT,
-            Param("version_output_id", str, description="The version output ID."),
+            Param("version_output_id", UUID, description="The version output ID (from run_qa results)."),
         ),
         return_annotation=list,
     ),
@@ -222,3 +263,87 @@ SPECS: list[ToolSpec] = [
 
 def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, SPECS)
+
+    @mcp.tool()
+    async def export_dataset_csv(project_id: UUID, dataset_id: UUID) -> str:
+        """Export all entries in a QA dataset as CSV text.
+
+        Returns CSV with columns: position, input (JSON string), expected_output,
+        plus custom columns (using display names as headers). Compatible with
+        `import_dataset_csv` for round-trip workflows (sort, filter, migrate).
+
+        Args:
+            project_id: The project ID (from list_projects or get_project_overview).
+            dataset_id: The dataset ID (from list_datasets or create_dataset).
+        """
+        jwt, _ = _get_auth()
+
+        columns = await api.get(
+            f"/projects/{project_id}/qa/datasets/{dataset_id}/custom-columns",
+            jwt, trim=False,
+        )
+        sorted_cols = sorted(columns, key=lambda c: c.get("column_display_position", 0))
+
+        all_entries: list[dict] = []
+        page = 1
+        while True:
+            resp = await api.get(
+                f"/projects/{project_id}/qa/datasets/{dataset_id}/entries",
+                jwt, page=page, page_size=100, trim=False,
+            )
+            all_entries.extend(resp.get("inputs_groundtruths", []))
+            if page >= resp.get("pagination", {}).get("total_pages", 1):
+                break
+            page += 1
+
+        headers = ["position", "input", "expected_output"]
+        headers.extend(c["column_name"] for c in sorted_cols)
+
+        if not all_entries:
+            output = io.StringIO()
+            csv.writer(output).writerow(headers)
+            return output.getvalue()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(headers)
+
+        for entry in sorted(all_entries, key=lambda e: e.get("position") or 0):
+            custom = entry.get("custom_columns") or {}
+            row = [
+                entry.get("position", ""),
+                json.dumps(entry.get("input", {})),
+                entry.get("groundtruth", ""),
+            ]
+            row.extend(custom.get(c["column_id"], "") for c in sorted_cols)
+            writer.writerow(row)
+
+        return output.getvalue()
+
+    @mcp.tool()
+    async def import_dataset_csv(project_id: UUID, dataset_id: UUID, csv_content: str) -> dict:
+        """Import entries into a QA dataset from CSV text.
+
+        Required CSV columns: `input` (valid JSON string), `expected_output`.
+        Optional: `position` (int >= 1). Any other column headers are treated as
+        custom columns — new ones are auto-created in the dataset.
+
+        If the dataset already has custom columns, the CSV must include ALL of them
+        (the backend rejects CSVs missing existing custom columns).
+
+        This appends entries. To replace all entries, delete existing ones first
+        with `delete_entries`, then import.
+
+        Args:
+            project_id: The project ID (from list_projects or get_project_overview).
+            dataset_id: The dataset ID (from list_datasets or create_dataset).
+            csv_content: The full CSV text to import.
+        """
+        jwt, _ = _get_auth()
+
+        return await api.post_file(
+            f"/projects/{project_id}/qa/datasets/{dataset_id}/import",
+            jwt,
+            file_content=csv_content.encode("utf-8"),
+            filename="import.csv",
+        )

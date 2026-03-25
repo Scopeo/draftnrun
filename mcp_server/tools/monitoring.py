@@ -1,5 +1,7 @@
 """Monitoring, traces, and credit usage tools."""
 
+from uuid import UUID
+
 from fastmcp import FastMCP
 
 from mcp_server.client import api
@@ -17,7 +19,7 @@ PROXY_SPECS: list[ToolSpec] = [
         description="Get the full span tree for a specific trace.",
         method="get",
         path="/traces/{trace_id}/tree",
-        path_params=(Param("trace_id", str, description="The trace ID."),),
+        path_params=(Param("trace_id", UUID, description="The trace ID (from list_traces or run)."),),
     ),
     ToolSpec(
         name="get_credit_usage",
@@ -43,11 +45,11 @@ def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, PROXY_SPECS)
 
     @mcp.tool()
-    async def list_traces(project_id: str, page: int = 1, page_size: int = 50) -> dict:
+    async def list_traces(project_id: UUID, page: int = 1, page_size: int = 50) -> dict:
         """List execution traces for a project.
 
         Args:
-            project_id: The project ID.
+            project_id: The project ID (from list_projects or get_project_overview).
             page: Page number (1-based). Defaults to 1.
             page_size: Results per page (max 100). Defaults to 50.
         """

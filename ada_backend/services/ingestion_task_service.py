@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ada_backend.mixpanel_analytics import track_ingestion_task_created
 from ada_backend.repositories.ingestion_task_repository import (
     create_ingestion_task,
     delete_ingestion_task,
@@ -17,7 +18,6 @@ from ada_backend.schemas.ingestion_task_schema import (
     ResultType,
     TaskResultMetadata,
 )
-from ada_backend.segment_analytics import track_ingestion_task_created
 from ada_backend.utils.redis_client import push_ingestion_task
 
 LOGGER = logging.getLogger(__name__)
@@ -65,7 +65,11 @@ def create_ingestion_task_by_organization(
             ingestion_task_data.status,
             ingestion_task_data.source_id,
         )
-        track_ingestion_task_created(task_id, organization_id, user_id=user_id, api_key_id=api_key_id)
+        track_ingestion_task_created(
+            task_id, organization_id,
+            source_type=ingestion_task_data.source_type.value,
+            user_id=user_id, api_key_id=api_key_id,
+        )
 
         LOGGER.info(f"Task created in database with ID {task_id}")
 

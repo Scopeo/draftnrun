@@ -61,7 +61,7 @@ class BaseConfig(BaseSettings):
     FIRECRAWL_API_KEY: Optional[str] = None
     RESEND_API_KEY: Optional[str] = None
 
-    SEGMENT_API_KEY: Optional[str] = None
+    MIXPANEL_TOKEN: Optional[str] = None
     ENV: Optional[str] = None
     SENTRY_DSN: Optional[str] = None  # Sentry project DSN (leave unset to disable Sentry)
     SENTRY_ENVIRONMENT: str = "development"  # Sentry environment tag (e.g. development, staging, production)

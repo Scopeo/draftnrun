@@ -6,6 +6,7 @@ import pytest
 
 from mcp_server.tools import monitoring
 from mcp_server.tools.monitoring import _normalize_duration
+from tests.mcp_server.conftest import FAKE_PROJECT_ID
 
 
 class TestNormalizeDuration:
@@ -45,7 +46,7 @@ async def test_list_traces_caps_page_size(fake_mcp, monkeypatch):
     monkeypatch.setattr(monitoring, "api", type("API", (), {"get": get_mock})())
 
     monitoring.register(fake_mcp)
-    await fake_mcp.tools["list_traces"](project_id="p-1", page_size=999)
+    await fake_mcp.tools["list_traces"](project_id=FAKE_PROJECT_ID, page_size=999)
 
     assert get_mock.call_args.kwargs["page_size"] == 100
 
@@ -56,4 +57,4 @@ async def test_list_traces_rejects_zero_page(fake_mcp, monkeypatch):
     monitoring.register(fake_mcp)
 
     with pytest.raises(ValueError, match="page must be >= 1"):
-        await fake_mcp.tools["list_traces"](project_id="p-1", page=0)
+        await fake_mcp.tools["list_traces"](project_id=FAKE_PROJECT_ID, page=0)

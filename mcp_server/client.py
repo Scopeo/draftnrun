@@ -87,18 +87,30 @@ async def _handle_response(response: httpx.Response, *, trim: bool = True) -> An
         return {"status": "ok"}
 
     if response.status_code == 401:
-        raise ToolError("Authentication failed. Your session may have expired — reconnect to refresh.")
+        raise ToolError(
+            "Authentication failed. Your session may have expired — reconnect to refresh. "
+            "Next step: check your MCP client's server status, then call get_current_context() "
+            "to verify your session."
+        )
 
     if response.status_code == 403:
         detail = _extract_error_detail(response)
         base = "Permission denied."
+        hint = (
+            " Next step: call get_current_context() to check your role, "
+            "then see docs://getting-started for the role hierarchy."
+        )
         if detail:
-            raise ToolError(f"{base} {detail}")
-        raise ToolError(f"{base} You may lack the required role for this operation.")
+            raise ToolError(f"{base} {detail}{hint}")
+        raise ToolError(f"{base} You may lack the required role for this operation.{hint}")
 
     if response.status_code == 404:
         detail = _extract_error_detail(response)
-        raise ToolError(f"Resource not found.{f' {detail}' if detail else ''}")
+        raise ToolError(
+            f"Resource not found.{f' {detail}' if detail else ''} "
+            "Next step: verify the ID came from a list_*/get_* call in this session — "
+            "never reuse IDs across projects or orgs."
+        )
 
     if response.status_code == 429:
         retry_after = response.headers.get("Retry-After", "unknown")
@@ -131,9 +143,33 @@ class DraftnrunClient:
         response = await client.get(path, headers=_make_headers(token), params=params or None)
         return await _handle_response(response, trim=trim)
 
+    async def get_raw(self, path: str, token: str, **params: Any) -> str:
+        """Return the raw response text (for non-JSON endpoints like CSV export)."""
+        client = _get_client()
+        response = await client.get(path, headers=_make_headers(token), params=params or None)
+        if response.status_code >= 400:
+            await _handle_response(response)
+        return response.text
+
     async def post(self, path: str, token: str, json: dict | None = None, trim: bool = True, **params: Any) -> Any:
         client = _get_client()
         response = await client.post(path, headers=_make_headers(token), json=json, params=params or None)
+        return await _handle_response(response, trim=trim)
+
+    async def post_file(
+        self, path: str, token: str, *,
+        file_content: bytes, filename: str, field_name: str = "file",
+        content_type: str = "text/csv",
+        trim: bool = True, **params: Any,
+    ) -> Any:
+        """Upload a file via multipart form data (for CSV import, etc.)."""
+        client = _get_client()
+        response = await client.post(
+            path,
+            headers=_make_headers(token),
+            files={field_name: (filename, file_content, content_type)},
+            params=params or None,
+        )
         return await _handle_response(response, trim=trim)
 
     async def put(self, path: str, token: str, json: dict | None = None, *, trim: bool = True) -> Any:

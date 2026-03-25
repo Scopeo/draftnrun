@@ -5,7 +5,24 @@ The AI fetches only the domain it needs, keeping base context minimal.
 The `get_guide` tool provides the same content for clients that don't support resources.
 """
 
+import uuid as _uuid
+
 from fastmcp import FastMCP
+
+# Doc example UUIDs: never hand-write hex; generate with \
+# `uv run python -c "import uuid; print(uuid.uuid4())"`.
+_GRAPH_DOC_THREE_NODE_EXAMPLE_IDS: tuple[str, str, str] = (
+    "f145519f-4336-429b-98d3-030dcdbe5839",
+    "230ea47e-0c45-445f-8af3-a957af344f55",
+    "1ee0413a-9c31-4ae2-8ed0-a65efc3185cd",
+)
+for _g in _GRAPH_DOC_THREE_NODE_EXAMPLE_IDS:
+    if _uuid.UUID(_g).version != 4:
+        raise ValueError(f"graph doc example node id must be UUID v4: {_g}")
+
+_GRAPH_DOC_QA_CUSTOM_COLUMN_EXAMPLE_ID = "1be4f994-a804-4552-9fe6-bba839d679dc"
+if _uuid.UUID(_GRAPH_DOC_QA_CUSTOM_COLUMN_EXAMPLE_ID).version != 4:
+    raise ValueError("graph doc QA custom column example id must be UUID v4")
 
 GETTING_STARTED = """\
 # Getting Started
@@ -22,16 +39,18 @@ to `claude_desktop_config.json`. The `"type":"http"` field is required.
 Authentication is handled via OAuth 2.1 PKCE with Supabase — the client starts the flow \
 automatically on first connection.
 
-## First Steps — Always Do This
+## First Steps — Always Do This (Sequential, Not Parallel)
 
-Before any operation, set an organization context:
+Before any operation, set an organization context. These steps MUST be sequential — \
+do NOT parallelize `select_organization` with org-scoped tools:
 
 1. `list_my_organizations` — see available orgs and your role in each
 2. `select_organization(organization_id)` — set the active org for the session \
-(caches role + release stage)
+(caches role + release stage). **Wait for success before proceeding.**
 3. `get_current_context` — verify active org, role, release_stage, user info
 
-All org-scoped tools will fail with "No organization selected" until you do this.
+All org-scoped tools will fail with "No organization selected" until you do this. \
+See `docs://known-quirks` for details on the sequencing requirement.
 
 ## Role Hierarchy
 
@@ -46,13 +65,24 @@ If a tool returns a role error, check with `get_current_context`.
 
 ## Key Concepts
 
-- **Agent vs Workflow**: Agents are configured via `configure_agent`/`add_tool_to_agent` \
-(high-level). Workflows use `get_graph`/`update_graph` (low-level DAG manipulation).
+- **Agent vs Workflow**: Choose **Agent** when the user wants a single AI that receives \
+messages and optionally uses tools — create with `create_agent`, configure with \
+`configure_agent`/`add_tool_to_agent`. Choose **Workflow** when the user needs a multi-step \
+DAG with a separate Start node, custom input fields beyond messages, or multiple chained \
+components — create with `create_workflow`, edit with `get_graph`/`update_graph`. \
+Disambiguation signals: if the user mentions "Start node", "custom inputs", "payload fields", \
+or "multi-step", they likely want a workflow.
 - **Draft vs Production**: Only drafts are editable. Use `save_graph_version` to snapshot, \
 `publish_to_production` to go live.
 - **Release Stage**: Org-level tier (public/early_access/beta/internal) controlling which \
 components are visible.
 - **RBAC**: Variables/secrets require admin. Deletions require developer+. Invites require admin in the target org.
+
+## ID Provenance — NEVER invent UUIDs
+
+Every ID you pass to a tool **must** come from a previous tool response in this session \
+(`list_*`, `get_*`, `create_*`, `search_*`). If you do not have the ID, call the appropriate \
+discovery tool first. **Never fabricate, guess, or hard-code UUIDs.**
 
 ## AI Builder Habits
 
@@ -96,14 +126,18 @@ AGENT_CONFIG = """\
 5. **Discover available tools** — call `search_components(query)` to find the exact component \
 display name.
 6. `add_tool_to_agent(agent_id, graph_runner_id, "<display name from step 5>")` → adds by name
-7. `run_agent(project_id, graph_runner_id, [{"role": "user", "content": "test"}])` → test it
+7. `run(project_id, graph_runner_id, {"messages": [{"role": "user", "content": "test"}]})` → test it
 8. `save_graph_version(project_id, graph_runner_id)` → snapshot
 9. `publish_to_production(project_id, graph_runner_id)` → go live
 
-## configure_agent
+## configure_agent (AGENT projects only)
 
 Sets system prompt and existing model parameters on the agent's root AI Agent node. It handles the \
 full read-modify-write cycle internally — you only pass what you want to change.
+
+⚠️ This tool only works for **AGENT-type projects** (created with `create_agent`). For \
+**WORKFLOW-type projects**, use `update_component_parameters` to change a component's parameters \
+(e.g. the AI Agent's `initial_prompt`), or `get_graph` + `update_graph` for structural changes.
 
 Model names are auto-prefixed when no provider is specified: `"gpt-4.1"` becomes `"openai:gpt-4.1"`. \
 Pass `"anthropic:claude-sonnet-4-5"` for non-OpenAI models.
@@ -161,10 +195,17 @@ as unavailable instead of designing around it from memory.
 hints in one call.
 """
 
-GRAPHS = """\
+_GRAPHS_DOC = """\
 # Graph Editing
 
 Fetch `docs://versioning` before editing, saving, or publishing graphs.
+
+⚠️ **Concurrent Edit Warning**: The Draft'n Run web UI auto-saves the canvas state to the \
+same draft runner. If the project is open in the browser while you call `update_graph`, the \
+browser may silently overwrite your changes (last-write-wins, no conflict detection). **Close \
+the browser tab before making API edits.** You can optionally pass `last_edited_time` (from a \
+previous `update_graph` response) to detect conflicts — the backend returns 409 if the graph \
+was modified since that timestamp.
 
 A graph is a DAG with four top-level collections:
 
@@ -327,6 +368,24 @@ Used for agent nodes that contain tool sub-components.
 
 ## Updating a Graph
 
+### Quick path: update a single component's parameters
+
+For single-parameter changes (e.g. updating a prompt), use `update_component_parameters` instead \
+of `update_graph`. It performs the full read-modify-write server-side, so you only send the \
+parameter keys you want to change:
+
+```
+update_component_parameters(project_id, graph_runner_id, component_instance_id,
+  parameters={"initial_prompt": "New instructions..."})
+```
+
+⚠️ Do NOT use `update_component_parameters` on `drives_output_schema` fields \
+(`payload_schema` on Start, `output_format` on AI Agent) unless you intend to change dynamic \
+output ports — modifying those fields deletes and recreates `OutputPortInstance` rows, which \
+may break downstream field expressions.
+
+### Full graph update
+
 `update_graph` sends the full graph structure for the selected runner. The safe pattern:
 
 1. `get_project_overview(project_id)` — identify the editable draft runner
@@ -349,6 +408,108 @@ After `publish_to_production`, the backend creates a fresh draft with remapped i
 Always call `get_graph` on the returned new draft before further edits.
 
 After `save_graph_version`, the current draft stays editable and its instance IDs stay the same.
+
+### Read format ≠ Write format
+
+`get_graph` returns a **normalized read format** with `field_expressions` at the node level. \
+When writing with `update_graph`, use `input_port_instances` on each component instance. \
+**Do NOT copy `field_expressions` from a `get_graph` response into an `update_graph` call** — \
+the formats are different and the backend expects the write format.
+
+### Complete example: 3-node workflow (Start → AI Agent → If/Else)
+
+```json
+{
+  "component_instances": [
+    {
+      "id": "__GRAPH_DOC_NODE_A__",
+      "name": "Start",
+      "ref": "start",
+      "is_start_node": true,
+      "component_id": "<from search_components>",
+      "component_version_id": "<from search_components>",
+      "component_name": "start_v2",
+      "parameters": [],
+      "input_port_instances": []
+    },
+    {
+      "id": "__GRAPH_DOC_NODE_B__",
+      "name": "Analyse",
+      "ref": "analyse",
+      "is_start_node": false,
+      "component_id": "<from search_components>",
+      "component_version_id": "<from search_components>",
+      "component_name": "ai_agent",
+      "parameters": [
+        {"name": "initial_prompt", "kind": "parameter", "value": "Analyse this document."}
+      ],
+      "input_port_instances": []
+    },
+    {
+      "id": "__GRAPH_DOC_NODE_C__",
+      "name": "Is Invoice?",
+      "ref": "is_invoice",
+      "is_start_node": false,
+      "component_id": "<from search_components>",
+      "component_version_id": "<from search_components>",
+      "component_name": "if_else",
+      "parameters": [
+        {
+          "name": "conditions",
+          "kind": "input",
+          "value": {
+            "type": "json_build",
+            "template": [
+              {
+                "value_a": "$ref_output",
+                "operator": "text_contains",
+                "value_b": "invoice"
+              }
+            ],
+            "refs": {
+              "$ref_output": {
+                "type": "ref",
+                "instance": "__GRAPH_DOC_NODE_B__",
+                "port": "output"
+              }
+            }
+          }
+        }
+      ],
+      "input_port_instances": []
+    }
+  ],
+  "edges": [
+    {
+      "id": null,
+      "origin": "__GRAPH_DOC_NODE_A__",
+      "destination": "__GRAPH_DOC_NODE_B__",
+      "order": 0
+    },
+    {
+      "id": null,
+      "origin": "__GRAPH_DOC_NODE_B__",
+      "destination": "__GRAPH_DOC_NODE_C__",
+      "order": 0
+    }
+  ],
+  "port_mappings": [],
+  "relationships": []
+}
+```
+
+Key takeaways from this example:
+- **Node `id` values** above are pinned UUID v4 strings defined in `docs.py` (from `uuid.uuid4()`); \
+in real graphs use IDs from `get_graph`, not copied literals.
+- **Edges** use `"origin"` and `"destination"` as **plain UUID strings** (node IDs), not objects.
+- **Edge `id`** can be `null` — the MCP layer auto-generates UUIDs.
+- **Canonical inputs** (like `messages` on AI Agent) are auto-wired by the backend when an edge \
+exists — no need to provide `input_port_instances` for them.
+- **JSON-typed parameters** like `conditions` on If/Else: use `json_build` expressions to \
+reference other node outputs while preserving structure. If you need a static JSON value, \
+pass it as a `kind="parameter"` with the value JSON-encoded as a string.
+- **`component_id` and `component_version_id`** must come from `search_components()` or \
+`list_components()` — never hard-code them.
 
 ### Input data wiring: `kind="input"` vs `input_port_instances`
 
@@ -415,13 +576,13 @@ field is a display label only — using it in expressions produces a 400 error: 
 Example — correct field expression referencing node output:
 
 ```json
-{"type": "ref", "instance": "df934e83-1a31-487f-8977-a0614c6a76f1", "port": "output"}
+{"type": "ref", "instance": "__GRAPH_DOC_NODE_B__", "port": "output"}
 ```
 
 Example — key extraction from an artifacts port:
 
 ```json
-{"type": "ref", "instance": "df934e83-1a31-487f-8977-a0614c6a76f1", "port": "artifacts", "key": "pdf_filename"}
+{"type": "ref", "instance": "__GRAPH_DOC_NODE_B__", "port": "artifacts", "key": "pdf_filename"}
 ```
 
 The string shorthand `@{{<uuid>.port}}` and `@{{<uuid>.port::key}}` follow the same rule — \
@@ -432,6 +593,29 @@ always use the instance UUID, never the `ref`.
 The engine auto-adds edges from field expression references. A node referencing another node's \
 output will always run after it, even without an explicit edge. Still create explicit edges — \
 auto-augmentation is a safety net, not the primary design pattern.
+
+## Attaching Tools to Agents in Workflows
+
+`add_tool_to_agent` is for **agent-type projects only** (single AI Agent with tools). \
+For **workflow-type projects**, attach tools to an AI Agent node using `relationships` in \
+`update_graph`:
+
+```json
+{
+  "relationships": [
+    {
+      "parent_component_instance_id": "<agent-node-uuid>",
+      "child_component_instance_id": "<tool-node-uuid>",
+      "parameter_name": "tools",
+      "order": 0
+    }
+  ]
+}
+```
+
+The tool node must be a separate `component_instance` in the same graph (discovered via \
+`search_components`). Do not use `add_tool_to_agent` for workflows — it modifies the agent \
+model config, not the graph structure.
 """
 
 COMPONENTS = """\
@@ -529,25 +713,32 @@ Fetch `docs://playground` for runner-selection and UI execution habits.
 
 ## MCP Execution Surface
 
-`run_agent(project_id, graph_runner_id, messages, timeout=60)` — fires an async run, \
-auto-polls for completion, and returns the final result in one call.
+`run(project_id, graph_runner_id, payload, timeout=60)` — fires an async run, auto-polls \
+for completion, and returns the final result in one call.
 
-The `run_agent` tool exposes only the `messages` argument. It does **not** expose:
+`payload` is a single dict containing the full request body.  It must include a `messages` key \
+and may include any additional Start-node fields defined in the graph's `payload_schema`:
 
-- arbitrary Start-node payload fields
-- a `response_format` selector
-- a generic file upload helper
-
-It sends only:
-
+Agent (messages only):
 ```json
-{
-  "messages": [{"role": "user", "content": "Hello"}]
-}
+run(project_id, runner_id,
+  payload={"messages": [{"role": "user", "content": "Hello"}]})
 ```
 
-If a workflow expects additional Start fields, configure them in the graph or use a backend/API \
-surface outside this MCP.
+Workflow with custom Start fields:
+```json
+run(project_id, runner_id,
+  payload={"messages": [{"role": "user", "content": "Hello"}],
+           "name": "Ada", "language": "fr"})
+```
+
+The backend extracts `messages` for the execution pipeline and injects remaining keys into \
+`ctx` as Start-node output ports.
+
+`run` does **not** expose:
+
+- a `response_format` selector
+- a generic file upload helper
 
 Response:
 
@@ -608,8 +799,8 @@ Additional execution semantics:
 - `conversation_id` is generated automatically if omitted
 - the current MCP wrapper does not expose either of those fields directly
 
-That backend concept is broader than the current MCP wrapper. From this MCP, only `messages` is \
-directly exposed today.
+The MCP `run` tool accepts the full payload (including `messages` and any custom Start fields). \
+`conversation_id` and `set_id` are not exposed.
 """
 
 VARIABLES = """\
@@ -723,7 +914,7 @@ FILE_MANAGEMENT = """\
 The current MCP surface is **not** a general file API. It can:
 
 - inspect existing knowledge sources and logical documents
-- run graphs with `messages`
+- run graphs via `run(payload={"messages": [...], ...})`
 - return references to some generated files
 
 It does **not** currently expose a full upload/download workflow for arbitrary files.
@@ -774,15 +965,15 @@ The backend can accept file-shaped payload values like:
 {"type": "file", "file": {"filename": "report.pdf", "file_data": "<base64>"}}
 ```
 
-However, the MCP `run_agent` tool currently exposes only the `messages` argument. \
-Do not claim the MCP has a general file upload helper.
+The MCP `run` tool accepts a `payload` dict (which must include `messages`), but does not \
+provide a general file upload helper.
 
 The web playground allows file-style inputs with a 10 MB per-file limit, but that is a frontend \
 behavior, not a current MCP capability.
 
 ## Generated Files
 
-Some components can create files (for example PDF or DOCX generation). For `run_agent`:
+Some components can create files (for example PDF or DOCX generation). For `run`:
 
 - generated files usually come back as `files[].s3_key`
 - there is no MCP tool today to download those bytes from the returned key
@@ -794,7 +985,7 @@ Backend file-response limits:
 `.tiff`, `.pdf`, `.docx`, `.xlsx`, `.xls`, `.xlsm`, `.csv`, `.txt`, `.md`, `.json`, `.html`, \
 `.xml`
 - max size per file: 10 MB
-- base64 mode is limited to 5 files, but `run_agent` uses `s3_key` responses
+- base64 mode is limited to 5 files, but `run` uses `s3_key` responses
 
 ## Components And Availability
 
@@ -809,7 +1000,13 @@ Do not assume:
 - a component supports local paths, URLs, base64, or uploads unless the current catalog says so
 """
 
-QA = """\
+GRAPHS = (
+    _GRAPHS_DOC.replace("__GRAPH_DOC_NODE_A__", _GRAPH_DOC_THREE_NODE_EXAMPLE_IDS[0])
+    .replace("__GRAPH_DOC_NODE_B__", _GRAPH_DOC_THREE_NODE_EXAMPLE_IDS[1])
+    .replace("__GRAPH_DOC_NODE_C__", _GRAPH_DOC_THREE_NODE_EXAMPLE_IDS[2])
+)
+
+_QA_DOC = """\
 # QA & Evaluation
 
 ## Datasets
@@ -849,6 +1046,57 @@ Entry shape for update (requires `id` from `list_entries`):
 {"id": "<entry-uuid>", "input": {"role": "user", "content": "updated"}, "groundtruth": "new answer"}
 ```
 
+### Custom Columns — Key Semantics
+
+Custom column values are stored as `{column_uuid: value}` dicts on each entry. The keys are \
+internal column UUIDs, NOT the human-readable display names. Using display names as keys will \
+store the data but it will NOT appear in the frontend.
+
+Safe workflow:
+
+1. `list_custom_columns(project_id, dataset_id)` → get `column_id` (UUID) and `column_name` \
+(display label) for each column
+2. Use the `column_id` as the key in `custom_columns` dicts when creating or updating entries:
+   `{"custom_columns": {"__GRAPH_DOC_QA_COL__": "my value"}}`
+
+### Pagination & Truncation
+
+`list_entries` responses over 50KB are trimmed (`_truncated: true`). For datasets with large \
+inputs or many custom columns, reduce `page_size` (e.g. 10–20). For full dataset retrieval, \
+use `export_dataset_csv` instead.
+
+## CSV Export / Import
+
+Round-trip dataset operations via CSV text:
+
+1. `export_dataset_csv(project_id, dataset_id)` → returns CSV text with columns: \
+`position`, `input` (JSON string), `expected_output`, plus custom column display names
+2. `import_dataset_csv(project_id, dataset_id, csv_content)` → imports CSV entries into a dataset
+
+CSV import rules:
+- Required columns: `input` (valid JSON), `expected_output`
+- Optional: `position` (int >= 1)
+- Extra columns are auto-created as custom columns
+- If the dataset has existing custom columns, the CSV MUST include all of them
+- Import **appends** entries — to replace, delete existing entries first
+
+### Dataset Migration / Reorder Playbook
+
+To reorganize, sort, or migrate entries between datasets:
+
+1. `export_dataset_csv(project_id, source_dataset_id)` → get all entries as CSV
+2. Process the CSV (sort rows, filter, edit values)
+3. `create_dataset(project_id, {"datasets_name": ["target"]})` → create destination (or reuse existing)
+4. `import_dataset_csv(project_id, target_dataset_id, modified_csv)` → import sorted entries
+5. Verify with `list_entries(project_id, target_dataset_id)` (check `total_items` in pagination)
+
+To replace entries in an existing dataset:
+
+1. `export_dataset_csv(project_id, dataset_id)` → snapshot current state
+2. `list_entries` → collect all entry IDs
+3. `delete_entries(project_id, dataset_id, all_ids)` → clear
+4. `import_dataset_csv(project_id, dataset_id, modified_csv)` → re-import
+
 ## Judges
 
 LLM-based evaluators that score agent responses:
@@ -886,6 +1134,8 @@ treated as stale
 - bulk QA execution is run sequentially in the frontend to avoid server overload
 - only evaluate rows that already have a valid `version_output_id`
 """
+
+QA = _QA_DOC.replace("__GRAPH_DOC_QA_COL__", _GRAPH_DOC_QA_CUSTOM_COLUMN_EXAMPLE_ID)
 
 VERSIONING = """\
 # Versioning
@@ -959,10 +1209,21 @@ important rule is: do not mix runners from one project with another project ID.
 
 ## Execution Model
 
-`run_agent(...)` starts async execution and polls until completion or timeout.
+`run(...)` starts async execution and polls until completion or timeout.
 
 The frontend can also stream `202 Accepted` runs over websockets, but the current MCP wrapper only \
 offers the polling-based abstraction.
+
+## Custom Start Fields
+
+Workflows with custom `payload_schema` fields (e.g. `name`, `language`) are passed as part of \
+the `payload` dict in `run`:
+
+```json
+run(project_id, runner_id,
+  payload={"messages": [{"role": "user", "content": "Hello"}],
+           "name": "Ada", "language": "fr"})
+```
 
 ## Conversation And Variables
 
@@ -971,7 +1232,7 @@ Backend execution can use:
 - `conversation_id` for multi-turn continuity
 - `set_id` / `set_ids` for variable-set resolution
 
-The current MCP wrapper does not expose those fields directly, so do not assume playground parity \
+The MCP wrapper does not expose those fields directly, so do not assume full playground parity \
 for those features.
 
 ## Traces And Replay
@@ -1029,12 +1290,52 @@ to connect in the UI.
 
 If a component catalog entry includes an `integration` block, treat it as unsafe for the generic \
 agent-tool helper unless the helper explicitly supports it.
+
+## Preflight Checklist: Graph with Integration-Backed Components
+
+Building a graph that uses OAuth-dependent components (Gmail, Slack, HubSpot, etc.) requires a \
+specific order of operations. Skipping steps causes `update_graph` to fail with errors like \
+"access_token is required".
+
+1. **Set context**: `list_my_organizations` → `select_organization` → `get_current_context`
+2. **Verify OAuth**: `list_oauth_connections(provider_config_key)` — confirm the required \
+provider has an active connection. If not, tell the user to connect it in the web UI first.
+3. **Discover components**: `search_components(query)` — find the integration component and \
+note its `component_id` and `component_version_id`.
+4. **Get current graph**: `get_project_overview(project_id)` → `get_graph(project_id, graph_runner_id)` \
+with the draft runner.
+5. **Build the graph payload**: add the integration component as a node. Include the `integration` \
+block from the catalog entry if present.
+6. **Save**: `update_graph(project_id, graph_runner_id, graph_data)`.
+7. **Wire OAuth in UI**: even after a successful save, the user must open the web UI to select \
+the OAuth connection on each integration-backed component.
+8. **Verify**: `check_oauth_status(provider_config_key, connection_id)` to confirm.
+
+If step 6 fails with an OAuth/token error, the integration dependency is enforced at save time \
+(see `docs://known-quirks`). The user must complete step 7 before the graph can be saved with \
+that component.
 """
 
 KNOWN_QUIRKS = """\
 # Known Quirks
 
 These are current backend/MCP behaviors the AI should actively work around.
+
+## Concurrent UI and API Edits Race (Last-Write-Wins)
+
+The Draft'n Run web UI auto-saves the canvas state to the same draft runner that `update_graph` \
+writes to. If the project is open in the browser, the UI may overwrite API changes seconds after \
+a successful 200 response — silently resetting the graph to whatever the canvas shows (often just \
+the Start node if no manual edits were made in the UI).
+
+There is no optimistic locking: the API accepts an optional `last_edited_time` field that triggers \
+a 409 Conflict if another write happened since that timestamp, but the web UI does not send it.
+
+Safest approach:
+
+- **Close the browser tab** before calling `update_graph` from MCP or API
+- After `update_graph` succeeds, call `get_graph` to verify the save persisted
+- If the graph appears reset, the UI likely overwrote it — close the tab and retry
 
 ## Graph Update Hash Excludes `port_mappings`
 
@@ -1096,6 +1397,25 @@ before sending to the backend, but structural validation still happens server-si
 
 See `docs://integrations` for details.
 
+## Integration Components Require Active OAuth at Save Time
+
+`update_graph` validates integration dependencies eagerly — the backend instantiates sub-components \
+on save, not just at run time. If the graph contains an OAuth-backed component (e.g. HubSpot MCP \
+Tool, Gmail Sender) and the OAuth connection is missing or inactive, the save fails with an error \
+like "access_token is required".
+
+Consequence:
+
+- you cannot scaffold a draft graph containing integration components and defer OAuth setup for later
+- the OAuth connection must be active **before** the graph can be saved with that component
+
+Workaround:
+
+- check `list_oauth_connections(provider_config_key)` before including integration components
+- if no connection exists, tell the user to set it up in the web UI first
+- alternatively, save the graph **without** the integration component, then add it after OAuth is connected
+- see `docs://integrations` preflight checklist for the full sequence
+
 ## Unknown Top-Level Keys In `update_graph` Are Silently Ignored
 
 The backend accepts and ignores unknown keys in the graph payload. A common mistake is \
@@ -1104,6 +1424,76 @@ mappings are silently dropped.
 
 The MCP layer now warns about known typos, but less obvious unknown keys will still pass \
 through silently.
+
+## Organization Selection Must Be Sequential
+
+`select_organization` stores session context that all subsequent org-scoped tools depend on. \
+If you call `select_organization` **in parallel** with org-scoped tools (e.g. `list_projects`), \
+the org-scoped call may execute before the context write completes, causing "No organization \
+selected" errors.
+
+Safest approach:
+
+1. Call `list_my_organizations` (can be parallel with auth-only tools)
+2. Call `select_organization` and **wait for success**
+3. Only then call org-scoped tools (`list_projects`, etc.)
+
+## Response Truncation Affects Large QA Datasets
+
+Responses exceeding 50KB are trimmed (`_truncated: true`). QA datasets with many entries or \
+large input payloads are particularly affected. `list_entries` with the default `page_size=100` \
+will often truncate.
+
+Workarounds:
+
+- Use smaller `page_size` (10–20) and paginate manually
+- Use `export_dataset_csv` for full dataset retrieval — it paginates internally and returns \
+CSV text that won't be truncated by the MCP response limiter
+- Never assume a `_truncated` response contains all data
+
+## Custom Column Keys Are UUIDs, Not Display Names
+
+QA dataset entries store custom column values keyed by column UUID, not by the human-readable \
+column name. Writing `{"my column": "value"}` will persist in the database but will NOT display \
+in the frontend (the frontend resolves columns by UUID).
+
+Always call `list_custom_columns(project_id, dataset_id)` first to get the `column_id` → \
+`column_name` mapping, then use `column_id` as the key in `custom_columns` dicts. See `docs://qa` \
+for the full workflow.
+
+## `drives_output_schema` Fields Control Dynamic Output Ports
+
+Some component parameters (e.g. `payload_schema` on Start, `output_format` on AI Agent) have \
+`drives_output_schema: true`. Changing these fields deletes **all** existing `OutputPortInstance` \
+rows for that component and recreates them from the new schema's top-level keys.
+
+Consequences:
+
+- simplifying or omitting these fields to reduce payload size will **break** downstream field \
+expressions that reference the dynamic output ports
+- the `get_graph` → `update_graph` round-trip is safe **only if these fields are preserved exactly**
+
+When using `update_component_parameters`, avoid modifying `drives_output_schema` fields unless \
+you intend to change the component's output port structure. Use `get_graph` to inspect the \
+current value before making changes.
+
+## `configure_agent` Is AGENT-Only
+
+`configure_agent`, `add_tool_to_agent`, and `remove_tool_from_agent` only work for projects \
+of type `AGENT` (created with `create_agent`). Calling them on a `WORKFLOW` project returns \
+a clear error with guidance toward `update_component_parameters`.
+
+For WORKFLOW projects, use `update_component_parameters` to change parameters like \
+`initial_prompt` on an AI Agent component, or `get_graph` + `update_graph` for structural changes.
+
+## Direct HTTP Calls to the MCP Server Are Not Supported
+
+The MCP server at `mcp.draftnrun.com` is protected by Cloudflare and requires OAuth tokens \
+managed by the MCP client (Cursor). Direct HTTP calls (via `curl`, `httpx`, etc.) will be \
+blocked by Cloudflare (403) or fail authentication (401).
+
+All interactions must go through the `CallMcpTool` interface. Do not attempt to extract tokens \
+from Cursor's encrypted storage or bypass Cloudflare.
 """
 
 ADMIN = """\

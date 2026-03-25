@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from inspect import Parameter, Signature
 from typing import Any, Literal
 from urllib.parse import quote
+from uuid import UUID
 
 from fastmcp import FastMCP
 
@@ -112,7 +113,11 @@ def _build_handler(spec: ToolSpec):
         if spec.body_param:
             json_body = resolved[spec.body_param.name]
         elif spec.body_fields or spec.body_org_key:
-            json_body = {bf.name: resolved[bf.name] for bf in spec.body_fields if resolved[bf.name] is not None}
+            json_body = {}
+            for bf in spec.body_fields:
+                val = resolved[bf.name]
+                if val is not None:
+                    json_body[bf.name] = str(val) if isinstance(val, UUID) else val
             if spec.body_org_key and org_id:
                 json_body[spec.body_org_key] = org_id
 
@@ -122,7 +127,7 @@ def _build_handler(spec: ToolSpec):
         for qp in spec.query_params:
             val = resolved.get(qp.name)
             if val is not None:
-                call_kwargs[qp.name] = val
+                call_kwargs[qp.name] = str(val) if isinstance(val, UUID) else val
         if org_id and spec.org_query_key:
             call_kwargs[spec.org_query_key] = org_id
 
