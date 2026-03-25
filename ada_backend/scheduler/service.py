@@ -19,7 +19,7 @@ from ada_backend.repositories.cron_repository import (
 )
 from ada_backend.scheduler.sync_cron_jobs_with_scheduler import schedule_sync_job
 from ada_backend.scheduler.utils import ID_SYSTEM_SYNC_CRON_JOBS, log_sync_job_status
-from ada_backend.services.cron.registry import CRON_REGISTRY
+from ada_backend.services.cron.execution import run_cron_spec
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 
@@ -116,10 +116,7 @@ def _job_listener(event: JobExecutionEvent):
 
 
 async def _execute_cron_job(cron_id: UUID, entrypoint: CronEntrypoint, payload: Dict[str, Any]):
-    """Execute a cron job by calling the appropriate entrypoint function.
-    Also updates the cron run status in the database.
-
-    """
+    """Execute a scheduled cron job: creates the run record, sets context, and delegates to run_cron_spec."""
     trace_manager = _get_scheduler_trace_manager()
     set_trace_manager(trace_manager)
 
@@ -137,47 +134,7 @@ async def _execute_cron_job(cron_id: UUID, entrypoint: CronEntrypoint, payload: 
 
     set_cron_execution_context(CronExecutionContext(run_id=run_id, cron_id=cron_id))
 
-    try:
-        LOGGER.info(f"Executing cron job {cron_id} with entrypoint {entrypoint}")
-
-        if entrypoint not in CRON_REGISTRY:
-            raise ValueError(f"Invalid entrypoint '{entrypoint}'.")
-
-        spec = CRON_REGISTRY[entrypoint]
-
-        # JSON from DB -> Parse to Execution Pydantic Model
-        execution_payload = spec.execution_payload_model(**payload)
-
-        with get_db_session() as session:
-            # Execution Pydantic Model -> Execution Validator
-            spec.execution_validator(execution_payload, db=session, cron_id=cron_id)
-
-            # Execution Pydantic Model -> Executor
-            result = await spec.executor(execution_payload, db=session, cron_id=cron_id)
-
-        with get_db_session() as session:
-            update_cron_run(
-                session=session,
-                run_id=run_id,
-                status=CronStatus.COMPLETED,
-                finished_at=datetime.now(timezone.utc),
-                result=result,
-            )
-
-        LOGGER.info(f"Cron job {cron_id} executed successfully")
-        return result
-
-    except Exception as e:
-        LOGGER.error(f"Cron job {cron_id} failed: {e}")
-        with get_db_session() as session:
-            update_cron_run(
-                session=session,
-                run_id=run_id,
-                status=CronStatus.ERROR,
-                finished_at=datetime.now(timezone.utc),
-                error=str(e),
-            )
-        raise
+    return await run_cron_spec(run_id=run_id, cron_id=cron_id, entrypoint=entrypoint, payload=payload)
 
 
 def start_scheduler():

@@ -1515,11 +1515,13 @@ Scheduled agent execution:
 3. `update_cron(cron_id, cron_data)` → modify
 4. `delete_cron(cron_id)` → remove
 5. `pause_cron(cron_id)` / `resume_cron(cron_id)` → toggle without deleting
-6. `get_cron_runs(cron_id)` → execution history
+6. `trigger_cron(cron_id)` → run immediately (background execution, member role or above)
+7. `get_cron_runs(cron_id)` → execution history
 
 Important runtime notes:
 
 - cron write operations (create, update, delete, pause, resume) require developer role
+- `trigger_cron` requires member role or above
 - cron jobs are organization-scoped in MCP
 - the frontend treats schedules as production-oriented behavior
 - successful CRUD writes DB state first; scheduler pickup can lag slightly

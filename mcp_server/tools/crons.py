@@ -21,7 +21,7 @@ SPECS: list[ToolSpec] = [
         method="get",
         path=_BASE,
         scope="org",
-        return_annotation=list,
+        return_annotation=dict,
     ),
     ToolSpec(
         name="get_cron",
@@ -100,7 +100,18 @@ SPECS: list[ToolSpec] = [
         path=f"{_ITEM}/runs",
         scope="org",
         path_params=(_CRON_ID,),
-        return_annotation=list,
+        return_annotation=dict,
+    ),
+    ToolSpec(
+        name="trigger_cron",
+        description=(
+            "Manually trigger a cron job to run immediately. Requires member role or above.\n\n"
+            "Returns immediately while execution continues in the background."
+        ),
+        method="post",
+        path=f"{_ITEM}/trigger",
+        scope="org",
+        path_params=(_CRON_ID,),
     ),
 ]
 

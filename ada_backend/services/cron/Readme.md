@@ -12,7 +12,8 @@ The CRON system automates scheduled tasks using APScheduler with our database as
 
 **API Layer**
 
-- Simple CRUD endpoints for registering/managing cron jobs
+- CRUD endpoints for registering/managing cron jobs
+- Manual trigger endpoint (`POST /{org_id}/crons/{cron_id}/trigger`) to run a cron job on demand
 
 **Scheduler Service**
 
@@ -29,8 +30,7 @@ with the command:
 ```mermaid
 flowchart TB
 
-  %% Top row: Registration and Scheduler side by side
-  subgraph Cron System
+  subgraph cronSystem [Cron System]
     direction LR
 
     subgraph REG [Registration Flow]
@@ -45,26 +45,37 @@ flowchart TB
     subgraph SCH [Scheduler & Execution]
       direction TB
       S[Scheduler Service<br/>reconcile & sync]
-      V[execution_validator<br/>runtime checks]
-      E[executor<br/>business logic]
-      S --> V --> E
+      X["run_cron_spec (execution.py)"]
+      S --> X
+    end
+
+    subgraph MAN [Manual Trigger]
+      direction TB
+      T[POST /{org_id}/crons/{cron_id}/trigger]
+      Y["run_cron_spec (execution.py)"]
+      T -->|BackgroundTask| Y
     end
 
   end
 
-  %% Bottom: Database
   subgraph DB [Database - scheduler schema]
     direction TB
     J[cron_jobs<br/>payload = ExecutionPayload JSONB]
     R[cron_runs<br/>status/result/error JSONB]
   end
 
-  %% Edges
   D -->|store| J
   J -.->|sync on startup/changes| S
-  E -->|write run| R
+  X -->|write run| R
+  Y -->|write run| R
 
 ```
+
+## Manual Trigger
+
+Cron jobs can be triggered on demand via `POST /{org_id}/crons/{cron_id}/trigger`. The endpoint is available to org members and validates that the cron exists and belongs to the organization. It creates a `CronRun` record with `status=RUNNING`, schedules execution in a FastAPI `BackgroundTask`, and returns 202 immediately. A paused cron can still be triggered manually — the schedule and the manual trigger are independent.
+
+Both the scheduler and the manual trigger delegate to `run_cron_spec` in `execution.py`, which contains the shared execution logic: spec lookup, payload deserialization, validation, execution, and run status update.
 
 ## Registry System
 

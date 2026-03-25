@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID
 
@@ -8,7 +8,7 @@ import pytz
 from croniter import croniter
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import CronJob
+from ada_backend.database.models import CronJob, CronStatus
 from ada_backend.mixpanel_analytics import track_cron_job_created, track_cron_job_deleted, track_cron_job_toggled
 from ada_backend.repositories.cron_repository import (
     delete_cron_job,
@@ -17,6 +17,7 @@ from ada_backend.repositories.cron_repository import (
     get_cron_jobs_by_project_id,
     get_cron_runs_by_cron_id,
     insert_cron_job,
+    insert_cron_run,
     permanently_delete_cron_jobs_by_ids,
     update_cron_job,
 )
@@ -28,12 +29,18 @@ from ada_backend.schemas.cron_schema import (
     CronJobListResponse,
     CronJobPauseResponse,
     CronJobResponse,
+    CronJobTriggerResponse,
     CronJobUpdate,
     CronJobWithRuns,
     CronRunListResponse,
 )
 from ada_backend.services.cron.constants import CRON_MIN_INTERVAL_MINUTES
-from ada_backend.services.cron.errors import CronJobAccessDenied, CronJobNotFound, CronValidationError
+from ada_backend.services.cron.errors import (
+    CronJobAccessDenied,
+    CronJobNotFound,
+    CronValidationError,
+)
+from ada_backend.services.cron.execution import run_cron_spec
 from ada_backend.services.cron.registry import CRON_REGISTRY
 
 LOGGER = logging.getLogger(__name__)
@@ -363,3 +370,38 @@ def get_cron_runs(
         runs=runs,
         total=len(runs),
     )
+
+
+def trigger_cron_job_now(
+    session: Session,
+    cron_id: UUID,
+    organization_id: UUID,
+) -> tuple[CronJobTriggerResponse, CronEntrypoint, dict[str, Any]]:
+    """Validate the cron job and create a CronRun record to be executed in the background.
+
+    Returns the trigger response alongside the entrypoint and payload needed to execute the run.
+    """
+    cron_job = _assert_cron_in_org(session, cron_id, organization_id)
+
+    now = datetime.now(timezone.utc)
+    cron_run = insert_cron_run(
+        session=session,
+        cron_id=cron_id,
+        scheduled_for=now,
+        started_at=now,
+        status=CronStatus.RUNNING,
+    )
+
+    response = CronJobTriggerResponse(
+        run_id=cron_run.id,
+        cron_id=cron_id,
+    )
+    return response, cron_job.entrypoint, dict(cron_job.payload)
+
+
+async def execute_cron_run(run_id: UUID, cron_id: UUID, entrypoint: CronEntrypoint, payload: dict[str, Any]) -> None:
+    """Execute a manually triggered cron job run. Delegates to shared execution logic."""
+    try:
+        await run_cron_spec(run_id=run_id, cron_id=cron_id, entrypoint=entrypoint, payload=payload)
+    except Exception:
+        LOGGER.exception("Manual cron run failed: run_id=%s cron_id=%s entrypoint=%s", run_id, cron_id, entrypoint)

@@ -91,7 +91,7 @@ All domain content lives in `docs.py` (single source of truth).
 | Knowledge | 9 | `create_source` (website/database), sources, documents, chunks |
 | QA | 20 | Datasets, entries, custom columns, CSV export/import, judges, evaluations |
 | Monitoring | 5 | Traces, charts, KPIs, credits |
-| Crons | 8 | Create, pause/resume, execution history |
+| Crons | 9 | Create, pause/resume, manual trigger, execution history |
 | OAuth | 3 | List, check status, revoke |
 | **Docs** | **1** | **`get_guide(domain)` — fallback for domain docs** |
 
@@ -111,7 +111,7 @@ SPECS = [
         method="get",
         path="/organizations/{org_id}/crons",
         scope="org",
-        return_annotation=list,
+        return_annotation=dict,
     ),
 ]
 
@@ -127,7 +127,7 @@ Custom tools (validation, multi-step, client-side logic) are still defined as `@
 
 | Guard | Description |
 |---|---|
-| RBAC | Variables/secrets require admin. Deletions require developer+. `create_agent`, cron writes (create/update/delete/pause/resume), OAuth tools, and `update_document_chunks` require developer+. `invite_org_member` checks admin/super_admin on the target org, not just the active org. |
+| RBAC | Variables/secrets require admin. Deletions require developer+. `create_agent`, cron writes (create/update/delete/pause/resume), OAuth tools, and `update_document_chunks` require developer+. `trigger_cron` requires member role or above. `invite_org_member` checks admin/super_admin on the target org, not just the active org. |
 | Component search | `search_components` rejects blank or whitespace-only queries. |
 | Release stage | Component catalog auto-filtered by org tier. Cannot be overridden by the AI. |
 | Agent name | `create_agent` rejects empty/whitespace names. |
