@@ -19,6 +19,7 @@ def _sync_batched(qdrant_service: QdrantService, rows: list[dict], collection_na
         )
     )
 
+
 TEST_COLLECTION_NAME = f"test_agentic_ci_collection_{uuid4()}"
 
 
