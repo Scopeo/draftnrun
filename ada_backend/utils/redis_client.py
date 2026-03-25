@@ -405,26 +405,72 @@ def push_run_task(
         return False
 
 
-def publish_run_event(run_id: UUID, event: Dict[str, Any]) -> bool:
+def push_qa_task(
+    session_id: UUID,
+    project_id: UUID,
+    dataset_id: UUID,
+    run_request_data: Dict[str, Any],
+) -> bool:
+    client = get_redis_client()
+    if not client:
+        LOGGER.error("Redis client unavailable. Cannot push QA task for session %s", session_id)
+        return False
+
+    try:
+        payload = {
+            "session_id": str(session_id),
+            "project_id": str(project_id),
+            "dataset_id": str(dataset_id),
+            "run_request": run_request_data,
+        }
+        json_payload = json.dumps(payload)
+        result = client.rpush(settings.REDIS_QA_QUEUE_NAME, json_payload)
+        if result:
+            LOGGER.info(
+                "Pushed QA task (session %s) to Redis queue %s (queue length: %s)",
+                session_id,
+                settings.REDIS_QA_QUEUE_NAME,
+                result,
+            )
+            return True
+        LOGGER.warning("Redis returned %s when pushing to queue %s", result, settings.REDIS_QA_QUEUE_NAME)
+        return False
+    except _RECONNECT_ERRORS as e:
+        LOGGER.error("Redis connection error pushing QA task %s to queue: %s", session_id, e)
+        reset_redis_client()
+        return False
+    except Exception as e:
+        LOGGER.error("Failed to push QA task %s to Redis queue: %s", session_id, e)
+        return False
+
+
+def publish_event(channel_prefix: str, resource_id: UUID, event: Dict[str, Any]) -> bool:
     """
-    Publish a run event to Redis Pub/Sub channel run:{run_id}.
-    Used by the worker to stream events to WebSocket subscribers.
-    Returns True if at least one subscriber received the message, False on error.
+    Publish an event to Redis Pub/Sub channel {channel_prefix}:{resource_id}.
+    Used by workers to stream events to WebSocket subscribers.
     """
     client = get_redis_client()
     if not client:
-        LOGGER.debug("Redis client unavailable. Cannot publish run event for %s", run_id)
+        LOGGER.debug("Redis client unavailable. Cannot publish event to %s:%s", channel_prefix, resource_id)
         return False
     try:
-        channel = f"run:{run_id}"
+        channel = f"{channel_prefix}:{resource_id}"
         message = json.dumps(event)
         count = client.publish(channel, message)
         LOGGER.debug("Published event to %s (%s subscribers)", channel, count)
         return True
     except _RECONNECT_ERRORS as e:
-        LOGGER.error("Redis connection error publishing run event for %s: %s", run_id, e)
+        LOGGER.error("Redis connection error publishing to %s:%s: %s", channel_prefix, resource_id, e)
         reset_redis_client()
         return False
     except Exception as e:
-        LOGGER.error("Failed to publish run event for %s: %s", run_id, e)
+        LOGGER.error("Failed to publish event to %s:%s: %s", channel_prefix, resource_id, e)
         return False
+
+
+def publish_run_event(run_id: UUID, event: Dict[str, Any]) -> bool:
+    return publish_event("run", run_id, event)
+
+
+def publish_qa_event(session_id: UUID, event: Dict[str, Any]) -> bool:
+    return publish_event("qa", session_id, event)

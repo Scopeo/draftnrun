@@ -3,14 +3,23 @@ import io
 import json
 import logging
 from collections import Counter
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import BinaryIO, Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import CallType
+from ada_backend.database.models import CallType, QASession, RunStatus
+from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.qa_evaluation_repository import delete_evaluations_for_input_ids
+from ada_backend.repositories.qa_session_repository import (
+    create_qa_session,
+    get_qa_session,
+    get_qa_sessions_by_project,
+    update_qa_session_status,
+)
 from ada_backend.repositories.quality_assurance_repository import (
     check_dataset_belongs_to_project,
     clear_version_outputs_for_input_ids,
@@ -66,6 +75,7 @@ from ada_backend.services.qa.qa_error import (
     QAPartialPositionError,
 )
 from ada_backend.services.qa.qa_metadata_service import create_qa_column_service
+from ada_backend.utils.redis_client import publish_qa_event
 
 LOGGER = logging.getLogger(__name__)
 
@@ -148,51 +158,117 @@ def get_version_output_ids_by_input_ids_and_graph_runner_service(
     )
 
 
-async def run_qa_service(
+@dataclass
+class QAEntry:
+    id: UUID
+    input: dict
+    groundtruth: str | None
+
+
+def _validate_env_binding(
+    session: Session,
+    project_id: UUID,
+    graph_runner_id: UUID,
+):
+    env_relationship = get_env_relationship_by_graph_runner_id(
+        session=session, graph_runner_id=graph_runner_id
+    )
+    if not env_relationship:
+        raise GraphNotBoundToProjectError(graph_runner_id)
+    if env_relationship.project_id != project_id:
+        raise GraphNotBoundToProjectError(
+            graph_runner_id,
+            bound_project_id=env_relationship.project_id,
+            expected_project_id=project_id,
+        )
+    return env_relationship
+
+
+def validate_qa_run_request(
     session: Session,
     project_id: UUID,
     dataset_id: UUID,
     run_request: QARunRequest,
-) -> QARunResponse:
-    """Run QA process on multiple inputs and store results in VersionOutput table.
+) -> None:
+    if not check_dataset_belongs_to_project(session, project_id, dataset_id):
+        raise QADatasetNotInProjectError(project_id, dataset_id)
 
-    Args:
-        session: SQLAlchemy session
-        project_id: ID of the project to run
-        dataset_id: ID of the dataset
-        run_request: Request containing graph_runner_id and either input_ids or run_all flag
+    if not run_request.run_all:
+        input_entries = get_inputs_groundtruths_by_ids(session, run_request.input_ids)
+        if not input_entries:
+            raise ValueError("No input entries found for the provided input_ids")
+        returned_ids = {entry.id for entry in input_entries}
+        missing_ids = set(run_request.input_ids) - returned_ids
+        if missing_ids:
+            raise ValueError(f"Input IDs not found: {sorted(missing_ids)}")
+        for entry in input_entries:
+            if entry.dataset_id != dataset_id:
+                raise ValueError(f"Input {entry.id} does not belong to dataset {dataset_id}")
 
-    Returns:
-        Results of the QA run with summary
-    """
-    try:
-        if run_request.run_all:
-            number_of_dataset_inputs = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
-            input_entries = get_inputs_groundtruths_by_dataset(
-                session, dataset_id, skip=0, limit=number_of_dataset_inputs
-            )
-            if not input_entries:
-                raise ValueError(f"No input entries found in dataset {dataset_id}")
-        else:
-            input_entries = get_inputs_groundtruths_by_ids(session, run_request.input_ids)
-            if not input_entries:
-                raise ValueError("No input entries found for the provided input_ids")
+    _validate_env_binding(session, project_id, run_request.graph_runner_id)
 
-            for entry in input_entries:
-                if entry.dataset_id != dataset_id:
-                    raise ValueError(f"Input {entry.id} does not belong to dataset {dataset_id}")
 
-        results = []
-        successful_runs = 0
-        failed_runs = 0
+def resolve_qa_entries_and_environment(
+    session: Session,
+    project_id: UUID,
+    dataset_id: UUID,
+    run_request: QARunRequest,
+) -> tuple[list[QAEntry], str]:
+    if not check_dataset_belongs_to_project(session, project_id, dataset_id):
+        raise QADatasetNotInProjectError(project_id, dataset_id)
 
-        env_relationship = get_env_relationship_by_graph_runner_id(
-            session=session, graph_runner_id=run_request.graph_runner_id
+    if run_request.run_all:
+        number_of_dataset_inputs = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
+        input_entries = get_inputs_groundtruths_by_dataset(
+            session, dataset_id, skip=0, limit=number_of_dataset_inputs
         )
-        if not env_relationship:
-            raise GraphNotBoundToProjectError(run_request.graph_runner_id)
-        environment = env_relationship.environment
-        for input_entry in input_entries:
+        if not input_entries:
+            raise ValueError(f"No input entries found in dataset {dataset_id}")
+    else:
+        input_entries = get_inputs_groundtruths_by_ids(session, run_request.input_ids)
+        if not input_entries:
+            raise ValueError("No input entries found for the provided input_ids")
+
+        returned_ids = {entry.id for entry in input_entries}
+        missing_ids = set(run_request.input_ids) - returned_ids
+        if missing_ids:
+            raise ValueError(f"Input IDs not found: {sorted(missing_ids)}")
+
+        for entry in input_entries:
+            if entry.dataset_id != dataset_id:
+                raise ValueError(f"Input {entry.id} does not belong to dataset {dataset_id}")
+
+    env_relationship = _validate_env_binding(session, project_id, run_request.graph_runner_id)
+
+    qa_entries = [
+        QAEntry(id=entry.id, input=entry.input, groundtruth=entry.groundtruth)
+        for entry in input_entries
+    ]
+    return qa_entries, env_relationship.environment
+
+
+async def _execute_qa_entries(
+    project_id: UUID,
+    run_request: QARunRequest,
+    input_entries,
+    environment,
+    session_id: UUID | None = None,
+) -> QARunResponse:
+    results = []
+    successful_runs = 0
+    failed_runs = 0
+    total = len(input_entries)
+
+    with get_db_session() as db_session:
+        for index, input_entry in enumerate(input_entries):
+            if session_id:
+                publish_qa_event(session_id, {
+                    "type": "qa.entry.started",
+                    "input_id": str(input_entry.id),
+                    "index": index,
+                    "total": total,
+                })
+
             try:
                 chat_response = await run_agent(
                     project_id=project_id,
@@ -207,11 +283,13 @@ async def run_qa_service(
                     output_content = f"Error: {chat_response.error}"
 
                 upsert_version_output(
-                    session=session,
+                    session=db_session,
                     input_id=input_entry.id,
                     output=output_content,
                     graph_runner_id=run_request.graph_runner_id,
+                    qa_session_id=session_id,
                 )
+                db_session.commit()
 
                 result = QARunResult(
                     input_id=input_entry.id,
@@ -222,19 +300,21 @@ async def run_qa_service(
                     success=True,
                     error=None,
                 )
-
                 successful_runs += 1
 
             except Exception as e:
+                db_session.rollback()
                 LOGGER.error(f"Error processing input {input_entry.id}: {str(e)}")
 
                 error_output = f"Error: {str(e)}"
                 upsert_version_output(
-                    session=session,
+                    session=db_session,
                     input_id=input_entry.id,
                     output=error_output,
                     graph_runner_id=run_request.graph_runner_id,
+                    qa_session_id=session_id,
                 )
+                db_session.commit()
 
                 result = QARunResult(
                     input_id=input_entry.id,
@@ -245,39 +325,136 @@ async def run_qa_service(
                     success=False,
                     error=str(e),
                 )
-
                 failed_runs += 1
 
             results.append(result)
 
-        total_processed = len(results)
-        success_rate = (successful_runs / total_processed * 100) if total_processed > 0 else 0.0
+            if session_id:
+                publish_qa_event(session_id, {
+                    "type": "qa.entry.completed",
+                    "input_id": str(input_entry.id),
+                    "output": result.output,
+                    "success": result.success,
+                    "error": result.error,
+                })
 
-        summary = QARunSummary(
-            total=total_processed,
-            passed=successful_runs,
-            failed=failed_runs,
-            success_rate=success_rate,
-        )
+    total_processed = len(results)
+    success_rate = (successful_runs / total_processed * 100) if total_processed > 0 else 0.0
 
-        run_mode = "all entries" if run_request.run_all else f"{len(run_request.input_ids)} selected entries"
-        LOGGER.info(
-            f"QA run completed for project {project_id}, "
-            f"dataset {dataset_id}, graph_runner_id {run_request.graph_runner_id}, mode: {run_mode}"
-        )
-        LOGGER.info(
-            f"Total processed: {total_processed}, Successful: {successful_runs}, "
-            f"Failed: {failed_runs}, Success Rate: {success_rate:.2f}%"
-        )
+    summary = QARunSummary(
+        total=total_processed,
+        passed=successful_runs,
+        failed=failed_runs,
+        success_rate=success_rate,
+    )
 
-        return QARunResponse(
-            results=results,
-            summary=summary,
-        )
+    run_mode = "all entries" if run_request.run_all else f"{len(run_request.input_ids)} selected entries"
+    LOGGER.info(
+        f"QA run completed for project {project_id}, "
+        f"dataset {run_request.graph_runner_id}, mode: {run_mode}"
+    )
 
+    return QARunResponse(results=results, summary=summary)
+
+
+async def run_qa_service(
+    session: Session,
+    project_id: UUID,
+    dataset_id: UUID,
+    run_request: QARunRequest,
+) -> QARunResponse:
+    try:
+        input_entries, environment = resolve_qa_entries_and_environment(session, project_id, dataset_id, run_request)
+        return await _execute_qa_entries(project_id, run_request, input_entries, environment)
+    except (ValueError, GraphNotBoundToProjectError, QADatasetNotInProjectError):
+        raise
     except Exception as e:
         LOGGER.error(f"Error in run_qa_service: {str(e)}")
-        raise ValueError(f"Failed to run QA process: {str(e)}") from e
+        raise
+
+
+async def run_qa_background(
+    session_id: UUID,
+    project_id: UUID,
+    dataset_id: UUID,
+    run_request: QARunRequest,
+) -> None:
+    try:
+        with get_db_session() as session:
+            input_entries, environment = resolve_qa_entries_and_environment(
+                session, project_id, dataset_id, run_request,
+            )
+            update_qa_session_status(
+                session, session_id,
+                status=RunStatus.RUNNING,
+                started_at=datetime.now(timezone.utc),
+            )
+        response = await _execute_qa_entries(
+            project_id, run_request, input_entries, environment, session_id=session_id,
+        )
+
+        with get_db_session() as session:
+            update_qa_session_status(
+                session, session_id,
+                status=RunStatus.COMPLETED,
+                finished_at=datetime.now(timezone.utc),
+                total=response.summary.total,
+                passed=response.summary.passed,
+                failed=response.summary.failed,
+            )
+
+        publish_qa_event(session_id, {
+            "type": "qa.completed",
+            "summary": response.summary.model_dump(),
+        })
+
+    except Exception as e:
+        LOGGER.error(f"Background QA run failed for session {session_id}: {str(e)}", exc_info=True)
+        try:
+            with get_db_session() as session:
+                update_qa_session_status(
+                    session, session_id,
+                    status=RunStatus.FAILED,
+                    finished_at=datetime.now(timezone.utc),
+                    error={"message": str(e), "type": type(e).__name__},
+                )
+        except Exception as status_err:
+            LOGGER.error(f"Failed to update QA session status to FAILED for {session_id}: {status_err}")
+        publish_qa_event(session_id, {
+            "type": "qa.failed",
+            "error": {"message": str(e), "type": type(e).__name__},
+        })
+
+
+def create_qa_session_service(
+    session: Session,
+    *,
+    project_id: UUID,
+    dataset_id: UUID,
+    graph_runner_id: UUID,
+) -> QASession:
+    return create_qa_session(
+        session, project_id=project_id, dataset_id=dataset_id, graph_runner_id=graph_runner_id,
+    )
+
+
+def list_qa_sessions_service(
+    session: Session,
+    project_id: UUID,
+    dataset_id: UUID | None = None,
+) -> list[QASession]:
+    return get_qa_sessions_by_project(session, project_id, dataset_id)
+
+
+def get_qa_session_service(
+    session: Session,
+    qa_session_id: UUID,
+    project_id: UUID,
+) -> QASession:
+    qa_session = get_qa_session(session, qa_session_id)
+    if not qa_session or qa_session.project_id != project_id:
+        raise ValueError(f"QA session {qa_session_id} not found in project {project_id}")
+    return qa_session
 
 
 def create_inputs_groundtruths_service(

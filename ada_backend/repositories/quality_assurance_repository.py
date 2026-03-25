@@ -169,17 +169,30 @@ def upsert_version_output(
     input_id: UUID,
     output: str,
     graph_runner_id: UUID,
+    qa_session_id: Optional[UUID] = None,
 ) -> VersionOutput:
-    """Create or update a version output entry for the given input and graph_runner_id.
+    """Create or update a version output entry.
 
-    If a `VersionOutput` for the `(input_id, graph_runner_id)` pair exists, update its `output`.
-    Otherwise, create a new one.
+    When qa_session_id is given the lookup key is (input_id, qa_session_id) so
+    each QA session stores its own isolated row.  When qa_session_id is None
+    (sync runs) the legacy (input_id, graph_runner_id) key is used.
     """
-    existing: Optional[VersionOutput] = (
-        session.query(VersionOutput)
-        .filter(VersionOutput.input_id == input_id, VersionOutput.graph_runner_id == graph_runner_id)
-        .first()
-    )
+    if qa_session_id is not None:
+        existing: Optional[VersionOutput] = (
+            session.query(VersionOutput)
+            .filter(VersionOutput.input_id == input_id, VersionOutput.qa_session_id == qa_session_id)
+            .first()
+        )
+    else:
+        existing = (
+            session.query(VersionOutput)
+            .filter(
+                VersionOutput.input_id == input_id,
+                VersionOutput.graph_runner_id == graph_runner_id,
+                VersionOutput.qa_session_id.is_(None),
+            )
+            .first()
+        )
 
     if existing:
         existing.output = output
@@ -192,6 +205,7 @@ def upsert_version_output(
         input_id=input_id,
         output=output,
         graph_runner_id=graph_runner_id,
+        qa_session_id=qa_session_id,
     )
 
     session.add(version_output)
@@ -225,6 +239,17 @@ def get_outputs_by_graph_runner(
     )
 
     return results
+
+
+def get_outputs_by_session(
+    session: Session,
+    qa_session_id: UUID,
+) -> List[Tuple[UUID, str]]:
+    return (
+        session.query(VersionOutput.input_id, VersionOutput.output)
+        .filter(VersionOutput.qa_session_id == qa_session_id)
+        .all()
+    )
 
 
 def get_version_output_ids_by_input_ids_and_graph_runner(

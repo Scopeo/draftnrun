@@ -1848,7 +1848,18 @@ class QADatasetMetadata(Base):
 class VersionOutput(Base):
     __tablename__ = "version_output"
     __table_args__ = (
-        sa.UniqueConstraint("input_id", "graph_runner_id", name="uq_version_output_input_graph_runner"),
+        sa.Index(
+            "uq_version_output_input_session",
+            "input_id", "qa_session_id",
+            unique=True,
+            postgresql_where=sa.text("qa_session_id IS NOT NULL"),
+        ),
+        sa.Index(
+            "uq_version_output_input_graph_runner_no_session",
+            "input_id", "graph_runner_id",
+            unique=True,
+            postgresql_where=sa.text("qa_session_id IS NULL"),
+        ),
         {"schema": "quality_assurance"},
     )
 
@@ -1866,12 +1877,18 @@ class VersionOutput(Base):
         nullable=False,
         index=True,
     )
+    qa_session_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.qa_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # Relationships
     input_groundtruth = relationship("InputGroundtruth", back_populates="version_outputs")
     graph_runner = relationship("GraphRunner")
+    qa_session = relationship("QASession")
     evaluations = relationship("JudgeEvaluation", back_populates="version_output", cascade="all, delete-orphan")
 
     def __str__(self):
@@ -1936,6 +1953,54 @@ class JudgeEvaluation(Base):
 
     def __str__(self):
         return f"JudgeEvaluation(judge_id={self.judge_id}, version_output_id={self.version_output_id})"
+
+
+class QASession(Base):
+    __tablename__ = "qa_sessions"
+    __table_args__ = (
+        Index("ix_qa_sessions_project_created", "project_id", sa.text("created_at DESC")),
+        Index("ix_qa_sessions_project_dataset_created", "project_id", "dataset_id", sa.text("created_at DESC")),
+        {"schema": "quality_assurance"},
+    )
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    dataset_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.dataset_project.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    graph_runner_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("graph_runners.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status = mapped_column(
+        SQLAlchemyEnum(
+            RunStatus,
+            name="run_status",
+            values_callable=lambda x: [e.value for e in x],
+            native_enum=True,
+            create_type=False,
+        ),
+        nullable=False,
+        default=RunStatus.PENDING,
+    )
+    total = mapped_column(Integer, nullable=True)
+    passed = mapped_column(Integer, nullable=True)
+    failed = mapped_column(Integer, nullable=True)
+    error = mapped_column(JSONB, nullable=True)
+    started_at = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    project = relationship("Project")
+    dataset = relationship("DatasetProject")
+
+    def __str__(self):
+        return f"QASession(id={self.id}, project_id={self.project_id}, status={self.status})"
 
 
 class LLMModel(Base):

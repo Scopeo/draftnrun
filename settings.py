@@ -134,6 +134,7 @@ class BaseConfig(BaseSettings):
     REDIS_INGESTION_STREAM: str = "ada_ingestion_stream"
     REDIS_WEBHOOK_STREAM: str = "ada_webhook_stream"
     REDIS_RUNS_QUEUE_NAME: str = "ada_runs_queue"
+    REDIS_QA_QUEUE_NAME: str = "ada_qa_queue"
     REDIS_WEBHOOK_DEDUP_TTL: int = 86400  # 24 hours in seconds
     REDIS_CONSUMER_GROUP: str = "ada_workers"
     # Seconds the lifespan shutdown will wait for the in-flight run worker to finish

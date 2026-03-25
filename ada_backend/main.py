@@ -1,4 +1,5 @@
 import logging
+import threading
 from contextlib import asynccontextmanager
 
 import sentry_sdk
@@ -36,6 +37,7 @@ from ada_backend.routers.oauth_router import router as oauth_router
 from ada_backend.routers.organization_router import router as org_router
 from ada_backend.routers.project_router import router as project_router
 from ada_backend.routers.qa_evaluation_router import router as qa_evaluation_router
+from ada_backend.routers.qa_stream_router import router as qa_stream_router
 from ada_backend.routers.quality_assurance_router import router as quality_assurance_router
 from ada_backend.routers.run_router import router as run_router
 from ada_backend.routers.run_stream_router import router as run_stream_router
@@ -50,6 +52,7 @@ from ada_backend.routers.webhooks.webhook_trigger_router import router as webhoo
 from ada_backend.routers.widget_router import router as widget_router
 from ada_backend.services.rate_limit_service import limiter
 from ada_backend.utils.redis_client import xgroup_create_if_not_exists
+from ada_backend.workers.qa_queue_worker import _request_qa_drain, start_qa_queue_worker_thread
 from ada_backend.workers.run_queue_worker import _request_drain, start_run_queue_worker_thread
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
@@ -74,6 +77,20 @@ if settings.SENTRY_DSN:
     )
 
 
+def _join_worker(thread: threading.Thread | None, worker_name: str, item_name: str, timeout: float) -> None:
+    if thread is None:
+        return
+    LOGGER.info("Waiting up to %ss for %s worker to finish current job...", timeout, worker_name)
+    thread.join(timeout=timeout)
+    if thread.is_alive():
+        LOGGER.warning(
+            "%s worker did not finish within %ss — in-flight %s will be recovered by the next pod on restart.",
+            worker_name.capitalize(),
+            timeout,
+            item_name,
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler.
@@ -85,23 +102,18 @@ async def lifespan(app: FastAPI):
     xgroup_create_if_not_exists(settings.REDIS_INGESTION_STREAM, settings.REDIS_CONSUMER_GROUP)
     xgroup_create_if_not_exists(settings.REDIS_WEBHOOK_STREAM, settings.REDIS_CONSUMER_GROUP)
 
-    # Start run queue worker thread and set up graceful shutdown
+    # Start queue worker threads and set up graceful shutdown
     worker_thread = start_run_queue_worker_thread()
+    qa_worker_thread = start_qa_queue_worker_thread()
 
     try:
         yield
     finally:
         _request_drain()
-        if worker_thread is not None:
-            timeout = settings.WORKER_SHUTDOWN_TIMEOUT_SECONDS
-            LOGGER.info("Waiting up to %ss for run queue worker to finish current job...", timeout)
-            worker_thread.join(timeout=timeout)
-            if worker_thread.is_alive():
-                LOGGER.warning(
-                    "Run queue worker did not finish within %ss — "
-                    "in-flight run will be recovered by the next pod on restart.",
-                    timeout,
-                )
+        _request_qa_drain()
+        timeout = settings.WORKER_SHUTDOWN_TIMEOUT_SECONDS
+        _join_worker(worker_thread, "run queue", "run", timeout)
+        _join_worker(qa_worker_thread, "QA queue", "QA session", timeout)
 
 
 app = FastAPI(
@@ -241,6 +253,7 @@ app.include_router(component_version_router)
 app.include_router(categories_router)
 app.include_router(graph_router)
 app.include_router(quality_assurance_router)
+app.include_router(qa_stream_router)
 app.include_router(llm_judges_router)
 app.include_router(qa_evaluation_router)
 app.include_router(graphql_router, prefix="/graphql")

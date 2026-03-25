@@ -7,7 +7,9 @@ from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Upload
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from ada_backend.database.models import RunStatus
 from ada_backend.database.setup_db import get_db
+from ada_backend.repositories.qa_session_repository import update_qa_session_status
 from ada_backend.routers.auth_router import UserRights, user_has_access_to_project_dependency
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.dataset_schema import (
@@ -25,6 +27,8 @@ from ada_backend.schemas.input_groundtruth_schema import (
     PaginatedInputGroundtruthResponse,
     QARunRequest,
     QARunResponse,
+    QASessionAcceptedSchema,
+    QASessionResponseSchema,
 )
 from ada_backend.schemas.qa_metadata_schema import QAColumnResponse
 from ada_backend.services.errors import GraphNotBoundToProjectError
@@ -49,19 +53,24 @@ from ada_backend.services.qa.qa_metadata_service import (
 from ada_backend.services.qa.quality_assurance_service import (
     create_datasets_service,
     create_inputs_groundtruths_service,
+    create_qa_session_service,
     delete_datasets_service,
     delete_inputs_groundtruths_service,
     export_qa_data_to_csv_service,
     get_datasets_by_project_service,
     get_inputs_groundtruths_with_version_outputs_service,
     get_outputs_by_graph_runner_service,
+    get_qa_session_service,
     get_version_output_ids_by_input_ids_and_graph_runner_service,
     import_qa_data_from_csv_service,
+    list_qa_sessions_service,
     run_qa_service,
     save_conversation_to_groundtruth_service,
     update_dataset_service,
     update_inputs_groundtruths_service,
+    validate_qa_run_request,
 )
+from ada_backend.utils.redis_client import push_qa_task
 
 router = APIRouter(tags=["Quality Assurance"])
 LOGGER = logging.getLogger(__name__)
@@ -612,6 +621,8 @@ async def run_qa_endpoint(
 
     try:
         return await run_qa_service(session, project_id, dataset_id, run_request)
+    except QADatasetNotInProjectError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except GraphNotBoundToProjectError as e:
         LOGGER.error(
             f"Graph runner {run_request.graph_runner_id} is not bound to project {project_id} when running QA",
@@ -628,6 +639,102 @@ async def run_qa_endpoint(
             f"Failed to run QA process on dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post(
+    "/projects/{project_id}/qa/datasets/{dataset_id}/run/async",
+    response_model=QASessionAcceptedSchema,
+    status_code=202,
+    summary="Run QA Process Async (WebSocket streaming)",
+    tags=["Quality Assurance"],
+)
+async def run_qa_async_endpoint(
+    project_id: UUID,
+    dataset_id: UUID,
+    run_request: QARunRequest,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> QASessionAcceptedSchema:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        validate_qa_run_request(session, project_id, dataset_id, run_request)
+    except QADatasetNotInProjectError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphNotBoundToProjectError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    qa_session = create_qa_session_service(
+        session,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        graph_runner_id=run_request.graph_runner_id,
+    )
+    if not push_qa_task(
+        session_id=qa_session.id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        run_request_data=run_request.model_dump(mode="json"),
+    ):
+        update_qa_session_status(
+            session, qa_session.id,
+            status=RunStatus.FAILED,
+            error={"message": "Failed to enqueue QA run; Redis unavailable.", "type": "EnqueueError"},
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="QA session created but could not be enqueued. Try again.",
+        )
+    return QASessionAcceptedSchema(session_id=qa_session.id)
+
+
+@router.get(
+    "/projects/{project_id}/qa/sessions",
+    response_model=List[QASessionResponseSchema],
+    summary="List QA Sessions",
+    tags=["Quality Assurance"],
+)
+def list_qa_sessions_endpoint(
+    project_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+    dataset_id: Optional[UUID] = Query(None, description="Filter by dataset"),
+) -> List[QASessionResponseSchema]:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    return list_qa_sessions_service(session, project_id, dataset_id)
+
+
+@router.get(
+    "/projects/{project_id}/qa/sessions/{qa_session_id}",
+    response_model=QASessionResponseSchema,
+    summary="Get QA Session",
+    tags=["Quality Assurance"],
+)
+def get_qa_session_endpoint(
+    project_id: UUID,
+    qa_session_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> QASessionResponseSchema:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        return get_qa_session_service(session, qa_session_id, project_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="QA session not found")
 
 
 @router.post(
