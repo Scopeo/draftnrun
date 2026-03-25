@@ -119,7 +119,7 @@ class SQLTool(Component):
         completion_service: CompletionService,
         db_service: DBService,
         component_attributes: ComponentAttributes,
-        include_tables: Optional[list[str]] = None,
+        include_tables: Optional[list[str] | str] = None,
         additional_db_description: Optional[str] = None,
         tool_description: Optional[ToolDescription] = DEFAULT_SQL_TOOL_DESCRIPTION,
         text_to_sql_prompt: str = TEXT_TO_SQL_PROMPT,
@@ -132,7 +132,7 @@ class SQLTool(Component):
             component_attributes=component_attributes,
         )
         self._db_service = db_service
-        self._include_tables = include_tables
+        self._include_tables = self._parse_include_tables(include_tables)
         self._additional_db_description = additional_db_description
         self._completion_service = completion_service
         self._text_to_sql_prompt = text_to_sql_prompt
@@ -140,13 +140,20 @@ class SQLTool(Component):
         self._dialect = db_service.engine.dialect.name
         self.synthesize_sql_prompt = synthesize_sql_prompt
 
+    @staticmethod
+    def _parse_include_tables(value: Optional[list[str] | str]) -> Optional[list[str]]:
+        if value is None or isinstance(value, list):
+            return value or None
+        tables = [t.strip() for t in value.replace(",", " ").split() if t.strip()]
+        return tables or None
+
     async def _run_without_io_trace(
         self,
         inputs: SQLToolInputs,
         ctx: Optional[dict] = None,
     ) -> SQLToolOutputs:
         query_str = inputs.natural_language_query
-        schema = self._db_service.get_db_description(self._include_tables)
+        schema = self._db_service.get_db_description(table_names=self._include_tables)
         if self._additional_db_description:
             schema += self._additional_db_description
         input_prompt = self._text_to_sql_prompt.format(query_str=query_str, schema=schema, dialect=self._dialect)

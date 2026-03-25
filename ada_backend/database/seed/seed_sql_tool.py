@@ -11,7 +11,11 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
-from ada_backend.database.models import ParameterType
+from ada_backend.database.models import (
+    ParameterType,
+    UIComponent,
+    UIComponentProperties,
+)
 from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
@@ -51,7 +55,7 @@ def seed_sql_tool_components(session: Session):
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.INTERNAL,
         description="SQL Tool for querying databases",
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_sql_tool_description"],
     )
     run_sql_query_tool_version = db.ComponentVersion(
         id=COMPONENT_VERSION_UUIDS["run_sql_query_tool"],
@@ -94,13 +98,19 @@ def seed_sql_tool_components(session: Session):
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[
-            # SQL Tool
             db.ComponentParameterDefinition(
                 id=UUID("1e15c7d2-9f86-4428-8722-b39b8ddafac8"),
                 component_version_id=sql_tool_version.id,
-                name="db_service",
-                type=ParameterType.COMPONENT,
+                name="engine_url",
+                type=ParameterType.STRING,
                 nullable=False,
+                display_order=0,
+                is_advanced=False,
+                ui_component=UIComponent.TEXTFIELD,
+                ui_component_properties=UIComponentProperties(
+                    label="Database Engine URL",
+                    placeholder="e.g., postgresql://user:password@localhost:5432/database",
+                ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             db.ComponentParameterDefinition(
                 id=UUID("1299b4db-4cc9-4a02-b4a0-16c2802281ee"),
@@ -108,6 +118,13 @@ def seed_sql_tool_components(session: Session):
                 name="include_tables",
                 type=ParameterType.STRING,
                 nullable=True,
+                display_order=2,
+                is_advanced=True,
+                ui_component=UIComponent.TEXTFIELD,
+                ui_component_properties=UIComponentProperties(
+                    label="Include Tables",
+                    placeholder="Enter the tables to include in the query",
+                ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             db.ComponentParameterDefinition(
                 id=UUID("4f2e918f-842a-4f32-b378-8b08c9cb9da9"),
@@ -115,6 +132,13 @@ def seed_sql_tool_components(session: Session):
                 name="additional_db_description",
                 type=ParameterType.STRING,
                 nullable=True,
+                display_order=3,
+                is_advanced=True,
+                ui_component=UIComponent.TEXTAREA,
+                ui_component_properties=UIComponentProperties(
+                    label="Additional DB Description",
+                    placeholder="Enter additional database description here",
+                ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             db.ComponentParameterDefinition(
                 id=UUID("4ffb10e0-b5cb-487e-970e-ef8decbf77da"),
@@ -122,6 +146,16 @@ def seed_sql_tool_components(session: Session):
                 name="synthesize",
                 type=ParameterType.BOOLEAN,
                 default="False",
+                display_order=4,
+                is_advanced=True,
+                ui_component=UIComponent.CHECKBOX,
+                ui_component_properties=UIComponentProperties(
+                    label="Synthesize",
+                    placeholder=(
+                        "When enabled, uses the LLM to generate a natural language answer"
+                        " from the raw SQL results instead of returning the raw output."
+                    ),
+                ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             *build_completion_service_config_definitions(
                 component_version_id=sql_tool_version.id,
