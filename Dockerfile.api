@@ -70,10 +70,10 @@ EXPOSE 8000
 
 # Gunicorn with Uvicorn workers
 # - 1 worker per pod (scaling is done via k8s replicas)
-# - max-requests recycles worker to prevent memory leaks
+# - no max-requests: with 1 worker the pod goes dark during recycle (~20s),
+#   causing health probe failures. Let k8s memory limits + OOMKill handle leaks.
 # - graceful-timeout matches terminationGracePeriodSeconds
 CMD ["gunicorn", "-w", "1", "-k", "uvicorn.workers.UvicornWorker", \
      "ada_backend.main:app", "--bind", "0.0.0.0:8000", \
      "--timeout", "1800", "--graceful-timeout", "1800", \
-     "--max-requests", "5000", "--max-requests-jitter", "500", \
      "--forwarded-allow-ips", "*"]
