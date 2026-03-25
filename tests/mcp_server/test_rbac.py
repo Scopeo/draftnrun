@@ -44,3 +44,7 @@ class TestCronWriteRoles:
     def test_cron_read_specs_remain_org_scoped(self, tool_name):
         spec = next(s for s in crons.SPECS if s.name == tool_name)
         assert spec.scope == "org"
+
+    def test_trigger_cron_is_org_scoped_for_member_plus(self):
+        spec = next(s for s in crons.SPECS if s.name == "trigger_cron")
+        assert spec.scope == "org"

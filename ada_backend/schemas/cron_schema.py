@@ -94,3 +94,11 @@ class CronJobPauseResponse(BaseModel):
     id: UUID
     is_enabled: bool
     message: str
+
+
+class CronJobTriggerResponse(BaseModel):
+    """Schema for manually triggering a cron job."""
+
+    run_id: UUID
+    cron_id: UUID
+    message: str = "Cron job triggered successfully. Execution is running in the background."

@@ -2,7 +2,7 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
@@ -17,6 +17,7 @@ from ada_backend.schemas.cron_schema import (
     CronJobListResponse,
     CronJobPauseResponse,
     CronJobResponse,
+    CronJobTriggerResponse,
     CronJobUpdate,
     CronJobWithRuns,
     CronRunListResponse,
@@ -29,11 +30,13 @@ from ada_backend.services.cron.errors import (
 from ada_backend.services.cron.service import (
     create_cron_job,
     delete_cron_job_service,
+    execute_cron_run,
     get_cron_job_detail,
     get_cron_jobs_for_organization,
     get_cron_runs,
     pause_cron_job,
     resume_cron_job,
+    trigger_cron_job_now,
     update_cron_job_service,
 )
 
@@ -276,5 +279,43 @@ def get_cron_job_runs(
     except Exception as e:
         LOGGER.error(
             f"Failed to fetch runs for cron job {cron_id} for organization {organization_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post("/{organization_id}/crons/{cron_id}/trigger", response_model=CronJobTriggerResponse, status_code=202)
+def trigger_organization_cron_job(
+    organization_id: UUID,
+    cron_id: UUID,
+    background_tasks: BackgroundTasks,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    """
+    Manually trigger a cron job to run immediately.
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        result, entrypoint, payload = trigger_cron_job_now(session, cron_id, organization_id=organization_id)
+        background_tasks.add_task(
+            execute_cron_run,
+            run_id=result.run_id,
+            cron_id=cron_id,
+            entrypoint=entrypoint,
+            payload=payload,
+        )
+        return result
+    except CronJobNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except CronJobAccessDenied as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to trigger cron job {cron_id} for organization {organization_id}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
