@@ -137,6 +137,7 @@ async def ingest_google_drive_source(
     source_id: Optional[UUID] = None,
     document_reading_mode: DocumentReadingMode = DocumentReadingMode.STANDARD,
     llamaparse_api_key: Optional[str] = None,
+    mistral_ocr_api_key: Optional[str] = None,
 ) -> None:
     LOGGER.info(
         f"[INGESTION_SOURCE] Starting GOOGLE DRIVE ingestion - Source: '{source_name}', "
@@ -164,6 +165,7 @@ async def ingest_google_drive_source(
         source_id=source_id,
         document_reading_mode=document_reading_mode,
         llamaparse_api_key=llamaparse_api_key,
+        mistral_ocr_api_key=mistral_ocr_api_key,
     )
 
 
@@ -179,6 +181,7 @@ async def ingest_local_folder_source(
     source_id: Optional[UUID] = None,
     document_reading_mode: DocumentReadingMode = DocumentReadingMode.STANDARD,
     llamaparse_api_key: Optional[str] = None,
+    mistral_ocr_api_key: Optional[str] = None,
 ) -> None:
     LOGGER.info(
         f"[INGESTION_SOURCE] Starting LOCAL ingestion - Source: '{source_name}', "
@@ -204,6 +207,7 @@ async def ingest_local_folder_source(
         source_id=source_id,
         document_reading_mode=document_reading_mode,
         llamaparse_api_key=llamaparse_api_key,
+        mistral_ocr_api_key=mistral_ocr_api_key,
     )
     folder_manager.clean_bucket()
 
@@ -221,6 +225,7 @@ async def _ingest_folder_source(
     source_id: Optional[UUID] = None,
     document_reading_mode: DocumentReadingMode = DocumentReadingMode.STANDARD,
     llamaparse_api_key: Optional[str] = None,
+    mistral_ocr_api_key: Optional[str] = None,
 ) -> None:
     if source_id is None:
         source_id = uuid.uuid4()
@@ -309,6 +314,7 @@ async def _ingest_folder_source(
             document_reading_mode=document_reading_mode,
             overlapping_size=chunk_overlap,
             llamaparse_api_key=llamaparse_api_key,
+            mistral_ocr_api_key=mistral_ocr_api_key,
         )
     except Exception as e:
         error_msg = f"Failed to chunk documents: {str(e)}, PDF reading mode: {document_reading_mode}"

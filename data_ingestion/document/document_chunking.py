@@ -17,6 +17,7 @@ from data_ingestion.document.folder_management.folder_management import (
 )
 from data_ingestion.document.llamaparser_ingestion import _parse_document_with_llamaparse
 from data_ingestion.document.markdown_ingestion import get_chunks_from_markdown
+from data_ingestion.document.mistral_ocr_ingestion import get_chunks_from_document_with_mistral_ocr
 from data_ingestion.document.pdf_ingestion import _parse_pdf_without_llm, create_chunks_from_pdf_document
 from data_ingestion.document.pdf_vision_ingestion import create_chunks_from_document
 from data_ingestion.utils import DocumentReadingMode
@@ -35,6 +36,7 @@ def document_chunking_mapping(
     chunk_size: Optional[int] = 1024,
     document_reading_mode: DocumentReadingMode = DocumentReadingMode.STANDARD,
     llamaparse_api_key: Optional[str] = None,
+    mistral_ocr_api_key: Optional[str] = None,
 ) -> dict[FileDocumentType, FileProcessor]:
     excel_processor = None
     if document_reading_mode == DocumentReadingMode.LLM_VISION:
@@ -81,6 +83,20 @@ def document_chunking_mapping(
             llamaparse_api_key=llamaparse_api_key,
         )
         LOGGER.info("Using LlamaParse for PDF and DOCX processing")
+
+    elif document_reading_mode == DocumentReadingMode.MISTRAL_OCR:
+        if not mistral_ocr_api_key:
+            raise ValueError("mistral_ocr_api_key is required for MISTRAL_OCR mode")
+        mistral_ocr_processor = partial(
+            get_chunks_from_document_with_mistral_ocr,
+            get_file_content=get_file_content_func,
+            mistral_ocr_api_key=mistral_ocr_api_key,
+            chunk_size=chunk_size,
+            chunk_overlap=overlapping_size,
+        )
+        pdf_processor = mistral_ocr_processor
+        docx_processor = mistral_ocr_processor
+        LOGGER.info("Using Mistral OCR for PDF and DOCX processing")
 
     else:
         pdf_processor = partial(
