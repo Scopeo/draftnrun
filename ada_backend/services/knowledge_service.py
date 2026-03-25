@@ -46,7 +46,7 @@ from ada_backend.services.knowledge.errors import (
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.trace.trace_context import get_trace_manager
-from ingestion_script.utils import CHUNK_ID_COLUMN_NAME, SOURCE_ID_COLUMN_NAME, TIMESTAMP_COLUMN_NAME
+from ingestion_script.utils import CHUNK_ID_COLUMN_NAME, SOURCE_ID_COLUMN_NAME
 
 LOGGER = logging.getLogger(__name__)
 
@@ -291,16 +291,14 @@ async def update_document_chunks_service(
     )
 
     try:
-        rows_by_chunk_id = {row[CHUNK_ID_COLUMN_NAME]: row for row in chunks_dict}
-        incoming_ids_with_timestamp = {
-            row[CHUNK_ID_COLUMN_NAME]: row.get(TIMESTAMP_COLUMN_NAME) for row in chunks_dict
-        }
-        await qdrant_service.sync_batched_with_collection_async(
-            incoming_ids_with_timestamp=incoming_ids_with_timestamp,
-            fetch_rows=lambda ids: [rows_by_chunk_id[chunk_id] for chunk_id in ids if chunk_id in rows_by_chunk_id],
+        chunk_ids = [row[CHUNK_ID_COLUMN_NAME] for row in chunks_dict]
+        schema = qdrant_service._get_schema(source.qdrant_collection_name)
+        await qdrant_service.delete_chunks_async(
+            point_ids=chunk_ids,
+            id_field=schema.chunk_id_field,
             collection_name=source.qdrant_collection_name,
-            query_filter_qdrant={"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(source_id)}}]},
         )
+        await qdrant_service.add_chunks_async(chunks_dict, source.qdrant_collection_name)
         LOGGER.info(f"Upserted {len(chunks)} chunks to Qdrant collection {source.qdrant_collection_name}")
     except Exception as e:
         LOGGER.error(

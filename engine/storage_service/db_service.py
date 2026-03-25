@@ -140,8 +140,6 @@ class DBService(CloseMixin, ABC):
 
     def _fetch_sql_query_as_dataframe(self, query: str):
         """Convenience method that returns a pandas DataFrame. Prefer _fetch_sql_query_as_dicts."""
-        import pandas as pd
-
         rows = self._fetch_sql_query_as_dicts(query)
         return pd.DataFrame(rows)
 

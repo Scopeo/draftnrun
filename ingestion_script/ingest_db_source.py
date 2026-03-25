@@ -1,7 +1,8 @@
 import json
 import logging
 from collections.abc import AsyncGenerator
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from functools import partial
 from typing import Optional
 from uuid import UUID
@@ -36,11 +37,16 @@ LOGGER = logging.getLogger(__name__)
 
 
 def _serialize_value(value):
-    """Convert Timestamp/datetime objects to ISO format strings for JSON serialization."""
     if value is None:
         return None
     if isinstance(value, datetime):
         return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, (UUID, Decimal)):
+        return str(value)
+    if isinstance(value, (bytes, bytearray)):
+        return value.decode("utf-8", errors="replace")
     return value
 
 
