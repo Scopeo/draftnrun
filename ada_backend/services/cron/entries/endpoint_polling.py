@@ -724,7 +724,7 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
                     "messages": [
                         {"role": "user", "content": input_message},
                     ],
-                    "item": item,  # Pass item as separate field for easy access
+                    **(item if isinstance(item, dict) else {"item": item}),
                 }
                 workflow_result = await run_env_agent(
                     project_id=agent_inference_execution_payload.project_id,
