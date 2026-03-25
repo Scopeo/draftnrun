@@ -3,7 +3,6 @@ from unittest.mock import AsyncMock, call
 import pytest
 
 from mcp_server.tools import _factory, crons
-from tests.mcp_server.conftest import FAKE_CRON_ID
 
 
 class FakeMCP:
