@@ -1,5 +1,3 @@
-import pytest
-
 from engine.components.sql.sql_tool import SQLTool
 
 
