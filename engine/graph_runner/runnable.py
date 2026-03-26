@@ -32,5 +32,8 @@ class Runnable(Protocol):
     def get_outputs_schema(cls) -> Type[BaseModel]:
         """Return the output schema for the runnable."""
 
+    def is_available(self) -> bool:
+        """Return True if this tool has the credentials/resources it needs to run."""
+
     async def close(self) -> None:
         """Release any resources held by this runnable."""

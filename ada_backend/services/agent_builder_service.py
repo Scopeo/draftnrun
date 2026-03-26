@@ -15,7 +15,6 @@ from ada_backend.repositories.component_repository import (
     get_global_parameters_by_component_version_id,
     get_tool_description,
     get_tool_description_component,
-    has_oauth_connection,
 )
 from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
 from ada_backend.repositories.integration_repository import (
@@ -24,7 +23,6 @@ from ada_backend.repositories.integration_repository import (
 )
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
 from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
-from ada_backend.services.entity_factory import OAuthComponentFactory
 from ada_backend.services.errors import MissingDataSourceError, MissingIntegrationError
 from ada_backend.services.registry import FACTORY_REGISTRY
 from ada_backend.utils.secret_resolver import replace_secret_placeholders
@@ -135,17 +133,6 @@ def _resolve_literal_field_expressions(
     return resolved_values
 
 
-def _should_skip_oauth_tool(
-    session: Session,
-    child_instance: Any,
-    skip_flag: bool,
-) -> bool:
-    if not skip_flag:
-        return False
-    factory = FACTORY_REGISTRY.get(child_instance.component_version_id)
-    return isinstance(factory, OAuthComponentFactory) and not has_oauth_connection(session, child_instance.id)
-
-
 async def instantiate_component(
     session: Session,
     component_instance_id: UUID,
@@ -174,13 +161,11 @@ async def instantiate_component(
     LOGGER.debug(f"Init instantiation for component {component_name} version: {component_version_id}\n")
 
     # Fetch basic parameters
-    raw_params: dict[str, Any] = get_component_params(
+    input_params: dict[str, Any] = get_component_params(
         session,
         component_instance_id,
         project_id=project_id,
     )
-    skip_tools_with_missing_oauth = raw_params.pop("skip_tools_with_missing_oauth", True)
-    input_params: dict[str, Any] = raw_params
 
     LOGGER.debug(f"{input_params=}\n")
 
@@ -215,9 +200,6 @@ async def instantiate_component(
         child_instance = sub_component.child_component_instance
         LOGGER.debug(f"Found sub-component: {param_name=}, {child_instance.ref=}\n")
 
-        if _should_skip_oauth_tool(session, child_instance, skip_tools_with_missing_oauth):
-            LOGGER.warning(f"Skipping tool '{child_instance.name}' ({param_name}): no OAuth connection configured.")
-            continue
         try:
             instantiated_sub_component = await instantiate_component(
                 session,

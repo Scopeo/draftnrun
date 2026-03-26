@@ -56,6 +56,14 @@ class Component(ABC):
         """Return the tool descriptions this agent exposes (default: single tool)."""
         return [self.tool_description]
 
+    def is_available(self) -> bool:
+        """Return True if this component has the credentials/resources it needs to run.
+
+        Override in components that require external credentials (e.g. OAuth tokens,
+        API keys) to let consumers like AIAgent skip unavailable tools gracefully.
+        """
+        return True
+
     @classmethod
     def get_inputs_schema(cls) -> Type[BaseModel]:
         class DefaultInput(BaseModel):

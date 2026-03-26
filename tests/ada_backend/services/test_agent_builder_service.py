@@ -1,68 +1,81 @@
-"""Tests for _should_skip_oauth_tool in agent_builder_service."""
+"""Regression tests for OAuth tool skipping via AIAgent._build_tool_cache."""
 
-import uuid
-from unittest.mock import MagicMock, patch
+from typing import Optional
+from unittest.mock import MagicMock
 
-from ada_backend.services.agent_builder_service import _should_skip_oauth_tool
-from ada_backend.services.entity_factory import OAuthComponentFactory
-
-
-def _real_oauth_factory():
-    class _Dummy:
-        def __init__(self, access_token=None):
-            pass
-
-    return OAuthComponentFactory(entity_class=_Dummy, provider_config_key="test")
+from engine.components.ai_agent import AIAgent
+from engine.components.types import ComponentAttributes, ToolDescription
 
 
-def _child_instance(component_version_id=None):
-    ci = MagicMock()
-    ci.id = uuid.uuid4()
-    ci.component_version_id = component_version_id or uuid.uuid4()
-    return ci
+def _make_tool_description(name: str = "test_tool") -> ToolDescription:
+    return ToolDescription(name=name, description="", tool_properties={}, required_tool_properties=[])
 
 
-def test_skips_oauth_tool_with_no_connection(monkeypatch):
-    session = MagicMock()
-    child = _child_instance()
-    oauth_factory = _real_oauth_factory()
-
-    with patch("ada_backend.services.agent_builder_service.FACTORY_REGISTRY") as mock_registry, \
-         patch("ada_backend.services.agent_builder_service.has_oauth_connection", return_value=False):
-        mock_registry.get.return_value = oauth_factory
-        assert _should_skip_oauth_tool(session, child, skip_flag=True) is True
-
-
-def test_does_not_skip_oauth_tool_when_flag_disabled(monkeypatch):
-    session = MagicMock()
-    child = _child_instance()
-    oauth_factory = _real_oauth_factory()
-
-    with patch("ada_backend.services.agent_builder_service.FACTORY_REGISTRY") as mock_registry, \
-         patch("ada_backend.services.agent_builder_service.has_oauth_connection", return_value=False) as has_conn:
-        mock_registry.get.return_value = oauth_factory
-        assert _should_skip_oauth_tool(session, child, skip_flag=False) is False
-        has_conn.assert_not_called()
+def _make_ai_agent(agent_tools: list, skip_tools_with_missing_oauth: bool = True) -> AIAgent:
+    completion_service = MagicMock()
+    trace_manager = MagicMock()
+    trace_manager.start_span.return_value.__enter__ = MagicMock(return_value=MagicMock())
+    trace_manager.start_span.return_value.__exit__ = MagicMock(return_value=False)
+    return AIAgent(
+        completion_service=completion_service,
+        trace_manager=trace_manager,
+        tool_description=_make_tool_description("agent"),
+        component_attributes=ComponentAttributes(
+            component_instance_name="test_agent",
+            component_instance_id=None,
+        ),
+        agent_tools=agent_tools,
+        skip_tools_with_missing_oauth=skip_tools_with_missing_oauth,
+    )
 
 
-def test_does_not_skip_oauth_tool_when_connection_exists():
-    session = MagicMock()
-    child = _child_instance()
-    oauth_factory = _real_oauth_factory()
-
-    with patch("ada_backend.services.agent_builder_service.FACTORY_REGISTRY") as mock_registry, \
-         patch("ada_backend.services.agent_builder_service.has_oauth_connection", return_value=True):
-        mock_registry.get.return_value = oauth_factory
-        assert _should_skip_oauth_tool(session, child, skip_flag=True) is False
+def _make_tool(name: str, available: bool) -> MagicMock:
+    tool = MagicMock()
+    tool.is_available.return_value = available
+    tool.get_tool_descriptions.return_value = [_make_tool_description(name)]
+    tool.component_attributes.component_instance_name = name
+    return tool
 
 
-def test_does_not_skip_non_oauth_tool():
-    session = MagicMock()
-    child = _child_instance()
-    non_oauth_factory = MagicMock()
+def test_unavailable_tool_skipped_when_flag_enabled():
+    available = _make_tool("slack", available=True)
+    unavailable = _make_tool("gmail", available=False)
 
-    with patch("ada_backend.services.agent_builder_service.FACTORY_REGISTRY") as mock_registry, \
-         patch("ada_backend.services.agent_builder_service.has_oauth_connection") as has_conn:
-        mock_registry.get.return_value = non_oauth_factory
-        assert _should_skip_oauth_tool(session, child, skip_flag=True) is False
-        has_conn.assert_not_called()
+    agent = _make_ai_agent([available, unavailable], skip_tools_with_missing_oauth=True)
+
+    assert "slack" in agent._tool_registry
+    assert "gmail" not in agent._tool_registry
+
+
+def test_unavailable_tool_included_when_flag_disabled():
+    available = _make_tool("slack", available=True)
+    unavailable = _make_tool("gmail", available=False)
+
+    agent = _make_ai_agent([available, unavailable], skip_tools_with_missing_oauth=False)
+
+    assert "slack" in agent._tool_registry
+    assert "gmail" in agent._tool_registry
+
+
+def test_available_tool_always_included():
+    tool = _make_tool("hubspot", available=True)
+
+    agent = _make_ai_agent([tool], skip_tools_with_missing_oauth=True)
+
+    assert "hubspot" in agent._tool_registry
+
+
+def test_is_available_not_called_when_flag_disabled():
+    tool = _make_tool("slack", available=False)
+
+    _make_ai_agent([tool], skip_tools_with_missing_oauth=False)
+
+    tool.is_available.assert_not_called()
+
+
+def test_no_tools_skipped_when_all_available():
+    tools = [_make_tool(name, available=True) for name in ("slack", "gmail", "outlook")]
+
+    agent = _make_ai_agent(tools, skip_tools_with_missing_oauth=True)
+
+    assert set(agent._tool_registry.keys()) == {"slack", "gmail", "outlook"}

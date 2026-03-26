@@ -66,6 +66,9 @@ class HubSpotMCPTool(LocalMCPTool):
             tool_descriptions=tool_descriptions,
         )
 
+    def is_available(self) -> bool:
+        return bool(self.env and self.env.get("HUBSPOT_ACCESS_TOKEN"))
+
     async def _run_without_io_trace(
         self,
         inputs: MCPToolInputs,

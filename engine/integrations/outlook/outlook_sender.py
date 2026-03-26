@@ -163,7 +163,7 @@ class OutlookSender(Component):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        access_token: str,
+        access_token: Optional[str] = None,
         save_as_draft: bool = True,
         tool_description: ToolDescription = OUTLOOK_SENDER_TOOL_DESCRIPTION,
     ):
@@ -175,6 +175,9 @@ class OutlookSender(Component):
         self.access_token = access_token
         self._email_address: Optional[str] = None
         self.save_as_draft = save_as_draft
+
+    def is_available(self) -> bool:
+        return self.access_token is not None
 
     def _auth_headers(self) -> dict[str, str]:
         return {

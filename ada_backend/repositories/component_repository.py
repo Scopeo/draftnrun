@@ -348,22 +348,6 @@ def get_component_basic_parameters(
     )
 
 
-def has_oauth_connection(session: Session, component_instance_id: UUID) -> bool:
-    """Returns True if the component instance has a non-null oauth_connection_id parameter."""
-    return session.query(
-        session.query(db.BasicParameter)
-        .join(
-            db.ComponentParameterDefinition,
-            db.BasicParameter.parameter_definition_id == db.ComponentParameterDefinition.id,
-        )
-        .filter(
-            db.BasicParameter.component_instance_id == component_instance_id,
-            db.ComponentParameterDefinition.name == "oauth_connection_id",
-            db.BasicParameter.value.isnot(None),
-        )
-        .exists()
-    ).scalar()
-
 
 def get_component_instances_by_ids(
     session: Session,
