@@ -7,7 +7,6 @@ from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
     upsert_component_versions,
     upsert_components,
-    upsert_components_parameter_child_relationships,
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
@@ -72,25 +71,22 @@ def seed_sql_tool_components(session: Session):
             run_sql_query_tool_version,
         ],
     )
-    # SQL Run Tool
-    run_sql_tool_db_service_param = db.ComponentParameterDefinition(
-        id=UUID("1160d57c-77cd-4a5c-a569-4c14fca875d6"),
-        component_version_id=run_sql_query_tool_version.id,
-        name="db_service",
-        type=ParameterType.COMPONENT,
-        nullable=False,
-    )
     upsert_components_parameter_definitions(
         session=session,
-        component_parameter_definitions=[run_sql_tool_db_service_param],
-    )
-    upsert_components_parameter_child_relationships(
-        session=session,
-        component_parameter_child_relationships=[
-            db.ComponentParameterChildRelationship(
-                id=UUID("8440ddee-bc05-4274-bcec-877e9e978af1"),
-                component_parameter_definition_id=run_sql_tool_db_service_param.id,
-                child_component_version_id=COMPONENT_VERSION_UUIDS["sql_db_service"],
+        component_parameter_definitions=[
+            db.ComponentParameterDefinition(
+                id=UUID("1160d57c-77cd-4a5c-a569-4c14fca875d6"),
+                component_version_id=run_sql_query_tool_version.id,
+                name="engine_url",
+                type=ParameterType.STRING,
+                nullable=False,
+                display_order=0,
+                is_advanced=False,
+                ui_component=UIComponent.TEXTFIELD,
+                ui_component_properties=UIComponentProperties(
+                    label="Database Engine URL",
+                    placeholder="e.g., postgresql://user:password@localhost:5432/database",
+                ).model_dump(exclude_unset=True, exclude_none=True),
             ),
         ],
     )
