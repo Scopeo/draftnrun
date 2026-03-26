@@ -3,6 +3,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy.exc import DBAPIError, DisconnectionError, IntegrityError
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import EnvType
@@ -78,28 +79,31 @@ def get_project_graph(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return get_graph_service(sqlaclhemy_db_session, project_id, graph_runner_id)
-    except ProjectNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except GraphNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except GraphNotBoundToProjectError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except ConnectionError as e:
-        LOGGER.error(
-            f"Database connection failed for project {project_id} and runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
+    except ProjectNotFound:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+    except GraphNotFound:
+        raise HTTPException(status_code=404, detail=f"Graph runner {graph_runner_id} not found")
+    except GraphNotBoundToProjectError:
+        raise HTTPException(
+            status_code=403, detail=f"Graph runner {graph_runner_id} does not belong to project {project_id}"
         )
-        raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
+    except (DBAPIError, DisconnectionError) as e:
+        LOGGER.error(
+            "Database connection failed for project %s and runner %s", project_id, graph_runner_id, exc_info=True
+        )
+        raise HTTPException(status_code=503, detail="Database connection failed, please retry") from e
     except ValueError as e:
         LOGGER.error(
-            f"Failed to get graph for project {project_id} and runner {graph_runner_id}: {str(e)}", exc_info=True
+            "Failed to get graph for project %s and runner %s: %s", project_id, graph_runner_id, e, exc_info=True
         )
-        raise HTTPException(status_code=400, detail="Bad request") from e
+        raise HTTPException(
+            status_code=400, detail="Failed to load graph: the graph data may be corrupted or incomplete"
+        ) from e
     except Exception as e:
         LOGGER.error(
-            f"Failed to get graph for project {project_id} and runner {graph_runner_id}: {str(e)}", exc_info=True
+            "Failed to get graph for project %s and runner %s: %s", project_id, graph_runner_id, e, exc_info=True
         )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+        raise HTTPException(status_code=500, detail="Unexpected error while loading the graph") from e
 
 
 @router.get(
@@ -124,28 +128,31 @@ def get_graph_modification_history(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return get_graph_modification_history_service(session, project_id, graph_runner_id)
-    except (ProjectNotFound, GraphNotFound) as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except GraphNotBoundToProjectError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except ConnectionError as e:
-        LOGGER.error(
-            f"Database connection failed for project {project_id} and runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
+    except ProjectNotFound:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+    except GraphNotFound:
+        raise HTTPException(status_code=404, detail=f"Graph runner {graph_runner_id} not found")
+    except GraphNotBoundToProjectError:
+        raise HTTPException(
+            status_code=403, detail=f"Graph runner {graph_runner_id} does not belong to project {project_id}"
         )
-        raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
+    except (DBAPIError, DisconnectionError) as e:
+        LOGGER.error(
+            "Database connection failed for project %s and runner %s", project_id, graph_runner_id, exc_info=True
+        )
+        raise HTTPException(status_code=503, detail="Database connection failed, please retry") from e
     except ValueError as e:
         LOGGER.error(
-            f"Failed to get modification history for project {project_id} and runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
+            "Failed to get modification history for project %s and runner %s: %s",
+            project_id, graph_runner_id, e, exc_info=True,
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(status_code=400, detail="Failed to load modification history for this graph") from e
     except Exception as e:
         LOGGER.error(
-            f"Failed to get modification history for project {project_id} and runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
+            "Failed to get modification history for project %s and runner %s: %s",
+            project_id, graph_runner_id, e, exc_info=True,
         )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+        raise HTTPException(status_code=500, detail="Unexpected error while loading modification history") from e
 
 
 @router.put(
@@ -160,11 +167,6 @@ async def update_project_pipeline(
     ],
     session: Session = Depends(get_db),
 ) -> GraphUpdateResponse:
-    """
-    Replace an entire pipeline for a project.
-    Creates or updates all component instances, their parameters, and relationships.
-    Follows PUT semantics - completely replaces existing pipeline state.
-    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     project = get_project(session, project_id=project_id)
@@ -179,60 +181,77 @@ async def update_project_pipeline(
             project_id=project_id,
             user_id=user.id,
         )
-    except GraphConflictError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
-    except GraphNotBoundToProjectError as e:
-        LOGGER.error(
-            f"Graph runner {graph_runner_id} is not bound to project {project_id} when updating graph",
-            exc_info=True,
+    except GraphConflictError:
+        raise HTTPException(
+            status_code=409,
+            detail="The graph was modified by another client since your last fetch. Refresh the graph and retry.",
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except ConnectionError as e:
-        LOGGER.error(
-            f"Database connection failed for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
+    except GraphNotBoundToProjectError:
+        LOGGER.warning(
+            "Graph runner %s is not bound to project %s when updating graph", graph_runner_id, project_id,
         )
-        raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
+        raise HTTPException(
+            status_code=403, detail=f"Graph runner {graph_runner_id} does not belong to project {project_id}"
+        )
+    except (DBAPIError, DisconnectionError) as e:
+        LOGGER.error(
+            "Database connection failed for project %s runner %s", project_id, graph_runner_id, exc_info=True
+        )
+        raise HTTPException(status_code=503, detail="Database connection failed, please retry") from e
     except FieldExpressionError as e:
-        error_msg = str(e)
-        LOGGER.error(
-            f"Failed to update graph for project {project_id} runner {graph_runner_id}: {error_msg}", exc_info=True
+        LOGGER.warning(
+            "Invalid field expression for project %s runner %s: %s", project_id, graph_runner_id, e
         )
-        raise HTTPException(status_code=400, detail=error_msg) from e
+        raise HTTPException(status_code=400, detail="Invalid field expression in the graph configuration") from e
     except MissingDataSourceError as e:
         LOGGER.warning(
-            f"Graph saved with missing data source for project {project_id} runner {graph_runner_id}: {str(e)}"
+            "Graph saved with missing data source for project %s runner %s: %s", project_id, graph_runner_id, e
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        detail = (
+            f"Component '{e.component_name}' requires a data source to be configured"
+            if e.component_name
+            else "A component in the graph requires a data source to be configured"
+        )
+        raise HTTPException(status_code=400, detail=detail) from e
     except MissingKeyPromptTemplateError as e:
-        LOGGER.error(
-            f"Missing key from prompt template for project {project_id} runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
+        LOGGER.warning(
+            "Missing key from prompt template for project %s runner %s: %s", project_id, graph_runner_id, e,
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing template variable(s) in prompt: {', '.join(e.missing_keys)}",
+        ) from e
     except KeyTypePromptTemplateError as e:
-        LOGGER.error(
-            f"Key type error in prompt template for project {project_id} runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
+        LOGGER.warning(
+            "Key type error in prompt template for project %s runner %s: %s", project_id, graph_runner_id, e,
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(
+            status_code=400, detail=f"Template variable '{e.key}' has an incompatible value type"
+        ) from e
     except MCPConnectionError as e:
-        LOGGER.error(
-            f"MCP connection failed for project {project_id} runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
+        LOGGER.warning(
+            "MCP connection failed for project %s runner %s: %s", project_id, graph_runner_id, e,
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(
+            status_code=400, detail="An MCP tool in the graph failed to connect to its endpoint"
+        ) from e
     except MissingIntegrationError as e:
-        LOGGER.error(f"Missing integration for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.warning(
+            "Missing integration for project %s runner %s: %s", project_id, graph_runner_id, e
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"Component '{e.component_instance_name}' requires the "
+            f"'{e.integration_name}' integration to be connected",
+        ) from e
     except ValueError as e:
         error_msg = str(e)
         LOGGER.error(
-            f"Failed to update graph for project {project_id} runner {graph_runner_id}: {error_msg}", exc_info=True
+            "Failed to update graph for project %s runner %s: %s", project_id, graph_runner_id, e, exc_info=True
         )
-        # Check if this is a draft mode validation error
         if "only draft versions" in error_msg.lower():
             raise HTTPException(status_code=403, detail="Only the draft version can be modified") from e
-        raise HTTPException(status_code=400, detail=f"Error: {error_msg}") from e
+        raise HTTPException(status_code=400, detail="Invalid graph update request") from e
 
 
 @router.get(
@@ -259,16 +278,18 @@ def autocomplete_field_expressions_endpoint(
             query=query,
         )
         return autocomplete_field_expression(session, project_id, graph_runner_id, request)
-    except GraphNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except GraphNotBoundToProjectError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
+    except GraphNotFound:
+        raise HTTPException(status_code=404, detail=f"Graph runner {graph_runner_id} not found")
+    except GraphNotBoundToProjectError:
+        raise HTTPException(
+            status_code=403, detail=f"Graph runner {graph_runner_id} does not belong to project {project_id}"
+        )
     except Exception as e:
         LOGGER.error(
-            f"Failed to autocomplete field expressions for project {project_id} runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
+            "Failed to autocomplete field expressions for project %s runner %s: %s",
+            project_id, graph_runner_id, e, exc_info=True,
         )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+        raise HTTPException(status_code=500, detail="Unexpected error during field expression autocomplete") from e
 
 
 @router.post(
@@ -296,35 +317,53 @@ def deploy_graph(
             user_id=user.id,
             organization_id=project.organization_id,
         )
-    except GraphNotFound as e:
-        LOGGER.error(
-            f"Graph runner {graph_runner_id} not found when deploying to production for project {project_id}",
-            exc_info=True,
+    except GraphNotFound:
+        LOGGER.warning(
+            "Graph runner %s not found when deploying to production for project %s",
+            graph_runner_id, project_id,
         )
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except GraphNotBoundToProjectError as e:
-        LOGGER.error(
-            f"Graph runner {graph_runner_id} is not bound to project {project_id} when deploying to production",
-            exc_info=True,
+        raise HTTPException(status_code=404, detail=f"Graph runner {graph_runner_id} not found")
+    except GraphNotBoundToProjectError:
+        LOGGER.warning(
+            "Graph runner %s is not bound to project %s when deploying to production",
+            graph_runner_id, project_id,
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except GraphRunnerAlreadyInEnvironmentError as e:
-        LOGGER.error(
-            f"Graph runner {graph_runner_id} is already in production for project {project_id}",
-            exc_info=True,
+        raise HTTPException(
+            status_code=403, detail=f"Graph runner {graph_runner_id} does not belong to project {project_id}"
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    except GraphRunnerAlreadyInEnvironmentError:
+        LOGGER.warning(
+            "Graph runner %s is already in production for project %s", graph_runner_id, project_id,
+        )
+        raise HTTPException(
+            status_code=400, detail=f"Graph runner {graph_runner_id} is already in production"
+        )
     except FieldExpressionError as e:
-        error_msg = str(e)
-        LOGGER.error(
-            f"Failed to deploy graph for project {project_id} runner {graph_runner_id}: {error_msg}", exc_info=True
+        LOGGER.warning(
+            "Invalid field expression when deploying project %s runner %s: %s",
+            project_id, graph_runner_id, e,
         )
-        raise HTTPException(status_code=400, detail=error_msg) from e
+        raise HTTPException(
+            status_code=400, detail="Cannot deploy: the graph contains an invalid field expression"
+        ) from e
+    except IntegrityError as e:
+        session.rollback()
+        LOGGER.error(
+            "Conflict deploying graph runner %s for project %s: concurrent deployment detected",
+            graph_runner_id, project_id, exc_info=True,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail="Conflict: another deployment for this project's production environment is in progress",
+        ) from e
     except ValueError as e:
         LOGGER.error(
-            f"Failed to deploy graph for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
+            "Failed to deploy graph for project %s runner %s: %s", project_id, graph_runner_id, e, exc_info=True
         )
-        raise HTTPException(status_code=400, detail="Bad request") from e
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to deploy: the graph contains data that could not be cloned to production",
+        ) from e
 
     return result
 
@@ -355,31 +394,38 @@ def save_graph_version(
             user_id=user.id,
             organization_id=project.organization_id,
         )
-    except GraphNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except GraphNotBoundToProjectError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except GraphVersionSavingFromNonDraftError as e:
-        LOGGER.error(
-            "Attempted to save version from non-draft graph runner for "
-            f"project {project_id} runner {graph_runner_id}: {str(e)}"
+    except GraphNotFound:
+        raise HTTPException(status_code=404, detail=f"Graph runner {graph_runner_id} not found")
+    except GraphNotBoundToProjectError:
+        raise HTTPException(
+            status_code=403, detail=f"Graph runner {graph_runner_id} does not belong to project {project_id}"
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except ConnectionError as e:
-        LOGGER.error(
-            f"Database connection failed for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
+    except GraphVersionSavingFromNonDraftError:
+        LOGGER.warning(
+            "Attempted to save version from non-draft graph runner for project %s runner %s",
+            project_id, graph_runner_id,
         )
-        raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
+        raise HTTPException(
+            status_code=400, detail="Versions can only be saved from the draft environment"
+        )
+    except (DBAPIError, DisconnectionError) as e:
+        LOGGER.error(
+            "Database connection failed for project %s runner %s", project_id, graph_runner_id, exc_info=True
+        )
+        raise HTTPException(status_code=503, detail="Database connection failed, please retry") from e
     except ValueError as e:
         LOGGER.error(
-            f"Failed to save version for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
+            "Failed to save version for project %s runner %s: %s", project_id, graph_runner_id, e, exc_info=True
         )
-        raise HTTPException(status_code=400, detail="Bad request") from e
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to save version: the graph contains data that could not be cloned",
+        ) from e
     except Exception as e:
         LOGGER.error(
-            f"Failed to save version for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
+            "Failed to save version for project %s runner %s: %s", project_id, graph_runner_id, e, exc_info=True
         )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+        raise HTTPException(status_code=500, detail="Unexpected error while saving graph version") from e
 
     return result
 
@@ -411,17 +457,21 @@ def load_copy_graph_runner(
             graph_runner_id_to_copy=graph_runner_id,
         )
     except FieldExpressionError as e:
-        error_msg = str(e)
         LOGGER.error(
-            f"Failed to load copy of graph for project {project_id} runner {graph_runner_id}: {error_msg}",
-            exc_info=True,
+            "Invalid field expression when copying graph for project %s runner %s: %s",
+            project_id, graph_runner_id, e, exc_info=True,
         )
-        raise HTTPException(status_code=400, detail=error_msg) from e
+        raise HTTPException(
+            status_code=400, detail="Cannot copy graph: it contains an invalid field expression"
+        ) from e
     except ValueError as e:
         LOGGER.error(
-            f"Failed to load copy of graph for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
+            "Failed to copy graph for project %s runner %s: %s", project_id, graph_runner_id, e, exc_info=True
         )
-        raise HTTPException(status_code=400, detail="Bad request") from e
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to copy graph: the graph contains data that could not be cloned",
+        ) from e
 
 
 @router.put(
@@ -446,31 +496,48 @@ def bind_graph_to_env(
             project_id=project_id,
             env=env,
         )
-    except GraphNotFound as e:
-        LOGGER.error(
-            f"Graph runner {graph_runner_id} not found when binding to {env.value} for project {project_id}",
-            exc_info=True,
+    except GraphNotFound:
+        LOGGER.warning(
+            "Graph runner %s not found when binding to %s for project %s",
+            graph_runner_id, env.value, project_id,
         )
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except GraphNotBoundToProjectError as e:
-        LOGGER.error(
-            f"Graph runner {graph_runner_id} is not bound to project {project_id} when binding to {env.value}",
-            exc_info=True,
+        raise HTTPException(status_code=404, detail=f"Graph runner {graph_runner_id} not found")
+    except GraphNotBoundToProjectError:
+        LOGGER.warning(
+            "Graph runner %s is not bound to project %s when binding to %s",
+            graph_runner_id, project_id, env.value,
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except GraphRunnerAlreadyInEnvironmentError as e:
-        LOGGER.error(
-            f"Graph runner {graph_runner_id} is already in {env.value} for project {project_id}",
-            exc_info=True,
+        raise HTTPException(
+            status_code=403, detail=f"Graph runner {graph_runner_id} does not belong to project {project_id}"
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    except GraphRunnerAlreadyInEnvironmentError:
+        LOGGER.warning(
+            "Graph runner %s is already in %s for project %s",
+            graph_runner_id, env.value, project_id,
+        )
+        raise HTTPException(
+            status_code=400, detail=f"Graph runner {graph_runner_id} is already in {env.value}"
+        )
+    except IntegrityError as e:
+        session.rollback()
+        LOGGER.warning(
+            "Conflict binding graph runner %s to %s for project %s: "
+            "another graph runner was concurrently bound to this environment",
+            graph_runner_id, env.value, project_id,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=f"Another graph runner was concurrently bound to {env.value} for this project. "
+            "Please retry the operation.",
+        ) from e
     except Exception as e:
         LOGGER.error(
-            f"Unexpected error binding graph runner {graph_runner_id} to {env.value} "
-            f"for project {project_id}, Error: {str(e)}",
-            exc_info=True,
+            "Unexpected error binding graph runner %s to %s for project %s",
+            graph_runner_id, env.value, project_id, exc_info=True,
         )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+        raise HTTPException(
+            status_code=500, detail="Unexpected error while binding graph runner to environment"
+        ) from e
 
 
 @router.post(
@@ -493,36 +560,42 @@ def load_version_as_draft(
             project_id=project_id,
             graph_runner_id=graph_runner_id,
         )
-    except GraphNotFound as e:
-        LOGGER.error(
-            f"Graph runner {graph_runner_id} not found when loading as draft for project {project_id}",
-            exc_info=True,
+    except GraphNotFound:
+        LOGGER.warning(
+            "Graph runner %s not found when loading as draft for project %s",
+            graph_runner_id, project_id,
         )
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except GraphNotBoundToProjectError as e:
-        LOGGER.error(
-            f"Graph runner {graph_runner_id} is not bound to project {project_id} when loading as draft",
-            exc_info=True,
+        raise HTTPException(status_code=404, detail=f"Graph runner {graph_runner_id} not found")
+    except GraphNotBoundToProjectError:
+        LOGGER.warning(
+            "Graph runner %s is not bound to project %s when loading as draft",
+            graph_runner_id, project_id,
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except GraphRunnerAlreadyInEnvironmentError as e:
-        LOGGER.error(
-            f"Graph runner {graph_runner_id} is already in draft for project {project_id}",
-            exc_info=True,
+        raise HTTPException(
+            status_code=403, detail=f"Graph runner {graph_runner_id} does not belong to project {project_id}"
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    except GraphRunnerAlreadyInEnvironmentError:
+        LOGGER.warning(
+            "Graph runner %s is already in draft for project %s", graph_runner_id, project_id,
+        )
+        raise HTTPException(
+            status_code=400, detail=f"Graph runner {graph_runner_id} is already in draft"
+        )
     except ValueError as e:
         LOGGER.error(
-            f"Failed to load version as draft for project {project_id} runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
+            "Failed to load version as draft for project %s runner %s: %s",
+            project_id, graph_runner_id, e, exc_info=True,
         )
-        raise HTTPException(status_code=400, detail="Bad request") from e
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to load version as draft: the graph contains data that could not be cloned",
+        ) from e
     except Exception as e:
         LOGGER.error(
-            f"Unexpected error loading version as draft for project {project_id} runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
+            "Unexpected error loading version as draft for project %s runner %s",
+            project_id, graph_runner_id, exc_info=True,
         )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+        raise HTTPException(status_code=500, detail="Unexpected error while loading version as draft") from e
 
 
 @router.delete("/{graph_runner_id}", summary="Delete Graph Runner", tags=["Graph"])
@@ -533,16 +606,12 @@ def delete_graph_runner_endpoint(
     ],
     session: Session = Depends(get_db),
 ):
-    """
-    Delete a graph runner and everything related to it.
-    This includes all components, edges, and the graph runner itself.
-    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         delete_graph_runner_service(session, graph_runner_id)
     except Exception as e:
-        LOGGER.error(f"Failed to delete graph runner {graph_runner_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error("Failed to delete graph runner %s", graph_runner_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Unexpected error while deleting graph runner") from e
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

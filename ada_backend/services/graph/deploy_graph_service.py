@@ -376,7 +376,7 @@ def bind_graph_to_env_service(
         env=env,
     )
     if previous_env_graph:
-        update_graph_runner_env(session, previous_env_graph.id, env=None)
+        update_graph_runner_env(session, previous_env_graph.id, env=None, commit=False)
         LOGGER.info(f"Removed previous {env.value} graph runner {previous_env_graph.id} from {env.value}")
 
     update_graph_runner_env(session, graph_runner_id, env=env)
