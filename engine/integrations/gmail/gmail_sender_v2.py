@@ -59,7 +59,7 @@ class GmailSenderV2(Component):
         self.save_as_draft = save_as_draft
 
     def is_available(self) -> bool:
-        return self._access_token is not None
+        return bool(self._access_token)
 
     def _ensure_client(self) -> None:
         if not self._access_token:

@@ -1,6 +1,5 @@
 """Regression tests for OAuth tool skipping via AIAgent._build_tool_cache."""
 
-from typing import Optional
 from unittest.mock import MagicMock
 
 from engine.components.ai_agent import AIAgent
