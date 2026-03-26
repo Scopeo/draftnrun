@@ -13,9 +13,7 @@ LOGGER = logging.getLogger(__name__)
 
 # Matches @{{instance.port}} (RefNode) or @{{var_name}} (VarNode).
 # group(1) = first identifier, group(2) = port (if dot present), group(3) = key (if :: present)
-_TOKEN_PATTERN = re.compile(
-    r"@\{\{\s*([a-zA-Z0-9_-]+)(?:\.([a-zA-Z0-9_-]+)(?:::([a-zA-Z0-9_-]+))?)?\s*\}\}"
-)
+_TOKEN_PATTERN = re.compile(r"@\{\{\s*([a-zA-Z0-9_-]+)(?:\.([a-zA-Z0-9_-]+)(?:::([a-zA-Z0-9_-]+))?)?\s*\}\}")
 
 
 # TODO: Use a more robust parser instead of a regex
@@ -79,7 +77,7 @@ def parse_expression_flexible(value: Union[str, dict, list]) -> ExpressionNode:
 
     Args:
         value: Either a string expression, a serialized AST dict, or a list.
-            The frontend is responsible for building json_build AST nodes for
+            The client is responsible for building json_build AST nodes for
             JSON-typed parameters that contain @{{}} refs/vars.
 
     Returns:

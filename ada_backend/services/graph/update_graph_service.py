@@ -23,6 +23,7 @@ from ada_backend.repositories.edge_repository import delete_edge, get_edges, ups
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.field_expression_repository import (
     create_field_expression,
+    delete_field_expression_by_id,
     update_field_expression,
 )
 from ada_backend.repositories.graph_runner_repository import (
@@ -499,6 +500,9 @@ async def update_graph_service(
             fields_to_delete = db_field_expr_port_names[instance_id] - incoming_fields
             for field_name in fields_to_delete:
                 port_id = db_port_instances_by_instance[instance_id][field_name]
+                port = get_input_port_instance(session, port_id)
+                if port and port.field_expression_id:
+                    delete_field_expression_by_id(session, port.field_expression_id)
                 delete_input_port_instance(session, port_id)
 
     nodes_to_delete = previous_graph_nodes - instance_ids

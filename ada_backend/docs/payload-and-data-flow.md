@@ -62,7 +62,7 @@ Field expressions define how data is assembled for each input port. They are JSO
 | `ConcatNode` | `"concat"` | Concatenation of parts | `{"type": "concat", "parts": [...]}` |
 | `JsonBuildNode` | `"json_build"` | Build JSON with refs | `{"type": "json_build", "template": {...}, "refs": {...}}` |
 
-`JsonBuildNode` is used for JSON-typed parameters (dicts/lists) that contain `@{{...}}` tokens inside their string values. The frontend builds the `json_build` AST and sends it as a serialized dict; `parse_expression_flexible()` deserializes it via `from_json()`. Placeholders in the template are substituted at runtime: exact matches preserve type, embedded matches are stringified into the surrounding text.
+`JsonBuildNode` is used for JSON-typed parameters (dicts/lists) that contain `@{{...}}` tokens inside their string values. The client builds the `json_build` AST and sends it as a serialized dict; `parse_expression_flexible()` deserializes it via `from_json()`. Placeholders in the template are substituted at runtime: exact matches preserve type, embedded matches are stringified into the surrounding text.
 
 ### Text Syntax
 
@@ -71,7 +71,7 @@ In the UI, field expressions use `@{{...}}` syntax:
 - `@{{instance_id.port_name::key}}` → RefNode with key extraction
 - `@{{var_name}}` (no dot) → VarNode
 - Mixed text and refs → ConcatNode
-- Serialized `json_build` AST dict (built by frontend) → JsonBuildNode
+- Serialized `json_build` AST dict (built by client) → JsonBuildNode
 
 ### Evaluation Priority
 

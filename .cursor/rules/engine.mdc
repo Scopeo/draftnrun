@@ -10,7 +10,7 @@ globs:
 - Port system: `PortDefinition` (catalogue schema) → `PortInstance` (per-graph-instance) → `PortMapping` (wiring) → `FieldExpression` (JSON AST transforms).
 - `GraphRunner` uses `networkx.DiGraph`, topological scheduling, `ExecutionDirective` for control flow (`CONTINUE`, `HALT`, `SELECTIVE_EDGE_INDICES`). Skipped subgraphs use `TaskState.HALTED` (root of the skipped branch plus descendants), not `COMPLETED`.
 - Field expressions: 5 AST node types (`literal`, `ref`, `var`, `concat`, `json_build`). Key files: `engine/field_expressions/ast.py` (AST), `parser.py`, `serializer.py`, `traversal.py`.
-- `parse_expression_flexible()` accepts `str`, `dict`, and `list`. Dicts that match a serialized AST shape are deserialized via `from_json()`. Plain dicts/lists become `LiteralNode(json.dumps(value))`. The frontend is responsible for building `json_build` AST nodes for JSON-typed parameters containing `@{{}}` refs/vars.
+- `parse_expression_flexible()` accepts `str`, `dict`, and `list`. Dicts that match a serialized AST shape are deserialized via `from_json()`. Plain dicts/lists become `LiteralNode(json.dumps(value))`. The client is responsible for building `json_build` AST nodes for JSON-typed parameters containing `@{{}}` refs/vars.
 - Variable resolution: defaults → layered set overrides. See `ada_backend/services/variable_resolution_service.py`.
 - `requires_tool_name = True` for components that need a `tool_name` input (MCP tools, API tools).
 - Legacy system: some components still use `AgentPayload` pattern (`migrated = False`). New components MUST use the multi-port `NodeData` system (`migrated = True`).

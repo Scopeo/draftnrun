@@ -170,7 +170,7 @@ def test_parse_expression_flexible_with_list_returns_literal():
 
 
 def test_parse_expression_flexible_with_conditions_list():
-    """Lists are serialized as JSON literals — the frontend builds json_build AST when needed."""
+    """Lists are serialized as JSON literals — the client builds json_build AST when needed."""
     conditions = [{"value_a": "@{{uuid.output}}", "operator": "text_contains", "value_b": "invoice"}]
     result = parse_expression_flexible(conditions)
     assert isinstance(result, LiteralNode)

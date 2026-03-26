@@ -67,7 +67,7 @@ def evaluate_expression(
             if obj in refs:
                 return refs[obj]
             result = obj
-            for placeholder, value in refs.items():
+            for placeholder, value in sorted(refs.items(), key=lambda item: len(item[0]), reverse=True):
                 if placeholder in result:
                     result = result.replace(placeholder, to_string(value))
             return result

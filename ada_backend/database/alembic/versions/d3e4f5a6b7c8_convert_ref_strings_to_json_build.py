@@ -27,9 +27,7 @@ down_revision: Union[str, None] = "c2396dc8b10d"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_TOKEN_PATTERN = re.compile(
-    r"@\{\{\s*([a-zA-Z0-9_-]+)(?:\.([a-zA-Z0-9_-]+)(?:::([a-zA-Z0-9_-]+))?)?\s*\}\}"
-)
+_TOKEN_PATTERN = re.compile(r"@\{\{\s*([a-zA-Z0-9_-]+)(?:\.([a-zA-Z0-9_-]+)(?:::([a-zA-Z0-9_-]+))?)?\s*\}\}")
 
 
 def _build_json_build_expression(parsed_json: Any) -> dict | None:
@@ -139,7 +137,7 @@ def upgrade() -> None:
         try:
             parsed = json.loads(literal_value)
         except (json.JSONDecodeError, TypeError) as exc:
-            print(f"[d3e4f5a6b7c8] skipping field_expression {fe_id}: {exc!r} — value: {literal_value!r:.120}")
+            print(f"[d3e4f5a6b7c8] skipping field_expression {fe_id}: {exc!r}")
             continue
 
         if not isinstance(parsed, (dict, list)):
