@@ -53,9 +53,6 @@ class HubSpotMCPTool(LocalMCPTool):
         allowed_tools: Collection[str] | None = None,
         timeout: int = 30,
     ) -> Self:
-        if not access_token:
-            raise ValueError("access_token is required")
-
         allowed = _normalize_allowed_tools(allowed_tools)
         tool_descriptions = await get_tool_descriptions(allowed)
 
