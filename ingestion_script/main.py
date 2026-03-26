@@ -123,6 +123,7 @@ async def ingestion_main_async(
                 source_id=source_id,
                 document_reading_mode=document_reading_mode,
                 llamaparse_api_key=settings.LLAMACLOUD_API_KEY,
+                mistral_ocr_api_key=settings.MISTRAL_API_KEY,
             )
         except Exception as e:
             error_msg = f"Error during google drive ingestion: {str(e)}"
@@ -159,6 +160,7 @@ async def ingestion_main_async(
                 source_id=source_id,
                 document_reading_mode=document_reading_mode,
                 llamaparse_api_key=settings.LLAMACLOUD_API_KEY,
+                mistral_ocr_api_key=settings.MISTRAL_API_KEY,
             )
         except Exception as e:
             error_msg = f"Error during local ingestion: {str(e)}"

@@ -152,3 +152,4 @@ class DocumentReadingMode(str, Enum):
     LLM_VISION = "llm_vision"
     STANDARD = "standard"
     LLAMAPARSE = "llamaparse"
+    MISTRAL_OCR = "mistral_ocr"
