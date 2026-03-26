@@ -8,7 +8,7 @@ globs:
 - Components implement the `Runnable` protocol with typed Pydantic I/O schemas.
 - `_run_without_io_trace(inputs: BaseModel, ctx: dict) -> BaseModel` is the core execution method — this is what subclasses implement.
 - Port system: `PortDefinition` (catalogue schema) → `PortInstance` (per-graph-instance) → `PortMapping` (wiring) → `FieldExpression` (JSON AST transforms).
-- `GraphRunner` uses `networkx.DiGraph`, topological scheduling, `ExecutionDirective` for control flow (`CONTINUE`, `HALT`, `SELECTIVE_EDGE_INDICES`).
+- `GraphRunner` uses `networkx.DiGraph`, topological scheduling, `ExecutionDirective` for control flow (`CONTINUE`, `HALT`, `SELECTIVE_EDGE_INDICES`). Skipped subgraphs use `TaskState.HALTED` (root of the skipped branch plus descendants), not `COMPLETED`.
 - Field expressions: 5 AST node types (`literal`, `ref`, `var`, `concat`, `json_build`). Key files: `engine/field_expressions/ast.py` (AST), `parser.py`, `serializer.py`, `traversal.py`.
 - `parse_expression_flexible()` accepts `str`, `dict`, and `list`. Lists are serialized as `LiteralNode(json.dumps(value))` — this supports JSON-typed parameters like If/Else `conditions` passed as native Python lists.
 - Variable resolution: defaults → layered set overrides. See `ada_backend/services/variable_resolution_service.py`.

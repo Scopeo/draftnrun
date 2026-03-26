@@ -225,6 +225,28 @@ class GraphRunner:
                 start_node,
             )
 
+    def _add_dependency_edge_if_needed(self, src: str, dst: str) -> None:
+        """Add a dependency edge src → dst unless execution ordering is already guaranteed.
+
+        Skips the edge when a transitive path already exists — adding it would be redundant
+        and would cause selective-routing nodes (Routers) to treat the extra edge as an
+        unmatched route and halt the destination unnecessarily.
+
+        Always adds the edge when:
+        - src == dst  (self-loop must be preserved so the DAG check can raise)
+        - either node is not yet in the graph  (unknown nodes must reach _validate_graph)
+        """
+        if self.graph.has_edge(src, dst):
+            return
+        already_reachable = (
+            src != dst
+            and src in self.graph
+            and dst in self.graph
+            and nx.has_path(self.graph, src, dst)
+        )
+        if not already_reachable:
+            self.graph.add_edge(src, dst)
+
     def _augment_graph_with_dependencies(self) -> None:
         """Augment the graph with edges derived from port mappings and expressions, then validate DAG.
 
@@ -233,17 +255,12 @@ class GraphRunner:
         - Forbid self-loops; raise on cycles.
         """
         for pm in self.port_mappings:
-            src = pm.source_instance_id
-            dst = pm.target_instance_id
-            if not self.graph.has_edge(src, dst):
-                self.graph.add_edge(src, dst)
+            self._add_dependency_edge_if_needed(pm.source_instance_id, pm.target_instance_id)
 
         for (target, _field), expr_ast in self._expressions_by_target_ast.items():
             ref_nodes: Iterator[RefNode] = select_nodes(expr_ast, lambda n: isinstance(n, RefNode))
-            src_instances = {ref_node.instance for ref_node in ref_nodes}
-            for src in src_instances:
-                if not self.graph.has_edge(src, target):
-                    self.graph.add_edge(src, target)
+            for src in {ref_node.instance for ref_node in ref_nodes}:
+                self._add_dependency_edge_if_needed(src, target)
 
         if not nx.is_directed_acyclic_graph(self.graph):
             raise ValueError(
@@ -517,7 +534,13 @@ class GraphRunner:
             self._mappings_by_target.setdefault(pm.target_instance_id, []).append(pm)
 
     def _halt_downstream_execution(self, source_node_id: str) -> None:
-        """Mark all downstream nodes from source as completed without execution."""
+        """Mark source node and all its downstream nodes as halted without execution.
+        Nodes already COMPLETED are left unchanged."""
+        root_task = self.tasks[source_node_id]
+        if root_task.state not in (TaskState.COMPLETED, TaskState.HALTED):
+            LOGGER.debug(f"Halting execution for root node '{source_node_id}'")
+            root_task.state = TaskState.HALTED
+            root_task.result = NodeData(data={}, ctx=self.run_context)
         visited = set()
         queue = [source_node_id]
 
@@ -530,10 +553,9 @@ class GraphRunner:
             for successor in self.graph.successors(current):
                 if successor not in visited:
                     task = self.tasks[successor]
-                    if task.state != TaskState.COMPLETED:
+                    if task.state not in (TaskState.COMPLETED, TaskState.HALTED):
                         LOGGER.debug(f"Halting execution for downstream node '{successor}'")
-                        # Mark as completed with empty result to prevent execution
-                        task.state = TaskState.COMPLETED
+                        task.state = TaskState.HALTED
                         task.result = NodeData(data={}, ctx=self.run_context)
                     queue.append(successor)
 

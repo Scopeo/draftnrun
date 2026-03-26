@@ -28,7 +28,7 @@ The `GraphRunner` takes a `networkx.DiGraph`, a dict of `Runnable` instances key
    - Merge output `ctx` back into shared `run_context`
 4. **Handle directive** from result:
    - `CONTINUE` — decrement all successors' pending deps
-   - `HALT` — BFS-mark all downstream as completed (empty data)
+   - `HALT` — BFS-mark downstream (and branch roots skipped by selective routing) as `HALTED` with empty `NodeData` (nodes already `COMPLETED`, e.g. the halting node, are left unchanged)
    - `SELECTIVE_EDGE_INDICES` — only specific successors proceed based on edge `order` attribute
 5. **Collect outputs**: Gather leaf node results into final response
 
@@ -36,6 +36,7 @@ The `GraphRunner` takes a `networkx.DiGraph`, a dict of `Runnable` instances key
 
 ```text
 NOT_READY → READY (pending_deps reaches 0) → COMPLETED (after execution)
+NOT_READY → HALTED (branch skipped; empty NodeData; excluded from legacy leaf output collection)
 ```
 
 ## Component Protocol
@@ -103,8 +104,8 @@ Controls post-node execution flow:
 | Strategy | Behavior |
 |---|---|
 | `CONTINUE` | Default — all successors execute |
-| `HALT` | All downstream nodes marked completed with empty data |
-| `SELECTIVE_EDGE_INDICES` | Only edges matching listed `order` indices proceed; rest halted |
+| `HALT` | Successors of the halting node (already `COMPLETED`) are marked `HALTED` with empty data |
+| `SELECTIVE_EDGE_INDICES` | Only edges matching listed `order` indices proceed; non-selected successors and their subgraphs marked `HALTED` |
 
 Used by: Router (selective routing), IfElse (halt branch).
 
