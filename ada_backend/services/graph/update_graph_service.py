@@ -399,11 +399,18 @@ async def update_graph_service(
                     field_name = port_instance.name
                     incoming_field_expressions_by_instance[instance.id].add(field_name)
 
-                    expr = create_field_expression(session, port_instance.field_expression.expression_json)
                     existing_port_id = db_port_instances_by_instance[instance.id].get(field_name)
                     if existing_port_id:
-                        update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
+                        port = get_input_port_instance(session, existing_port_id)
+                        if port and port.field_expression_id:
+                            update_field_expression(
+                                session, port.field_expression_id, port_instance.field_expression.expression_json
+                            )
+                        else:
+                            expr = create_field_expression(session, port_instance.field_expression.expression_json)
+                            update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
                     else:
+                        expr = create_field_expression(session, port_instance.field_expression.expression_json)
                         create_input_port_instance(
                             session=session,
                             component_instance_id=instance.id,
