@@ -47,7 +47,7 @@ def seed_scorer_components(session: Session):
         name="Scorer",
         is_agent=True,
         function_callable=True,
-        icon="tabler-percentage",
+        icon="tabler-gauge",
     )
     upsert_components(
         session=session,
