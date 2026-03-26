@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Iterator, Optional
+from typing import Any, Callable, Iterator, Optional
 
 import pandas as pd
 
@@ -145,7 +145,8 @@ class DBService(CloseMixin, ABC):
 
     def update_table(
         self,
-        new_rows: list[dict],
+        incoming_ids_with_timestamp: dict[str, Any],
+        fetch_rows_fn: Callable[[set[str]], list[dict]],
         table_name: str,
         table_definition: DBDefinition,
         id_column_name: str,
@@ -156,110 +157,92 @@ class DBService(CloseMixin, ABC):
         source_id: Optional[str] = None,
     ) -> None:
         """
-        Update a table on Database with new rows (list[dict]).
-        If the table does not exist, it will be created.
+        Update a table with incoming data identified by IDs and timestamps.
+
+        Accepts a lightweight dict of {id: timestamp} for diffing and a callback
+        that is called only for IDs that actually need to be inserted or updated.
+        Creates the table if it does not exist.
         """
-        if not new_rows:
-            LOGGER.info("Empty row list provided, skipping update")
+        if not incoming_ids_with_timestamp:
+            LOGGER.info("Empty incoming IDs provided, skipping update")
             return
 
         target_table_name = f"{schema_name}.{table_name}" if schema_name else table_name
-        table_exists = self.table_exists(table_name, schema_name=schema_name)
 
-        if not table_exists:
+        if not self.table_exists(table_name, schema_name=schema_name):
             LOGGER.info(f"Table {target_table_name} does not exist. Creating it...")
-            self.create_table(
+            self.create_table(table_name=table_name, table_definition=table_definition, schema_name=schema_name)
+            all_rows = fetch_rows_fn(set(incoming_ids_with_timestamp.keys()))
+            self.insert_rows(rows=all_rows, table_name=table_name, schema_name=schema_name)
+            return
+
+        all_existing_ids = self._fetch_column_as_set(
+            table_name=table_name,
+            column_name=id_column_name,
+            schema_name=schema_name,
+            source_id=source_id,
+        )
+
+        query = (
+            f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name}"
+            if timestamp_column_name
+            else f"SELECT {id_column_name} FROM {target_table_name}"
+        )
+        filters = []
+        if source_id is not None:
+            filters.append(f"source_id = '{source_id}'")
+        if sql_query_filter:
+            filters.append(f"({sql_query_filter})")
+        final_query = f"{query} WHERE {' AND '.join(filters)};" if filters else f"{query};"
+        existing_rows = self._fetch_sql_query_as_dicts(final_query)
+
+        existing_by_id: dict = {}
+        for row in existing_rows:
+            row_id = cast_id_value(row[id_column_name], id_column_name, table_definition)
+            existing_by_id[row_id] = row
+
+        incoming_ids = set(incoming_ids_with_timestamp.keys())
+        ids_to_add = incoming_ids - all_existing_ids
+        common_ids = incoming_ids & set(existing_by_id.keys())
+
+        if timestamp_column_name and not sql_query_filter:
+            ids_to_update = set()
+            for shared_id in common_ids:
+                incoming_dt = parse_datetime(incoming_ids_with_timestamp[shared_id])
+                existing_dt = parse_datetime(existing_by_id[shared_id].get(timestamp_column_name))
+                if incoming_dt is not None and existing_dt is not None:
+                    if make_naive_utc(incoming_dt) > make_naive_utc(existing_dt):
+                        ids_to_update.add(shared_id)
+                elif incoming_ids_with_timestamp[shared_id] != existing_by_id[shared_id].get(timestamp_column_name):
+                    ids_to_update.add(shared_id)
+        else:
+            ids_to_update = common_ids
+
+        ids_to_delete = set(existing_by_id.keys()) - incoming_ids if not append_mode else set()
+
+        LOGGER.info(f"Diff: {len(ids_to_add)} to add, {len(ids_to_update)} to update, {len(ids_to_delete)} to delete")
+
+        if ids_to_delete:
+            self.delete_rows_from_table(
                 table_name=table_name,
+                ids=list(ids_to_delete),
+                id_column_name=id_column_name,
+                schema_name=schema_name,
+            )
+
+        if ids_to_update:
+            rows_to_update = fetch_rows_fn(ids_to_update)
+            self._refresh_table_from_rows(
+                rows=rows_to_update,
+                table_name=table_name,
+                id_column=id_column_name,
                 table_definition=table_definition,
                 schema_name=schema_name,
             )
-            self.insert_rows(rows=new_rows, table_name=table_name, schema_name=schema_name)
-        else:
-            all_existing_ids = self._fetch_column_as_set(
-                table_name=table_name,
-                column_name=id_column_name,
-                schema_name=schema_name,
-                source_id=source_id,
-            )
 
-            query = (
-                f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name}"
-                if timestamp_column_name
-                else f"SELECT {id_column_name} FROM {target_table_name}"
-            )
-            filters = []
-            if source_id is not None:
-                filters.append(f"source_id = '{source_id}'")
-            if sql_query_filter:
-                filters.append(f"({sql_query_filter})")
-            final_query = f"{query} WHERE {' AND '.join(filters)};" if filters else f"{query};"
-            existing_rows = self._fetch_sql_query_as_dicts(final_query)
-
-            existing_rows_by_id: dict = {}
-            for row in existing_rows:
-                row_id = cast_id_value(row[id_column_name], id_column_name, table_definition)
-                existing_rows_by_id[row_id] = row
-
-            incoming_rows_by_id: dict = {}
-            for row in new_rows:
-                row_id = cast_id_value(row[id_column_name], id_column_name, table_definition)
-                incoming_rows_by_id[row_id] = row
-
-            common_ids = set(incoming_rows_by_id.keys()) & set(existing_rows_by_id.keys())
-
-            if timestamp_column_name and not sql_query_filter:
-                ids_to_update = set()
-                for shared_id in common_ids:
-                    incoming_dt = parse_datetime(incoming_rows_by_id[shared_id].get(timestamp_column_name))
-                    existing_dt = parse_datetime(existing_rows_by_id[shared_id].get(timestamp_column_name))
-                    if incoming_dt is not None and existing_dt is not None:
-                        if make_naive_utc(incoming_dt) > make_naive_utc(existing_dt):
-                            ids_to_update.add(shared_id)
-                    elif incoming_rows_by_id[shared_id] != existing_rows_by_id[shared_id]:
-                        ids_to_update.add(shared_id)
-            else:
-                ids_to_update = common_ids
-
-            LOGGER.info(f"Found {len(ids_to_update)} rows to update in the table")
-            rows_to_update = [incoming_rows_by_id[row_id] for row_id in ids_to_update]
-
-            if rows_to_update:
-                self._refresh_table_from_rows(
-                    rows=rows_to_update,
-                    table_name=table_name,
-                    id_column=id_column_name,
-                    table_definition=table_definition,
-                    schema_name=schema_name,
-                )
-            else:
-                LOGGER.info("No rows to update, skipping update operation")
-
-            existing_count = sum(
-                1
-                for row in new_rows
-                if cast_id_value(row[id_column_name], id_column_name, table_definition) in all_existing_ids
-            )
-            LOGGER.info(f"Found {existing_count} existing rows in the table")
-            rows_to_insert = [
-                row
-                for row in new_rows
-                if cast_id_value(row[id_column_name], id_column_name, table_definition) not in all_existing_ids
-            ]
-            self.insert_rows(rows_to_insert, table_name, schema_name=schema_name)
-
-            if not append_mode:
-                filtered_existing_ids = set(existing_rows_by_id.keys())
-                incoming_ids_in_scope = set(incoming_rows_by_id.keys())
-                ids_to_delete = filtered_existing_ids - incoming_ids_in_scope
-
-                LOGGER.info(f"Found {len(ids_to_delete)} rows to delete in the filtered scope")
-                if ids_to_delete:
-                    self.delete_rows_from_table(
-                        table_name=table_name,
-                        ids=list(ids_to_delete),
-                        id_column_name=id_column_name,
-                        schema_name=schema_name,
-                    )
+        if ids_to_add:
+            rows_to_add = fetch_rows_fn(ids_to_add)
+            self.insert_rows(rows_to_add, table_name, schema_name=schema_name)
 
     @abstractmethod
     def _refresh_table_from_rows(
@@ -283,38 +266,6 @@ class DBService(CloseMixin, ABC):
         """Convenience method that accepts a pandas DataFrame. Prefer _refresh_table_from_rows."""
         rows = df.to_dict(orient="records") if hasattr(df, "to_dict") else list(df)
         self._refresh_table_from_rows(rows, table_name, id_column, table_definition, schema_name)
-
-    def delete_stale_rows(
-        self,
-        table_name: str,
-        id_column_name: str,
-        incoming_ids: set,
-        table_definition: DBDefinition,
-        schema_name: Optional[str] = None,
-        sql_query_filter: Optional[str] = None,
-        source_id: Optional[str] = None,
-    ) -> None:
-        """Delete rows in the scoped table whose IDs are not in incoming_ids."""
-        target_table_name = f"{schema_name}.{table_name}" if schema_name else table_name
-        query = f"SELECT {id_column_name} FROM {target_table_name}"
-        filters = []
-        if source_id is not None:
-            filters.append(f"source_id = '{source_id}'")
-        if sql_query_filter:
-            filters.append(f"({sql_query_filter})")
-        final_query = f"{query} WHERE {' AND '.join(filters)};" if filters else f"{query};"
-        existing_rows = self._fetch_sql_query_as_dicts(final_query)
-        existing_ids = {cast_id_value(row[id_column_name], id_column_name, table_definition) for row in existing_rows}
-        cast_incoming_ids = {cast_id_value(id_, id_column_name, table_definition) for id_ in incoming_ids}
-        ids_to_delete = existing_ids - cast_incoming_ids
-        LOGGER.info(f"Found {len(ids_to_delete)} stale rows to delete in the filtered scope")
-        if ids_to_delete:
-            self.delete_rows_from_table(
-                table_name=table_name,
-                ids=list(ids_to_delete),
-                id_column_name=id_column_name,
-                schema_name=schema_name,
-            )
 
     @abstractmethod
     def delete_rows_from_table(

@@ -246,9 +246,13 @@ async def upload_website_source(
     LOGGER.info(f"Syncing {len(all_chunks_df)} total chunks to db table {storage_table_name}")
 
     all_chunks_df_for_db = transform_chunks_df_for_unified_table(all_chunks_df, source_id)
+    all_rows = all_chunks_df_for_db.to_dict(orient="records")
+    rows_by_id = {row[CHUNK_ID_COLUMN_NAME]: row for row in all_rows}
+    ids_with_ts = {row[CHUNK_ID_COLUMN_NAME]: row.get(TIMESTAMP_COLUMN_NAME) for row in all_rows}
 
     db_service.update_table(
-        new_rows=all_chunks_df_for_db.to_dict(orient="records"),
+        incoming_ids_with_timestamp=ids_with_ts,
+        fetch_rows_fn=lambda ids: [rows_by_id[id_] for id_ in ids if id_ in rows_by_id],
         table_name=storage_table_name,
         table_definition=UNIFIED_TABLE_DEFINITION,
         id_column_name=CHUNK_ID_COLUMN_NAME,
