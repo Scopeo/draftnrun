@@ -84,6 +84,14 @@ Every ID you pass to a tool **must** come from a previous tool response in this 
 (`list_*`, `get_*`, `create_*`, `search_*`). If you do not have the ID, call the appropriate \
 discovery tool first. **Never fabricate, guess, or hard-code UUIDs.**
 
+UUIDs are validated at the MCP layer (format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`, \
+5 hyphen-separated groups). A malformed UUID (wrong group count, missing hyphen) is rejected \
+before reaching the backend. If you get a UUID parse error, double-check hyphens and group \
+lengths — copy the ID verbatim from the tool response.
+
+To avoid ``graph_runner_id`` copy errors, use `get_draft_graph(project_id)` — it resolves the \
+editable draft runner automatically and returns the graph alongside the resolved runner ID.
+
 ## AI Builder Habits
 
 - Never copy IDs, instance UUIDs, component IDs, source IDs, or graph JSON from another \
@@ -389,7 +397,9 @@ may break downstream field expressions.
 `update_graph` sends the full graph structure for the selected runner. The safe pattern:
 
 1. `get_project_overview(project_id)` — identify the editable draft runner
-2. `get_graph(project_id, graph_runner_id)` — get current state
+2. `get_graph(project_id, graph_runner_id)` — get current state \
+(or use `get_draft_graph(project_id)` to skip the runner lookup — it resolves the draft \
+automatically and returns both the graph and the `graph_runner_id`)
 3. Modify the response (add/remove nodes, change parameters, rewire ports)
 4. `update_graph(project_id, graph_runner_id, modified_graph)` — send it back
 
@@ -1162,9 +1172,18 @@ A tagged snapshot is immutable even if it still feels like a draft-like version.
 
 ### `publish_to_production(project_id, graph_runner_id)`
 
-- promotes the supplied runner to production
-- creates a brand new draft runner for continued editing
-- remaps instance UUIDs in that new draft
+- tags the current draft with an auto-incremented version
+- promotes it to live production
+- creates a brand-new cloned draft runner for continued editing
+- returns `draft_graph_runner_id` and `prod_graph_runner_id`
+- the supplied runner must be the editable draft (env='draft', untagged)
+
+### `promote_version_to_env(project_id, graph_runner_id, env)`
+
+- low-level: rebinds a runner to an environment without tagging or cloning
+- does NOT create a new draft runner
+- use only on tagged/past versions (e.g. rollback production to older version)
+- do NOT call this on the editable draft — use `publish_to_production` instead
 
 After publish, switch to the returned `draft_graph_runner_id` and call `get_graph` again before \
 making more edits.
@@ -1172,10 +1191,11 @@ making more edits.
 ## Safe Workflow
 
 1. `get_project_overview(project_id)` — identify the editable draft and current production runner
-2. `get_graph(project_id, draft_runner_id)` — inspect current draft
+2. `get_graph(project_id, draft_runner_id)` — inspect current draft \
+(or `get_draft_graph(project_id)` to skip the runner lookup)
 3. `update_graph(...)` or `configure_agent(...)`
 4. `save_graph_version(...)` — snapshot when ready
-5. `publish_to_production(...)` — go live
+5. `publish_to_production(...)` — go live (tags, promotes, creates fresh draft)
 6. switch to the returned new draft for further work
 
 ## Production-Only Surfaces
@@ -1437,6 +1457,15 @@ Safest approach:
 1. Call `list_my_organizations` (can be parallel with auth-only tools)
 2. Call `select_organization` and **wait for success**
 3. Only then call org-scoped tools (`list_projects`, etc.)
+
+## `list_projects` with `include_templates` Returns Cross-Org Projects
+
+When `include_templates=True`, the backend returns template projects from **all** organizations \
+(e.g. the platform Templates org), not just the active org. This is by design — templates are \
+global resources — but it can be surprising if you expect org-scoped results.
+
+Workaround: filter the response by `organization_id` matching the active org (from \
+`get_current_context`) to isolate the org's own projects.
 
 ## Response Truncation Affects Large QA Datasets
 

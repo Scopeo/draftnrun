@@ -4,10 +4,12 @@ These tools manage the user's active organization session and provide
 access to org membership data via direct Supabase queries.
 """
 
+from typing import Annotated
 from uuid import UUID
 
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_access_token
+from pydantic import Field
 
 from mcp_server import context as _ctx
 from mcp_server.auth.supabase_client import (
@@ -58,14 +60,20 @@ def register(mcp: FastMCP) -> None:
         return await list_user_organizations(jwt, user_id)
 
     @mcp.tool()
-    async def select_organization(organization_id: UUID) -> dict:
+    async def select_organization(
+        organization_id: Annotated[
+            UUID,
+            Field(
+                description=(
+                    "The organization ID (from list_my_organizations). Never invent this value."
+                ),
+            ),
+        ],
+    ) -> dict:
         """Set your active organization for this session.
 
         All subsequent org-scoped tools will operate on this organization.
         Use list_my_organizations first to see available orgs.
-
-        Args:
-            organization_id: The organization ID (from list_my_organizations). Never invent this value.
         """
         jwt, user_id = _get_auth()
         orgs = await list_user_organizations(jwt, user_id)
@@ -104,12 +112,10 @@ def register(mcp: FastMCP) -> None:
         }
 
     @mcp.tool()
-    async def list_org_members(organization_id: UUID) -> list[dict]:
-        """List members of an organization with their roles.
-
-        Args:
-            organization_id: The organization ID (from list_my_organizations).
-        """
+    async def list_org_members(
+        organization_id: Annotated[UUID, Field(description="The organization ID (from list_my_organizations).")],
+    ) -> list[dict]:
+        """List members of an organization with their roles."""
         jwt, user_id = _get_auth()
         org_id_str = str(organization_id)
         await _require_target_org_role(
@@ -119,14 +125,12 @@ def register(mcp: FastMCP) -> None:
         return await get_org_members(jwt, org_id_str)
 
     @mcp.tool()
-    async def invite_org_member(organization_id: UUID, email: str, role: str = "member") -> dict:
-        """Invite a user to an organization by email. Requires admin role.
-
-        Args:
-            organization_id: Target organization ID (from list_my_organizations).
-            email: Email address of the person to invite.
-            role: Role to assign (member, developer, admin). Defaults to member.
-        """
+    async def invite_org_member(
+        organization_id: Annotated[UUID, Field(description="Target organization ID (from list_my_organizations).")],
+        email: Annotated[str, Field(description="Email address of the person to invite.")],
+        role: Annotated[str, Field(description="Role to assign (member, developer, admin).")] = "member",
+    ) -> dict:
+        """Invite a user to an organization by email. Requires admin role."""
         _ALLOWED_INVITE_ROLES = {"member", "developer", "admin"}
         if role not in _ALLOWED_INVITE_ROLES:
             raise ValueError(

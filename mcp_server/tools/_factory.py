@@ -14,11 +14,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from inspect import Parameter, Signature
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import quote
 from uuid import UUID
 
 from fastmcp import FastMCP
+from pydantic import Field
 
 from mcp_server.client import api
 from mcp_server.context import require_org_context, require_role
@@ -147,21 +148,20 @@ def _build_handler(spec: ToolSpec):
 
     sig_params = []
     for p in all_params:
-        kw: dict[str, Any] = {"annotation": p.annotation}
+        annotation = Annotated[p.annotation, Field(description=p.description)] if p.description else p.annotation
+        kw: dict[str, Any] = {"annotation": annotation}
         if p.default is not Parameter.empty:
             kw["default"] = p.default
         sig_params.append(Parameter(p.name, Parameter.POSITIONAL_OR_KEYWORD, **kw))
 
     handler.__signature__ = Signature(sig_params, return_annotation=spec.return_annotation)
-    handler.__annotations__ = {p.name: p.annotation for p in all_params}
+    handler.__annotations__ = {
+        p.name: (Annotated[p.annotation, Field(description=p.description)] if p.description else p.annotation)
+        for p in all_params
+    }
     handler.__annotations__["return"] = spec.return_annotation
 
-    doc_lines = [spec.description]
-    documented = [p for p in all_params if p.description]
-    if documented:
-        doc_lines += ["", "Args:"]
-        doc_lines += [f"    {p.name}: {p.description}" for p in documented]
-    handler.__doc__ = "\n".join(doc_lines)
+    handler.__doc__ = spec.description
 
     return handler
 

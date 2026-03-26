@@ -5,9 +5,10 @@ the AI cannot override it to see components above the org's tier.
 """
 
 import logging
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastmcp import FastMCP
+from pydantic import Field
 
 from mcp_server.client import api
 from mcp_server.context import require_org_context
@@ -60,17 +61,23 @@ def register(mcp: FastMCP) -> None:
         return await api.get(f"/components/{org['org_id']}", jwt, trim=False, release_stage=release_stage)
 
     @mcp.tool()
-    async def search_components(query: str, category: Optional[str] = None) -> list[dict]:
+    async def search_components(
+        query: Annotated[str, Field(description="Search term to match against component name or description.")],
+        category: Annotated[
+            Optional[str],
+            Field(
+                description=(
+                    "Optional category filter (e.g. 'AI', 'Workflow Logic', 'RAG', 'Search', "
+                    "'SQL/Data', 'Integrations', 'Code', 'Files')."
+                ),
+            ),
+        ] = None,
+    ) -> list[dict]:
         """Search the component catalog by name or description.
 
         Returns a compact summary of matching components including port
         definitions (input/output port names needed for edges, port_mappings,
         and field expressions in `update_graph`).
-
-        Args:
-            query: Search term to match against component name or description.
-            category: Optional category filter (e.g. 'AI', 'Workflow Logic',
-                'RAG', 'Search', 'SQL/Data', 'Integrations', 'Code', 'Files').
         """
         query = query.strip()
         if not query:

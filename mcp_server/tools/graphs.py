@@ -5,9 +5,11 @@ edit draft, save a version snapshot, publish to production, view history.
 """
 
 import logging
+from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastmcp import FastMCP
+from pydantic import Field
 
 from mcp_server.client import ToolError, api
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
@@ -48,18 +50,24 @@ PROXY_SPECS: list[ToolSpec] = [
         path_params=(_P_PROJECT, _P_RUNNER),
     ),
     ToolSpec(
-        name="publish_to_production",
+        name="promote_version_to_env",
         description=(
-            "Publish a graph version to production.\n\n"
-            "The supplied runner becomes the live production version that serves API "
-            "requests, cron jobs, widgets, and other production-oriented surfaces. "
-            "The backend also creates a fresh draft runner for continued editing; "
-            "re-fetch the graph using the returned `draft_graph_runner_id` before "
-            "making more changes."
+            "Promote a tagged version to an environment (low-level).\n\n"
+            "Rebinds an existing graph runner to the specified environment. "
+            "This does NOT tag, clone, or create a new draft runner — it only "
+            "moves the env pointer.\n\n"
+            "⚠️ Do NOT call this on the editable draft. Use `publish_to_production` "
+            "to deploy the draft (which tags, promotes, and creates a fresh draft). "
+            "This tool is for advanced scenarios like rolling back production to a "
+            "previously tagged version."
         ),
         method="put",
-        path=f"{_GRAPH_BASE}/env/production",
-        path_params=(_P_PROJECT, _P_RUNNER),
+        path=f"{_GRAPH_BASE}/env/{{env}}",
+        path_params=(
+            _P_PROJECT,
+            _P_RUNNER,
+            Param("env", str, description="Target environment: 'production' or 'draft'."),
+        ),
     ),
     ToolSpec(
         name="get_graph_history",
@@ -162,7 +170,86 @@ def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, PROXY_SPECS)
 
     @mcp.tool()
-    async def update_graph(project_id: UUID, graph_runner_id: UUID, graph_data: dict) -> dict:
+    async def publish_to_production(
+        project_id: Annotated[
+            UUID, Field(description="The project ID (from list_projects or get_project_overview).")
+        ],
+        graph_runner_id: Annotated[
+            UUID, Field(description="The editable draft runner ID (from get_project_overview).")
+        ],
+    ) -> dict:
+        """Publish the current draft to production (full deploy).
+
+        Tags the current draft with an auto-incremented version, promotes it to the
+        live production environment, and creates a brand-new draft runner for continued
+        editing.
+
+        Returns `draft_graph_runner_id` (the new editable draft) and
+        `prod_graph_runner_id` (now serving production). Always switch to
+        `draft_graph_runner_id` and call `get_graph` before making further edits.
+
+        The supplied `graph_runner_id` must be the current editable draft
+        (env='draft', untagged).
+        """
+        jwt, _ = _get_auth()
+        return await api.post(
+            f"/projects/{project_id}/graph/{graph_runner_id}/deploy", jwt
+        )
+
+    @mcp.tool()
+    async def get_draft_graph(
+        project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
+    ) -> dict:
+        """Get the full graph for a project's editable draft — resolves the draft runner automatically.
+
+        Convenience wrapper that avoids passing ``graph_runner_id`` directly.
+        Internally fetches the project, finds the editable draft runner
+        (env='draft', untagged), and returns the full untrimmed graph along
+        with the resolved ``graph_runner_id``.
+
+        Use this when you need the current draft but don't have the
+        ``graph_runner_id`` handy.  For production graphs or specific tagged
+        versions, use ``get_graph`` with an explicit runner ID.
+        """
+        jwt, _ = _get_auth()
+        project = await api.get(f"/projects/{project_id}", jwt)
+
+        draft = None
+        for gr in project.get("graph_runners", []):
+            if gr.get("env") == "draft" and gr.get("tag_name") is None:
+                draft = gr
+                break
+
+        if not draft:
+            raise ToolError(
+                f"No editable draft runner found for project {project_id}. "
+                "The project may not have been published yet or may lack a draft. "
+                "Use get_project_overview(project_id) to inspect all runners."
+            )
+
+        runner_id = draft.get("graph_runner_id") or draft.get("id")
+        graph = await api.get(
+            f"/projects/{project_id}/graph/{runner_id}", jwt, trim=False
+        )
+        return {
+            "graph_runner_id": runner_id,
+            "graph": graph,
+        }
+
+    @mcp.tool()
+    async def update_graph(
+        project_id: Annotated[
+            UUID, Field(description="The project ID (from list_projects or get_project_overview).")
+        ],
+        graph_runner_id: Annotated[
+            UUID,
+            Field(description="The graph runner version ID — must be a draft (from get_project_overview)."),
+        ],
+        graph_data: Annotated[
+            dict,
+            Field(description="Complete graph definition (component_instances, edges, port_mappings, relationships)."),
+        ],
+    ) -> dict:
         """Replace the full graph definition (PUT semantics).
 
         ⚠️ REQUIRED: Call `get_guide('graphs')` before using this tool for the
@@ -206,11 +293,6 @@ def register(mcp: FastMCP) -> None:
         - `get_graph` returns `field_expressions` (normalized read format).
           When writing, use `input_port_instances` on component instances —
           do NOT copy `field_expressions` from `get_graph` into `update_graph`.
-
-        Args:
-            project_id: The project ID (from list_projects or get_project_overview).
-            graph_runner_id: The graph runner version ID — must be a draft (from get_project_overview).
-            graph_data: Complete graph definition.
         """
         jwt, _ = _get_auth()
         graph_data = _assign_missing_ids(graph_data)
@@ -230,10 +312,24 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def update_component_parameters(
-        project_id: UUID,
-        graph_runner_id: UUID,
-        component_instance_id: UUID,
-        parameters: dict,
+        project_id: Annotated[
+            UUID, Field(description="The project ID (from list_projects or get_project_overview).")
+        ],
+        graph_runner_id: Annotated[
+            UUID,
+            Field(description="The graph runner version ID — must be a draft (from get_project_overview)."),
+        ],
+        component_instance_id: Annotated[
+            UUID,
+            Field(
+                description="The ID of the component instance to update"
+                " (from get_graph — each node has an 'id' field)."
+            ),
+        ],
+        parameters: Annotated[
+            dict,
+            Field(description='Dict of parameter names to new values. Only provided keys are updated.'),
+        ],
     ) -> dict:
         """Update specific parameters on a single component instance within a graph.
 
@@ -252,16 +348,6 @@ def register(mcp: FastMCP) -> None:
         unless you intend to change the component's dynamic output ports.
         Changing these fields will delete and recreate output port instances,
         which may break downstream field expressions.
-
-        Args:
-            project_id: The project ID (from list_projects or get_project_overview).
-            graph_runner_id: The graph runner version ID — must be a draft
-                (from get_project_overview).
-            component_instance_id: The ID of the component instance to update
-                (from get_graph — each node has an ``id`` field).
-            parameters: Dict of parameter names to new values. Only provided
-                keys are updated. Example: ``{"initial_prompt": "You are a
-                helpful assistant."}``.
         """
         jwt, _ = _get_auth()
 

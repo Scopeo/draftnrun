@@ -9,10 +9,11 @@ to preserve the full payload.  Trimming a read-modify-write response
 corrupts the write-back (empty model_parameters / tools).
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 from uuid import UUID
 
 from fastmcp import FastMCP
+from pydantic import Field
 
 from mcp_server.client import ToolError, api
 from mcp_server.context import require_org_context
@@ -175,14 +176,35 @@ def _build_tool_entry(component: dict, tool_parameters: dict) -> dict:
 def register(mcp: FastMCP) -> None:
     @mcp.tool()
     async def configure_agent(
-        agent_id: UUID,
-        graph_runner_id: UUID,
-        system_prompt: Optional[str] = None,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
+        agent_id: Annotated[
+            UUID, Field(description="The agent (project) ID (from list_agents or create_agent).")
+        ],
+        graph_runner_id: Annotated[
+            UUID, Field(description="The graph runner version ID (from get_project_overview).")
+        ],
+        system_prompt: Annotated[
+            Optional[str], Field(description="The agent's instructions / system prompt.")
+        ] = None,
+        model: Annotated[
+            Optional[str],
+            Field(
+                description="LLM model identifier exactly as listed in the agent's completion_model"
+                " options (e.g. 'gpt-4.1', 'anthropic:claude-sonnet-4-5')."
+                " Raises ValueError if not in the available options."
+            ),
+        ] = None,
+        temperature: Annotated[
+            Optional[float], Field(description="Sampling temperature (0.0 - 2.0).")
+        ] = None,
+        max_tokens: Annotated[
+            Optional[int], Field(description="Maximum response tokens.")
+        ] = None,
+        name: Annotated[
+            Optional[str], Field(description="Update the agent's display name.")
+        ] = None,
+        description: Annotated[
+            Optional[str], Field(description="Update the agent's description.")
+        ] = None,
     ) -> dict:
         """Configure an agent's model settings and system prompt.
 
@@ -198,19 +220,6 @@ def register(mcp: FastMCP) -> None:
         against the options available on this agent.  Use ``get_graph()`` to
         inspect the ``completion_model`` parameter's options list, or omit the
         ``model`` argument to keep the current model.
-
-        Args:
-            agent_id: The agent (project) ID (from list_agents or create_agent).
-            graph_runner_id: The graph runner version ID (from get_project_overview).
-            system_prompt: The agent's instructions / system prompt.
-            model: LLM model identifier exactly as listed in the agent's
-                completion_model options (e.g. 'gpt-4.1',
-                'anthropic:claude-sonnet-4-5').  Raises ValueError if the
-                model is not in the available options.
-            temperature: Sampling temperature (0.0 - 2.0).
-            max_tokens: Maximum response tokens.
-            name: Update the agent's display name.
-            description: Update the agent's description.
         """
         jwt, _ = _get_auth()
         await _require_agent_project(jwt, agent_id)
@@ -273,10 +282,23 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def add_tool_to_agent(
-        agent_id: UUID,
-        graph_runner_id: UUID,
-        component_name: str,
-        tool_parameters: Optional[dict] = None,
+        agent_id: Annotated[
+            UUID, Field(description="The agent (project) ID (from list_agents or create_agent).")
+        ],
+        graph_runner_id: Annotated[
+            UUID, Field(description="The graph runner version ID (from get_project_overview).")
+        ],
+        component_name: Annotated[
+            str,
+            Field(
+                description="Component display name from search_components()"
+                " (e.g. 'Internet Search (Linkup)'). Case-insensitive."
+            ),
+        ],
+        tool_parameters: Annotated[
+            Optional[dict],
+            Field(description="Optional overrides for tool parameters. Defaults are used for unspecified params."),
+        ] = None,
     ) -> dict:
         """Add a tool to an agent by component name.
 
@@ -296,14 +318,6 @@ def register(mcp: FastMCP) -> None:
         - this helper is one-tool-per-component, matching the frontend UI
         - integration-backed tools are rejected because this helper cannot wire
           the required integration relationship automatically
-
-        Args:
-            agent_id: The agent (project) ID (from list_agents or create_agent).
-            graph_runner_id: The graph runner version ID (from get_project_overview).
-            component_name: Component display name from search_components()
-                (e.g. 'Internet Search (Linkup)', 'Internet Search (OpenAI)').
-            tool_parameters: Optional overrides for tool parameters
-                (e.g. {"timeout": 30}). Defaults are used for unspecified params.
         """
         if tool_parameters is None:
             tool_parameters = {}
@@ -338,17 +352,15 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def remove_tool_from_agent(
-        agent_id: UUID,
-        graph_runner_id: UUID,
-        component_name: str,
+        agent_id: Annotated[
+            UUID, Field(description="The agent (project) ID (from list_agents or create_agent).")
+        ],
+        graph_runner_id: Annotated[
+            UUID, Field(description="The graph runner version ID (from get_project_overview).")
+        ],
+        component_name: Annotated[str, Field(description="Name of the component to remove.")],
     ) -> dict:
-        """Remove a tool from an agent by component name.
-
-        Args:
-            agent_id: The agent (project) ID (from list_agents or create_agent).
-            graph_runner_id: The graph runner version ID (from get_project_overview).
-            component_name: Name of the component to remove.
-        """
+        """Remove a tool from an agent by component name."""
         jwt, _ = _get_auth()
         await _require_agent_project(jwt, agent_id)
         current = await api.get(f"/agents/{agent_id}/versions/{graph_runner_id}", jwt, trim=False)

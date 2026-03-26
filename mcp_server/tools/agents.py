@@ -1,8 +1,10 @@
 """Agent management tools."""
 
+from typing import Annotated
 from uuid import UUID
 
 from fastmcp import FastMCP
+from pydantic import Field
 
 from mcp_server.client import api
 from mcp_server.context import require_role
@@ -36,7 +38,10 @@ def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, PROXY_SPECS)
 
     @mcp.tool()
-    async def create_agent(name: str, description: str = "") -> dict:
+    async def create_agent(
+        name: Annotated[str, Field(description="Agent name. Must not be empty or whitespace-only.")],
+        description: Annotated[str, Field(description="Optional description.")] = "",
+    ) -> dict:
         """Create a new agent in the active organization.
 
         An agent is a single AI node that is also the start node.  It receives
@@ -47,10 +52,6 @@ def register(mcp: FastMCP) -> None:
         Requires developer role or above. Auto-generates a unique ID, icon,
         and color. Use `configure_agent` afterwards to set the system prompt,
         model, and tools.
-
-        Args:
-            name: Agent name. Must not be empty or whitespace-only.
-            description: Optional description.
         """
         name = name.strip()
         if not name:
