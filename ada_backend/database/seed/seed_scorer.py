@@ -60,7 +60,10 @@ def seed_scorer_components(session: Session):
         component_id=COMPONENT_UUIDS["scorer"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.BETA,
-        description="A component that scores content from 0 to 100 based on a criterion using AI.",
+        description=(
+            "Assign a numerical score from 0 to 100, based on predefined criteria, "
+            "to quantitatively assess the quality of a given entity."
+        ),
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["scorer_tool_description"],
     )
     upsert_component_versions(
@@ -114,10 +117,7 @@ def seed_scorer_components(session: Session):
 
 def seed_scorer_parameter_groups(session: Session):
     parameter_groups = [
-        db.ParameterGroup(
-            id=SCORER_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
-            name="Advanced LLM Parameters"
-        ),
+        db.ParameterGroup(id=SCORER_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"], name="Advanced LLM Parameters"),
     ]
     build_parameters_group(session, parameter_groups)
 
@@ -145,5 +145,3 @@ def seed_scorer_parameter_groups(session: Session):
         },
     }
     build_components_parameters_assignments_to_parameter_groups(session, parameter_group_assignments)
-
-    session.commit()

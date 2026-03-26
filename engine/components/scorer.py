@@ -5,8 +5,9 @@ from typing import Optional, Type
 
 from pydantic import BaseModel, Field
 
-from ada_backend.database.models import UIComponent, UIComponentProperties
+from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from engine.components.component import Component
+from engine.components.errors import ScorerError
 from engine.components.llm_call import LLMCallAgent, LLMCallInputs
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService
@@ -16,32 +17,43 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_SCORER_TOOL_DESCRIPTION = ToolDescription(
     name="Scorer",
-    description="Scores content from 0 to 100 based on a criterion using AI.",
+    description="Scores an item from 0 to 100 based on a criterion using AI.",
     tool_properties={
         "input": {
             "type": "string",
-            "description": "The content to score",
+            "description": "The item to be scored",
         },
         "criteria": {
             "type": "string",
-            "description": "The criterion used to evaluate and score the content from 0 to 100",
+            "description": "The criterion used to evaluate and score the item from 0 to 100",
         },
     },
     required_tool_properties=["input", "criteria"],
 )
 
 PROMPT_TEMPLATE = (
-    "You are an evaluation assistant. Score the following content from 0 to 100 "
-    "based on the criterion provided.\n\n"
-    "Content: {input}\n\n"
-    "Criterion: {criteria}\n\n"
+    "You are a strict, expert evaluator. Your task is to objectively assess the quality of the provided item "
+    "against the given criterion and assign a precise numerical score from 0 to 100.\n\n"
+    "## Item to evaluate\n"
+    "{input}\n\n"
+    "## Evaluation criterion\n"
+    "{criteria}\n\n"
     "{additional_context_section}"
-    "Provide a score from 0 to 100 where:\n"
-    "- 0-20: Very poor\n"
-    "- 21-40: Poor\n"
-    "- 41-60: Average\n"
-    "- 61-80: Good\n"
-    "- 81-100: Excellent"
+    "## Scoring guidelines\n"
+    "Use the FULL range of the scale. Do NOT default to middle values — be decisive.\n"
+    "- 0-10: Completely fails the criterion; fundamentally broken or irrelevant.\n"
+    "- 11-25: Severe deficiencies; meets almost none of the criterion's expectations.\n"
+    "- 26-40: Below average; significant gaps that undermine quality.\n"
+    "- 41-55: Mediocre; partially meets the criterion but with notable weaknesses.\n"
+    "- 56-70: Adequate; meets the basic expectations with minor shortcomings.\n"
+    "- 71-85: Good; clearly satisfies the criterion with only small areas for improvement.\n"
+    "- 86-95: Excellent; exceeds expectations with minimal or negligible issues.\n"
+    "- 96-100: Exceptional; near-perfect or perfect execution of the criterion.\n\n"
+    "## Instructions\n"
+    "1. Analyze the item strictly through the lens of the stated criterion.\n"
+    "2. Identify specific strengths and weaknesses relevant to the criterion.\n"
+    "3. Assign a score that precisely reflects your assessment.\n"
+    "4. Provide a concise reason justifying the score with concrete observations."
 )
 
 OUTPUT_FORMAT = {
@@ -51,49 +63,57 @@ OUTPUT_FORMAT = {
         "type": "object",
         "properties": {
             "score": {
-                "type": "integer",
+                "type": "number",
                 "description": "Score from 0 to 100",
-                "minimum": 0,
-                "maximum": 100,
-            }
+            },
+            "reason": {
+                "type": "string",
+                "description": "Brief explanation for the assigned score",
+            },
         },
         "additionalProperties": False,
-        "required": ["score"],
+        "required": ["score", "reason"],
     },
 }
 
 
 class ScorerInputs(BaseModel):
     input: str = Field(
-        description="The content to score",
+        description="The item to be scored",
         json_schema_extra={
+            "display_order": 0,
+            "parameter_type": ParameterType.STRING,
             "ui_component": UIComponent.TEXTAREA,
             "ui_component_properties": UIComponentProperties(
-                label="Input",
-                placeholder="Enter the content to score",
+                label="Item",
+                placeholder="Enter the item to be scored",
             ).model_dump(exclude_unset=True, exclude_none=True),
         },
     )
     criteria: str = Field(
-        description="The criterion used to evaluate and score the content from 0 to 100",
+        description="The criterion used to evaluate and score the item from 0 to 100",
         json_schema_extra={
+            "display_order": 1,
+            "parameter_type": ParameterType.STRING,
             "ui_component": UIComponent.TEXTAREA,
             "ui_component_properties": UIComponentProperties(
-                label="Scoring Criteria",
-                placeholder="Clarity of the message: The message must be clear and understandable",
-                description="The criterion used to evaluate and score the content from 0 to 100.",
+                label="Criteria",
+                placeholder="Enter the scoring criteria, e.g., 'Clarity of the message:'",
+                description="The criterion used to evaluate and score the item from 0 to 100.",
             ).model_dump(exclude_unset=True, exclude_none=True),
         },
     )
     additional_context: Optional[str] = Field(
         default=None,
-        description="Additional context to help with scoring",
+        description="Additional context to guide the scoring",
         json_schema_extra={
+            "display_order": 2,
             "is_tool_input": False,
             "ui_component": UIComponent.TEXTAREA,
             "ui_component_properties": UIComponentProperties(
                 label="Additional Context",
-                placeholder="Add any additional context or instructions for scoring",
+                placeholder="[Optional] ex: 'The criteria here pertain to the clarity of the message'",
+                description="Provide extra context to guide the scoring.",
             ).model_dump(exclude_unset=True, exclude_none=True),
         },
     )
@@ -101,6 +121,8 @@ class ScorerInputs(BaseModel):
 
 class ScorerOutputs(BaseModel):
     score: int = Field(description="Score from 0 to 100")
+    reason: str = Field(description="Explanation for the assigned score")
+    output: str = Field(description="Full scoring result with score and reason")
 
 
 class Scorer(Component):
@@ -116,7 +138,7 @@ class Scorer(Component):
 
     @classmethod
     def get_canonical_ports(cls) -> dict[str, str | None]:
-        return {"input": "input", "output": "score"}
+        return {"input": "input", "output": "output"}
 
     def __init__(
         self,
@@ -159,7 +181,22 @@ class Scorer(Component):
 
         llm_outputs = await self._llm_agent._run_without_io_trace(llm_inputs, ctx)
 
-        result = json.loads(llm_outputs.output)
-        score = int(result["score"])
+        try:
+            result = json.loads(llm_outputs.output)
+        except json.JSONDecodeError as e:
+            raise ScorerError(detail=f"Failed to parse LLM output as JSON: {e}", llm_output=llm_outputs.output)
 
-        return ScorerOutputs(score=score)
+        score = result.get("score")
+        reason = result.get("reason")
+
+        if score is None:
+            raise ScorerError(detail="LLM response missing 'score' field", llm_output=result)
+        if not reason:
+            raise ScorerError(detail="LLM response missing 'reason' field", llm_output=result)
+
+        try:
+            score = int(score)
+        except (ValueError, TypeError) as e:
+            raise ScorerError(detail=f"Invalid score value: {score}", llm_output=result) from e
+
+        return ScorerOutputs(score=score, reason=reason, output=json.dumps({"score": score, "reason": reason}))
