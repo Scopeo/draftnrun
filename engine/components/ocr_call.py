@@ -4,14 +4,25 @@ from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 
+from ada_backend.database.models import ParameterType
 from engine.components.component import Component
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
+from engine.constants import DEFAULT_MODEL_OCR
 from engine.llm_services.llm_service import OCRService
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
 
 class OCRCallInputs(BaseModel):
+    completion_model: str = Field(
+        default=DEFAULT_MODEL_OCR,
+        json_schema_extra={
+            "is_tool_input": False,
+            "parameter_type": ParameterType.LLM_MODEL,
+            "ui_component": "Select",
+            "ui_component_properties": {"label": "Model Name", "model_capabilities": ["ocr"]},
+        },
+    )
     messages: list[ChatMessage] = Field(
         default_factory=list,
         description="Messages containing file/image data for OCR processing",

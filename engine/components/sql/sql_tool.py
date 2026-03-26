@@ -5,9 +5,10 @@ from typing import Optional, Type
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field
 
-from ada_backend.database.models import UIComponent, UIComponentProperties
+from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
+from engine.constants import DEFAULT_MODEL
 from engine.llm_services.llm_service import CompletionService
 from engine.storage_service.db_service import DBService
 from engine.trace.trace_manager import TraceManager
@@ -76,6 +77,15 @@ DEFAULT_SQL_TOOL_DESCRIPTION = ToolDescription(
 
 
 class SQLToolInputs(BaseModel):
+    completion_model: str = Field(
+        default=DEFAULT_MODEL,
+        json_schema_extra={
+            "is_tool_input": False,
+            "parameter_type": ParameterType.LLM_MODEL,
+            "ui_component": "Select",
+            "ui_component_properties": {"label": "Model Name", "model_capabilities": ["completion"]},
+        },
+    )
     natural_language_query: str = Field(
         description="The user's natural language query to interrogate the database.",
         json_schema_extra={
