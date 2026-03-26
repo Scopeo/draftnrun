@@ -489,6 +489,9 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["run_sql_query_tool"],
         factory=AgentFactory(
             entity_class=RunSQLQueryTool,
+            parameter_processors=[
+                db_service_processor,
+            ],
         ),
     )
     registry.register(
