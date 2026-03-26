@@ -610,3 +610,21 @@ def test_generic_list_to_string():
     # Empty generic list
     result = coercion_matrix.coerce([], str)
     assert result == "[]"
+
+
+def test_arbitrary_dict_to_chat_messages():
+    """Regression: arbitrary JSON dicts coerced to list[ChatMessage] must not silently produce []."""
+    coercion_matrix = get_coercion_matrix()
+
+    job_dict = {"id": 258658, "title": "Engineer", "created_at": "2025-11-17"}
+    result = coercion_matrix.coerce(job_dict, list[ChatMessage], dict)
+    assert len(result) == 1
+    assert result[0].role == "user"
+    assert json.loads(result[0].content) == job_dict
+
+    payload_like = {"messages": [{"role": "user", "content": "hello"}]}
+    result = coercion_matrix.coerce(payload_like, list[ChatMessage], dict)
+    assert len(result) == 1
+    assert isinstance(result[0], ChatMessage)
+    assert result[0].role == "user"
+    assert result[0].content == "hello"

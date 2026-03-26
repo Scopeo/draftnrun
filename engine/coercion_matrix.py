@@ -169,7 +169,11 @@ class CoercionMatrix:
         self._coercers[(float, list[str])] = lambda x: [str(x)]
 
         # Message conversions
-        self._coercers[(dict, list[ChatMessage])] = lambda x: x.get("messages", [])
+        self._coercers[(dict, list[ChatMessage])] = lambda x: (
+            [ChatMessage(**m) if isinstance(m, dict) else m for m in x["messages"]]
+            if "messages" in x and isinstance(x.get("messages"), list)
+            else [ChatMessage(role="user", content=json.dumps(x, ensure_ascii=False, default=str))]
+        )
         self._coercers[(str, list[ChatMessage])] = lambda x: [ChatMessage(role="user", content=x)]
         self._coercers[(dict, ChatMessage)] = lambda x: (
             ChatMessage(**x) if "role" in x else ChatMessage(role="user", content=str(x))
