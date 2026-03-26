@@ -15,6 +15,7 @@ from ada_backend.services.entity_factory import (
     NonToolCallableBlockFactory,
     OAuthComponentFactory,
     RemoteMCPToolFactory,
+    build_completion_service_factory_processor,
     build_completion_service_processor,
     build_db_service_processor,
     build_formatter_processor,
@@ -161,7 +162,6 @@ def create_factory_registry() -> FactoryRegistry:
 
     completion_service_processor = compose_processors(
         build_param_name_translator({
-            # Name from DB -> Name in processor
             COMPLETION_MODEL_IN_DB: "completion_model",
             TEMPERATURE_IN_DB: "temperature",
             VERBOSITY_IN_DB: "verbosity",
@@ -169,6 +169,16 @@ def create_factory_registry() -> FactoryRegistry:
             "api_key": "llm_api_key",
         }),
         build_completion_service_processor(),
+    )
+    completion_service_factory_processor = compose_processors(
+        build_param_name_translator({
+            COMPLETION_MODEL_IN_DB: "completion_model",
+            TEMPERATURE_IN_DB: "temperature",
+            VERBOSITY_IN_DB: "verbosity",
+            REASONING_IN_DB: "reasoning",
+            "api_key": "llm_api_key",
+        }),
+        build_completion_service_factory_processor(),
     )
     qdrant_service_processor = compose_processors(
         build_param_name_translator({
@@ -216,7 +226,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=EntityFactory(
             entity_class=Synthesizer,
             parameter_processors=[
-                completion_service_processor,
+                completion_service_factory_processor,
                 detect_and_convert_dataclasses,
                 trace_manager_processor,
             ],
@@ -227,7 +237,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=EntityFactory(
             entity_class=HybridSynthesizer,
             parameter_processors=[
-                completion_service_processor,
+                completion_service_factory_processor,
                 detect_and_convert_dataclasses,
                 trace_manager_processor,
             ],
@@ -238,7 +248,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=EntityFactory(
             entity_class=RelevantChunkSelector,
             parameter_processors=[
-                completion_service_processor,
+                completion_service_factory_processor,
                 detect_and_convert_dataclasses,
             ],
         ),

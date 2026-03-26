@@ -149,7 +149,9 @@ def test_vocabulary_rag_run(
         retriever=mock_retriever,
         trace_manager=mock_trace_manager,
         synthesizer=Synthesizer(
-            completion_service=mock_llm_service, prompt_template=prompt_template, trace_manager=mock_trace_manager
+            completion_service_factory=lambda **kwargs: mock_llm_service,
+            prompt_template=prompt_template,
+            trace_manager=mock_trace_manager,
         ),
         vocabulary_search=vocabulary_search,
         tool_description=MagicMock(),

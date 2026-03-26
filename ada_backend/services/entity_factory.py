@@ -35,7 +35,13 @@ from engine.components.rag.vocabulary_search import VocabularySearch
 from engine.components.synthesizer import Synthesizer
 from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import ToolDescription
-from engine.llm_services.llm_service import CompletionService, EmbeddingService, OCRService, WebSearchService
+from engine.llm_services.llm_service import (
+    CompletionService,
+    CompletionServiceFactory,
+    EmbeddingService,
+    OCRService,
+    WebSearchService,
+)
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.secret_utils import unwrap_secret, unwrap_secrets
 from engine.storage_service.local_service import SQLLocalService
@@ -653,6 +659,72 @@ def build_completion_service_processor(
     return processor
 
 
+def build_completion_service_factory_processor(
+    target_name: str = "completion_service_factory",
+) -> ParameterProcessor:
+    """
+    Returns a processor that injects a CompletionServiceFactory callable.
+
+    The factory captures default values from DB parameters and allows runtime overrides.
+    Calling the factory with no arguments returns a service with the defaults;
+    passing keyword overrides (completion_model, temperature, verbosity, reasoning, llm_api_key)
+    creates a service with those values instead.
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        default_model = params.pop("completion_model")
+        default_temperature = params.pop("temperature", 1.0)
+        if default_temperature is not None:
+            default_temperature = float(default_temperature)
+        default_api_key = params.pop("llm_api_key", None)
+        default_verbosity = params.pop("verbosity", None)
+        default_reasoning = params.pop("reasoning", None)
+
+        trace_manager = get_trace_manager()
+
+        default_provider, default_model_name = get_llm_provider_and_model(default_model)
+        default_model_id = fetch_model_id_by_name(default_model_name)
+        default_service = CompletionService(
+            provider=default_provider,
+            model_name=default_model_name,
+            trace_manager=trace_manager,
+            temperature=default_temperature,
+            api_key=default_api_key,
+            verbosity=default_verbosity,
+            reasoning=default_reasoning,
+            model_id=default_model_id,
+        )
+
+        def factory(
+            completion_model: str | None = None,
+            temperature: float | None = None,
+            verbosity: str | None = None,
+            reasoning: str | None = None,
+            llm_api_key: str | None = None,
+        ) -> CompletionService:
+            if not any([completion_model, temperature is not None, verbosity, reasoning, llm_api_key]):
+                return default_service
+
+            model_str = completion_model or default_model
+            provider, model_name = get_llm_provider_and_model(model_str)
+            model_id = fetch_model_id_by_name(model_name) if completion_model else default_model_id
+            return CompletionService(
+                provider=provider,
+                model_name=model_name,
+                trace_manager=trace_manager,
+                temperature=temperature if temperature is not None else default_temperature,
+                api_key=llm_api_key or default_api_key,
+                verbosity=verbosity or default_verbosity,
+                reasoning=reasoning or default_reasoning,
+                model_id=model_id,
+            )
+
+        params[target_name] = factory
+        return params
+
+    return processor
+
+
 def build_llm_capability_resolver_processor(
     target_name: str = "capability_resolver",
 ) -> ParameterProcessor:
@@ -969,38 +1041,23 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
 
 def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterProcessor:
     """
-    Creates a processor that builds a Synthesizer from completion_model, temperature, prompt_template.
+    Creates a processor that builds a Synthesizer with a CompletionServiceFactory.
 
-    Args:
-        target_name (str): Parameter name for the created Synthesizer.
-
-    Returns:
-        ParameterProcessor: A processor function that handles Synthesizer creation
+    The factory is built from the DB parameters (completion_model, temperature, etc.)
+    and allows runtime overrides when calling synthesizer.get_response().
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        completion_model = params.pop(COMPLETION_MODEL_IN_DB)
-        provider, model_name = get_llm_provider_and_model(llm_model=completion_model)
-
-        temperature = params.pop(TEMPERATURE_IN_DB, 1.0)
-        if temperature is not None:
-            try:
-                temperature = float(temperature)
-            except ValueError as e:
-                raise ValueError(f"temperature must be a float, got {temperature}: {e}")
-
-        model_id = fetch_model_id_by_name(model_name)
-
-        completion_service = CompletionService(
-            provider=provider,
-            model_name=model_name,
-            trace_manager=get_trace_manager(),
-            temperature=temperature,
-            api_key=params.pop("llm_api_key", None),
-            verbosity=params.pop(VERBOSITY_IN_DB, None),
-            reasoning=params.pop(REASONING_IN_DB, None),
-            model_id=model_id,
-        )
+        factory_params = {
+            "completion_model": params.pop(COMPLETION_MODEL_IN_DB),
+            "temperature": params.pop(TEMPERATURE_IN_DB, 1.0),
+            "llm_api_key": params.pop("llm_api_key", None),
+            "verbosity": params.pop(VERBOSITY_IN_DB, None),
+            "reasoning": params.pop(REASONING_IN_DB, None),
+        }
+        inner_processor = build_completion_service_factory_processor(target_name="__synth_factory")
+        factory_params = inner_processor(factory_params, constructor_params)
+        completion_service_factory: CompletionServiceFactory = factory_params["__synth_factory"]
 
         prompt_template = params.pop("prompt_template", None)
         if prompt_template is None:
@@ -1012,7 +1069,7 @@ def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterPr
                 raise ValueError("prompt_template must be a non-empty string")
 
         synthesizer = Synthesizer(
-            completion_service=completion_service,
+            completion_service_factory=completion_service_factory,
             trace_manager=get_trace_manager(),
             prompt_template=prompt_template,
             component_attributes=None,
