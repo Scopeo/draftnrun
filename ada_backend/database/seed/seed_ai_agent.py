@@ -289,6 +289,10 @@ def seed_ai_agent_parameter_groups(session: Session):
             "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
             "parameter_order_within_group": 3,
         },
+        AI_MODEL_PARAMETER_IDS["skip_tools_with_missing_oauth"]: {
+            "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
+            "parameter_order_within_group": 4,
+        },
         # Advanced LLM Parameters Group
         AI_MODEL_PARAMETER_IDS[TEMPERATURE_IN_DB]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],

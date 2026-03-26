@@ -348,7 +348,6 @@ def get_component_basic_parameters(
     )
 
 
-
 def get_component_instances_by_ids(
     session: Session,
     component_instance_ids: list[UUID],
