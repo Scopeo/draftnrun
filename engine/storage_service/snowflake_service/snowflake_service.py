@@ -264,19 +264,11 @@ class SnowflakeService(DBService):
             quote_identifiers=False,
         )
 
-    def insert_rows(
-        self, rows: list[dict], table_name: str, schema_name: Optional[str] = None, batch_size: Optional[int] = None
-    ) -> None:
+    def insert_rows(self, rows: list[dict], table_name: str, schema_name: Optional[str] = None) -> None:
         if not rows:
             return
-        if batch_size and len(rows) > batch_size:
-            for i in range(0, len(rows), batch_size):
-                batch = rows[i : i + batch_size]
-                df = pd.DataFrame(batch)
-                self.insert_df_to_table(df, table_name, schema_name)
-        else:
-            df = pd.DataFrame(rows)
-            self.insert_df_to_table(df, table_name, schema_name)
+        df = pd.DataFrame(rows)
+        self.insert_df_to_table(df, table_name, schema_name)
 
     def grant_select_on_table(self, table_name: str, schema_name: str, role: str) -> None:
         self.connector.cursor().execute(f"GRANT USAGE ON SCHEMA {schema_name} TO ROLE {role}")

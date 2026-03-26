@@ -100,10 +100,8 @@ class DBService(CloseMixin, ABC):
         pass
 
     @abstractmethod
-    def insert_rows(
-        self, rows: list[dict], table_name: str, schema_name: Optional[str] = None, batch_size: Optional[int] = None
-    ) -> None:
-        """Insert a list of row dicts into a table. If batch_size is set, inserts in batches."""
+    def insert_rows(self, rows: list[dict], table_name: str, schema_name: Optional[str] = None) -> None:
+        """Insert a list of row dicts into a table."""
         pass
 
     def insert_df_to_table(self, df, table_name: str, schema_name: Optional[str] = None) -> None:
@@ -146,6 +144,21 @@ class DBService(CloseMixin, ABC):
         rows = self._fetch_sql_query_as_dicts(query)
         return pd.DataFrame(rows)
 
+    def _fetch_and_insert_batched(
+        self,
+        ids: set[str],
+        fetch_rows_fn: Callable[[set[str]], list[dict]],
+        table_name: str,
+        schema_name: Optional[str],
+        batch_size: int,
+    ) -> None:
+        id_list = list(ids)
+        for i in range(0, len(id_list), batch_size):
+            batch_ids = set(id_list[i : i + batch_size])
+            rows = fetch_rows_fn(batch_ids)
+            if rows:
+                self.insert_rows(rows, table_name, schema_name=schema_name)
+
     def update_table(
         self,
         incoming_ids_with_timestamp: dict[str, Any],
@@ -176,27 +189,13 @@ class DBService(CloseMixin, ABC):
 
         target_table_name = f"{schema_name}.{table_name}" if schema_name else table_name
 
-        def _fetch_and_insert_batched(ids: set[str]) -> None:
-            id_list = list(ids)
-            effective_batch_size = batch_size or len(id_list)
-            for i in range(0, len(id_list), effective_batch_size):
-                batch_ids = set(id_list[i : i + effective_batch_size])
-                rows = fetch_rows_fn(batch_ids)
-                if rows:
-                    self.insert_rows(rows, table_name, schema_name=schema_name, batch_size=batch_size)
-
         if not self.table_exists(table_name, schema_name=schema_name):
             LOGGER.info(f"Table {target_table_name} does not exist. Creating it...")
             self.create_table(table_name=table_name, table_definition=table_definition, schema_name=schema_name)
-            _fetch_and_insert_batched(set(incoming_ids_with_timestamp.keys()))
+            self._fetch_and_insert_batched(
+                set(incoming_ids_with_timestamp.keys()), fetch_rows_fn, table_name, schema_name, batch_size
+            )
             return
-
-        all_existing_ids = self._fetch_column_as_set(
-            table_name=table_name,
-            column_name=id_column_name,
-            schema_name=schema_name,
-            source_id=source_id,
-        )
 
         query = (
             f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name}"
@@ -217,8 +216,9 @@ class DBService(CloseMixin, ABC):
             existing_by_id[row_id] = row
 
         incoming_ids = set(incoming_ids_with_timestamp.keys())
-        ids_to_add = incoming_ids - all_existing_ids
-        common_ids = incoming_ids & set(existing_by_id.keys())
+        existing_ids = set(existing_by_id.keys())
+        common_ids = incoming_ids & existing_ids
+        ids_to_add = incoming_ids - existing_ids
 
         if timestamp_column_name and not sql_query_filter:
             ids_to_update = set()
@@ -233,7 +233,7 @@ class DBService(CloseMixin, ABC):
         else:
             ids_to_update = common_ids
 
-        ids_to_delete = set(existing_by_id.keys()) - incoming_ids if not append_mode else set()
+        ids_to_delete = existing_ids - incoming_ids if not append_mode else set()
 
         LOGGER.info(f"Diff: {len(ids_to_add)} to add, {len(ids_to_update)} to update, {len(ids_to_delete)} to delete")
 
@@ -252,10 +252,10 @@ class DBService(CloseMixin, ABC):
                 id_column_name=id_column_name,
                 schema_name=schema_name,
             )
-            _fetch_and_insert_batched(ids_to_update)
+            self._fetch_and_insert_batched(ids_to_update, fetch_rows_fn, table_name, schema_name, batch_size)
 
         if ids_to_add:
-            _fetch_and_insert_batched(ids_to_add)
+            self._fetch_and_insert_batched(ids_to_add, fetch_rows_fn, table_name, schema_name, batch_size)
 
     @abstractmethod
     def delete_rows_from_table(

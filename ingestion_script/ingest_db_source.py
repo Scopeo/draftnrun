@@ -31,7 +31,6 @@ from ingestion_script.utils import (
     resolve_sql_timestamp_filter,
     upload_source,
 )
-from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -84,76 +83,10 @@ def _validate_source_columns(
     return column_info
 
 
-def _chunk_source_rows(
-    sql_local_service: SQLLocalService,
-    table_name: str,
-    id_column_name: str,
-    text_column_names: list[str],
-    source_schema_name: Optional[str],
-    metadata_column_names: Optional[list[str]],
-    timestamp_column_name: Optional[str],
-    url_pattern: Optional[str],
-    chunk_size: int,
-    chunk_overlap: int,
-    batch_size: int,
-    sql_query_filter: Optional[str] = None,
-) -> list[dict]:
-    splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-    all_chunks: list[dict] = []
-
-    source_batches = sql_local_service.iter_table_rows(
-        table_name=table_name,
-        batch_size=batch_size,
-        schema_name=source_schema_name,
-        sql_query_filter=sql_query_filter,
-    )
-
-    for batch in source_batches:
-        for source_row in batch:
-            row_id = source_row[id_column_name]
-            combined_text = " ".join(str(source_row.get(col) or "") for col in text_column_names)
-            chunks = splitter.split_text(combined_text)
-            file_id = build_file_id(table_name, row_id)
-            timestamp_value = source_row.get(timestamp_column_name) if timestamp_column_name else None
-
-            for chunk_index, chunk_text in enumerate(chunks, start=1):
-                chunk_id = f"{row_id}_{chunk_index}"
-
-                if url_pattern:
-                    null_safe_row = {k: ("" if v is None else v) for k, v in source_row.items()}
-                    url_value = url_pattern.format_map(null_safe_row)
-                else:
-                    url_value = None
-
-                metadata: dict = {}
-                if timestamp_column_name and timestamp_value is not None:
-                    metadata[timestamp_column_name] = _serialize_value(timestamp_value)
-                if metadata_column_names:
-                    for metadata_col_name in metadata_column_names:
-                        if metadata_col_name != timestamp_column_name:
-                            metadata_value = source_row.get(metadata_col_name)
-                            if metadata_value is not None:
-                                metadata[metadata_col_name] = _serialize_value(metadata_value)
-
-                all_chunks.append({
-                    CHUNK_ID_COLUMN_NAME: chunk_id,
-                    CHUNK_COLUMN_NAME: chunk_text,
-                    FILE_ID_COLUMN_NAME: file_id,
-                    ORDER_COLUMN_NAME: chunk_index - 1,
-                    DOCUMENT_TITLE_COLUMN_NAME: file_id,
-                    TIMESTAMP_COLUMN_NAME: _serialize_value(timestamp_value),
-                    URL_COLUMN_NAME: url_value,
-                    METADATA_COLUMN_NAME: json.dumps(metadata) if metadata else json.dumps({}),
-                })
-
-    return all_chunks
-
-
 def get_db_source_ids(
     db_url: str,
     table_name: str,
     id_column_name: str,
-    batch_size: int,
     source_schema_name: Optional[str] = None,
     timestamp_column_name: Optional[str] = None,
     sql_query_filter: Optional[str] = None,
@@ -167,30 +100,31 @@ def get_db_source_ids(
         timestamp_column_name=timestamp_column_name,
     )
 
-    ids_with_ts: dict[str, any] = {}
-    source_batches = sql_local_service.iter_table_rows(
+    columns = [id_column_name]
+    if timestamp_column_name:
+        columns.append(timestamp_column_name)
+
+    rows = sql_local_service.get_column_values(
         table_name=table_name,
-        batch_size=batch_size,
+        columns=columns,
         schema_name=source_schema_name,
         sql_query_filter=sql_query_filter,
     )
-    for batch in source_batches:
-        for source_row in batch:
-            row_id = source_row[id_column_name]
-            file_id = build_file_id(table_name, row_id)
-            timestamp_value = source_row.get(timestamp_column_name) if timestamp_column_name else None
-            ids_with_ts[file_id] = _serialize_value(timestamp_value)
 
-    return ids_with_ts
+    return {
+        build_file_id(table_name, row[id_column_name]): _serialize_value(row.get(timestamp_column_name))
+        if timestamp_column_name
+        else None
+        for row in rows
+    }
 
 
 def fetch_db_source_chunks(
     file_ids: set[str],
-    db_url: str,
+    sql_local_service: SQLLocalService,
     table_name: str,
     id_column_name: str,
     text_column_names: list[str],
-    batch_size: int,
     source_id: Optional[str] = None,
     source_schema_name: Optional[str] = None,
     metadata_column_names: Optional[list[str]] = None,
@@ -202,42 +136,55 @@ def fetch_db_source_chunks(
     if not file_ids:
         return []
 
-    sql_local_service = SQLLocalService(engine_url=db_url)
-    _validate_source_columns(
-        sql_local_service,
-        table_name,
-        id_column_name,
-        source_schema_name,
-        text_column_names=text_column_names,
-        metadata_column_names=metadata_column_names,
-        timestamp_column_name=timestamp_column_name,
+    raw_row_ids = [extract_row_id_from_file_id(fid, table_name) for fid in file_ids]
+    id_filter = f"{id_column_name} IN ({','.join(repr(str(rid)) for rid in raw_row_ids)})"
+
+    source_rows = sql_local_service.get_table_rows(
+        table_name=table_name,
+        schema_name=source_schema_name,
+        sql_query_filter=id_filter,
     )
 
-    raw_row_ids = list(extract_row_id_from_file_id(fid, table_name) for fid in file_ids)
+    splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     all_chunks: list[dict] = []
 
-    for i in range(0, len(raw_row_ids), batch_size):
-        batch_ids = raw_row_ids[i : i + batch_size]
-        id_filter = f"{id_column_name} IN ({','.join(repr(str(rid)) for rid in batch_ids)})"
+    for source_row in source_rows:
+        row_id = source_row[id_column_name]
+        combined_text = " ".join(str(source_row.get(col) or "") for col in text_column_names)
+        chunks = splitter.split_text(combined_text)
+        file_id = build_file_id(table_name, row_id)
+        timestamp_value = source_row.get(timestamp_column_name) if timestamp_column_name else None
 
-        batch_chunks = _chunk_source_rows(
-            sql_local_service=sql_local_service,
-            table_name=table_name,
-            id_column_name=id_column_name,
-            text_column_names=text_column_names,
-            source_schema_name=source_schema_name,
-            metadata_column_names=metadata_column_names,
-            timestamp_column_name=timestamp_column_name,
-            url_pattern=url_pattern,
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-            batch_size=batch_size,
-            sql_query_filter=id_filter,
-        )
-        if source_id:
-            for chunk in batch_chunks:
-                chunk[SOURCE_ID_COLUMN_NAME] = source_id
-        all_chunks.extend(batch_chunks)
+        for chunk_index, chunk_text in enumerate(chunks, start=1):
+            chunk_id = f"{row_id}_{chunk_index}"
+
+            if url_pattern:
+                null_safe_row = {k: ("" if v is None else v) for k, v in source_row.items()}
+                url_value = url_pattern.format_map(null_safe_row)
+            else:
+                url_value = None
+
+            metadata: dict = {}
+            if timestamp_column_name and timestamp_value is not None:
+                metadata[timestamp_column_name] = _serialize_value(timestamp_value)
+            if metadata_column_names:
+                for metadata_col_name in metadata_column_names:
+                    if metadata_col_name != timestamp_column_name:
+                        metadata_value = source_row.get(metadata_col_name)
+                        if metadata_value is not None:
+                            metadata[metadata_col_name] = _serialize_value(metadata_value)
+
+            all_chunks.append({
+                CHUNK_ID_COLUMN_NAME: chunk_id,
+                CHUNK_COLUMN_NAME: chunk_text,
+                FILE_ID_COLUMN_NAME: file_id,
+                ORDER_COLUMN_NAME: chunk_index - 1,
+                DOCUMENT_TITLE_COLUMN_NAME: file_id,
+                TIMESTAMP_COLUMN_NAME: _serialize_value(timestamp_value),
+                URL_COLUMN_NAME: url_value,
+                METADATA_COLUMN_NAME: json.dumps(metadata) if metadata else json.dumps({}),
+                **(({SOURCE_ID_COLUMN_NAME: source_id}) if source_id else {}),
+            })
 
     return all_chunks
 
@@ -311,7 +258,6 @@ async def upload_db_source(
     )
 
     source_id_str = str(source_id)
-    batch_size = settings.INGESTION_BATCH_SIZE
 
     sql_local_service = SQLLocalService(engine_url=source_db_url)
     column_info = _validate_source_columns(
@@ -335,7 +281,6 @@ async def upload_db_source(
         db_url=source_db_url,
         table_name=source_table_name,
         id_column_name=id_column_name,
-        batch_size=batch_size,
         source_schema_name=source_schema_name,
         timestamp_column_name=timestamp_column_name,
         sql_query_filter=combined_filter_sql,
@@ -350,11 +295,10 @@ async def upload_db_source(
         incoming_ids_with_timestamp=ids_with_ts,
         fetch_rows_fn=partial(
             fetch_db_source_chunks,
-            db_url=source_db_url,
+            sql_local_service=sql_local_service,
             table_name=source_table_name,
             id_column_name=id_column_name,
             text_column_names=text_column_names,
-            batch_size=batch_size,
             source_id=source_id_str,
             source_schema_name=source_schema_name,
             metadata_column_names=metadata_column_names,
@@ -408,14 +352,13 @@ async def ingestion_database(
     source_type = db.SourceType.DATABASE
     LOGGER.info("Start ingestion data from the database source...")
     qdrant_schema = UNIFIED_QDRANT_SCHEMA
-    metadata_fields_to_keep = set(metadata_column_names) if metadata_column_names else None
-    if metadata_fields_to_keep:
-        metadata_field_types = {col: "VARCHAR" for col in metadata_fields_to_keep}
+    metadata_fields_to_keep: set[str] = set(metadata_column_names) if metadata_column_names else set()
+    metadata_field_types: dict[str, str] = {col: "VARCHAR" for col in metadata_fields_to_keep}
     if timestamp_column_name:
         metadata_fields_to_keep.add(timestamp_column_name)
         metadata_field_types[timestamp_column_name] = "DATETIME"
-    qdrant_schema.metadata_fields_to_keep = metadata_fields_to_keep
-    qdrant_schema.metadata_field_types = metadata_field_types if metadata_field_types else None
+    qdrant_schema.metadata_fields_to_keep = metadata_fields_to_keep or None
+    qdrant_schema.metadata_field_types = metadata_field_types or None
     await upload_source(
         source_name,
         organization_id,

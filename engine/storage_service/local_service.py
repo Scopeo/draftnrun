@@ -347,7 +347,6 @@ class SQLLocalService(DBService):
         rows: list[dict],
         table_name: str,
         schema_name: Optional[str] = None,
-        batch_size: Optional[int] = None,
     ) -> None:
         if not rows:
             LOGGER.info("Empty row list provided, skipping insert")
@@ -359,17 +358,9 @@ class SQLLocalService(DBService):
         jsonb_columns = {col["name"] for col in description_table if "jsonb" in str(col.get("type", "")).lower()}
         rows = self._parse_jsonb_in_rows(rows, jsonb_columns)
 
-        if batch_size and len(rows) > batch_size:
-            for i in range(0, len(rows), batch_size):
-                batch = rows[i : i + batch_size]
-                LOGGER.info(f"Inserting batch {i // batch_size + 1} ({len(batch)} rows)")
-                with self.Session() as session:
-                    session.execute(table.insert(), batch)
-                    session.commit()
-        else:
-            with self.Session() as session:
-                session.execute(table.insert(), rows)
-                session.commit()
+        with self.Session() as session:
+            session.execute(table.insert(), rows)
+            session.commit()
 
     def grant_select_on_table(
         self,
