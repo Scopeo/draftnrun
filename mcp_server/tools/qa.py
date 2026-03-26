@@ -3,9 +3,11 @@
 import csv
 import io
 import json
+from typing import Annotated
 from uuid import UUID
 
 from fastmcp import FastMCP
+from pydantic import Field
 
 from mcp_server.client import api
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
@@ -265,16 +267,15 @@ def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, SPECS)
 
     @mcp.tool()
-    async def export_dataset_csv(project_id: UUID, dataset_id: UUID) -> str:
+    async def export_dataset_csv(
+        project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
+        dataset_id: Annotated[UUID, Field(description="The dataset ID (from list_datasets or create_dataset).")],
+    ) -> str:
         """Export all entries in a QA dataset as CSV text.
 
         Returns CSV with columns: position, input (JSON string), expected_output,
         plus custom columns (using display names as headers). Compatible with
         `import_dataset_csv` for round-trip workflows (sort, filter, migrate).
-
-        Args:
-            project_id: The project ID (from list_projects or get_project_overview).
-            dataset_id: The dataset ID (from list_datasets or create_dataset).
         """
         jwt, _ = _get_auth()
 
@@ -321,7 +322,11 @@ def register(mcp: FastMCP) -> None:
         return output.getvalue()
 
     @mcp.tool()
-    async def import_dataset_csv(project_id: UUID, dataset_id: UUID, csv_content: str) -> dict:
+    async def import_dataset_csv(
+        project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
+        dataset_id: Annotated[UUID, Field(description="The dataset ID (from list_datasets or create_dataset).")],
+        csv_content: Annotated[str, Field(description="The full CSV text to import.")],
+    ) -> dict:
         """Import entries into a QA dataset from CSV text.
 
         Required CSV columns: `input` (valid JSON string), `expected_output`.
@@ -333,11 +338,6 @@ def register(mcp: FastMCP) -> None:
 
         This appends entries. To replace all entries, delete existing ones first
         with `delete_entries`, then import.
-
-        Args:
-            project_id: The project ID (from list_projects or get_project_overview).
-            dataset_id: The dataset ID (from list_datasets or create_dataset).
-            csv_content: The full CSV text to import.
         """
         jwt, _ = _get_auth()
 

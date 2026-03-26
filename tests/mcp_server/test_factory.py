@@ -1,5 +1,6 @@
 """Tests for the proxy-tool factory (_factory.py)."""
 
+import typing
 from unittest.mock import AsyncMock
 
 import pytest
@@ -385,8 +386,13 @@ def test_handler_has_correct_name_and_doc(mcp):
 
     fn = mcp.tools["my_tool"]
     assert fn.__name__ == "my_tool"
-    assert "Does something useful." in fn.__doc__
-    assert "x_id: The X ID." in fn.__doc__
+    assert fn.__doc__ == "Does something useful."
+
+    ann = fn.__annotations__["x_id"]
+    assert typing.get_origin(ann) is typing.Annotated
+    meta = typing.get_args(ann)
+    assert meta[0] is str
+    assert meta[1].description == "The X ID."
 
 
 # --- trim flag ---

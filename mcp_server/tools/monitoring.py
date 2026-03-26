@@ -1,8 +1,10 @@
 """Monitoring, traces, and credit usage tools."""
 
+from typing import Annotated
 from uuid import UUID
 
 from fastmcp import FastMCP
+from pydantic import Field
 
 from mcp_server.client import api
 from mcp_server.context import require_org_context
@@ -45,14 +47,12 @@ def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, PROXY_SPECS)
 
     @mcp.tool()
-    async def list_traces(project_id: UUID, page: int = 1, page_size: int = 50) -> dict:
-        """List execution traces for a project.
-
-        Args:
-            project_id: The project ID (from list_projects or get_project_overview).
-            page: Page number (1-based). Defaults to 1.
-            page_size: Results per page (max 100). Defaults to 50.
-        """
+    async def list_traces(
+        project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
+        page: Annotated[int, Field(description="Page number (1-based).")] = 1,
+        page_size: Annotated[int, Field(description="Results per page (max 100).")] = 50,
+    ) -> dict:
+        """List execution traces for a project."""
         if page < 1:
             raise ValueError("page must be >= 1")
         if page_size < 1:
@@ -67,24 +67,26 @@ def register(mcp: FastMCP) -> None:
         )
 
     @mcp.tool()
-    async def get_org_charts(duration: int = DEFAULT_DURATION_DAYS) -> dict:
-        """Get organization-level monitoring charts.
-
-        Args:
-            duration: Number of days to include. Clamped to 1-365. Defaults to 30.
-        """
+    async def get_org_charts(
+        duration: Annotated[
+            int,
+            Field(description="Number of days to include. Clamped to 1-365."),
+        ] = DEFAULT_DURATION_DAYS,
+    ) -> dict:
+        """Get organization-level monitoring charts."""
         duration = _normalize_duration(duration)
         jwt, user_id = _get_auth()
         org = await require_org_context(user_id)
         return await api.get(f"/monitor/org/{org['org_id']}/charts", jwt, duration=duration)
 
     @mcp.tool()
-    async def get_org_kpis(duration: int = DEFAULT_DURATION_DAYS) -> dict:
-        """Get organization-level KPI metrics.
-
-        Args:
-            duration: Number of days to include. Clamped to 1-365. Defaults to 30.
-        """
+    async def get_org_kpis(
+        duration: Annotated[
+            int,
+            Field(description="Number of days to include. Clamped to 1-365."),
+        ] = DEFAULT_DURATION_DAYS,
+    ) -> dict:
+        """Get organization-level KPI metrics."""
         duration = _normalize_duration(duration)
         jwt, user_id = _get_auth()
         org = await require_org_context(user_id)

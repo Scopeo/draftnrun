@@ -1,10 +1,11 @@
 """Project management tools."""
 
 import logging
-from typing import Optional
+from typing import Annotated, Optional
 from uuid import UUID
 
 from fastmcp import FastMCP
+from pydantic import Field
 
 from mcp_server.client import api
 from mcp_server.context import require_org_context, require_role
@@ -61,14 +62,22 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def list_projects(
-        project_type: str = "WORKFLOW",
-        include_templates: bool = False,
+        project_type: Annotated[str, Field(description="Filter by type (WORKFLOW or AGENT).")] = "WORKFLOW",
+        include_templates: Annotated[
+            bool,
+            Field(
+                description=(
+                    "Include template projects (may include cross-org templates)."
+                ),
+            ),
+        ] = False,
     ) -> list[dict]:
         """List all projects in the active organization.
 
-        Args:
-            project_type: Filter by type (WORKFLOW or AGENT). Defaults to WORKFLOW.
-            include_templates: Include template projects. Defaults to False.
+        ⚠️ When ``include_templates`` is True, the response includes global
+        template projects from **other organizations** (e.g. the platform
+        Templates org).  Filter results by ``organization_id`` if you only
+        want projects belonging to the active org.
         """
         _VALID_PROJECT_TYPES = {"WORKFLOW", "AGENT"}
         normalized = project_type.strip().upper()
@@ -86,7 +95,10 @@ def register(mcp: FastMCP) -> None:
         )
 
     @mcp.tool()
-    async def create_workflow(name: str, description: str = "") -> dict:
+    async def create_workflow(
+        name: Annotated[str, Field(description="Project name.")],
+        description: Annotated[str, Field(description="Optional description.")] = "",
+    ) -> dict:
         """Create a new workflow project in the active organization.
 
         Creates a **workflow** — a multi-step DAG with a Start node, custom
@@ -98,10 +110,6 @@ def register(mcp: FastMCP) -> None:
 
         Authorization: caller must have one of the roles ``developer``,
         ``admin``, or ``super_admin``.  Raises if not authorized.
-
-        Args:
-            name: Project name.
-            description: Optional description.
         """
         name = name.strip()
         if not name:
@@ -123,28 +131,32 @@ def register(mcp: FastMCP) -> None:
         )
 
     @mcp.tool()
-    async def create_project(name: str, description: str = "") -> dict:
+    async def create_project(
+        name: Annotated[str, Field(description="Project name.")],
+        description: Annotated[str, Field(description="Optional description.")] = "",
+    ) -> dict:
         """Deprecated: use ``create_workflow`` instead.
 
         Creates a new workflow project. This tool is a compatibility shim
         that forwards to ``create_workflow``.
-
-        Args:
-            name: Project name.
-            description: Optional description.
         """
         logger.warning("create_project is deprecated — use create_workflow instead")
         return await create_workflow(name=name, description=description)
 
     @mcp.tool()
-    async def update_project(project_id: UUID, name: Optional[str] = None, description: Optional[str] = None) -> dict:
-        """Update a project's name or description.
-
-        Args:
-            project_id: The project to update (from list_projects or get_project_overview).
-            name: New name (optional).
-            description: New description (optional).
-        """
+    async def update_project(
+        project_id: Annotated[
+            UUID,
+            Field(
+                description=(
+                    "The project to update (from list_projects or get_project_overview)."
+                ),
+            ),
+        ],
+        name: Annotated[Optional[str], Field(description="New name.")] = None,
+        description: Annotated[Optional[str], Field(description="New description.")] = None,
+    ) -> dict:
+        """Update a project's name or description."""
         jwt, _ = _get_auth()
         body = {}
         if name is not None:
@@ -159,16 +171,22 @@ def register(mcp: FastMCP) -> None:
         return await api.patch(f"/projects/{project_id}", jwt, json=body)
 
     @mcp.tool()
-    async def get_project_overview(project_id: UUID) -> dict:
+    async def get_project_overview(
+        project_id: Annotated[
+            UUID,
+            Field(
+                description=(
+                    "The project ID (from list_projects or create_workflow/create_agent)."
+                ),
+            ),
+        ],
+    ) -> dict:
         """Get a comprehensive overview of a project in a single call.
 
         Returns the project details, identifies the editable draft and current
         production versions, includes the 5 most recent runs, and surfaces
         versioning safety hints. Use this before editing graphs, configuring
         agents, publishing, scheduling, or reasoning about live behavior.
-
-        Args:
-            project_id: The project ID (from list_projects or create_workflow/create_agent).
         """
         jwt, _ = _get_auth()
         project = await api.get(f"/projects/{project_id}", jwt)

@@ -6,9 +6,11 @@ polls for the result.  It does not expose file download helpers.
 
 import asyncio
 import time
+from typing import Annotated
 from uuid import UUID
 
 from fastmcp import FastMCP
+from pydantic import Field
 
 from mcp_server.client import api
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
@@ -51,14 +53,12 @@ def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, PROXY_SPECS)
 
     @mcp.tool()
-    async def list_runs(project_id: UUID, page: int = 1, page_size: int = 50) -> dict:
-        """List runs for a project with pagination.
-
-        Args:
-            project_id: The project ID (from list_projects or get_project_overview).
-            page: Page number (1-based). Defaults to 1.
-            page_size: Results per page (max 100). Defaults to 50.
-        """
+    async def list_runs(
+        project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
+        page: Annotated[int, Field(description="Page number (1-based).")] = 1,
+        page_size: Annotated[int, Field(description="Results per page (max 100).")] = 50,
+    ) -> dict:
+        """List runs for a project with pagination."""
         if page < 1:
             raise ValueError("Page must be greater than or equal to 1.")
         if page_size < 1:
@@ -74,10 +74,24 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def run(
-        project_id: UUID,
-        graph_runner_id: UUID,
-        payload: dict,
-        timeout: int = 60,
+        project_id: Annotated[
+            UUID,
+            Field(description="The project ID (from list_projects or get_project_overview)."),
+        ],
+        graph_runner_id: Annotated[
+            UUID,
+            Field(description="The graph runner version ID (from get_project_overview)."),
+        ],
+        payload: Annotated[
+            dict,
+            Field(
+                description=(
+                    'Request body dict — must contain "messages", may contain additional '
+                    "Start-node fields."
+                ),
+            ),
+        ],
+        timeout: Annotated[int, Field(description="Max seconds to wait for completion.")] = 60,
     ) -> dict:
         """Run an agent or workflow and wait for the result.
 
@@ -100,13 +114,6 @@ def register(mcp: FastMCP) -> None:
           testing; production is for live-behavior checks.
         - If the run times out here, continue with `get_run` and
           `get_run_result` rather than assuming failure.
-
-        Args:
-            project_id: The project ID (from list_projects or get_project_overview).
-            graph_runner_id: The graph runner version ID (from get_project_overview).
-            payload: Request body dict — must contain "messages", may contain
-                     additional Start-node fields.
-            timeout: Max seconds to wait for completion. Defaults to 60.
         """
         if not isinstance(timeout, int) or timeout <= 0:
             raise ValueError("timeout must be a positive integer")

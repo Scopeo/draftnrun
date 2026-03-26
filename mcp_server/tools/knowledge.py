@@ -7,10 +7,11 @@ have important limitations; see `docs://file-management`.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Annotated, Optional
 from uuid import UUID
 
 from fastmcp import FastMCP
+from pydantic import Field
 
 from mcp_server.client import api
 from mcp_server.context import require_role
@@ -167,9 +168,24 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def create_source(
-        source_type: str,
-        config: dict,
-        name: Optional[str] = None,
+        source_type: Annotated[str, Field(description='One of "website" or "database".')],
+        config: Annotated[
+            dict,
+            Field(
+                description=(
+                    "Type-specific configuration dict. Website: url (required), follow_links, "
+                    "max_depth, limit, include_paths, exclude_paths, chunk_size, chunk_overlap. "
+                    "Database: source_db_url, source_table_name, id_column_name, "
+                    "text_column_names (all required), plus source_schema_name, "
+                    "metadata_column_names, timestamp_column_name, chunk_size, chunk_overlap, "
+                    "update_existing, query_filter, timestamp_filter."
+                ),
+            ),
+        ],
+        name: Annotated[
+            Optional[str],
+            Field(description="Human-readable source name. Auto-generated if omitted."),
+        ] = None,
     ) -> dict:
         """Create a new knowledge source and trigger its first ingestion.
 
@@ -178,35 +194,6 @@ def register(mcp: FastMCP) -> None:
 
         The backend creates the source record, provisions infrastructure
         (DB table, Qdrant collection), and starts ingestion automatically.
-
-        Args:
-            source_type: One of "website" or "database".
-            config: Type-specific configuration dict.
-                For website:
-                  - url (str, required): Starting URL to crawl.
-                  - follow_links (bool, default True): Follow links on pages.
-                  - max_depth (int, default 1): Crawl depth.
-                  - limit (int, default 100): Max pages to crawl.
-                  - include_paths (list[str]): URL pathname regex patterns to include.
-                  - exclude_paths (list[str]): URL pathname regex patterns to exclude.
-                  - include_tags (list[str]): HTML tags to keep.
-                  - exclude_tags (list[str]): HTML tags to strip.
-                  - chunk_size (int): Override default chunk size (1024).
-                  - chunk_overlap (int): Override default chunk overlap (0).
-                For database:
-                  - source_db_url (str, required): Connection string.
-                  - source_table_name (str, required): Table to ingest.
-                  - id_column_name (str, required): Row identifier column.
-                  - text_column_names (list[str], required): Columns to index.
-                  - source_schema_name (str): DB schema name.
-                  - metadata_column_names (list[str]): Columns carried as metadata.
-                  - timestamp_column_name (str): For incremental ingestion.
-                  - chunk_size (int): Override default chunk size.
-                  - chunk_overlap (int): Override default chunk overlap.
-                  - update_existing (bool, default False): Re-ingest existing rows.
-                  - query_filter (str): SQL WHERE filter.
-                  - timestamp_filter (str): Timestamp-based filter.
-            name: Human-readable source name. Auto-generated if omitted.
         """
         if source_type not in _VALID_SOURCE_TYPES:
             raise ValueError(
@@ -248,10 +235,25 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def update_document_chunks(
-        source_id: UUID,
-        document_id: UUID,
-        chunks: list[dict],
-        confirm_full_replacement: bool = False,
+        source_id: Annotated[UUID, Field(description="The source ID (from list_sources).")],
+        document_id: Annotated[UUID, Field(description="The document ID (from list_documents).")],
+        chunks: Annotated[
+            list[dict],
+            Field(
+                description=(
+                    "List of chunk objects. Each chunk: content (str, required), "
+                    "metadata (dict, optional)."
+                ),
+            ),
+        ],
+        confirm_full_replacement: Annotated[
+            bool,
+            Field(
+                description=(
+                    "Explicit acknowledgement that this is a risky full replacement operation."
+                ),
+            ),
+        ] = False,
     ) -> dict:
         """Replace all chunks of a document with caution.
 
@@ -260,15 +262,6 @@ def register(mcp: FastMCP) -> None:
         source. Use only when the user explicitly wants a full replacement,
         you know the complete desired chunk set, and you pass
         `confirm_full_replacement=True`.
-
-        Args:
-            source_id: The source ID (from list_sources).
-            document_id: The document ID (from list_documents).
-            chunks: List of chunk objects. Each chunk should have:
-                - content (str): The text content.
-                - metadata (dict, optional): Arbitrary metadata.
-            confirm_full_replacement: Explicit acknowledgement that this is a
-                risky full replacement operation, not a routine partial edit.
         """
         if not confirm_full_replacement:
             raise ValueError(

@@ -1,6 +1,12 @@
+from unittest.mock import AsyncMock
 from uuid import UUID
 
+import pytest
+
+from mcp_server.client import ToolError
+from mcp_server.tools import graphs
 from mcp_server.tools.graphs import _assign_missing_ids, _warn_unknown_graph_keys
+from tests.mcp_server.conftest import FAKE_PROJECT_ID, FAKE_RUNNER_ID
 
 
 def test_assigns_uuids_to_null_id_instances():
@@ -96,3 +102,110 @@ def test_warns_on_completely_unknown_key():
     warnings = _warn_unknown_graph_keys(graph_data)
     assert len(warnings) == 1
     assert "something_random" in warnings[0]
+
+
+# --- publish_to_production (custom tool → POST .../deploy) ---
+
+
+@pytest.mark.asyncio
+async def test_publish_to_production_calls_deploy_endpoint(monkeypatch, fake_mcp):
+    deploy_response = {
+        "project_id": FAKE_PROJECT_ID,
+        "draft_graph_runner_id": "00000000-0000-4000-8000-aaaaaaaaaaaa",
+        "prod_graph_runner_id": FAKE_RUNNER_ID,
+        "previous_prod_graph_runner_id": None,
+    }
+    post_mock = AsyncMock(return_value=deploy_response)
+
+    monkeypatch.setattr(graphs, "_get_auth", lambda: ("jwt-token", "user-123"))
+    monkeypatch.setattr(graphs.api, "post", post_mock)
+
+    graphs.register(fake_mcp)
+    result = await fake_mcp.tools["publish_to_production"](FAKE_PROJECT_ID, FAKE_RUNNER_ID)
+
+    assert result == deploy_response
+    post_mock.assert_awaited_once_with(
+        f"/projects/{FAKE_PROJECT_ID}/graph/{FAKE_RUNNER_ID}/deploy", "jwt-token"
+    )
+
+
+# --- get_draft_graph (convenience → resolves draft runner automatically) ---
+
+
+@pytest.mark.asyncio
+async def test_get_draft_graph_resolves_draft_runner(monkeypatch, fake_mcp):
+    project_response = {
+        "graph_runners": [
+            {"id": FAKE_RUNNER_ID, "env": "draft", "tag_name": None},
+            {"id": "00000000-0000-4000-8000-bbbbbbbbbbbb", "env": "production", "tag_name": "v1"},
+        ],
+    }
+    graph_response = {"component_instances": [], "edges": []}
+
+    call_log = []
+
+    async def mock_get(path, token, *, trim=True, **params):
+        call_log.append((path, trim))
+        if "/graph/" in path:
+            return graph_response
+        return project_response
+
+    monkeypatch.setattr(graphs, "_get_auth", lambda: ("jwt-token", "user-123"))
+    monkeypatch.setattr(graphs.api, "get", mock_get)
+
+    graphs.register(fake_mcp)
+    result = await fake_mcp.tools["get_draft_graph"](FAKE_PROJECT_ID)
+
+    assert result["graph_runner_id"] == FAKE_RUNNER_ID
+    assert result["graph"] == graph_response
+    assert call_log[0] == (f"/projects/{FAKE_PROJECT_ID}", True)
+    assert call_log[1] == (f"/projects/{FAKE_PROJECT_ID}/graph/{FAKE_RUNNER_ID}", False)
+
+
+@pytest.mark.asyncio
+async def test_get_draft_graph_raises_when_no_draft(monkeypatch, fake_mcp):
+    project_response = {
+        "graph_runners": [
+            {"id": "00000000-0000-4000-8000-bbbbbbbbbbbb", "env": "production", "tag_name": "v1"},
+        ],
+    }
+
+    monkeypatch.setattr(graphs, "_get_auth", lambda: ("jwt-token", "user-123"))
+    monkeypatch.setattr(graphs.api, "get", AsyncMock(return_value=project_response))
+
+    graphs.register(fake_mcp)
+    with pytest.raises(ToolError, match="No editable draft runner found"):
+        await fake_mcp.tools["get_draft_graph"](FAKE_PROJECT_ID)
+
+
+@pytest.mark.asyncio
+async def test_get_draft_graph_skips_tagged_drafts(monkeypatch, fake_mcp):
+    """A draft runner with a tag_name is a snapshot, not the editable draft."""
+    project_response = {
+        "graph_runners": [
+            {"id": "00000000-0000-4000-8000-cccccccccccc", "env": "draft", "tag_name": "v2-snapshot"},
+            {"id": FAKE_RUNNER_ID, "env": "draft", "tag_name": None},
+        ],
+    }
+    graph_response = {"component_instances": [{"id": "node-1"}], "edges": []}
+
+    async def mock_get(path, token, *, trim=True, **params):
+        if "/graph/" in path:
+            return graph_response
+        return project_response
+
+    monkeypatch.setattr(graphs, "_get_auth", lambda: ("jwt-token", "user-123"))
+    monkeypatch.setattr(graphs.api, "get", mock_get)
+
+    graphs.register(fake_mcp)
+    result = await fake_mcp.tools["get_draft_graph"](FAKE_PROJECT_ID)
+
+    assert result["graph_runner_id"] == FAKE_RUNNER_ID
+
+
+# --- promote_version_to_env (factory proxy → PUT .../env/{env}) ---
+
+
+def test_promote_version_to_env_registered(fake_mcp):
+    graphs.register(fake_mcp)
+    assert "promote_version_to_env" in fake_mcp.tools

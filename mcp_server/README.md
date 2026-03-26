@@ -83,7 +83,7 @@ All domain content lives in `docs.py` (single source of truth).
 | Projects | 7 | `create_workflow` (auto ID/icon), `get_project_overview` |
 | Agents | 3 | `create_agent` (auto ID/icon — single AI node; use `create_workflow` for DAGs) |
 | Agent Config | 3 | `configure_agent`, `add_tool_to_agent`, `remove_tool_from_agent` |
-| Graphs | 6 | `get_graph`, `update_graph`, `update_component_parameters`, `save_graph_version`, `publish_to_production` |
+| Graphs | 8 | `get_graph`, `get_draft_graph` (auto-resolves draft runner), `update_graph`, `update_component_parameters`, `save_graph_version`, `publish_to_production`, `promote_version_to_env`, `get_graph_history` |
 | Components | 2 | `list_components` (auto-filtered by release stage), `search_components` |
 | Runs | 4 | `run` (payload dict, async + polling), `list_runs`, `get_run`, `get_run_result` |
 | API Keys | 6 | Project + org level keys |
@@ -260,3 +260,7 @@ Any Streamable-HTTP-compatible MCP client can connect to `https://mcp.draftnrun.
 **"access_token is required" on `update_graph`** — The graph contains an integration-backed component (e.g. Gmail, Slack, HubSpot) whose OAuth connection is not set up. The backend validates integration dependencies at save time, not just at run time. Fix: connect the integration in the web UI first, or save the graph without the integration component and add it later. See `docs://integrations` preflight checklist.
 
 **"Resource not found" on graph/project operations** — IDs may have changed after a publish (which creates a fresh draft with new instance UUIDs). Re-fetch with `get_project_overview` and `get_graph` before retrying. Never reuse IDs across projects or orgs.
+
+**UUID parse errors (e.g. "invalid group count")** — A malformed UUID was passed (wrong hyphen placement or missing group). Double-check the ID has the format `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` (5 hyphen-separated groups). Copy IDs verbatim from tool responses. To avoid `graph_runner_id` errors entirely, use `get_draft_graph(project_id)` which resolves the draft runner automatically.
+
+**`list_projects` returns projects from other organizations** — When `include_templates=True`, the backend includes global template projects from all orgs. Filter the response by `organization_id` to isolate the active org's projects, or use `include_templates=False` (the default).

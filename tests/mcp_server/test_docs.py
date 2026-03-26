@@ -21,7 +21,8 @@ async def test_get_guide_returns_corrected_versioning_admin_and_qa_guidance(fake
     qa = await get_guide("qa")
 
     assert "keeps the current draft runner as the editable draft" in versioning
-    assert "creates a brand new draft runner for continued editing" in versioning
+    assert "creates a brand-new cloned draft runner for continued editing" in versioning
+    assert "promote_version_to_env" in versioning
     assert "`list_crons()`" in admin
     assert "list_widgets" not in admin
     assert "`run_evaluation(project_id, judge_id, version_output_id)`" in qa
