@@ -347,6 +347,7 @@ class SQLLocalService(DBService):
         rows: list[dict],
         table_name: str,
         schema_name: Optional[str] = None,
+        batch_size: Optional[int] = None,
     ) -> None:
         if not rows:
             LOGGER.info("Empty row list provided, skipping insert")
@@ -358,9 +359,17 @@ class SQLLocalService(DBService):
         jsonb_columns = {col["name"] for col in description_table if "jsonb" in str(col.get("type", "")).lower()}
         rows = self._parse_jsonb_in_rows(rows, jsonb_columns)
 
-        with self.Session() as session:
-            session.execute(table.insert(), rows)
-            session.commit()
+        if batch_size and len(rows) > batch_size:
+            for i in range(0, len(rows), batch_size):
+                batch = rows[i : i + batch_size]
+                LOGGER.info(f"Inserting batch {i // batch_size + 1} ({len(batch)} rows)")
+                with self.Session() as session:
+                    session.execute(table.insert(), batch)
+                    session.commit()
+        else:
+            with self.Session() as session:
+                session.execute(table.insert(), rows)
+                session.commit()
 
     def grant_select_on_table(
         self,
@@ -396,61 +405,6 @@ class SQLLocalService(DBService):
                 stmt = stmt.where(table.c["source_id"] == source_id)
             result = session.execute(stmt)
             return set(result.scalars().all())
-
-    def _refresh_table_from_rows(
-        self,
-        rows: list[dict],
-        table_name: str,
-        id_column: str,
-        table_definition: DBDefinition,
-        schema_name: Optional[str] = None,
-    ) -> None:
-        """
-        Update a table based on the `id_column` column.
-        It only updates ids that already exist in the table.
-        rows contains ONLY the updated values.
-        """
-        if not rows:
-            return
-        table = self.get_table(table_name, schema_name)
-        sql_alchemy_columns = self.convert_table_definition_to_sqlalchemy(table_definition)
-
-        jsonb_columns = {col.name for col in table_definition.columns if col.type in ("JSONB", "VARIANT")}
-        rows = self._parse_jsonb_in_rows(rows, jsonb_columns)
-
-        if "updated_values" in self.metadata.tables:
-            self.metadata.remove(self.metadata.tables["updated_values"])
-
-        temp_table = sqlalchemy.Table("updated_values", self.metadata, *sql_alchemy_columns)
-
-        try:
-            temp_table.drop(self.engine, checkfirst=True)
-            temp_table.create(self.engine)
-            LOGGER.info(f"Temporary table created to update {table_name}")
-
-            with self.Session() as session:
-                session.execute(temp_table.insert(), rows)
-                session.commit()
-
-            columns_to_update = {
-                col.name: temp_table.c[col.name]
-                for col in table.columns
-                if col.name != PROCESSED_DATETIME_FIELD and col.name in temp_table.c
-            }
-
-            columns_to_update = self.add_processed_datetime_if_exists(table, columns_to_update)
-
-            update_stmt = table.update().where(table.c[id_column] == temp_table.c[id_column]).values(columns_to_update)
-
-            with self.Session() as session:
-                session.execute(update_stmt)
-                session.commit()
-        finally:
-            try:
-                temp_table.drop(self.engine, checkfirst=True)
-                self.metadata.remove(temp_table)
-            except Exception as e:
-                LOGGER.warning(f"Failed to cleanup temporary table: {str(e)}")
 
     def delete_rows_from_table(
         self,

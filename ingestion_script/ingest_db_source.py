@@ -1,6 +1,5 @@
 import json
 import logging
-from collections.abc import AsyncGenerator
 from datetime import date, datetime
 from decimal import Decimal
 from functools import partial
@@ -37,6 +36,15 @@ from settings import settings
 LOGGER = logging.getLogger(__name__)
 
 
+def build_file_id(table_name: str, row_id) -> str:
+    return f"{table_name}_{row_id}"
+
+
+def extract_row_id_from_file_id(file_id: str, table_name: str) -> str:
+    prefix = f"{table_name}_"
+    return file_id[len(prefix) :]
+
+
 def _serialize_value(value):
     if value is None:
         return None
@@ -51,29 +59,21 @@ def _serialize_value(value):
     return value
 
 
-async def get_db_source(
-    db_url: str,
+def _validate_source_columns(
+    sql_local_service: SQLLocalService,
     table_name: str,
     id_column_name: str,
-    text_column_names: list[str],
-    qdrant_service: QdrantService,
-    qdrant_collection_name: str,
-    source_schema_name: Optional[str] = None,
+    source_schema_name: Optional[str],
+    text_column_names: Optional[list[str]] = None,
     metadata_column_names: Optional[list[str]] = None,
     timestamp_column_name: Optional[str] = None,
-    url_pattern: Optional[str] = None,
-    chunk_size: int = 1024,
-    chunk_overlap: int = 0,
-    sql_query_filter: Optional[str] = None,
-) -> AsyncGenerator[list[dict], None]:
-    sql_local_service = SQLLocalService(engine_url=db_url)
-
+) -> dict:
     column_info = sql_local_service.get_column_info(table_name, schema_name=source_schema_name)
     column_names = set(column_info.keys())
 
     if id_column_name not in column_names:
         raise ValueError(f"ID column '{id_column_name}' not found in the columns: {sorted(column_names)}")
-    if not set(text_column_names).issubset(column_names):
+    if text_column_names and not set(text_column_names).issubset(column_names):
         raise ValueError(f"Text columns {text_column_names} not found in the columns: {sorted(column_names)}")
     if metadata_column_names is not None and not set(metadata_column_names).issubset(column_names):
         raise ValueError(f"Metadata columns {metadata_column_names} not found in the columns: {sorted(column_names)}")
@@ -81,39 +81,39 @@ async def get_db_source(
         raise ValueError(
             f"Timestamp column '{timestamp_column_name}' not found in the columns: {sorted(column_names)}"
         )
+    return column_info
 
-    if metadata_column_names:
-        for metadata_col in metadata_column_names:
-            qdrant_field_schema = map_sql_type_to_qdrant_field_schema(column_info.get(metadata_col, "VARCHAR"))
-            LOGGER.info(f"Creating index for metadata column '{metadata_col}' with qdrant type {qdrant_field_schema}")
-            await qdrant_service.create_index_if_needed_async(
-                collection_name=qdrant_collection_name,
-                field_name=metadata_col,
-                field_schema_type=qdrant_field_schema,
-            )
-    if timestamp_column_name:
-        await qdrant_service.create_index_if_needed_async(
-            collection_name=qdrant_collection_name,
-            field_name=timestamp_column_name,
-            field_schema_type=FieldSchema.DATETIME,
-        )
 
+def _chunk_source_rows(
+    sql_local_service: SQLLocalService,
+    table_name: str,
+    id_column_name: str,
+    text_column_names: list[str],
+    source_schema_name: Optional[str],
+    metadata_column_names: Optional[list[str]],
+    timestamp_column_name: Optional[str],
+    url_pattern: Optional[str],
+    chunk_size: int,
+    chunk_overlap: int,
+    batch_size: int,
+    sql_query_filter: Optional[str] = None,
+) -> list[dict]:
     splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    all_chunks: list[dict] = []
 
     source_batches = sql_local_service.iter_table_rows(
         table_name=table_name,
-        batch_size=settings.INGESTION_BATCH_SIZE,
+        batch_size=batch_size,
         schema_name=source_schema_name,
         sql_query_filter=sql_query_filter,
     )
 
     for batch in source_batches:
-        batch_rows: list[dict] = []
         for source_row in batch:
             row_id = source_row[id_column_name]
             combined_text = " ".join(str(source_row.get(col) or "") for col in text_column_names)
             chunks = splitter.split_text(combined_text)
-            file_id = f"{table_name}_{row_id}"
+            file_id = build_file_id(table_name, row_id)
             timestamp_value = source_row.get(timestamp_column_name) if timestamp_column_name else None
 
             for chunk_index, chunk_text in enumerate(chunks, start=1):
@@ -135,7 +135,7 @@ async def get_db_source(
                             if metadata_value is not None:
                                 metadata[metadata_col_name] = _serialize_value(metadata_value)
 
-                batch_rows.append({
+                all_chunks.append({
                     CHUNK_ID_COLUMN_NAME: chunk_id,
                     CHUNK_COLUMN_NAME: chunk_text,
                     FILE_ID_COLUMN_NAME: file_id,
@@ -145,8 +145,125 @@ async def get_db_source(
                     URL_COLUMN_NAME: url_value,
                     METADATA_COLUMN_NAME: json.dumps(metadata) if metadata else json.dumps({}),
                 })
-        if batch_rows:
-            yield batch_rows
+
+    return all_chunks
+
+
+def get_db_source_ids(
+    db_url: str,
+    table_name: str,
+    id_column_name: str,
+    batch_size: int,
+    source_schema_name: Optional[str] = None,
+    timestamp_column_name: Optional[str] = None,
+    sql_query_filter: Optional[str] = None,
+) -> dict[str, any]:
+    sql_local_service = SQLLocalService(engine_url=db_url)
+    _validate_source_columns(
+        sql_local_service,
+        table_name,
+        id_column_name,
+        source_schema_name,
+        timestamp_column_name=timestamp_column_name,
+    )
+
+    ids_with_ts: dict[str, any] = {}
+    source_batches = sql_local_service.iter_table_rows(
+        table_name=table_name,
+        batch_size=batch_size,
+        schema_name=source_schema_name,
+        sql_query_filter=sql_query_filter,
+    )
+    for batch in source_batches:
+        for source_row in batch:
+            row_id = source_row[id_column_name]
+            file_id = build_file_id(table_name, row_id)
+            timestamp_value = source_row.get(timestamp_column_name) if timestamp_column_name else None
+            ids_with_ts[file_id] = _serialize_value(timestamp_value)
+
+    return ids_with_ts
+
+
+def fetch_db_source_chunks(
+    file_ids: set[str],
+    db_url: str,
+    table_name: str,
+    id_column_name: str,
+    text_column_names: list[str],
+    batch_size: int,
+    source_id: Optional[str] = None,
+    source_schema_name: Optional[str] = None,
+    metadata_column_names: Optional[list[str]] = None,
+    timestamp_column_name: Optional[str] = None,
+    url_pattern: Optional[str] = None,
+    chunk_size: int = 1024,
+    chunk_overlap: int = 0,
+) -> list[dict]:
+    if not file_ids:
+        return []
+
+    sql_local_service = SQLLocalService(engine_url=db_url)
+    _validate_source_columns(
+        sql_local_service,
+        table_name,
+        id_column_name,
+        source_schema_name,
+        text_column_names=text_column_names,
+        metadata_column_names=metadata_column_names,
+        timestamp_column_name=timestamp_column_name,
+    )
+
+    raw_row_ids = list(extract_row_id_from_file_id(fid, table_name) for fid in file_ids)
+    all_chunks: list[dict] = []
+
+    for i in range(0, len(raw_row_ids), batch_size):
+        batch_ids = raw_row_ids[i : i + batch_size]
+        id_filter = f"{id_column_name} IN ({','.join(repr(str(rid)) for rid in batch_ids)})"
+
+        batch_chunks = _chunk_source_rows(
+            sql_local_service=sql_local_service,
+            table_name=table_name,
+            id_column_name=id_column_name,
+            text_column_names=text_column_names,
+            source_schema_name=source_schema_name,
+            metadata_column_names=metadata_column_names,
+            timestamp_column_name=timestamp_column_name,
+            url_pattern=url_pattern,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            batch_size=batch_size,
+            sql_query_filter=id_filter,
+        )
+        if source_id:
+            for chunk in batch_chunks:
+                chunk[SOURCE_ID_COLUMN_NAME] = source_id
+        all_chunks.extend(batch_chunks)
+
+    return all_chunks
+
+
+async def _ensure_qdrant_indexes(
+    qdrant_service: QdrantService,
+    qdrant_collection_name: str,
+    column_info: dict,
+    metadata_column_names: Optional[list[str]] = None,
+    timestamp_column_name: Optional[str] = None,
+) -> None:
+    if metadata_column_names:
+        for metadata_col in metadata_column_names:
+            qdrant_field_schema = map_sql_type_to_qdrant_field_schema(column_info.get(metadata_col, "VARCHAR"))
+            LOGGER.info(f"Creating index for metadata column '{metadata_col}' with qdrant type {qdrant_field_schema}")
+            await qdrant_service.create_index_if_needed_async(
+                collection_name=qdrant_collection_name,
+                field_name=metadata_col,
+                field_schema_type=qdrant_field_schema,
+            )
+    if timestamp_column_name:
+        await qdrant_service.create_index_if_needed_async(
+            collection_name=qdrant_collection_name,
+            field_name=timestamp_column_name,
+            field_schema_type=FieldSchema.DATETIME,
+        )
 
 
 async def upload_db_source(
@@ -194,38 +311,61 @@ async def upload_db_source(
     )
 
     source_id_str = str(source_id)
-    all_chunks: list[dict] = []
-    async for chunk_batch in get_db_source(
+    batch_size = settings.INGESTION_BATCH_SIZE
+
+    sql_local_service = SQLLocalService(engine_url=source_db_url)
+    column_info = _validate_source_columns(
+        sql_local_service,
+        source_table_name,
+        id_column_name,
+        source_schema_name,
+        text_column_names=text_column_names,
+        metadata_column_names=metadata_column_names,
+        timestamp_column_name=timestamp_column_name,
+    )
+    await _ensure_qdrant_indexes(
+        qdrant_service,
+        qdrant_collection_name,
+        column_info,
+        metadata_column_names=metadata_column_names,
+        timestamp_column_name=timestamp_column_name,
+    )
+
+    ids_with_ts = get_db_source_ids(
         db_url=source_db_url,
         table_name=source_table_name,
         id_column_name=id_column_name,
-        text_column_names=text_column_names,
+        batch_size=batch_size,
         source_schema_name=source_schema_name,
-        metadata_column_names=metadata_column_names,
         timestamp_column_name=timestamp_column_name,
-        url_pattern=url_pattern,
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
         sql_query_filter=combined_filter_sql,
-        qdrant_service=qdrant_service,
-        qdrant_collection_name=qdrant_collection_name,
-    ):
-        for row in chunk_batch:
-            row[SOURCE_ID_COLUMN_NAME] = source_id_str
-        all_chunks.extend(chunk_batch)
+    )
 
-    if not all_chunks:
+    if not ids_with_ts:
         raise ValueError(f"The table '{source_table_name}' is empty. No data to ingest.")
 
-    chunks_by_id = {chunk[CHUNK_ID_COLUMN_NAME]: chunk for chunk in all_chunks}
-    ids_with_ts = {chunk[CHUNK_ID_COLUMN_NAME]: chunk.get(TIMESTAMP_COLUMN_NAME) for chunk in all_chunks}
+    LOGGER.info(f"Found {len(ids_with_ts)} source rows from table {source_table_name}")
 
     db_service.update_table(
         incoming_ids_with_timestamp=ids_with_ts,
-        fetch_rows_fn=lambda ids: [chunks_by_id[id_] for id_ in ids if id_ in chunks_by_id],
+        fetch_rows_fn=partial(
+            fetch_db_source_chunks,
+            db_url=source_db_url,
+            table_name=source_table_name,
+            id_column_name=id_column_name,
+            text_column_names=text_column_names,
+            batch_size=batch_size,
+            source_id=source_id_str,
+            source_schema_name=source_schema_name,
+            metadata_column_names=metadata_column_names,
+            timestamp_column_name=timestamp_column_name,
+            url_pattern=url_pattern,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        ),
         table_name=storage_table_name,
         table_definition=db_definition,
-        id_column_name=CHUNK_ID_COLUMN_NAME,
+        id_column_name=FILE_ID_COLUMN_NAME,
         timestamp_column_name=TIMESTAMP_COLUMN_NAME,
         append_mode=update_existing,
         schema_name=storage_schema_name,

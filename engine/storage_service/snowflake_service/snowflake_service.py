@@ -264,57 +264,23 @@ class SnowflakeService(DBService):
             quote_identifiers=False,
         )
 
-    def insert_rows(self, rows: list[dict], table_name: str, schema_name: Optional[str] = None) -> None:
+    def insert_rows(
+        self, rows: list[dict], table_name: str, schema_name: Optional[str] = None, batch_size: Optional[int] = None
+    ) -> None:
         if not rows:
             return
-        df = pd.DataFrame(rows)
-        self.insert_df_to_table(df, table_name, schema_name)
+        if batch_size and len(rows) > batch_size:
+            for i in range(0, len(rows), batch_size):
+                batch = rows[i : i + batch_size]
+                df = pd.DataFrame(batch)
+                self.insert_df_to_table(df, table_name, schema_name)
+        else:
+            df = pd.DataFrame(rows)
+            self.insert_df_to_table(df, table_name, schema_name)
 
     def grant_select_on_table(self, table_name: str, schema_name: str, role: str) -> None:
         self.connector.cursor().execute(f"GRANT USAGE ON SCHEMA {schema_name} TO ROLE {role}")
         self.connector.cursor().execute(f"GRANT SELECT ON {schema_name}.{table_name} TO ROLE {role}")
-
-    def _refresh_table_from_rows(
-        self,
-        rows: list[dict],
-        table_name: str,
-        id_column: str,
-        table_definition: DBDefinition,
-        schema_name: Optional[str] = None,
-    ) -> None:
-        if not rows:
-            return
-        df = pd.DataFrame(rows)
-        self._refresh_table_from_df(df, table_name, schema_name, id_column, table_definition)
-
-    def _refresh_table_from_df(
-        self,
-        df: pd.DataFrame,
-        table_name: str,
-        schema_name: str,
-        id_column: str,
-        table_definition: DBDefinition,
-    ) -> None:
-        table_definition_str = self.convert_table_definition_to_string(table_definition)
-        query_temporary = f"CREATE TEMPORARY TABLE {schema_name}.updated_values ({table_definition_str});"
-        self.connector.cursor().execute(query_temporary)
-        self.insert_df_to_table(
-            df=df,
-            table_name="updated_values",
-            schema_name=schema_name,
-        )
-        LOGGER.info(f"Temporary table created to update {schema_name}.{table_name}")
-
-        df.columns = [column.upper() for column in df.columns]
-        query = (
-            f"UPDATE {schema_name}.{table_name} SET "
-            + ", ".join([f"{column} = {schema_name}.updated_values.{column}" for column in df.columns])
-            + f" FROM {schema_name}.updated_values "
-            + f"WHERE {schema_name}.{table_name}.{id_column} = "
-            + f"{schema_name}.updated_values.{id_column};"
-        )
-        self.connector.cursor().execute(query)
-        self.connector.cursor().execute(f"DROP TABLE {schema_name}.updated_values;")
 
     def _fetch_sql_query_as_dicts(self, query: str) -> list[dict]:
         with self._lock:

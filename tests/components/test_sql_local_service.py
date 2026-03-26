@@ -86,33 +86,6 @@ def test_delete_rows_from_table(postgres_service, sample_table_definition):
     assert rows[0]["name"] == "Bob"
 
 
-def test_refresh_table_from_rows(postgres_service, sample_table_definition):
-    postgres_service.create_table(
-        "test_table",
-        table_definition=sample_table_definition,
-        schema_name=TEST_SCHEMA_NAME,
-    )
-    postgres_service.insert_rows(
-        [
-            {"chunk_id": 1, "name": "Alice", "created_at": "2021-01-01 11:10:00"},
-            {"chunk_id": 2, "name": "Bob", "created_at": "2021-01-01 11:10:00"},
-        ],
-        "test_table",
-        TEST_SCHEMA_NAME,
-    )
-    postgres_service._refresh_table_from_rows(
-        rows=[{"chunk_id": 1, "name": "Alice Updated", "created_at": "2021-02-01 11:15:00"}],
-        table_name="test_table",
-        id_column="chunk_id",
-        table_definition=sample_table_definition,
-        schema_name=TEST_SCHEMA_NAME,
-    )
-    rows = postgres_service.get_table_rows("test_table", TEST_SCHEMA_NAME)
-    assert len(rows) == 2
-    alice_row = next(r for r in rows if r["chunk_id"] == 1)
-    assert alice_row["name"] == "Alice Updated"
-
-
 def test_drop_table(postgres_service, sample_table_definition):
     postgres_service.create_table(
         "test_table",

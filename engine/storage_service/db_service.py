@@ -8,6 +8,7 @@ from engine.components.close_mixin import CloseMixin
 from engine.components.component import ComponentAttributes
 from engine.datetime_utils import make_naive_utc, parse_datetime
 from engine.storage_service.db_utils import CHUNK_ID_COLUMN, DBDefinition, cast_id_value
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -99,8 +100,10 @@ class DBService(CloseMixin, ABC):
         pass
 
     @abstractmethod
-    def insert_rows(self, rows: list[dict], table_name: str, schema_name: Optional[str] = None) -> None:
-        """Insert a list of row dicts into a table."""
+    def insert_rows(
+        self, rows: list[dict], table_name: str, schema_name: Optional[str] = None, batch_size: Optional[int] = None
+    ) -> None:
+        """Insert a list of row dicts into a table. If batch_size is set, inserts in batches."""
         pass
 
     def insert_df_to_table(self, df, table_name: str, schema_name: Optional[str] = None) -> None:
@@ -155,6 +158,7 @@ class DBService(CloseMixin, ABC):
         append_mode: bool = True,
         sql_query_filter: Optional[str] = None,
         source_id: Optional[str] = None,
+        batch_size: Optional[int] = None,
     ) -> None:
         """
         Update a table with incoming data identified by IDs and timestamps.
@@ -167,13 +171,24 @@ class DBService(CloseMixin, ABC):
             LOGGER.info("Empty incoming IDs provided, skipping update")
             return
 
+        if batch_size is None:
+            batch_size = settings.INGESTION_BATCH_SIZE
+
         target_table_name = f"{schema_name}.{table_name}" if schema_name else table_name
+
+        def _fetch_and_insert_batched(ids: set[str]) -> None:
+            id_list = list(ids)
+            effective_batch_size = batch_size or len(id_list)
+            for i in range(0, len(id_list), effective_batch_size):
+                batch_ids = set(id_list[i : i + effective_batch_size])
+                rows = fetch_rows_fn(batch_ids)
+                if rows:
+                    self.insert_rows(rows, table_name, schema_name=schema_name, batch_size=batch_size)
 
         if not self.table_exists(table_name, schema_name=schema_name):
             LOGGER.info(f"Table {target_table_name} does not exist. Creating it...")
             self.create_table(table_name=table_name, table_definition=table_definition, schema_name=schema_name)
-            all_rows = fetch_rows_fn(set(incoming_ids_with_timestamp.keys()))
-            self.insert_rows(rows=all_rows, table_name=table_name, schema_name=schema_name)
+            _fetch_and_insert_batched(set(incoming_ids_with_timestamp.keys()))
             return
 
         all_existing_ids = self._fetch_column_as_set(
@@ -231,41 +246,16 @@ class DBService(CloseMixin, ABC):
             )
 
         if ids_to_update:
-            rows_to_update = fetch_rows_fn(ids_to_update)
-            self._refresh_table_from_rows(
-                rows=rows_to_update,
+            self.delete_rows_from_table(
                 table_name=table_name,
-                id_column=id_column_name,
-                table_definition=table_definition,
+                ids=list(ids_to_update),
+                id_column_name=id_column_name,
                 schema_name=schema_name,
             )
+            _fetch_and_insert_batched(ids_to_update)
 
         if ids_to_add:
-            rows_to_add = fetch_rows_fn(ids_to_add)
-            self.insert_rows(rows_to_add, table_name, schema_name=schema_name)
-
-    @abstractmethod
-    def _refresh_table_from_rows(
-        self,
-        rows: list[dict],
-        table_name: str,
-        id_column: str,
-        table_definition: DBDefinition,
-        schema_name: Optional[str] = None,
-    ) -> None:
-        pass
-
-    def _refresh_table_from_df(
-        self,
-        df,
-        table_name: str,
-        id_column: str,
-        table_definition: DBDefinition,
-        schema_name: Optional[str] = None,
-    ) -> None:
-        """Convenience method that accepts a pandas DataFrame. Prefer _refresh_table_from_rows."""
-        rows = df.to_dict(orient="records") if hasattr(df, "to_dict") else list(df)
-        self._refresh_table_from_rows(rows, table_name, id_column, table_definition, schema_name)
+            _fetch_and_insert_batched(ids_to_add)
 
     @abstractmethod
     def delete_rows_from_table(

@@ -125,7 +125,10 @@ async def sync_chunks_to_qdrant(
         incoming_ids_with_timestamp=incoming_ids_with_timestamp,
         fetch_rows=lambda ids: prepare_rows_for_qdrant(
             db_service.get_rows_by_ids(
-                table_name=table_name, chunk_ids=ids, schema_name=table_schema, sql_query_filter=combined_filter,
+                table_name=table_name,
+                chunk_ids=ids,
+                schema_name=table_schema,
+                sql_query_filter=combined_filter,
             )
         ),
         collection_name=collection_name,
@@ -442,9 +445,7 @@ async def _ingest_folder_source(
         all_chunks_df = pd.concat(file_chunks_dfs, ignore_index=True)
 
         initial_count = len(all_chunks_df)
-        all_chunks_df = all_chunks_df[
-            all_chunks_df["content"].notna() & (all_chunks_df["content"].str.strip() != "")
-        ]
+        all_chunks_df = all_chunks_df[all_chunks_df["content"].notna() & (all_chunks_df["content"].str.strip() != "")]
         filtered_count = initial_count - len(all_chunks_df)
         if filtered_count > 0:
             LOGGER.info(f"Filtered out {filtered_count} chunks with empty content")

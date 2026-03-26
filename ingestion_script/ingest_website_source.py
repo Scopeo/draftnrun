@@ -232,9 +232,7 @@ async def upload_website_source(
     all_chunks_df = pd.concat(page_chunks_dfs, ignore_index=True)
 
     initial_count = len(all_chunks_df)
-    all_chunks_df = all_chunks_df[
-        all_chunks_df["content"].notna() & (all_chunks_df["content"].str.strip() != "")
-    ]
+    all_chunks_df = all_chunks_df[all_chunks_df["content"].notna() & (all_chunks_df["content"].str.strip() != "")]
     filtered_count = initial_count - len(all_chunks_df)
     if filtered_count > 0:
         LOGGER.info(f"Filtered out {filtered_count} chunks with empty content")
