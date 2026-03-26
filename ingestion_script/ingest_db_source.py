@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from datetime import date, datetime
 from decimal import Decimal
 from functools import partial
-from typing import Any, Optional
+from typing import Optional
 from uuid import UUID
 
 from llama_index.core.node_parser import SentenceSplitter
@@ -51,11 +51,6 @@ def _serialize_value(value):
     return value
 
 
-def _iter_batches(items: list[Any], batch_size: int):
-    for index in range(0, len(items), batch_size):
-        yield items[index : index + batch_size]
-
-
 async def get_db_source(
     db_url: str,
     table_name: str,
@@ -70,7 +65,6 @@ async def get_db_source(
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
     sql_query_filter: Optional[str] = None,
-    row_ids_to_fetch: set[Any] = frozenset(),
 ) -> AsyncGenerator[list[dict], None]:
     sql_local_service = SQLLocalService(engine_url=db_url)
 
@@ -106,24 +100,12 @@ async def get_db_source(
 
     splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
-    if row_ids_to_fetch:
-        source_batches = (
-            sql_local_service.get_rows_by_ids(
-                table_name=table_name,
-                chunk_ids=row_id_batch,
-                schema_name=source_schema_name,
-                id_column_name=id_column_name,
-                sql_query_filter=sql_query_filter,
-            )
-            for row_id_batch in _iter_batches(list(row_ids_to_fetch), settings.INGESTION_BATCH_SIZE)
-        )
-    else:
-        source_batches = sql_local_service.iter_table_rows(
-            table_name=table_name,
-            batch_size=settings.INGESTION_BATCH_SIZE,
-            schema_name=source_schema_name,
-            sql_query_filter=sql_query_filter,
-        )
+    source_batches = sql_local_service.iter_table_rows(
+        table_name=table_name,
+        batch_size=settings.INGESTION_BATCH_SIZE,
+        schema_name=source_schema_name,
+        sql_query_filter=sql_query_filter,
+    )
 
     for batch in source_batches:
         batch_rows: list[dict] = []
