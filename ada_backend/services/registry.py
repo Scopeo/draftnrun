@@ -444,6 +444,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=SQLTool,
             parameter_processors=[
+                db_service_processor,
                 completion_service_processor,
             ],
         ),

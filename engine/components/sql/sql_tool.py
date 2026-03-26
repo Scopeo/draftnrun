@@ -1,9 +1,13 @@
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Type
 
+from openinference.semconv.trace import OpenInferenceSpanKindValues
+from pydantic import BaseModel, Field
+
+from ada_backend.database.models import UIComponent, UIComponentProperties
 from engine.components.component import Component
-from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.components.types import ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService
 from engine.storage_service.db_service import DBService
 from engine.trace.trace_manager import TraceManager
@@ -71,14 +75,51 @@ DEFAULT_SQL_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
+class SQLToolInputs(BaseModel):
+    natural_language_query: str = Field(
+        description="The user's natural language query to interrogate the database.",
+        json_schema_extra={
+            "is_tool_input": True,
+            "ui_component": UIComponent.TEXTAREA,
+            "ui_component_properties": UIComponentProperties(
+                label="Natural Language Query",
+                placeholder="What are the top 5 most expensive products?",
+                description="A natural language question about the database. Do not put raw SQL here.",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        },
+    )
+
+
+class SQLToolOutputs(BaseModel):
+    output: str = Field(description="The final response message (raw SQL result or synthesized answer).")
+    input_question: str = Field(description="The original natural language query.")
+    sql_query: str = Field(description="The generated SQL query.")
+    sql_output: str = Field(description="The raw SQL query result in markdown format.")
+
+
 class SQLTool(Component):
+    TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
+    migrated = True
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return SQLToolInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return SQLToolOutputs
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "natural_language_query", "output": "output"}
+
     def __init__(
         self,
         trace_manager: TraceManager,
         completion_service: CompletionService,
         db_service: DBService,
         component_attributes: ComponentAttributes,
-        include_tables: Optional[list[str]] = None,
+        include_tables: Optional[list[str] | str] = None,
         additional_db_description: Optional[str] = None,
         tool_description: Optional[ToolDescription] = DEFAULT_SQL_TOOL_DESCRIPTION,
         text_to_sql_prompt: str = TEXT_TO_SQL_PROMPT,
@@ -91,7 +132,7 @@ class SQLTool(Component):
             component_attributes=component_attributes,
         )
         self._db_service = db_service
-        self._include_tables = include_tables
+        self._include_tables = self._parse_include_tables(include_tables)
         self._additional_db_description = additional_db_description
         self._completion_service = completion_service
         self._text_to_sql_prompt = text_to_sql_prompt
@@ -99,12 +140,20 @@ class SQLTool(Component):
         self._dialect = db_service.engine.dialect.name
         self.synthesize_sql_prompt = synthesize_sql_prompt
 
+    @staticmethod
+    def _parse_include_tables(value: Optional[list[str] | str]) -> Optional[list[str]]:
+        if value is None or isinstance(value, list):
+            return value or None
+        tables = [t.strip() for t in value.replace(",", " ").split() if t.strip()]
+        return tables or None
+
     async def _run_without_io_trace(
-        self, *inputs: AgentPayload, natural_language_query: Optional[str] = None, ctx: Optional[dict] = None
-    ) -> AgentPayload:
-        agent_input = inputs[0]
-        query_str = natural_language_query or agent_input.last_message.content
-        schema = self._db_service.get_db_description(self._include_tables)
+        self,
+        inputs: SQLToolInputs,
+        ctx: Optional[dict] = None,
+    ) -> SQLToolOutputs:
+        query_str = inputs.natural_language_query
+        schema = self._db_service.get_db_description(table_names=self._include_tables)
         if self._additional_db_description:
             schema += self._additional_db_description
         input_prompt = self._text_to_sql_prompt.format(query_str=query_str, schema=schema, dialect=self._dialect)
@@ -125,7 +174,9 @@ class SQLTool(Component):
             )
             output_message = synthetize_answer
 
-        return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=output_message)],
-            artifacts={"input_question": query_str, "sql_query": sql_query, "sql_output": sql_output},
+        return SQLToolOutputs(
+            output=output_message,
+            input_question=query_str,
+            sql_query=sql_query,
+            sql_output=sql_output,
         )
