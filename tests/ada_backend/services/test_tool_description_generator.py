@@ -39,6 +39,7 @@ def _make_port_definition(
     pd.is_tool_input = is_tool_input
     pd.port_type = port_type
     pd.component_version_id = uuid4()
+    pd.default_tool_json_schema = None
     return pd
 
 
@@ -115,6 +116,22 @@ class TestBuildPropertySchema:
         config = _make_tool_port_config(port_def=pd, ai_description_override="custom AI desc")
         schema = _build_property_schema(pd, config=config)
         assert schema["description"] == "custom AI desc"
+
+    def test_default_tool_json_schema_used_as_fallback(self):
+        rich_schema = {"type": "object", "properties": {"must": {"type": "array"}}, "additionalProperties": False}
+        pd = _make_port_definition(parameter_type=ParameterType.JSON, description="Filters")
+        pd.default_tool_json_schema = rich_schema
+        schema = _build_property_schema(pd, config=None)
+        assert schema == rich_schema
+
+    def test_config_json_schema_override_beats_default_tool_json_schema(self):
+        default_schema = {"type": "object", "properties": {"must": {"type": "array"}}}
+        override_schema = {"type": "string", "description": "override"}
+        pd = _make_port_definition(parameter_type=ParameterType.JSON)
+        pd.default_tool_json_schema = default_schema
+        config = _make_tool_port_config(port_def=pd, json_schema_override=override_schema)
+        schema = _build_property_schema(pd, config=config)
+        assert schema == override_schema
 
     def test_json_schema_override_replaces_everything(self):
         pd = _make_port_definition()

@@ -17,6 +17,48 @@ from engine.qdrant_service import SOURCE_ID_COLUMN_NAME, QdrantCollectionSchema,
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
+QDRANT_FILTERS_TOOL_JSON_SCHEMA: dict = {
+    "type": "object",
+    "description": (
+        "Qdrant filter object. Top-level keys MUST be one or more of: "
+        "'must' (AND), 'should' (OR), 'must_not' (NOT). "
+        "NEVER output 'filters' as an array; it must be an object. "
+        "When in doubt, place all constraints in 'must'.\n\n"
+        "Only supported condition form:\n"
+        '- Date range: {"key": "date", "range": {"gte": "YYYY-MM-DD", "lte": "YYYY-MM-DD"}} '
+        "(ISO 8601)\n\n"
+        "The only allowed field for filters is: date (type date). Use exact spelling."
+    ),
+    "properties": {
+        "must": {"type": "array", "items": {"$ref": "#/$defs/dateCondition"}},
+        "should": {"type": "array", "items": {"$ref": "#/$defs/dateCondition"}},
+        "must_not": {"type": "array", "items": {"$ref": "#/$defs/dateCondition"}},
+    },
+    "$defs": {
+        "dateRange": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": False,
+            "properties": {
+                "gt": {"type": "string", "description": "ISO 8601 date"},
+                "gte": {"type": "string", "description": "ISO 8601 date"},
+                "lt": {"type": "string", "description": "ISO 8601 date"},
+                "lte": {"type": "string", "description": "ISO 8601 date"},
+            },
+        },
+        "dateCondition": {
+            "type": "object",
+            "required": ["key", "range"],
+            "additionalProperties": False,
+            "properties": {
+                "key": {"type": "string", "enum": ["date"]},
+                "range": {"$ref": "#/$defs/dateRange"},
+            },
+        },
+    },
+    "additionalProperties": False,
+}
+
 LOGGER = logging.getLogger(__name__)
 
 RETRIEVER_CITATION_INSTRUCTION = (
@@ -54,7 +96,7 @@ class RetrieverInputs(BaseModel):
     filters: Optional[dict] = Field(
         default=None,
         description="Optional filters to apply to the retrieval (e.g., metadata filters).",
-        json_schema_extra={"is_tool_input": True},
+        json_schema_extra={"is_tool_input": True, "default_tool_json_schema": QDRANT_FILTERS_TOOL_JSON_SCHEMA},
     )
     model_config = {"extra": "allow"}
 

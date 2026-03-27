@@ -15,6 +15,26 @@ from engine.components.component import Component
 LOGGER = logging.getLogger(__name__)
 
 
+def _unwrap_optional(annotation):
+    """Unwrap Optional[T] / Union[T, None] to T."""
+    origin = get_origin(annotation)
+    if origin is Union:
+        args = [a for a in get_args(annotation) if a is not type(None)]
+        if len(args) == 1:
+            return args[0]
+    return annotation
+
+
+_PYTHON_TYPE_TO_PARAMETER_TYPE = {
+    str: db.ParameterType.STRING,
+    int: db.ParameterType.INTEGER,
+    float: db.ParameterType.FLOAT,
+    bool: db.ParameterType.BOOLEAN,
+    dict: db.ParameterType.JSON,
+    list: db.ParameterType.JSON,
+}
+
+
 def get_parameter_type(field_info: FieldInfo) -> db.ParameterType:
     extra = getattr(field_info, "json_schema_extra", None)
     if isinstance(extra, dict) and "parameter_type" in extra:
@@ -26,6 +46,12 @@ def get_parameter_type(field_info: FieldInfo) -> db.ParameterType:
                 "Invalid parameter_type found in component metadata. Falling back to STRING.",
                 invalid_parameter_type=param_type_value,
             )
+
+    annotation = _unwrap_optional(field_info.annotation)
+    origin = get_origin(annotation)
+    base = origin if origin is not None else annotation
+    if base in _PYTHON_TYPE_TO_PARAMETER_TYPE:
+        return _PYTHON_TYPE_TO_PARAMETER_TYPE[base]
 
     return db.ParameterType.STRING
 
@@ -144,6 +170,7 @@ def seed_port_definitions(session: Session):
             display_order = None
             parameter_group_id = None
             parameter_order_within_group = None
+            default_tool_json_schema = None
             if isinstance(extra, dict):
                 ui_component = extra.get("ui_component")
                 ui_component_properties = extra.get("ui_component_properties")
@@ -153,6 +180,7 @@ def seed_port_definitions(session: Session):
                 display_order = extra.get("display_order")
                 parameter_group_id = extra.get("parameter_group_id")
                 parameter_order_within_group = extra.get("parameter_order_within_group")
+                default_tool_json_schema = extra.get("default_tool_json_schema")
 
             port_description = field_info.description
             parameter_type = get_parameter_type(field_info)
@@ -188,6 +216,7 @@ def seed_port_definitions(session: Session):
                 port.display_order = display_order
                 port.parameter_group_id = parameter_group_id
                 port.parameter_order_within_group = parameter_order_within_group
+                port.default_tool_json_schema = default_tool_json_schema
                 LOGGER.info(f"  - Updating INPUT port: {field_name}")
             else:
                 port = db.PortDefinition(
@@ -207,6 +236,7 @@ def seed_port_definitions(session: Session):
                     display_order=display_order,
                     parameter_group_id=parameter_group_id,
                     parameter_order_within_group=parameter_order_within_group,
+                    default_tool_json_schema=default_tool_json_schema,
                 )
                 session.add(port)
                 LOGGER.info(f"  - Creating INPUT port: {field_name}")

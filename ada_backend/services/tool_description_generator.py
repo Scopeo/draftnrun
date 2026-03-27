@@ -109,16 +109,20 @@ def _build_property_schema(
 ) -> dict[str, Any]:
     """Build the JSON Schema property dict for a single AI_FILLED port.
 
-    Priority order for each field:
-    1. json_schema_override on config (full replacement)
-    2. Attribute overrides on config (ai_name_override, ai_description_override, ...)
-    3. PortDefinition defaults
+    Priority order:
+    1. json_schema_override on config (full replacement, per-instance)
+    2. default_tool_json_schema on PortDefinition (full replacement, per-component)
+    3. Attribute overrides on config (ai_name_override, ai_description_override, ...)
+    4. PortDefinition parameter_type + description fallback
     """
     if config and config.json_schema_override:
         schema = dict(config.json_schema_override)
         if config.ai_description_override and "description" not in schema:
             schema["description"] = config.ai_description_override
         return schema
+
+    if port_def and isinstance(port_def.default_tool_json_schema, dict):
+        return dict(port_def.default_tool_json_schema)
 
     schema: dict[str, Any] = {}
 

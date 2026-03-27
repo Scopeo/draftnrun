@@ -1126,6 +1126,7 @@ class PortDefinition(Base):
         nullable=True,
     )
     parameter_order_within_group = mapped_column(Integer, nullable=True)
+    default_tool_json_schema = mapped_column(JSONB, nullable=True)
 
     component_version = relationship("ComponentVersion", back_populates="port_definitions")
 
