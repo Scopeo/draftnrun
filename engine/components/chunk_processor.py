@@ -9,6 +9,16 @@ from engine.trace.trace_manager import TraceManager
 
 
 def _normalize_escape_sequences(text: str) -> str:
+    """
+    Convert escaped sequences to their actual characters.
+    This function can be extended to handle more escape sequences as needed.
+
+    Args:
+        text: String that may contain escaped sequences
+
+    Returns:
+        String with escaped sequences converted to actual characters
+    """
     replacements = {
         "\\n": "\n",
         "\\t": "\t",
@@ -41,6 +51,11 @@ class ChunkProcessorOutputs(BaseModel):
 
 
 class ChunkProcessor(Component):
+    """
+    An agent that processes data by splitting it into chunks, running a graph workflow
+    on each chunk, and then merging the results.
+    """
+
     migrated = True
 
     @classmethod
@@ -74,11 +89,13 @@ class ChunkProcessor(Component):
         self._join_char = _normalize_escape_sequences(join_char)
 
     def _split(self, content: str) -> List[str]:
+        """Split a string into a list of non-empty stripped chunks."""
         if not content.strip():
             return []
         return [part.strip() for part in content.split(self._split_char) if part and part.strip()]
 
     def _merge(self, results: List[str]) -> str:
+        """Merge a list of string results into a single string using the join character."""
         return self._join_char.join(results)
 
     async def _run_without_io_trace(
@@ -86,6 +103,12 @@ class ChunkProcessor(Component):
         inputs: ChunkProcessorInputs,
         ctx: dict,
     ) -> ChunkProcessorOutputs:
+        """
+        Run the chunk processor:
+        1. Split input into chunks
+        2. Run graph runner on each chunk
+        3. Merge results
+        """
         # TODO (dynamic I/O): Remove this adaptation once chunk_processor supports dynamic ports
         # inherited from the inner project's schema. With dynamic ports, the canonical input will
         # carry the correct string type and this bridge becomes unnecessary.

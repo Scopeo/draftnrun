@@ -133,6 +133,23 @@ def test_chunk_processor_parameters(mock_trace_manager, simple_graph_runner):
         assert chunk_processor._join_char == " | "
 
 
+def test_normalize_escape_sequences_in_parameters(mock_trace_manager, simple_graph_runner):
+    """Escaped sequences in split_char/join_char are normalized at construction time."""
+    chunk_processor = ChunkProcessor(
+        trace_manager=mock_trace_manager,
+        graph_runner=simple_graph_runner,
+        component_attributes=ComponentAttributes(
+            component_instance_id=uuid.uuid4(),
+            component_instance_name="escape_test",
+        ),
+        split_char="\\n\\n",
+        join_char="\\t",
+    )
+
+    assert chunk_processor._split_char == "\n\n"
+    assert chunk_processor._join_char == "\t"
+
+
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
 def test_empty_input_handling(mock_agent_calls, mock_get_tracing_span, simple_graph_runner, mock_trace_manager):
