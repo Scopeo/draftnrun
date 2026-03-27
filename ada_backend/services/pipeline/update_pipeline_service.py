@@ -24,9 +24,9 @@ from ada_backend.repositories.tool_port_configuration_repository import (
     upsert_tool_port_configuration,
 )
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
-from ada_backend.services.entity_factory import get_llm_provider_and_model
 from engine.field_expressions.parser import parse_expression_flexible
 from engine.field_expressions.serializer import to_json as expression_to_json
+from engine.llm_services.utils import get_llm_provider_and_model
 
 LOGGER = getLogger(__name__)
 
