@@ -16,10 +16,15 @@ from ada_backend.repositories.component_repository import (
 )
 from ada_backend.repositories.release_stage_repository import _STAGE_ORDER, STAGE_HIERARCHY
 from ada_backend.schemas.category_schema import CategoryResponse
-from ada_backend.schemas.components_schema import ComponentsResponse, PortDefinitionSchema
+from ada_backend.schemas.components_schema import (
+    ComponentsResponse,
+    ComponentToolDescriptionSchema,
+    PortDefinitionSchema,
+)
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO, ParameterKind
 from ada_backend.services.errors import EntityInUseDeletionError
 from ada_backend.services.parameter_synthesis_utils import filter_conflicting_parameters
+from ada_backend.services.tool_description_generator import sanitize_tool_name
 
 LOGGER = logging.getLogger(__name__)
 
@@ -49,11 +54,15 @@ def _process_components_with_ports(
                 parameter_order_within_group=port.parameter_order_within_group,
             )
         )
-        # Track input ports per component_version for input-parameter synthesis
         if port.port_type == PortType.INPUT:
             input_ports_by_component_version.setdefault(port.component_version_id, []).append(port)
     for component in components:
         component.port_definitions = comp_id_to_ports.get(str(component.component_version_id), [])
+
+        component.tool_description = ComponentToolDescriptionSchema(
+            name=sanitize_tool_name(component.name),
+            description=component.description or "",
+        )
 
         input_ports = input_ports_by_component_version.get(component.component_version_id, [])
 
@@ -72,11 +81,11 @@ def _process_components_with_ports(
                     ui_component=input_port.ui_component,
                     ui_component_properties=input_port.ui_component_properties,
                     is_advanced=input_port.is_advanced,
+                    is_tool_input=input_port.is_tool_input,
                     drives_output_schema=input_port.drives_output_schema,
                     display_order=input_port.display_order,
                     parameter_group_id=input_port.parameter_group_id,
                     parameter_order_within_group=input_port.parameter_order_within_group,
-                    is_tool_input=input_port.is_tool_input,
                     parameter_group_name=None,
                     kind=ParameterKind.INPUT,
                 )

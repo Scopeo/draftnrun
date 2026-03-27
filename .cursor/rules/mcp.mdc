@@ -32,6 +32,7 @@ globs:
 - Body fields with `None` values are omitted from the JSON payload (not serialized as JSON `null`).
 - Redis fallback is recoverable: after a connection failure, the client retries automatically after 60 s.
 - Treat `_truncated` responses as partial data, never as complete truth.
+- Tool port configurations: component instances in graph payloads include `port_configurations` (setup modes: `ai_filled`, `user_set`, `deactivated`) and a computed `tool_description`. `tool_description_override` customizes the description shown to the AI. When changing tool port behavior, update `docs://graphs`, `docs://agent-config`, and `mcp_server/README.md`.
 - QA custom columns: entry `custom_columns` dicts are keyed by column UUID, not display name. Always use `list_custom_columns` to discover the mapping before writing. See `docs://qa` and `docs://known-quirks`.
 - CSV tools: `export_dataset_csv` / `import_dataset_csv` handle dataset round-trips. The export builds CSV from paginated `list_entries` internally (no `graph_runner_id` needed). The import uses multipart file upload to the backend's CSV import endpoint.
 - Client methods: `api.get_raw()` returns raw text (for non-JSON endpoints). `api.post_file()` handles multipart uploads. Both are available for custom tools that need non-JSON request/response patterns.

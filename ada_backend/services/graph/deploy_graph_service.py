@@ -26,7 +26,10 @@ from ada_backend.repositories.graph_runner_repository import (
     insert_graph_runner,
     upsert_component_node,
 )
-from ada_backend.repositories.input_port_instance_repository import create_input_port_instance
+from ada_backend.repositories.input_port_instance_repository import (
+    create_input_port_instance,
+    get_input_port_instances_for_component_instance,
+)
 from ada_backend.repositories.output_port_instance_repository import (
     create_output_port_instance,
     get_output_port_instances_for_component_instance,
@@ -37,6 +40,10 @@ from ada_backend.repositories.port_mapping_repository import (
     list_port_mappings_for_graph,
 )
 from ada_backend.repositories.tag_repository import update_graph_runner_tag_fields
+from ada_backend.repositories.tool_port_configuration_repository import (
+    get_tool_port_configurations,
+    upsert_tool_port_configuration,
+)
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.schemas.pipeline.graph_schema import GraphDeployResponse, GraphSaveVersionResponse
@@ -62,7 +69,7 @@ def copy_component_instance(
     component_instance_id_to_copy: UUID,
     is_start_node: bool,
     project_id: UUID,
-) -> UUID:
+) -> tuple[UUID, list[db.ToolPortConfiguration]]:
     """
     This function copies a component instance, its parameters, and field expressions to a new component instance.
     It returns the ID of the new component instance.
@@ -78,6 +85,9 @@ def copy_component_instance(
         for parameter in component_instance.parameters
     ]
     LOGGER.info(f"Copied parameters: {parameters}")
+
+    source_tool_port_configs = get_tool_port_configurations(session, component_instance_id_to_copy)
+
     new_composant_instance = ComponentInstanceSchema(
         name=component_instance.name,
         component_id=component_instance.component_id,
@@ -86,10 +96,12 @@ def copy_component_instance(
         is_start_node=is_start_node,
         parameters=parameters,
         integration=component_instance.integration,
+        # Clone tool port configs later with explicit input-port remapping.
+        port_configurations=[],
     )
     new_instance_id = create_or_update_component_instance(session, new_composant_instance, project_id)
 
-    return new_instance_id
+    return new_instance_id, source_tool_port_configs
 
 
 def clone_graph_runner(
@@ -109,16 +121,19 @@ def clone_graph_runner(
     edges = get_edges(session, graph_runner_id_to_copy)
     port_mappings = list_port_mappings_for_graph(session, graph_runner_id_to_copy)
     ids_map = {}
+    source_tool_port_configs_by_instance: dict[UUID, list[db.ToolPortConfiguration]] = {}
+    input_port_instance_ids_map: dict[UUID, UUID] = {}
     old_relationships = []
     for component_node in graph_nodes:
         # Copy the component instance into a new component instance
-        new_instance_id = copy_component_instance(
+        new_instance_id, source_tool_port_configs = copy_component_instance(
             session,
             component_instance_id_to_copy=component_node.component_instance_id,
             is_start_node=component_node.is_start_node,
             project_id=project_id,
         )
         ids_map[component_node.component_instance_id] = new_instance_id
+        source_tool_port_configs_by_instance[component_node.component_instance_id] = source_tool_port_configs
 
         # Insert the component node with the new ID in the new graph runner
         upsert_component_node(
@@ -138,13 +153,14 @@ def clone_graph_runner(
     for relation in old_relationships:
         if relation.child_component_instance_id not in ids_map.keys():
             # The child component instance is not a graph node, so we need to create it
-            new_child_component_instance_id = copy_component_instance(
+            new_child_component_instance_id, child_source_tool_port_configs = copy_component_instance(
                 session,
                 component_instance_id_to_copy=relation.child_component_instance_id,
                 is_start_node=False,
                 project_id=project_id,
             )
             ids_map[relation.child_component_instance_id] = new_child_component_instance_id
+            source_tool_port_configs_by_instance[relation.child_component_instance_id] = child_source_tool_port_configs
         if not (
             relation.parent_component_instance_id in ids_map.keys()
             and relation.child_component_instance_id in ids_map.keys()
@@ -251,6 +267,10 @@ def clone_graph_runner(
         )
         for source_instance_id, remapped_expressions in remapped_expressions_by_source_id.items():
             target_instance_id = ids_map[source_instance_id]
+            source_input_ports_by_name = {
+                source_input_port.name: source_input_port.id
+                for source_input_port in get_input_port_instances_for_component_instance(session, source_instance_id)
+            }
             for remapped_expr in remapped_expressions:
                 # Use expression_json directly if available (preserves json_build structures for Router routes)
                 # Otherwise fall back to parsing expression_text (for backwards compatibility)
@@ -265,18 +285,45 @@ def clone_graph_runner(
                     expression_json=expression_json,
                 )
 
-                create_input_port_instance(
+                new_input_port_instance = create_input_port_instance(
                     session=session,
                     component_instance_id=target_instance_id,
                     name=remapped_expr.field_name,
                     field_expression_id=field_expr.id,
                 )
+                source_input_port_id = source_input_ports_by_name.get(remapped_expr.field_name)
+                if source_input_port_id:
+                    input_port_instance_ids_map[source_input_port_id] = new_input_port_instance.id
         total_expressions = sum(len(exprs) for exprs in remapped_expressions_by_source_id.values())
         if total_expressions > 0:
             LOGGER.info(
                 "Remapped and copied %d field expressions for %d component instances",
                 total_expressions,
                 len(remapped_expressions_by_source_id),
+            )
+
+    # Clone tool port configurations with explicit source->target InputPortInstance remapping.
+    for source_instance_id, target_instance_id in ids_map.items():
+        for source_tool_port_config in source_tool_port_configs_by_instance.get(source_instance_id, []):
+            remapped_input_port_instance_id = None
+            if source_tool_port_config.input_port_instance_id:
+                remapped_input_port_instance_id = input_port_instance_ids_map.get(
+                    source_tool_port_config.input_port_instance_id
+                )
+
+            upsert_tool_port_configuration(
+                session=session,
+                component_instance_id=target_instance_id,
+                setup_mode=source_tool_port_config.setup_mode,
+                port_definition_id=source_tool_port_config.port_definition_id,
+                input_port_instance_id=remapped_input_port_instance_id,
+                ai_name_override=source_tool_port_config.ai_name_override,
+                ai_description_override=source_tool_port_config.ai_description_override,
+                is_required_override=source_tool_port_config.is_required_override,
+                custom_parameter_type=source_tool_port_config.custom_parameter_type,
+                json_schema_override=source_tool_port_config.json_schema_override,
+                expression_json=source_tool_port_config.expression_json,
+                custom_ui_component_properties=source_tool_port_config.custom_ui_component_properties,
             )
 
     return new_graph_runner_id

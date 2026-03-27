@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import ComponentInstance
+from ada_backend.database.models import PortSetupMode
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 from ada_backend.repositories.component_repository import (
     get_base_component_from_version,
@@ -13,8 +13,6 @@ from ada_backend.repositories.component_repository import (
     get_component_name_from_instance,
     get_component_sub_components,
     get_global_parameters_by_component_version_id,
-    get_tool_description,
-    get_tool_description_component,
 )
 from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
 from ada_backend.repositories.integration_repository import (
@@ -22,16 +20,18 @@ from ada_backend.repositories.integration_repository import (
     get_integration_from_component,
 )
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
-from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
+from ada_backend.repositories.tool_port_configuration_repository import get_tool_port_configurations
 from ada_backend.services.errors import MissingDataSourceError, MissingIntegrationError
 from ada_backend.services.registry import FACTORY_REGISTRY
+from ada_backend.services.tool_description_generator import generate_tool_description
 from ada_backend.utils.secret_resolver import replace_secret_placeholders
+from engine.components.component import Component as EngineComponent
 from engine.components.errors import (
     KeyTypePromptTemplateError,
     MCPConnectionError,
     MissingKeyPromptTemplateError,
 )
-from engine.components.types import ComponentAttributes, ToolDescription
+from engine.components.types import ComponentAttributes
 from engine.field_expressions.ast import LiteralNode
 from engine.field_expressions.errors import FieldExpressionError
 from engine.field_expressions.serializer import from_json as expression_from_json
@@ -112,24 +112,65 @@ def _resolve_literal_field_expressions(
     LiteralNode expressions are returned as-is. VarNode and JsonBuildNode expressions
     are evaluated using the resolved variables dict (which contains decrypted secrets).
     RefNode and ConcatNode expressions depend on runtime graph context and are skipped.
+
+    Only ports whose ToolPortConfiguration setup_mode is USER_SET (or tool-eligible
+    ports without an explicit config, which default to AI_FILLED and are therefore
+    excluded) are included.  Ports with is_tool_input=False are always included as
+    they are constructor configuration ports outside the tool interface.
     """
-    # TODO: do not resolve tool inputs here, resolve them in the tool itself
     input_port_instances = get_input_port_instances_for_component_instance(
-        session, component_instance_id, eager_load_field_expression=True
+        session, component_instance_id, eager_load_field_expression=True, eager_load_port_definition=True
     )
+
+    configs = get_tool_port_configurations(session, component_instance_id, eager_load_port_definition=True)
+    mode_by_port_def_id: dict[UUID, PortSetupMode] = {
+        c.port_definition_id: c.setup_mode for c in configs if c.port_definition_id
+    }
+
     resolved_values: dict[str, Any] = {}
-    for input_port_instance in input_port_instances:
-        if input_port_instance.field_expression and input_port_instance.field_expression.expression_json:
-            expr_ast = expression_from_json(input_port_instance.field_expression.expression_json)
-            if isinstance(expr_ast, LiteralNode):
-                resolved_values[input_port_instance.name] = expr_ast.value
-            elif variables is not None:
-                try:
-                    resolved_values[input_port_instance.name] = evaluate_expression(
-                        expr_ast, input_port_instance.name, tasks={}, variables=variables
-                    )
-                except FieldExpressionError:
-                    pass
+
+    # 1. Resolve from InputPortInstance field expressions (definition-based ports)
+    for ipi in input_port_instances:
+        if not (ipi.field_expression and ipi.field_expression.expression_json):
+            continue
+        expr_ast = expression_from_json(ipi.field_expression.expression_json)
+        if not isinstance(expr_ast, LiteralNode):
+            continue
+
+        if ipi.port_definition_id:
+            port_def = ipi.port_definition
+            if port_def and port_def.is_tool_input:
+                mode = mode_by_port_def_id.get(ipi.port_definition_id, PortSetupMode.AI_FILLED)
+                if mode != PortSetupMode.USER_SET:
+                    continue
+
+        resolved_values[ipi.name] = expr_ast.value
+
+    # 2. Resolve from ToolPortConfiguration.expression_json (custom ports + overrides)
+    for config in configs:
+        if config.setup_mode != PortSetupMode.USER_SET:
+            continue
+        if not config.expression_json:
+            continue
+
+        port_name = None
+        if config.ai_name_override:
+            port_name = config.ai_name_override
+        elif config.port_definition:
+            port_name = config.port_definition.name
+
+        if not port_name:
+            continue
+
+        expr_ast = expression_from_json(config.expression_json)
+        if isinstance(expr_ast, LiteralNode):
+            resolved_values[port_name] = expr_ast.value
+
+        elif variables is not None:
+            try:
+                resolved_values[port_name] = evaluate_expression(expr_ast, port_name, tasks={}, variables=variables)
+            except FieldExpressionError:
+                pass
     return resolved_values
 
 
@@ -295,16 +336,13 @@ async def instantiate_component(
 
     input_params = replace_secret_placeholders(input_params, key_to_secret)
 
-    # Resolve tool description if required
-    tool_description_schema = _get_tool_description(session, component_instance)
-    if tool_description_schema:
-        input_params["tool_description"] = ToolDescription(
-            name=tool_description_schema.name,
-            description=tool_description_schema.description,
-            tool_properties=tool_description_schema.tool_properties,
-            required_tool_properties=tool_description_schema.required_tool_properties,
-        )
-    LOGGER.debug(f"Tool description: {tool_description_schema}\n")
+    factory = FACTORY_REGISTRY.get(component_instance.component_version_id)
+    entity_class = getattr(factory, "entity_class", None)
+    if entity_class and issubclass(entity_class, EngineComponent):
+        tool_description = generate_tool_description(session, component_instance)
+        if tool_description:
+            input_params["tool_description"] = tool_description
+        LOGGER.debug(f"Tool description: {tool_description}\n")
     input_params["component_attributes"] = ComponentAttributes(
         component_instance_name=component_instance.name,
         component_instance_id=component_instance.id,
@@ -338,7 +376,7 @@ async def instantiate_component(
         LOGGER.error(
             f"Failed to instantiate component '{component_name}' "
             f"with version ID {component_instance.component_version_id} "
-            f"and instance ID {component_instance.id}: {e}",
+            f"and instance ID {component_instance.id}: {e}. "
             f"Input parameters: {input_params}",
             exc_info=True,
         )
@@ -347,35 +385,3 @@ async def instantiate_component(
             f"with version ID {component_instance.component_version_id} "
             f"and instance ID {component_instance.id}: {e}"
         ) from e
-
-
-def _get_tool_description(
-    session: Session,
-    component_instance: ComponentInstance,
-) -> Optional[ToolDescriptionSchema]:
-    """
-    Get the tool description for a component instance.
-
-    Args:
-        session (Session): SQLAlchemy session.
-        component_instance (ComponentInstance): Component instance to get the tool description for.
-
-    Returns:
-        Any: Tool description for the component instance.
-    """
-
-    db_tool_description = get_tool_description(session, component_instance.id)
-    if not db_tool_description:
-        db_tool_description = get_tool_description_component(session, component_instance.component_version_id)
-
-    if not db_tool_description:
-        LOGGER.warning(f"Tool description not found for agent component instance {component_instance.id}.")
-        return None
-
-    return ToolDescriptionSchema(
-        id=db_tool_description.id,
-        name=db_tool_description.name.replace(" ", "_"),
-        description=db_tool_description.description,
-        tool_properties=db_tool_description.tool_properties,
-        required_tool_properties=db_tool_description.required_tool_properties,
-    )

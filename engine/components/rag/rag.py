@@ -10,7 +10,7 @@ from engine.components.build_context import build_context_from_vocabulary_chunks
 from engine.components.component import Component
 from engine.components.rag.formatter import Formatter
 from engine.components.rag.reranker import Reranker
-from engine.components.rag.retriever import Retriever
+from engine.components.rag.retriever import QDRANT_FILTERS_TOOL_JSON_SCHEMA, Retriever
 from engine.components.rag.vocabulary_search import VocabularySearch
 from engine.components.synthesizer import Synthesizer
 from engine.components.types import ComponentAttributes, ToolDescription
@@ -29,7 +29,9 @@ class RAGInputs(BaseModel):
         description="The search query for the knowledge base.", json_schema_extra={"is_tool_input": True}
     )
     filters: Optional[dict] = Field(
-        default=None, description="Qdrant filter object.", json_schema_extra={"is_tool_input": True}
+        default=None,
+        description="Qdrant filter object.",
+        json_schema_extra={"is_tool_input": True, "default_tool_json_schema": QDRANT_FILTERS_TOOL_JSON_SCHEMA},
     )
 
 

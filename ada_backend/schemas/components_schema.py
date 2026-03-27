@@ -10,6 +10,11 @@ from ada_backend.schemas.integration_schema import IntegrationSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO, ParameterGroupSchema
 
 
+class ComponentToolDescriptionSchema(BaseModel):
+    name: str
+    description: str
+
+
 class ComponentSchema(BaseModel):
     id: UUID
     name: str
@@ -54,7 +59,7 @@ class PortDefinitionSchema(BaseModel):
 
 class ComponentWithParametersDTO(ComponentVersionUseInfoSchema, ComponentSchema):
     description: Optional[str]
-    tool_description: Optional[dict] = None
+    tool_description: Optional[ComponentToolDescriptionSchema] = None
     integration: Optional[IntegrationSchema] = None
     parameters: List[ComponentParamDefDTO]
     port_definitions: List[PortDefinitionSchema] = []
