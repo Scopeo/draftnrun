@@ -104,7 +104,7 @@ def get_db_source_ids(
     if timestamp_column_name:
         columns.append(timestamp_column_name)
 
-    rows = sql_local_service.get_column_values(
+    rows = sql_local_service.fetch_selected_columns(
         table_name=table_name,
         columns=columns,
         schema_name=source_schema_name,

@@ -18,7 +18,6 @@ from engine.storage_service.snowflake_service.snowflake_utils import (
     escape_sql_string,
     format_json,
 )
-from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -143,12 +142,9 @@ class SnowflakeService(DBService):
     def iter_table_rows(
         self,
         table_name: str,
-        batch_size: Optional[int] = None,
         schema_name: Optional[str] = None,
         sql_query_filter: Optional[str] = None,
     ) -> Iterator[list[dict]]:
-        if batch_size is None:
-            batch_size = settings.INGESTION_BATCH_SIZE
         if not self.table_exists(table_name, schema_name):
             raise ValueError(f"Table {table_name} does not exist in schema {schema_name}")
         query = f"SELECT * FROM {schema_name}.{table_name}"
@@ -158,13 +154,11 @@ class SnowflakeService(DBService):
             cursor = self.connector.cursor()
             cursor.execute(query)
             columns = [desc[0].lower() for desc in cursor.description]
-            while True:
-                rows = cursor.fetchmany(batch_size)
-                if not rows:
-                    break
+            rows = cursor.fetchall()
+            if rows:
                 yield [dict(zip(columns, row)) for row in rows]
 
-    def get_column_values(
+    def fetch_selected_columns(
         self,
         table_name: str,
         columns: list[str],

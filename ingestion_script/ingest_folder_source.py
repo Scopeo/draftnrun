@@ -91,7 +91,7 @@ async def sync_chunks_to_qdrant(
     else:
         combined_filter = sql_query_filter
 
-    id_rows = db_service.get_column_values(
+    id_rows = db_service.fetch_selected_columns(
         table_name,
         columns=[CHUNK_ID_COLUMN_NAME, TIMESTAMP_COLUMN_NAME],
         schema_name=table_schema,

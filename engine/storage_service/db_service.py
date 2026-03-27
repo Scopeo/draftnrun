@@ -54,7 +54,6 @@ class DBService(CloseMixin, ABC):
     def iter_table_rows(
         self,
         table_name: str,
-        batch_size: Optional[int] = None,
         schema_name: Optional[str] = None,
         sql_query_filter: Optional[str] = None,
     ) -> Iterator[list[dict]]:
@@ -62,7 +61,7 @@ class DBService(CloseMixin, ABC):
         pass
 
     @abstractmethod
-    def get_column_values(
+    def fetch_selected_columns(
         self,
         table_name: str,
         columns: list[str],

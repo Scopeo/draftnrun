@@ -22,7 +22,6 @@ from engine.storage_service.db_utils import (
     check_columns_matching_between_data_and_database_table,
 )
 from engine.storage_service.errors import RowNotFoundError
-from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -195,27 +194,22 @@ class SQLLocalService(DBService):
     def iter_table_rows(
         self,
         table_name: str,
-        batch_size: Optional[int] = None,
         schema_name: Optional[str] = None,
         sql_query_filter: Optional[str] = None,
     ) -> Iterator[list[dict]]:
-        """Yield batches of rows as list[dict] using server-side cursor."""
-        if batch_size is None:
-            batch_size = settings.INGESTION_BATCH_SIZE
+        """Yield table rows as list[dict] in a single chunk."""
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
             stmt = sqlalchemy.select(table)
             if sql_query_filter:
                 stmt = stmt.where(text(sql_query_filter))
-            result = session.execute(stmt, execution_options={"stream_results": True})
+            result = session.execute(stmt)
             keys = list(result.keys())
-            while True:
-                rows = result.fetchmany(batch_size)
-                if not rows:
-                    break
+            rows = result.fetchall()
+            if rows:
                 yield [dict(zip(keys, row)) for row in rows]
 
-    def get_column_values(
+    def fetch_selected_columns(
         self,
         table_name: str,
         columns: list[str],
