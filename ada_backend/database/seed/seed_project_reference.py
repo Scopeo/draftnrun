@@ -52,7 +52,7 @@ def seed_project_reference_components(session: Session):
                 # TODO: Dropdown to choose among existing projects (that are accessible to the user)
                 ui_component=UIComponent.TEXTFIELD,
                 ui_component_properties=UIComponentProperties(
-                    label="Project ID",
+                    label="Project",
                     placeholder="Enter the UUID of the project to reference",
                     description=(
                         "The UUID of the project whose graph workflow will be executed. "

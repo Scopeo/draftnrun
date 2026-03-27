@@ -5,13 +5,18 @@ Tests the ability to wrap a GraphRunner as an Agent and use it in another GraphR
 
 import asyncio
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import networkx as nx
 import pytest
 
-from engine.components.graph_runner_block import DEFAULT_GRAPH_RUNNER_BLOCK_TOOL_DESCRIPTION, GraphRunnerBlock
-from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes
+from engine.components.graph_runner_block import (
+    DEFAULT_GRAPH_RUNNER_BLOCK_TOOL_DESCRIPTION,
+    GraphRunnerBlock,
+    GraphRunnerBlockInputs,
+    GraphRunnerBlockOutputs,
+)
+from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, NodeData
 from engine.graph_runner.graph_runner import GraphRunner
 from tests.mocks.dummy_agent import DummyAgent
 
@@ -195,7 +200,6 @@ def test_graph_runner_block_empty_input(
     mock_agent_calls, mock_get_tracing_span, mock_trace_manager, simple_graph_runner
 ):
     """Test GraphRunnerBlock with empty input."""
-    # Setup prometheus mocks
     mock_get_tracing_span.return_value = MagicMock(project_id="test_project")
     mock_agent_calls.labels.return_value.inc = MagicMock()
 
@@ -213,6 +217,166 @@ def test_graph_runner_block_empty_input(
 
     result = asyncio.run(graph_runner_block.run(input_payload))
 
-    # Should apply Step1, Step2, Step3 prefixes to "empty input"
     expected = "[Step3] [Step2] [Step1] empty input"
     assert result.messages[-1].content == expected
+
+
+def test_graph_runner_block_migrated_flag_and_schemas():
+    """Verify typed I/O contract: migrated flag, schemas, and canonical ports."""
+    assert GraphRunnerBlock.migrated is True
+    assert GraphRunnerBlock.get_inputs_schema() is GraphRunnerBlockInputs
+    assert GraphRunnerBlock.get_outputs_schema() is GraphRunnerBlockOutputs
+    assert GraphRunnerBlock.get_canonical_ports() == {"input": "messages", "output": "output"}
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+def test_graph_runner_block_node_data_path(
+    mock_agent_calls, mock_get_tracing_span, mock_trace_manager, simple_graph_runner
+):
+    """Test primary migrated path: run(NodeData) returns NodeData with output field."""
+    mock_get_tracing_span.return_value = MagicMock(project_id="test_project")
+    mock_agent_calls.labels.return_value.inc = MagicMock()
+
+    graph_runner_block = GraphRunnerBlock(
+        trace_manager=mock_trace_manager,
+        graph_runner=simple_graph_runner,
+        tool_description=DEFAULT_GRAPH_RUNNER_BLOCK_TOOL_DESCRIPTION,
+        component_attributes=ComponentAttributes(
+            component_instance_id=uuid.uuid4(),
+            component_instance_name="node_data_test",
+        ),
+    )
+
+    input_node_data = NodeData(data={"messages": [{"role": "user", "content": "Node test!"}]}, ctx={})
+    result = asyncio.run(graph_runner_block.run(input_node_data))
+
+    assert isinstance(result, NodeData)
+    assert result.data["output"] == "[Step3] [Step2] [Step1] Node test!"
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+def test_graph_runner_block_node_data_empty_input(
+    mock_agent_calls, mock_get_tracing_span, mock_trace_manager, simple_graph_runner
+):
+    """Test NodeData path with empty input passes through correctly."""
+    mock_get_tracing_span.return_value = MagicMock(project_id="test_project")
+    mock_agent_calls.labels.return_value.inc = MagicMock()
+
+    graph_runner_block = GraphRunnerBlock(
+        trace_manager=mock_trace_manager,
+        graph_runner=simple_graph_runner,
+        tool_description=DEFAULT_GRAPH_RUNNER_BLOCK_TOOL_DESCRIPTION,
+        component_attributes=ComponentAttributes(
+            component_instance_id=uuid.uuid4(),
+            component_instance_name="node_data_empty_test",
+        ),
+    )
+
+    input_node_data = NodeData(data={}, ctx={})
+    result = asyncio.run(graph_runner_block.run(input_node_data))
+
+    assert isinstance(result, NodeData)
+    assert result.data["output"] == "[Step3] [Step2] [Step1] empty input"
+
+
+def test_graph_runner_block_messages_passed_directly(mock_trace_manager):
+    """The canonical messages field is passed as-is to the inner graph runner."""
+    messages_list = [{"role": "user", "content": "hello from outer workflow"}]
+    mock_graph_runner = MagicMock()
+    mock_graph_runner.run = AsyncMock(
+        return_value=AgentPayload(messages=[ChatMessage(role="assistant", content="response")])
+    )
+
+    block = GraphRunnerBlock(
+        trace_manager=mock_trace_manager,
+        graph_runner=mock_graph_runner,
+        tool_description=DEFAULT_GRAPH_RUNNER_BLOCK_TOOL_DESCRIPTION,
+        component_attributes=ComponentAttributes(
+            component_instance_id=uuid.uuid4(),
+            component_instance_name="messages_passthrough_test",
+        ),
+    )
+
+    inputs = GraphRunnerBlockInputs(messages=messages_list)
+    result = asyncio.run(block._run_without_io_trace(inputs, ctx={}))
+
+    passed_data = mock_graph_runner.run.call_args[0][0]
+    assert passed_data["messages"] == messages_list
+    assert result.output == "response"
+
+
+def test_graph_runner_block_wraps_string_messages(mock_trace_manager):
+    """When messages arrives as a plain string (e.g. coerced from a predecessor's string output),
+    it is wrapped into a single-element messages list so inner Agent-based graphs can consume it."""
+    mock_graph_runner = MagicMock()
+    mock_graph_runner.run = AsyncMock(
+        return_value=AgentPayload(messages=[ChatMessage(role="assistant", content="response")])
+    )
+
+    block = GraphRunnerBlock(
+        trace_manager=mock_trace_manager,
+        graph_runner=mock_graph_runner,
+        tool_description=DEFAULT_GRAPH_RUNNER_BLOCK_TOOL_DESCRIPTION,
+        component_attributes=ComponentAttributes(
+            component_instance_id=uuid.uuid4(),
+            component_instance_name="wrap_string_test",
+        ),
+    )
+
+    inputs = GraphRunnerBlockInputs(messages="Hello agent!")
+    asyncio.run(block._run_without_io_trace(inputs, ctx={}))
+
+    passed_data = mock_graph_runner.run.call_args[0][0]
+    assert passed_data["messages"] == [{"role": "user", "content": "Hello agent!"}]
+
+
+def test_graph_runner_block_passes_list_messages_directly(mock_trace_manager):
+    """When messages is already a list, it is forwarded unchanged to the inner graph runner."""
+    messages_list = [{"role": "user", "content": "already a list"}]
+    mock_graph_runner = MagicMock()
+    mock_graph_runner.run = AsyncMock(
+        return_value=AgentPayload(messages=[ChatMessage(role="assistant", content="response")])
+    )
+
+    block = GraphRunnerBlock(
+        trace_manager=mock_trace_manager,
+        graph_runner=mock_graph_runner,
+        tool_description=DEFAULT_GRAPH_RUNNER_BLOCK_TOOL_DESCRIPTION,
+        component_attributes=ComponentAttributes(
+            component_instance_id=uuid.uuid4(),
+            component_instance_name="list_passthrough_test",
+        ),
+    )
+
+    inputs = GraphRunnerBlockInputs(messages=messages_list)
+    asyncio.run(block._run_without_io_trace(inputs, ctx={}))
+
+    passed_data = mock_graph_runner.run.call_args[0][0]
+    assert passed_data["messages"] == messages_list
+
+
+def test_graph_runner_block_excludes_none_messages(mock_trace_manager):
+    """When messages is None (no input connected), it is excluded from input_data
+    so the inner graph runner receives a clean dict without a null messages key."""
+    mock_graph_runner = MagicMock()
+    mock_graph_runner.run = AsyncMock(
+        return_value=AgentPayload(messages=[ChatMessage(role="assistant", content="response")])
+    )
+
+    block = GraphRunnerBlock(
+        trace_manager=mock_trace_manager,
+        graph_runner=mock_graph_runner,
+        tool_description=DEFAULT_GRAPH_RUNNER_BLOCK_TOOL_DESCRIPTION,
+        component_attributes=ComponentAttributes(
+            component_instance_id=uuid.uuid4(),
+            component_instance_name="none_messages_test",
+        ),
+    )
+
+    inputs = GraphRunnerBlockInputs(messages=None)
+    asyncio.run(block._run_without_io_trace(inputs, ctx={}))
+
+    passed_data = mock_graph_runner.run.call_args[0][0]
+    assert "messages" not in passed_data

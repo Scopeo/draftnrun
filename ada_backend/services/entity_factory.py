@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from ada_backend.context import get_request_context, get_run_variables
+from ada_backend.context import get_current_project_id, get_run_variables
 from ada_backend.database.models import EnvType
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
@@ -28,7 +28,6 @@ from ada_backend.services.llm_models_service import (
     get_llm_models_by_capability_select_options_service,
     get_model_id_by_name_service,
 )
-from ada_backend.services.user_roles_service import get_user_access_to_organization
 from engine.components.rag.cohere_reranker import CohereReranker
 from engine.components.rag.formatter import Formatter
 from engine.components.rag.retriever import Retriever
@@ -791,7 +790,6 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
 def build_project_reference_processor(target_name: str = "graph_runner") -> ParameterProcessor:
     """
     Returns a processor function to build a GraphRunner from a project reference.
-    Access control is enforced to ensure the user has permission to use the project.
 
     Note: This processor calls async functions from sync code using ThreadPoolExecutor
     to avoid event loop conflicts when running inside FastAPI's async context.
@@ -800,7 +798,7 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
         ParameterProcessor: A function that validates project access before instantiation
 
     Raises:
-        ValueError: If user doesn't have access to the referenced project
+        ValueError: If the referenced project does not exist or has no production deployment
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
@@ -808,9 +806,6 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
         if project_id_str is None:
             raise ValueError("project_id is required")
         project_id = UUID(project_id_str)
-
-        context = get_request_context()
-        user = context.require_user()
 
         # Capture the current context including TraceManager.
         current_context = contextvars.copy_context()
@@ -825,22 +820,23 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
             if not project:
                 raise ValueError(f"Project {project_id} not found")
 
-            # Validate user has access to the project's organization
-            try:
-                # Run async function in a new thread with copied context to preserve TraceManager
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(
-                        current_context.run,
-                        asyncio.run,
-                        get_user_access_to_organization(
-                            user=user,
-                            organization_id=project.organization_id,
-                        ),
-                    )
-                    access = future.result()
-                LOGGER.info(f"User {user.id} has access to project {project_id} with role {access.role}")
-            except ValueError as e:
-                raise ValueError(f"Access denied to project {project_id}: {e}") from e
+            caller_project_id = get_current_project_id()
+            if caller_project_id is None:
+                raise ValueError(
+                    "project_reference requires a caller project context but none is set. "
+                    "Ensure set_current_project_id() is called before instantiating this component."
+                )
+            caller_project = get_project(session, caller_project_id)
+            if caller_project is None:
+                raise ValueError(f"Caller project {caller_project_id} not found or has been deleted.")
+            # TODO: Replace this org-level guard with a user_id-based access check once
+            # user_id is propagated in the worker payload. Until then, project_reference
+            # must remain internal to prevent external callers from bypassing this check.
+            if caller_project.organization_id != project.organization_id:
+                raise ValueError(
+                    f"Cross-organization project reference is not allowed. "
+                    f"Referenced project {project_id} belongs to a different organization."
+                )
 
             # Get and instantiate GraphRunner
             graph_runner_in_db = get_graph_runner_for_env(

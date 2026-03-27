@@ -132,6 +132,29 @@ def get_cron_execution_context() -> CronExecutionContext:
         raise ValueError("No cron execution context available.") from exc
 
 
+# TODO: Refactor these scattered ContextVars into logically grouped execution
+# contexts (e.g. a single GraphBuildContext dataclass covering project_id,
+# run_variables, and any future build-time state).
+# As part of that refactor, all setters should use the token/reset pattern
+# (token = var.set(...) / var.reset(token)) so context is properly restored
+# after each unit of work. Do this consistently for all vars at once to avoid
+# an inconsistent mix of reset/no-reset across the module.
+
+# ---------------------------------------------------------------------------
+# Current project context (graph build scope)
+# ---------------------------------------------------------------------------
+
+_current_project_id: ContextVar[UUID | None] = ContextVar("current_project_id", default=None)
+
+
+def set_current_project_id(project_id: UUID | None) -> None:
+    _current_project_id.set(project_id)
+
+
+def get_current_project_id() -> UUID | None:
+    return _current_project_id.get()
+
+
 # ---------------------------------------------------------------------------
 # Run variables context (OAuth / set_id overrides)
 # ---------------------------------------------------------------------------
