@@ -147,10 +147,19 @@ def create_or_update_component_instance(
 
         elif param_def.type != db.ParameterType.LLM_API_KEY:
             if param.value is None and not param_def.nullable:
-                raise ValueError(
-                    f"Parameter '{param.name}' cannot be None in component '{component_name}' "
-                    f"because it is not nullable."
-                )
+                if param_def.default is not None:
+                    upsert_basic_parameter(
+                        session=session,
+                        component_instance_id=instance_id,
+                        parameter_definition_id=param_def.id,
+                        value=param_def.default,
+                        order=param.display_order,
+                    )
+                else:
+                    raise ValueError(
+                        f"Parameter '{param.name}' cannot be None in component '{component_name}' "
+                        f"because it is not nullable."
+                    )
             elif param.value is not None:
                 upsert_basic_parameter(
                     session=session,
