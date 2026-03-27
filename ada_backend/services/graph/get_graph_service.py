@@ -109,6 +109,8 @@ def get_graph_service(
 
         for input_port in input_ports:
             props = input_port.ui_component_properties
+            # TODO: Remove this LLM_MODEL-specific enrichment once we support
+            # a generic mechanism for dynamic UI data on input ports.
             if input_port.parameter_type == ParameterType.LLM_MODEL:
                 caps = (props or {}).get("model_capabilities")
                 props = get_ui_component_properties_with_llm_options(
