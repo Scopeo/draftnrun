@@ -116,6 +116,7 @@ def _resolve_literal_field_expressions(
     excluded) are included.  Ports with is_tool_input=False are always included as
     they are constructor configuration ports outside the tool interface.
     """
+    # TODO: do not resolve tool inputs here, resolve them in the tool itself
     input_port_instances = get_input_port_instances_for_component_instance(
         session, component_instance_id, eager_load_field_expression=True, eager_load_port_definition=True
     )
