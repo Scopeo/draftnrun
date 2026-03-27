@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from abc import ABC
-from typing import Callable, Optional
+from typing import Optional
 from uuid import UUID
 
 from openai.types.chat import ChatCompletion
@@ -439,6 +439,3 @@ class OCRService(LLMService):
         result, prompt_tokens, completion_tokens, total_tokens = await self._provider_instance.ocr(messages=messages)
 
         return result
-
-
-CompletionServiceFactory = Callable[..., CompletionService]

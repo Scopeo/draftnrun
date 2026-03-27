@@ -22,7 +22,6 @@ from ada_backend.repositories.integration_repository import (
     get_integration_from_component,
 )
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
-from ada_backend.repositories.port_mapping_repository import get_build_time_port_defaults
 from ada_backend.repositories.tool_port_configuration_repository import get_tool_port_configurations
 from ada_backend.services.errors import MissingDataSourceError, MissingIntegrationError
 from ada_backend.services.registry import FACTORY_REGISTRY

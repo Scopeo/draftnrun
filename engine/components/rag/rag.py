@@ -127,6 +127,7 @@ class RAG(Component):
             query_str=inputs.query_text,
             chunks=chunks,
             optional_contexts=vocabulary_context,
+            completion_model=inputs.completion_model,
         )
 
         sourced_response = self._formatter.format(sourced_response)

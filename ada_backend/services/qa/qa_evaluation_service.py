@@ -21,12 +21,12 @@ from ada_backend.schemas.qa_evaluation_schema import (
     ScoreEvaluationResult,
 )
 from ada_backend.services.agent_runner_service import setup_tracing_context
-from ada_backend.services.entity_factory import get_llm_provider_and_model
 from ada_backend.services.errors import LLMJudgeNotFound
 from ada_backend.services.qa.deterministic_evaluators_service import run_deterministic_evaluation_service
 from ada_backend.services.qa.qa_error import VersionOutputEmptyError
 from engine.components.utils_prompt import fill_prompt_template
 from engine.llm_services.llm_service import CompletionService
+from engine.llm_services.utils import get_llm_provider_and_model
 from engine.trace.trace_context import get_trace_manager
 
 LOGGER = logging.getLogger(__name__)

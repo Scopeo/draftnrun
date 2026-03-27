@@ -2,7 +2,8 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import Any, Optional, Type
+from typing import Any, Callable, Optional, Type
+from uuid import UUID
 
 from openai.types.chat import ChatCompletionMessageToolCall
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -20,6 +21,7 @@ from engine.components.utils_prompt import fill_prompt_template
 from engine.constants import DEFAULT_MODEL
 from engine.graph_runner.runnable import Runnable
 from engine.llm_services.llm_service import CompletionService
+from engine.llm_services.utils import get_llm_provider_and_model
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
@@ -180,10 +182,14 @@ class AIAgent(Component):
 
     def __init__(
         self,
-        completion_service: CompletionService,
         trace_manager: TraceManager,
         tool_description: ToolDescription,
         component_attributes: ComponentAttributes,
+        temperature: float = 1.0,
+        llm_api_key: Optional[str] = None,
+        verbosity: Optional[str] = None,
+        reasoning: Optional[str] = None,
+        model_id_resolver: Optional[Callable[[str], Optional[UUID]]] = None,
         agent_tools: Optional[list[Runnable] | Runnable] = None,
         run_tools_in_parallel: bool = True,
         max_iterations: int = 3,
@@ -202,6 +208,11 @@ class AIAgent(Component):
             component_attributes=component_attributes,
         )
         self._skip_unavailable_tools = skip_tools_with_missing_oauth
+        self._temperature = temperature
+        self._llm_api_key = llm_api_key
+        self._verbosity = verbosity
+        self._reasoning = reasoning
+        self._model_id_resolver = model_id_resolver or (lambda _: None)
         self.run_tools_in_parallel = run_tools_in_parallel
         if agent_tools is None:
             self.agent_tools = []
@@ -213,7 +224,6 @@ class AIAgent(Component):
         self._max_iterations = max_iterations
         self._max_tools_per_iteration = max_tools_per_iteration
         self._current_iteration = 0
-        self._completion_service = completion_service
         self.input_data_field_for_messages_history = input_data_field_for_messages_history
         self._allow_tool_shortcuts = allow_tool_shortcuts
         self._date_in_system_prompt = date_in_system_prompt
@@ -618,6 +628,20 @@ class AIAgent(Component):
     # --- Thin adapter to typed I/O ---
     async def _run_without_io_trace(self, inputs: AIAgentInputs, ctx: dict) -> AIAgentOutputs:
         # Map typed inputs to the original call style
+        provider, model_name = get_llm_provider_and_model(inputs.completion_model)
+        model_id = self._model_id_resolver(model_name)
+
+        self._completion_service = CompletionService(
+            provider=provider,
+            model_name=model_name,
+            trace_manager=self.trace_manager,
+            temperature=self._temperature,
+            api_key=self._llm_api_key,
+            verbosity=self._verbosity,
+            reasoning=self._reasoning,
+            model_id=model_id,
+        )
+
         initial_prompt = inputs.initial_prompt
         output_format = inputs.output_format
         output_tool_description = self._get_output_tool_description(output_format)

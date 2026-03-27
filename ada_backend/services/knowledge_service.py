@@ -23,10 +23,7 @@ from ada_backend.schemas.knowledge_schema import (
     KnowledgeDocumentsListResponse,
     KnowledgeDocumentWithChunks,
 )
-from ada_backend.services.entity_factory import get_llm_provider_and_model
-from ada_backend.services.ingestion_database_service import (
-    get_sql_local_service_for_ingestion,
-)
+from ada_backend.services.ingestion_database_service import get_sql_local_service_for_ingestion
 from ada_backend.services.knowledge.errors import (
     KnowledgeEmptyChunkError,
     KnowledgeMaxChunkSizeError,
@@ -44,6 +41,7 @@ from ada_backend.services.knowledge.errors import (
     KnowledgeSourceNotFoundError,
 )
 from engine.llm_services.llm_service import EmbeddingService
+from engine.llm_services.utils import get_llm_provider_and_model
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.trace.trace_context import get_trace_manager
 from ingestion_script.utils import CHUNK_ID_COLUMN_NAME, SOURCE_ID_COLUMN_NAME

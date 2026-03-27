@@ -13,9 +13,9 @@ from typing import Sequence, Union
 from alembic import op
 from sqlalchemy import MetaData, Table, create_engine, text
 
-from ada_backend.services.entity_factory import get_llm_provider_and_model
 from data_ingestion.utils import sanitize_filename
 from engine.llm_services.llm_service import EmbeddingService
+from engine.llm_services.utils import get_llm_provider_and_model
 from engine.qdrant_service import FieldSchema, QdrantService
 from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD
 from engine.storage_service.local_service import SQLLocalService
