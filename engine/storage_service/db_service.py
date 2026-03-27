@@ -207,15 +207,15 @@ class DBService(CloseMixin, ABC):
         if sql_query_filter:
             filters.append(f"({sql_query_filter})")
         final_query = f"{query} WHERE {' AND '.join(filters)};" if filters else f"{query};"
-        existing_rows = self._fetch_sql_query_as_dicts(final_query)
+        existing_id_ts_pairs = self._fetch_sql_query_as_dicts(final_query)
 
-        existing_by_id: dict = {}
-        for row in existing_rows:
-            row_id = cast_id_value(row[id_column_name], id_column_name, table_definition)
-            existing_by_id[row_id] = row
+        existing_ids_with_ts = {
+            cast_id_value(pair[id_column_name], id_column_name, table_definition): pair.get(timestamp_column_name)
+            for pair in existing_id_ts_pairs
+        }
 
         incoming_ids = set(incoming_ids_with_timestamp.keys())
-        existing_ids = set(existing_by_id.keys())
+        existing_ids = set(existing_ids_with_ts.keys())
         common_ids = incoming_ids & existing_ids
         ids_to_add = incoming_ids - existing_ids
 
@@ -223,11 +223,11 @@ class DBService(CloseMixin, ABC):
             ids_to_update = set()
             for shared_id in common_ids:
                 incoming_dt = parse_datetime(incoming_ids_with_timestamp[shared_id])
-                existing_dt = parse_datetime(existing_by_id[shared_id].get(timestamp_column_name))
+                existing_dt = parse_datetime(existing_ids_with_ts[shared_id])
                 if incoming_dt is not None and existing_dt is not None:
                     if make_naive_utc(incoming_dt) > make_naive_utc(existing_dt):
                         ids_to_update.add(shared_id)
-                elif incoming_ids_with_timestamp[shared_id] != existing_by_id[shared_id].get(timestamp_column_name):
+                elif incoming_ids_with_timestamp[shared_id] != existing_ids_with_ts[shared_id]:
                     ids_to_update.add(shared_id)
         else:
             ids_to_update = common_ids
