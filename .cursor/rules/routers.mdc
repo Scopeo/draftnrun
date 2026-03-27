@@ -12,3 +12,33 @@ globs:
 - Error responses: always use `HTTPException` with specific status codes.
 - Secrets/credentials: never return in API responses.
 - When adding a new router: register in `main.py`, add to `ada_backend/docs/api-reference.md`, update cursor rules if new patterns emerge.
+
+## HTTP Error Details — No Python Exceptions in Responses
+
+**Never use `str(e)` or `repr(e)` in `HTTPException(detail=...)`.**  Python exception messages leak implementation details (class names, tracebacks, internal IDs, SQL errors) to API consumers. Instead:
+
+1. **Write an explicit, human-readable message** in the `detail` kwarg that describes the problem from the caller's perspective. Build it from route parameters or exception attributes — not from the exception string.
+2. **Log level depends on the exception kind:**
+   - **Domain / client errors** (`GraphNotFound`, `MissingIntegrationError`, validation errors, etc.): `LOGGER.warning(...)` — no `exc_info=True` (the traceback is noise for expected failures).
+   - **Infrastructure errors** (DB connection, external service timeouts): `LOGGER.error(..., exc_info=True)`.
+   - **Catch-all `except Exception`**: `LOGGER.error(..., exc_info=True)`.
+3. **For the final catch-all** `except Exception` (the "default" branch), use a contextual but generic message like `"Unexpected error while saving graph version"` — never expose the raw exception.
+4. **For domain exceptions** (`GraphNotFound`, `MissingIntegrationError`, etc.) that carry structured attributes (`.graph_id`, `.component_instance_name`), construct the detail from those attributes, not from `str(e)`.
+
+```python
+# BAD
+except ValueError as e:
+    raise HTTPException(status_code=400, detail=str(e))
+
+# BAD
+except GraphNotFound as e:
+    raise HTTPException(status_code=404, detail=str(e))
+
+# GOOD
+except ValueError:
+    raise HTTPException(status_code=400, detail="Failed to save version: the graph contains corrupted data")
+
+# GOOD
+except GraphNotFound:
+    raise HTTPException(status_code=404, detail=f"Graph runner {graph_runner_id} not found")
+```
