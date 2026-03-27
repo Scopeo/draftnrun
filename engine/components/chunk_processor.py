@@ -1,32 +1,22 @@
-from typing import List
+from typing import Any, List, Type
+
+from pydantic import BaseModel
 
 from engine.components.component import Component
-from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.components.types import AgentPayload, ComponentAttributes, ToolDescription
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.trace.trace_manager import TraceManager
 
 
 def _normalize_escape_sequences(text: str) -> str:
-    """
-    Convert escaped sequences to their actual characters.
-    This function can be extended to handle more escape sequences as needed.
-
-    Args:
-        text: String that may contain escaped sequences
-
-    Returns:
-        String with escaped sequences converted to actual characters
-    """
     replacements = {
         "\\n": "\n",
         "\\t": "\t",
         "\\r": "\r",
     }
-
     result = text
     for escaped, actual in replacements.items():
         result = result.replace(escaped, actual)
-
     return result
 
 
@@ -38,11 +28,32 @@ DEFAULT_CHUNK_PROCESSOR_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
+class ChunkProcessorInputs(BaseModel):
+    input: Any = None
+
+    model_config = {"extra": "allow"}
+
+
+class ChunkProcessorOutputs(BaseModel):
+    output: Any = None
+
+    model_config = {"extra": "allow"}
+
+
 class ChunkProcessor(Component):
-    """
-    An agent that processes data by splitting it into chunks, running a graph workflow
-    on each chunk, and then merging the results.
-    """
+    migrated = True
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return ChunkProcessorInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return ChunkProcessorOutputs
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "input", "output": "output"}
 
     def __init__(
         self,
@@ -62,62 +73,51 @@ class ChunkProcessor(Component):
         self._split_char = _normalize_escape_sequences(split_char)
         self._join_char = _normalize_escape_sequences(join_char)
 
-    def _split(self, input_payload: AgentPayload) -> List[AgentPayload]:
-        """Split AgentPayload into multiple AgentPayloads for chunk processing."""
-        content: str = input_payload.last_message.content or ""
+    def _split(self, content: str) -> List[str]:
         if not content.strip():
             return []
+        return [part.strip() for part in content.split(self._split_char) if part and part.strip()]
 
-        parts = content.split(self._split_char)
+    def _merge(self, results: List[str]) -> str:
+        return self._join_char.join(results)
 
-        # Build payloads for non-empty parts
-        chunk_payloads: List[AgentPayload] = []
-        for part in parts:
-            if part and part.strip():
-                chunk_payloads.append(AgentPayload(messages=[ChatMessage(role="user", content=part.strip())]))
+    async def _run_without_io_trace(
+        self,
+        inputs: ChunkProcessorInputs,
+        ctx: dict,
+    ) -> ChunkProcessorOutputs:
+        # TODO (dynamic I/O): Remove this adaptation once chunk_processor supports dynamic ports
+        # inherited from the inner project's schema. With dynamic ports, the canonical input will
+        # carry the correct string type and this bridge becomes unnecessary.
+        if isinstance(inputs.input, str):
+            content = inputs.input
+        elif isinstance(inputs.input, list) and inputs.input:
+            last = inputs.input[-1]
+            content = (last.get("content") if isinstance(last, dict) else getattr(last, "content", "")) or ""
+        else:
+            content = ""
+        chunks = self._split(content)
+        if not chunks:
+            return ChunkProcessorOutputs(output="")
 
-        return chunk_payloads
+        results: List[str] = []
+        for chunk in chunks:
+            chunk_data: dict = {"input": chunk}
 
-    def _merge(self, results: List[AgentPayload]) -> AgentPayload:
-        """Merge multiple AgentPayload results into a single AgentPayload."""
-        if not results:
-            return AgentPayload(messages=[ChatMessage(role="assistant", content="")])
+            # TODO (dynamic I/O): Remove this adaptation once chunk_processor supports dynamic ports
+            # inherited from the inner project's schema. With dynamic ports, the canonical input will
+            # match the inner project's expected fields (e.g. "messages" for Agent projects) and this
+            # bridge becomes unnecessary.
+            chunk_data["messages"] = [{"role": "user", "content": chunk}]
 
-        merged_content_parts: List[str] = []
-        for result in results:
-            if result.last_message.content:
-                merged_content_parts.append(result.last_message.content)
-
-        merged_content = self._join_char.join(merged_content_parts)
-
-        return AgentPayload(messages=[ChatMessage(role="assistant", content=merged_content)])
-
-    async def _run_without_io_trace(self, *inputs: AgentPayload, **kwargs) -> AgentPayload:
-        """
-        Run the chunk processor:
-        1. Split input into chunks
-        2. Run graph runner on each chunk
-        3. Merge results
-        Supports only 1 input
-        """
-        input_data: AgentPayload | dict = inputs[0]
-        if isinstance(input_data, dict):
-            input_data = AgentPayload(**input_data)
-
-        chunk_payloads = self._split(input_data)
-        if not chunk_payloads:
-            return AgentPayload(messages=[ChatMessage(role="assistant", content="")])
-
-        results: List[AgentPayload] = []
-        for chunk_payload in chunk_payloads:
             self._graph_runner.reset()
-            result = await self._graph_runner.run(chunk_payload)
 
-            if not isinstance(result, AgentPayload):
-                raise ValueError(
-                    f"ChunkProcessor: GraphRunner must return an AgentPayload, got {type(result)}",
-                )
+            # TODO (legacy cleanup): GraphRunner.run() still returns AgentPayload via collect_legacy_outputs().
+            # Once GraphRunner returns NodeData instead, replace this block with:
+            #   result: NodeData = await self._graph_runner.run(chunk_data)
+            #   results.append(result.data.get("output", ""))
+            result: AgentPayload = await self._graph_runner.run(chunk_data)
+            output = result.last_message.content if result.messages else ""
+            results.append(output)
 
-            results.append(result)
-
-        return self._merge(results)
+        return ChunkProcessorOutputs(output=self._merge(results))
