@@ -52,7 +52,6 @@ class Synthesizer(CloseMixin):
         optional_contexts: Optional[dict],
         completion_model: str,
     ) -> SourcedResponse:
-        
 
         provider, model_name = get_llm_provider_and_model(completion_model)
         model_id = self._model_id_resolver(model_name)
