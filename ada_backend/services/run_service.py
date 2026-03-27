@@ -172,7 +172,7 @@ async def stream_run_events(
     run_id: UUID,
     queue: asyncio.Queue,
     *,
-    ping_timeout_seconds: int = 60,
+    ping_timeout_seconds: int = 25,
 ) -> AsyncIterator[str]:
     """
     Async generator that yields JSON messages to send over the run WebSocket stream.

@@ -17,7 +17,7 @@ from ada_backend.utils.redis_client import get_redis_client
 LOGGER = logging.getLogger(__name__)
 
 TERMINAL_EVENT_TYPES = ("qa.completed", "qa.failed")
-PING_TIMEOUT_SECONDS = 60
+PING_TIMEOUT_SECONDS = 25
 
 
 def _is_stream_terminal(data) -> bool:

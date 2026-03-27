@@ -109,9 +109,7 @@ async def get_active_org(user_id: str) -> dict[str, Any] | None:
         return None
 
 
-async def set_active_org(
-    user_id: str, org_id: str, org_name: str, role: str, release_stage: str = "public"
-) -> None:
+async def set_active_org(user_id: str, org_id: str, org_name: str, role: str, release_stage: str = "public") -> None:
     session_id = _current_session_id()
     key = _session_key(user_id, session_id)
     data = json.dumps({
@@ -158,8 +156,5 @@ async def require_role(user_id: str, *allowed_roles: str) -> dict[str, Any]:
     """Return active org if the user's role is in allowed_roles, else raise."""
     org = await require_org_context(user_id)
     if org["role"] not in allowed_roles:
-        raise ValueError(
-            f"This operation requires one of {allowed_roles} role, "
-            f"but your role is '{org['role']}'."
-        )
+        raise ValueError(f"This operation requires one of {allowed_roles} role, but your role is '{org['role']}'.")
     return org
