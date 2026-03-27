@@ -8,6 +8,11 @@ The fix falls back to param_def.default instead of raising ValueError.
 Integration tests that run against the real seeded database.
 """
 
+from unittest.mock import patch
+
+import pytest
+
+from ada_backend.database import models as db
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.component_repository import get_instance_parameters_with_definition
@@ -83,3 +88,43 @@ def test_clone_ai_agent_with_explicit_skip_oauth_false_stores_false():
 
         assert skip_param is not None
         assert skip_param.value is False
+
+
+def test_non_nullable_param_without_default_raises():
+    """
+    When a parameter is non-nullable, has no default, and value=None is passed,
+    create_or_update_component_instance must still raise ValueError.
+
+    This guards against over-defaulting: the fallback to param_def.default must
+    only apply when a default actually exists.
+
+    We inject a fake parameter definition so the test is not coupled to a specific
+    component having a truly-required param in the seed.
+    """
+    fake_param_def = db.ComponentParameterDefinition(
+        id=COMPONENT_UUIDS["base_ai_agent"],
+        component_version_id=COMPONENT_VERSION_UUIDS["base_ai_agent"],
+        name="truly_required_param",
+        type=db.ParameterType.STRING,
+        nullable=False,
+        default=None,
+    )
+
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(session, project_name_prefix="dra_1149_raises")
+
+        instance_data = ComponentInstanceSchema(
+            component_id=COMPONENT_UUIDS["base_ai_agent"],
+            component_version_id=COMPONENT_VERSION_UUIDS["base_ai_agent"],
+            name="AI Agent",
+            parameters=[
+                PipelineParameterSchema(name="truly_required_param", value=None),
+            ],
+        )
+
+        with patch(
+            "ada_backend.services.pipeline.update_pipeline_service.get_component_parameter_definition_by_component_version",
+            return_value=[fake_param_def],
+        ):
+            with pytest.raises(ValueError, match="cannot be None"):
+                create_or_update_component_instance(session, instance_data, project_id)
