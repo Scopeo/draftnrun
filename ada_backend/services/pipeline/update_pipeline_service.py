@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 from ada_backend.repositories.component_repository import (
     delete_component_instance_parameters,
     get_component_by_id,
@@ -30,15 +31,13 @@ from engine.llm_services.utils import get_llm_provider_and_model
 
 LOGGER = getLogger(__name__)
 
-COMPLETION_MODEL_PORT_NAME = "completion_model"
-
 
 def _resolve_completion_model_name(session: Session, instance_data: ComponentInstanceSchema) -> Optional[str]:
     """Resolve the completion_model value from parameters or the port definition default."""
-    param = next((p for p in instance_data.parameters if p.name == COMPLETION_MODEL_PORT_NAME), None)
+    param = next((p for p in instance_data.parameters if p.name == COMPLETION_MODEL_IN_DB), None)
     if param is not None:
         return str(param.value) if param.value is not None else None
-    return get_port_definition_default(session, instance_data.component_version_id, COMPLETION_MODEL_PORT_NAME)
+    return get_port_definition_default(session, instance_data.component_version_id, COMPLETION_MODEL_IN_DB)
 
 
 def _normalize_expression_json(raw: object) -> dict | None:
