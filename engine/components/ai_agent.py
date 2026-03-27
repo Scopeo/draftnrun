@@ -183,12 +183,14 @@ class AIAgent(Component):
         allow_tool_shortcuts: bool = False,
         date_in_system_prompt: bool = False,
         tool_pre_configured_inputs: Optional[dict[str, dict[str, Any]]] = None,
+        skip_tools_with_missing_oauth: bool = True,
     ) -> None:
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
+        self._skip_unavailable_tools = skip_tools_with_missing_oauth
         self.run_tools_in_parallel = run_tools_in_parallel
         if agent_tools is None:
             self.agent_tools = []
@@ -260,11 +262,21 @@ class AIAgent(Component):
         - Single-tool components (default): returns [self.tool_description]
         - Multi-tool components (e.g., RemoteMCPTool): returns multiple ToolDescriptions
 
+        When skip_tools_with_missing_oauth is True, tools where is_available() returns
+        False are silently excluded from the registry so the LLM never sees them.
+
         Caches a single mapping for both LLM listing and fast lookup.
         """
         self._tool_registry: dict[str, tuple[Runnable, ToolDescription, dict[str, Any]]] = {}
 
         for tool in self.agent_tools:
+            if self._skip_unavailable_tools and not tool.is_available():
+                LOGGER.warning(
+                    "Skipping unavailable tool '%s': is_available() returned False.",
+                    tool.component_attributes.component_instance_name,
+                )
+                continue
+
             descriptions = tool.get_tool_descriptions()
             # Normalize to list if single ToolDescription
             if not isinstance(descriptions, list):

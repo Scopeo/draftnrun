@@ -101,6 +101,9 @@ class SlackSender(Component):
         self._access_token = access_token
         self.client = WebClient(token=access_token) if access_token else None
 
+    def is_available(self) -> bool:
+        return bool(self._access_token)
+
     async def _run_without_io_trace(
         self,
         inputs: SlackSenderInputs,

@@ -163,7 +163,7 @@ class OutlookSender(Component):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        access_token: str,
+        access_token: Optional[str] = None,
         save_as_draft: bool = True,
         tool_description: ToolDescription = OUTLOOK_SENDER_TOOL_DESCRIPTION,
     ):
@@ -175,6 +175,9 @@ class OutlookSender(Component):
         self.access_token = access_token
         self._email_address: Optional[str] = None
         self.save_as_draft = save_as_draft
+
+    def is_available(self) -> bool:
+        return bool(self.access_token)
 
     def _auth_headers(self) -> dict[str, str]:
         return {
@@ -242,6 +245,11 @@ class OutlookSender(Component):
             raise OutlookAPIError("send Outlook email", response.status_code)
 
     async def _run_without_io_trace(self, inputs: OutlookSenderInputs, ctx: dict) -> OutlookSenderOutputs:
+        if not self.access_token:
+            raise ValueError(
+                "Outlook Sender requires a configured OAuth connection. "
+                "Please select an Outlook connection in the component settings."
+            )
         if not inputs.mail_subject or not inputs.mail_body:
             raise ValueError("Both email_subject and email_body must be provided")
         span = get_current_span()

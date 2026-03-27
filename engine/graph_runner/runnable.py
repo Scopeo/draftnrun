@@ -2,12 +2,13 @@ from typing import Dict, Optional, Protocol, Type, runtime_checkable
 
 from pydantic import BaseModel
 
-from engine.components.types import AgentPayload, NodeData, ToolDescription
+from engine.components.types import AgentPayload, ComponentAttributes, NodeData, ToolDescription
 
 
 @runtime_checkable
 class Runnable(Protocol):
     tool_description: ToolDescription
+    component_attributes: ComponentAttributes
 
     async def run(self, *inputs: AgentPayload | NodeData, **kwargs) -> AgentPayload | NodeData:
         """Run the runnable with the given inputs and kwargs."""
@@ -31,6 +32,9 @@ class Runnable(Protocol):
     @classmethod
     def get_outputs_schema(cls) -> Type[BaseModel]:
         """Return the output schema for the runnable."""
+
+    def is_available(self) -> bool:
+        """Return True if this tool has the credentials/resources it needs to run."""
 
     async def close(self) -> None:
         """Release any resources held by this runnable."""

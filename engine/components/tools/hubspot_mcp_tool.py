@@ -53,9 +53,6 @@ class HubSpotMCPTool(LocalMCPTool):
         allowed_tools: Collection[str] | None = None,
         timeout: int = 30,
     ) -> Self:
-        if not access_token:
-            raise ValueError("access_token is required")
-
         allowed = _normalize_allowed_tools(allowed_tools)
         tool_descriptions = await get_tool_descriptions(allowed)
 
@@ -68,6 +65,9 @@ class HubSpotMCPTool(LocalMCPTool):
             timeout=timeout,
             tool_descriptions=tool_descriptions,
         )
+
+    def is_available(self) -> bool:
+        return bool(self.env and self.env.get("HUBSPOT_ACCESS_TOKEN"))
 
     async def _run_without_io_trace(
         self,

@@ -41,6 +41,7 @@ AI_MODEL_PARAMETER_IDS = {
     "first_history_messages": UUID("4ca78b43-4484-4a9d-bdab-e6dbdaff6da1"),
     COMPLETION_MODEL_IN_DB: UUID("e2d157b4-f26d-41b4-9e47-62b5b041a9ff"),
     "last_history_messages": UUID("e6caae01-d5ee-4afd-a995-e5ae9dbf3fbc"),
+    "skip_tools_with_missing_oauth": UUID("928839bb-84a7-4d6b-adda-fdf77d3df670"),
 }
 
 # Parameter Group UUIDs
@@ -186,6 +187,23 @@ def seed_ai_agent_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
             ),
+            db.ComponentParameterDefinition(
+                id=AI_MODEL_PARAMETER_IDS["skip_tools_with_missing_oauth"],
+                component_version_id=base_ai_agent_version.id,
+                name="skip_tools_with_missing_oauth",
+                type=ParameterType.BOOLEAN,
+                nullable=False,
+                default="True",
+                ui_component=UIComponent.CHECKBOX,
+                ui_component_properties=UIComponentProperties(
+                    label="Skip tools with missing OAuth connection",
+                    description=(
+                        "When enabled, tools without a configured OAuth connection are silently"
+                        " skipped instead of blocking the agent from loading."
+                    ),
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
             *build_function_calling_service_config_definitions(
                 component_version_id=base_ai_agent_version.id,
                 params_to_seed=[
@@ -270,6 +288,10 @@ def seed_ai_agent_parameter_groups(session: Session):
         AI_MODEL_PARAMETER_IDS["max_iterations"]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
             "parameter_order_within_group": 3,
+        },
+        AI_MODEL_PARAMETER_IDS["skip_tools_with_missing_oauth"]: {
+            "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
+            "parameter_order_within_group": 4,
         },
         # Advanced LLM Parameters Group
         AI_MODEL_PARAMETER_IDS[TEMPERATURE_IN_DB]: {
