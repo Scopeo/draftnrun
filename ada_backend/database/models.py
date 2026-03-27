@@ -83,6 +83,7 @@ class ParameterType(StrEnum):
     FLOAT = "float"
     BOOLEAN = "boolean"
     JSON = "json"
+    ARRAY = "array"
     COMPONENT = "component"
     TOOL = "tool"
     DATA_SOURCE = "data_source"
@@ -322,7 +323,7 @@ def cast_value(
         return float(unresolved_value)
     elif parameter_type == ParameterType.BOOLEAN:
         return unresolved_value.lower() in ("true", "1")
-    elif parameter_type == ParameterType.JSON or parameter_type == ParameterType.DATA_SOURCE:
+    elif parameter_type in (ParameterType.JSON, ParameterType.ARRAY, ParameterType.DATA_SOURCE):
         return json.loads(unresolved_value)
     elif parameter_type == ParameterType.LLM_API_KEY:
         return unresolved_value

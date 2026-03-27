@@ -111,6 +111,12 @@ class TestBuildPropertySchema:
         schema = _build_property_schema(pd, config=None)
         assert schema["type"] == "object"
 
+    def test_array_type_mapping(self):
+        pd = _make_port_definition(parameter_type=ParameterType.ARRAY, description="Items")
+        schema = _build_property_schema(pd, config=None)
+        assert schema["type"] == "array"
+        assert schema["items"] == {"type": "string"}
+
     def test_config_ai_description_overrides_port_definition(self):
         pd = _make_port_definition(description="default")
         config = _make_tool_port_config(port_def=pd, ai_description_override="custom AI desc")

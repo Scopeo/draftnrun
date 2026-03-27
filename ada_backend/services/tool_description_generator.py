@@ -52,6 +52,7 @@ PARAMETER_TYPE_TO_JSON_SCHEMA: dict[str, dict[str, str]] = {
     ParameterType.FLOAT: {"type": "number"},
     ParameterType.BOOLEAN: {"type": "boolean"},
     ParameterType.JSON: {"type": "object"},
+    ParameterType.ARRAY: {"type": "array", "items": {"type": "string"}},
 }
 
 JSON_SCHEMA_TYPE_MAP: dict[str, dict[str, str]] = {

@@ -31,7 +31,7 @@ _PYTHON_TYPE_TO_PARAMETER_TYPE = {
     float: db.ParameterType.FLOAT,
     bool: db.ParameterType.BOOLEAN,
     dict: db.ParameterType.JSON,
-    list: db.ParameterType.JSON,
+    list: db.ParameterType.ARRAY,
 }
 
 

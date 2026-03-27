@@ -50,7 +50,11 @@ def test_dict_str_any_annotation():
 
 
 def test_list_annotation():
-    assert get_parameter_type(_field(list)) == ParameterType.JSON
+    assert get_parameter_type(_field(list)) == ParameterType.ARRAY
+
+
+def test_optional_list_str_annotation():
+    assert get_parameter_type(_field(Optional[list[str]])) == ParameterType.ARRAY
 
 
 def test_optional_str_stays_string():
