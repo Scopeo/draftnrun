@@ -153,7 +153,6 @@ class APICallTool(Component):
             "PATCH",
         ]:
             request_kwargs["json"] = filtered_parameters
-
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.request(**request_kwargs)

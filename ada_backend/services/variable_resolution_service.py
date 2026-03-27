@@ -69,5 +69,4 @@ def resolve_variables(
                 row = secrets_by_def.get(definition.id)
                 if row:
                     resolved[definition.name] = row.get_secret()
-
     return resolved
