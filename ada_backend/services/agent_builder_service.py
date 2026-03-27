@@ -197,13 +197,11 @@ async def instantiate_component(
 
     for sub_component in sub_components:
         param_name = sub_component.parameter_definition.name
-        child_instance = sub_component.child_component_instance
-        LOGGER.debug(f"Found sub-component: {param_name=}, {child_instance.ref=}\n")
-
+        LOGGER.debug(f"Found sub-component: {param_name=}, {sub_component.child_component_instance.ref=}\n")
         try:
             instantiated_sub_component = await instantiate_component(
                 session,
-                child_instance.id,
+                sub_component.child_component_instance.id,
                 project_id=project_id,
                 variables=variables,
             )
@@ -213,7 +211,7 @@ async def instantiate_component(
             # tool description names so AIAgent can inject them at _run_tool_call time.
             # Variables are passed to also evaluate VarNode/JsonBuildNode expressions (e.g. secrets).
             pre_configured = _resolve_literal_field_expressions(
-                session, child_instance.id, variables=variables
+                session, sub_component.child_component_instance.id, variables=variables
             )
             if pre_configured:
                 get_descriptions = getattr(instantiated_sub_component, "get_tool_descriptions", None)
