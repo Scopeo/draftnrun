@@ -92,6 +92,9 @@ COMPONENT_VERSIONS = [
 PORT_DEF_IDS = [pd_id for _, pd_id, _, _ in COMPONENT_VERSIONS]
 PORT_DEF_IDS_ARRAY = "ARRAY[" + ", ".join(f"'{uid}'::uuid" for uid in PORT_DEF_IDS) + "]"
 
+COMPONENT_VERSION_IDS = [cv_id for cv_id, _, _, _ in COMPONENT_VERSIONS]
+CV_IDS_ARRAY = "ARRAY[" + ", ".join(f"'{uid}'::uuid" for uid in COMPONENT_VERSION_IDS) + "]"
+
 
 def upgrade() -> None:
     bind = op.get_bind()
@@ -142,7 +145,9 @@ def upgrade() -> None:
                     gen_random_uuid()                   AS new_pi_id
                 FROM basic_parameters bp
                 JOIN component_parameter_definitions cpd ON bp.parameter_definition_id = cpd.id
+                JOIN component_instances ci ON ci.id = bp.component_instance_id
                 WHERE bp.parameter_definition_id = ANY({CPD_IDS_ARRAY})
+                  AND ci.component_version_id = ANY({CV_IDS_ARRAY})
                 ORDER BY bp.component_instance_id, bp.id
             ),
             insert_fe AS (
