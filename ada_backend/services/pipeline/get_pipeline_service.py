@@ -63,7 +63,9 @@ def _get_port_configurations(
     is generated from the PortDefinition so the frontend always sees the
     full list.
     """
-    configs = get_tool_port_configurations(session, component_instance_id, eager_load_input_port_instance=True)
+    configs = get_tool_port_configurations(
+        session, component_instance_id, eager_load_input_port_instance=True, eager_load_port_definition=True
+    )
     covered_port_def_ids = {c.port_definition_id for c in configs if c.port_definition_id}
 
     result = [
@@ -80,7 +82,10 @@ def _get_port_configurations(
             ai_description_override=config.ai_description_override,
             is_required_override=config.is_required_override,
             custom_parameter_type=config.custom_parameter_type,
-            json_schema_override=config.json_schema_override,
+            json_schema_override=(
+                config.json_schema_override
+                or (config.port_definition.default_tool_json_schema if config.port_definition else None)
+            ),
             expression_json=config.expression_json,
             custom_ui_component_properties=config.custom_ui_component_properties,
         )
@@ -93,6 +98,7 @@ def _get_port_configurations(
                 ToolPortConfigurationSchema(
                     component_instance_id=component_instance_id,
                     parameter_id=port_definition.id,
+                    json_schema_override=port_definition.default_tool_json_schema,
                 )
             )
 
