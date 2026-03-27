@@ -193,6 +193,7 @@ async def build_graph_runner(
             session=session,
             component_instance_id=component_node.id,
             project_id=project_id,
+            variables=variables,
         )
         runnables[str(component_node.id)] = agent
         graph.add_node(str(component_node.id))

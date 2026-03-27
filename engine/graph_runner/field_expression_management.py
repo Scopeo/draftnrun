@@ -64,8 +64,13 @@ def evaluate_expression(
     def substitute_in_template(obj: Any, refs: dict[str, Any]) -> Any:
         """Recursively substitute placeholder strings with ref values in template."""
         if isinstance(obj, str):
-            # If the string is a placeholder, replace it
-            return refs.get(obj, obj)
+            if obj in refs:
+                return refs[obj]
+            result = obj
+            for placeholder, value in sorted(refs.items(), key=lambda item: len(item[0]), reverse=True):
+                if placeholder in result:
+                    result = result.replace(placeholder, to_string(value))
+            return result
         elif isinstance(obj, dict):
             return {key: substitute_in_template(val, refs) for key, val in obj.items()}
         elif isinstance(obj, list):

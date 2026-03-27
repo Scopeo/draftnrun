@@ -576,7 +576,28 @@ Field expressions define how data flows into input ports:
 | Variable `@{{var_name}}` | `{"type": "var", "name": "var_name"}` |
 | Literal (plain text) | `{"type": "literal", "value": "text"}` |
 | Concatenation | `{"type": "concat", "parts": [...]}` |
-| JSON build | `{"type": "json_build", "template": {...}, "refs": {...}}` |
+| JSON build | `{"type": "json_build", "template": <dict or list>, "refs": {...}}` |
+
+### `json_build` details
+
+`json_build` lets you build structured JSON (dicts or lists) with embedded references to other \
+nodes or variables. The `template` field is the JSON structure containing placeholder strings; \
+`refs` maps each placeholder to a `ref` or `var` expression:
+
+```json
+{
+  "type": "json_build",
+  "template": [{"value_a": "$ref_output", "label": "$var_lang"}],
+  "refs": {
+    "$ref_output": {"type": "ref", "instance": "<uuid>", "port": "output"},
+    "$var_lang": {"type": "var", "name": "language"}
+  }
+}
+```
+
+Type preservation: when a placeholder is the **entire** value (e.g. `"value_a": "$ref_output"`), \
+the substituted value keeps its original Python type (list, dict, int, etc.). When a placeholder \
+is **embedded** in a larger string (e.g. `"prefix_$ref_output"`), the value is stringified.
 
 **IMPORTANT**: The `instance` field in field expressions **must be the component instance UUID** \
 (the `id` field from the component instance), **not** the human-readable `ref` name. The `ref` \

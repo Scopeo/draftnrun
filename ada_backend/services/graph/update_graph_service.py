@@ -23,6 +23,7 @@ from ada_backend.repositories.edge_repository import delete_edge, get_edges, ups
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.field_expression_repository import (
     create_field_expression,
+    delete_field_expression_by_id,
     update_field_expression,
 )
 from ada_backend.repositories.graph_runner_repository import (
@@ -349,11 +350,13 @@ async def update_graph_service(
     )
 
     db_port_instances_by_instance: dict[UUID, dict[str, UUID]] = defaultdict(dict)
+    db_field_expr_port_names: dict[UUID, set[str]] = defaultdict(set)
     for instance_id in instance_ids:
         port_instances = get_input_port_instances_for_component_instance(session, instance_id)
         for port in port_instances:
+            db_port_instances_by_instance[instance_id][port.name] = port.id
             if port.field_expression_id:
-                db_port_instances_by_instance[instance_id][port.name] = port.id
+                db_field_expr_port_names[instance_id].add(port.name)
 
     # Create/update auto-generated canonical field expressions so the user can
     # see canonical wiring in the UI.  Must run before field-expression processing
@@ -396,11 +399,18 @@ async def update_graph_service(
                     field_name = port_instance.name
                     incoming_field_expressions_by_instance[instance.id].add(field_name)
 
-                    expr = create_field_expression(session, port_instance.field_expression.expression_json)
                     existing_port_id = db_port_instances_by_instance[instance.id].get(field_name)
                     if existing_port_id:
-                        update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
+                        port = get_input_port_instance(session, existing_port_id)
+                        if port and port.field_expression_id:
+                            update_field_expression(
+                                session, port.field_expression_id, port_instance.field_expression.expression_json
+                            )
+                        else:
+                            expr = create_field_expression(session, port_instance.field_expression.expression_json)
+                            update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
                     else:
+                        expr = create_field_expression(session, port_instance.field_expression.expression_json)
                         create_input_port_instance(
                             session=session,
                             component_instance_id=instance.id,
@@ -493,11 +503,13 @@ async def update_graph_service(
                 )
 
     for instance_id, incoming_fields in incoming_field_expressions_by_instance.items():
-        if instance_id in db_port_instances_by_instance:
-            existing_fields = set(db_port_instances_by_instance[instance_id].keys())
-            fields_to_delete = existing_fields - incoming_fields
+        if instance_id in db_field_expr_port_names:
+            fields_to_delete = db_field_expr_port_names[instance_id] - incoming_fields
             for field_name in fields_to_delete:
                 port_id = db_port_instances_by_instance[instance_id][field_name]
+                port = get_input_port_instance(session, port_id)
+                if port and port.field_expression_id:
+                    delete_field_expression_by_id(session, port.field_expression_id)
                 delete_input_port_instance(session, port_id)
 
     nodes_to_delete = previous_graph_nodes - instance_ids

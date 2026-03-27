@@ -33,7 +33,9 @@ from engine.components.errors import (
 )
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.field_expressions.ast import LiteralNode
+from engine.field_expressions.errors import FieldExpressionError
 from engine.field_expressions.serializer import from_json as expression_from_json
+from engine.graph_runner.field_expression_management import evaluate_expression
 
 LOGGER = logging.getLogger(__name__)
 
@@ -103,29 +105,39 @@ def get_component_params(
 def _resolve_literal_field_expressions(
     session: Session,
     component_instance_id: UUID,
+    variables: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return field expression values that are plain literals for a component instance.
+    """Return pre-configured field expression values for a sub-tool component instance.
 
-    Only LiteralNode expressions are returned. Reference, variable, and concat
-    expressions depend on runtime graph context and cannot be resolved here.
+    LiteralNode expressions are returned as-is. VarNode and JsonBuildNode expressions
+    are evaluated using the resolved variables dict (which contains decrypted secrets).
+    RefNode and ConcatNode expressions depend on runtime graph context and are skipped.
     """
     # TODO: do not resolve tool inputs here, resolve them in the tool itself
     input_port_instances = get_input_port_instances_for_component_instance(
         session, component_instance_id, eager_load_field_expression=True
     )
-    literal_values: dict[str, Any] = {}
+    resolved_values: dict[str, Any] = {}
     for input_port_instance in input_port_instances:
         if input_port_instance.field_expression and input_port_instance.field_expression.expression_json:
             expr_ast = expression_from_json(input_port_instance.field_expression.expression_json)
             if isinstance(expr_ast, LiteralNode):
-                literal_values[input_port_instance.name] = expr_ast.value
-    return literal_values
+                resolved_values[input_port_instance.name] = expr_ast.value
+            elif variables is not None:
+                try:
+                    resolved_values[input_port_instance.name] = evaluate_expression(
+                        expr_ast, input_port_instance.name, tasks={}, variables=variables
+                    )
+                except FieldExpressionError:
+                    pass
+    return resolved_values
 
 
 async def instantiate_component(
     session: Session,
     component_instance_id: UUID,
     project_id: Optional[UUID] = None,
+    variables: dict[str, Any] | None = None,
 ) -> Any:
     """
     Instantiate a component, resolving its dependencies recursively.
@@ -134,6 +146,8 @@ async def instantiate_component(
         session (Session): SQLAlchemy session.
         component_instance_id (UUID): ID of the component instance to instantiate.
         project_id (Optional[UUID]): ID of the project for resolving secrets.
+        variables (dict | None): Resolved variables (including decrypted secrets) for evaluating
+            non-literal field expressions on sub-tool inputs (e.g. json_build + VarNode).
 
     Returns:
         Any: Instantiated component object.
@@ -189,12 +203,16 @@ async def instantiate_component(
                 session,
                 sub_component.child_component_instance.id,
                 project_id=project_id,
+                variables=variables,
             )
             LOGGER.debug(f"Instantiated sub-component: {instantiated_sub_component}\n")
 
-            # Collect literal field expressions for this tool and map them to their
+            # Collect pre-configured field expression values for this tool and map them to their
             # tool description names so AIAgent can inject them at _run_tool_call time.
-            pre_configured = _resolve_literal_field_expressions(session, sub_component.child_component_instance.id)
+            # Variables are passed to also evaluate VarNode/JsonBuildNode expressions (e.g. secrets).
+            pre_configured = _resolve_literal_field_expressions(
+                session, sub_component.child_component_instance.id, variables=variables
+            )
             if pre_configured:
                 get_descriptions = getattr(instantiated_sub_component, "get_tool_descriptions", None)
                 if get_descriptions:

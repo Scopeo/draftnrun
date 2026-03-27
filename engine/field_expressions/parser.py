@@ -13,9 +13,7 @@ LOGGER = logging.getLogger(__name__)
 
 # Matches @{{instance.port}} (RefNode) or @{{var_name}} (VarNode).
 # group(1) = first identifier, group(2) = port (if dot present), group(3) = key (if :: present)
-_TOKEN_PATTERN = re.compile(
-    r"@\{\{\s*([a-zA-Z0-9_-]+)(?:\.([a-zA-Z0-9_-]+)(?:::([a-zA-Z0-9_-]+))?)?\s*\}\}"
-)
+_TOKEN_PATTERN = re.compile(r"@\{\{\s*([a-zA-Z0-9_-]+)(?:\.([a-zA-Z0-9_-]+)(?:::([a-zA-Z0-9_-]+))?)?\s*\}\}")
 
 
 # TODO: Use a more robust parser instead of a regex
@@ -75,12 +73,12 @@ def parse_expression_flexible(value: Union[str, dict, list]) -> ExpressionNode:
     """Parse an expression from either text or JSON format.
 
     This is a unified entry point that handles both text expressions
-    (e.g., "@{{comp.port}}") and JSON/dict structures (e.g., {"type": "ref", ...}).
+    (e.g., "@{{comp.port}}") and serialized AST dicts (e.g., {"type": "ref", ...}).
 
     Args:
-        value: Either a string expression, a dict/JSON structure, or a list
-            (lists are serialized as literal JSON — common for json-typed params
-            like If/Else conditions)
+        value: Either a string expression, a serialized AST dict, or a list.
+            The client is responsible for building json_build AST nodes for
+            JSON-typed parameters that contain @{{}} refs/vars.
 
     Returns:
         The parsed ExpressionNode

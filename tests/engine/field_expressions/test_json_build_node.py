@@ -3,7 +3,7 @@
 import pytest
 
 from engine.components.types import NodeData
-from engine.field_expressions.ast import JsonBuildNode, RefNode
+from engine.field_expressions.ast import JsonBuildNode, RefNode, VarNode
 from engine.field_expressions.serializer import from_json, to_json
 from engine.graph_runner.field_expression_management import evaluate_expression
 from engine.graph_runner.types import Task, TaskState
@@ -215,3 +215,52 @@ class TestJsonBuildNodeEvaluation:
             evaluate_expression(expression, "test_field", tasks)
 
         assert "missing" in str(exc_info.value).lower()
+
+    def test_embedded_placeholder_in_string(self):
+        """Regression: placeholder embedded in a larger string (e.g. 'Bearer __REF_0__') must be substituted."""
+        expression = JsonBuildNode(
+            template={"Authorization": "Bearer __REF_0__"},
+            refs={"__REF_0__": VarNode(name="api_token")},
+        )
+
+        result = evaluate_expression(
+            expression, "headers", tasks={}, variables={"api_token": "tok_abc123"}
+        )
+
+        assert result == {"Authorization": "Bearer tok_abc123"}
+
+    def test_embedded_placeholder_preserves_exact_match_type(self):
+        """When the placeholder IS the entire value, the resolved type should be preserved."""
+        tasks = {
+            "upstream": Task(
+                state=TaskState.COMPLETED,
+                pending_deps=0,
+                result=NodeData(data={"items": [1, 2, 3]}, ctx={}),
+            )
+        }
+
+        expression = JsonBuildNode(
+            template={"data": "__REF_0__"},
+            refs={"__REF_0__": RefNode(instance="upstream", port="items")},
+        )
+
+        result = evaluate_expression(expression, "body", tasks)
+
+        assert result == {"data": [1, 2, 3]}
+        assert isinstance(result["data"], list)
+
+    def test_embedded_placeholder_multiple_in_one_string(self):
+        """Multiple placeholders embedded in a single string value."""
+        expression = JsonBuildNode(
+            template={"url": "https://__REF_0__/api/__REF_1__"},
+            refs={
+                "__REF_0__": VarNode(name="host"),
+                "__REF_1__": VarNode(name="version"),
+            },
+        )
+
+        result = evaluate_expression(
+            expression, "endpoint", tasks={}, variables={"host": "example.com", "version": "v2"}
+        )
+
+        assert result == {"url": "https://example.com/api/v2"}
