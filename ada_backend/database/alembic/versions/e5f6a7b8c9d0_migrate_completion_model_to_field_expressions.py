@@ -4,7 +4,7 @@ Creates INPUT PortDefinitions for completion_model on all 13 affected component 
 and migrates existing BasicParameter rows to FieldExpression LiteralNodes + InputPortInstances.
 
 Revision ID: e5f6a7b8c9d0
-Revises: a9c3d2e1f0b4
+Revises: d3e4f5a6b7c8
 Create Date: 2026-03-24 00:00:00.000000
 
 """
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e5f6a7b8c9d0"
-down_revision: Union[str, None] = "a9c3d2e1f0b4"
+down_revision: Union[str, None] = "d3e4f5a6b7c8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

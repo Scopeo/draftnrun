@@ -1,7 +1,7 @@
 """reorganize_ingestion_tables_collections
 
 Revision ID: 4786bbd3c51
-Revises: d3e4f5a6b7c8
+Revises: 3f8319d78154
 Create Date: 2025-01-20 12:00:00.000000
 
 """
@@ -39,7 +39,7 @@ from settings import settings
 
 # revision identifiers, used by Alembic.
 revision: str = "4786bbd3c51"
-down_revision: Union[str, None] = "d3e4f5a6b7c8"
+down_revision: Union[str, None] = "3f8319d78154"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
