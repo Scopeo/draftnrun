@@ -6,9 +6,7 @@ from sqlalchemy.orm import Session
 from ada_backend.repositories.component_repository import (
     delete_component_global_parameters,
     get_component_parameter_definition_by_component_version,
-    get_or_create_tool_description,
     insert_component_global_parameter,
-    set_component_version_default_tool_description,
     upsert_specific_api_component_with_defaults,
 )
 from ada_backend.schemas.admin_tools_schema import (
@@ -30,7 +28,6 @@ def create_specific_api_tool_service(
     Create a preconfigured API tool as a component.
     """
 
-    # Component name is derived from the created component
     headers_json = _serialize_optional_json(payload.headers)
     fixed_params_json = _serialize_optional_json(payload.fixed_parameters)
     component_version = upsert_specific_api_component_with_defaults(
@@ -43,19 +40,7 @@ def create_specific_api_tool_service(
         fixed_params_json=fixed_params_json,
     )
 
-    # Upsert tool description
-    tool_desc = get_or_create_tool_description(
-        session=session,
-        name=payload.tool_description_name,
-        description=(payload.tool_description or payload.tool_display_name),
-        tool_properties=payload.tool_properties or {},
-        required_tool_properties=payload.required_tool_properties or [],
-    )
-    # Ensure the component exposes this tool description as its default
-    set_component_version_default_tool_description(session, component_version.id, tool_desc.id)
-
     # Reset then write global component parameters (non-overridable)
-    # Ensure idempotency when recreating/updating the same tool
     delete_component_global_parameters(session, component_version.id)
 
     param_defs = get_component_parameter_definition_by_component_version(
@@ -81,11 +66,7 @@ def create_specific_api_tool_service(
         _insert_global("timeout", str(payload.timeout))
     _insert_global("fixed_parameters", fixed_params_json)
 
-    # No instance-level parameters.
-    # Component-level defaults carry configuration.
-
     return CreatedSpecificApiToolResponse(
         component_version_id=component_version.id,
         name=payload.tool_display_name,
-        tool_description_id=tool_desc.id,
     )

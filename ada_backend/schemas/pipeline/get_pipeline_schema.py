@@ -2,7 +2,7 @@ from typing import Optional
 
 from ada_backend.schemas.components_schema import ComponentVersionUseInfoSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema
-from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
+from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ToolDescriptionReadSchema
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionReadSchema
 
 
@@ -12,6 +12,8 @@ class ComponentInstanceReadSchema(ComponentInstanceSchema, ComponentVersionUseIn
     component_name: str
     component_description: Optional[str]
     version_tag: Optional[str] = None
+
+    tool_description: Optional[ToolDescriptionReadSchema] = None
 
     parameters: list[PipelineParameterReadSchema]
     field_expressions: list[FieldExpressionReadSchema] = []

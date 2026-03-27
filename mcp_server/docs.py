@@ -187,6 +187,21 @@ helper cannot create automatically.
 
 Pass `tool_parameters` to override default parameter values when adding.
 
+## Tool Port Setup Modes
+
+Each tool input port can be configured via `port_configurations` on the component instance \
+in the graph (see `docs://graphs`). The three modes control what the AI sees at runtime:
+
+- **`ai_filled`** (default) — the AI provides the value; exposed as a tool parameter
+- **`user_set`** — a literal value is pre-configured; hidden from the AI
+- **`deactivated`** — the port is removed from the tool interface entirely
+
+These configurations are managed via `get_graph` / `update_graph`, not via `add_tool_to_agent`.
+
+To customize the tool description shown to the AI, set `tool_description_override` on the \
+component instance in the graph payload. The computed `tool_description` (read-only) reflects \
+the final name, description, and JSON Schema properties the AI will see.
+
 ## Tool Selection Habits
 
 - For web research, prefer dedicated search components (use `search_components("search")` to \
@@ -240,7 +255,8 @@ A graph is a DAG with four top-level collections:
   "component_version_id": "uuid",
   "component_name": "llm_call",
   "parameters": [
-    {"name": "prompt", "kind": "parameter", "value": "You are a helpful assistant..."}
+    {"name": "prompt", "kind": "parameter", "value": "You are a helpful assistant..."},
+    {"name": "messages", "kind": "input", "is_tool_input": true, "value": "@{{<uuid>.output}}"}
   ],
   "input_port_instances": [
     {
@@ -249,6 +265,16 @@ A graph is a DAG with four top-level collections:
         "expression_json": {"type": "ref", "instance": "<uuid>", "port": "messages"}
       }
     }
+  ],
+  "tool_description": {"name": "My_LLM_Call", "description": "...", "tool_properties": {...}},
+  "tool_description_override": null,
+  "port_configurations": [
+    {
+      "parameter_id": "port-def-uuid",
+      "setup_mode": "ai_filled",
+      "ai_name_override": null,
+      "ai_description_override": null
+    }
   ]
 }
 ```
@@ -256,8 +282,15 @@ A graph is a DAG with four top-level collections:
 Key fields:
 - `ref` — human-readable label (display only, not used in expressions)
 - `component_id` + `component_version_id` — which catalog component this is
-- `parameters` — configured values (prompt, model, temperature, etc.)
+- `parameters` — configured values (prompt, model, temperature, etc.). Parameters with \
+`is_tool_input: true` are part of the tool interface when the component is used as an agent tool.
 - `input_port_instances` — input ports with their data sources (field expressions)
+- `tool_description` — read-only, dynamically computed from port configurations. Shows the \
+tool name, description, and JSON Schema properties the AI sees at runtime.
+- `tool_description_override` — optional custom description for the tool (overrides the \
+component version description). Set to a string to customize what the AI sees.
+- `port_configurations` — per-port setup controlling how each tool input is handled \
+(see "Tool port configurations" below)
 
 ## Edges (execution order)
 
@@ -346,6 +379,33 @@ Provide explicit `port_mappings` when you need non-canonical wiring (for example
 
 Important quirk: pure `port_mappings`-only edits are risky because current graph change detection \
 excludes `port_mappings`. See `docs://known-quirks`.
+
+## Tool Port Configurations
+
+When a component is used as an agent tool, each of its `is_tool_input` ports can be \
+configured with one of three **setup modes**:
+
+| Mode | Behavior |
+|------|----------|
+| `ai_filled` (default) | The AI provides the value at runtime — exposed as a tool parameter |
+| `user_set` | A literal value is pre-configured — NOT exposed to the AI, injected at runtime |
+| `deactivated` | The port is hidden from the tool interface entirely |
+
+`port_configurations` is returned by `get_graph` and accepted by `update_graph` on each \
+component instance. Each entry targets a port definition (`parameter_id`) and can override:
+
+- `setup_mode` — one of `ai_filled`, `user_set`, `deactivated`
+- `ai_name_override` — custom parameter name shown to the AI
+- `ai_description_override` — custom description shown to the AI
+- `is_required_override` — override whether the AI must provide a value
+- `custom_parameter_type` — override the JSON Schema type (`string`, `integer`, `number`, `boolean`, `object`, `array`)
+- `json_schema_override` — full JSON Schema replacement for the property
+- `expression_json` — field expression for `user_set` ports (literal values)
+
+The read-only `tool_description` field on each component instance shows the computed \
+result: the tool name, description, and JSON Schema properties the AI will see at runtime. \
+Use `tool_description_override` on the component instance to customize the tool description \
+text shown to the AI.
 
 ## Port Mapping (data flow)
 
@@ -714,6 +774,10 @@ Ports are `INPUT` or `OUTPUT`. Each component has:
 - **Canonical ports** — the default input/output (e.g., `messages` in/out for LLM calls)
 - **Dynamic ports** — created at runtime based on configuration (e.g., Start node creates \
 output ports from `payload_schema` keys)
+- **Tool input ports** — input ports with `is_tool_input: true` that form the tool's \
+parameter interface when the component is used as an agent tool. Each tool input port can \
+be configured as `ai_filled` (default), `user_set`, or `deactivated` via `port_configurations` \
+on the component instance. See `docs://graphs` for details.
 
 ### Port Discovery
 

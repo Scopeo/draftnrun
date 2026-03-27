@@ -41,6 +41,7 @@ def get_input_port_instances_for_component_instance(
     session: Session,
     component_instance_id: UUID,
     eager_load_field_expression: bool = False,
+    eager_load_port_definition: bool = False,
 ) -> list[db.InputPortInstance]:
     query = session.query(db.InputPortInstance).filter(
         db.InputPortInstance.component_instance_id == component_instance_id
@@ -48,6 +49,8 @@ def get_input_port_instances_for_component_instance(
 
     if eager_load_field_expression:
         query = query.options(joinedload(db.InputPortInstance.field_expression))
+    if eager_load_port_definition:
+        query = query.options(joinedload(db.InputPortInstance.port_definition))
 
     return query.all()
 

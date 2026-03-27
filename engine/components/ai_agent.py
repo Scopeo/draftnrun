@@ -37,7 +37,7 @@ SYSTEM_PROMPT_DEFAULT = (
 
 
 class AIAgentInputs(BaseModel):
-    messages: list[ChatMessage] = Field(
+    messages: Optional[list[ChatMessage]] = Field(
         default_factory=list,
         description="The history of messages in the conversation.",
     )

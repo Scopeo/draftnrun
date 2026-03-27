@@ -21,7 +21,6 @@ IDS: dict[str, UUID] = {
     "component":     UUID("cccc0001-0000-4000-8000-000000000001"),
     "version":       UUID("cccc0001-0000-4000-8000-000000000002"),
     "integration":   UUID("cccc0001-0000-4000-8000-000000000003"),
-    "tool_desc":     UUID("cccc0001-0000-4000-8000-000000000004"),
     "param_group":   UUID("cccc0001-0000-4000-8000-000000000005"),
     "cpg":           UUID("cccc0001-0000-4000-8000-000000000006"),
     "param_regular": UUID("cccc0001-0000-4000-8000-000000000007"),
@@ -57,15 +56,6 @@ def full_component(session: Session):
     )
     session.add(integration)
 
-    tool_desc = db.ToolDescription(
-        id=IDS["tool_desc"],
-        name="send_email",
-        description="Send an email via Gmail",
-        tool_properties={"to": {"type": "string"}},
-        required_tool_properties=["to"],
-    )
-    session.add(tool_desc)
-
     component = db.Component(
         id=IDS["component"],
         name="__N1TestComponent__",
@@ -84,7 +74,6 @@ def full_component(session: Session):
         description="Test version",
         release_stage=db.ReleaseStage.INTERNAL,
         integration_id=IDS["integration"],
-        default_tool_description_id=IDS["tool_desc"],
     )
     session.add(version)
     session.flush()
@@ -236,12 +225,9 @@ class TestProcessComponentsWithVersions:
         comp = process_components_with_versions(session, [_make_dto(integration_id=None)])[0]
         assert comp.integration is None
 
-    def test_tool_description_is_populated(self, session: Session, full_component):
+    def test_tool_description_is_none(self, session: Session, full_component):
         comp = process_components_with_versions(session, [_make_dto()])[0]
-        assert comp.tool_description is not None
-        assert comp.tool_description["name"] == "send_email"
-        assert comp.tool_description["description"] == "Send an email via Gmail"
-        assert comp.tool_description["required_tool_properties"] == ["to"]
+        assert comp.tool_description is None
 
     def test_regular_param_is_present(self, session: Session, full_component):
         # 'recipient' is a regular param → must appear in parameters
@@ -284,7 +270,7 @@ class TestProcessComponentsWithVersions:
 
         assert [p.name for p in comp1.parameters] == ["recipient"]
         assert comp1.integration is not None
-        assert comp1.tool_description is not None
+        assert comp1.tool_description is None
         assert len(comp1.parameter_groups) == 1
 
         assert [p.name for p in comp2.parameters] == ["only_param"]

@@ -4,10 +4,7 @@ from uuid import UUID, uuid4
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterSchema
-from ada_backend.schemas.pipeline.base import (
-    ComponentInstanceSchema,
-    ToolDescriptionSchema,
-)
+from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema
 from ada_backend.services.errors import GraphNotFound
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
@@ -103,12 +100,7 @@ def test_update_graph_runner():
                             order=None,
                         ),
                     ],
-                    tool_description=ToolDescriptionSchema(
-                        name="Graph Test Chatbot",
-                        description="Graph Test for Revaline",
-                        tool_properties={},
-                        required_tool_properties=[],
-                    ),
+                    tool_description_override="Graph Test for Revaline",
                 ),
                 ComponentInstanceSchema(
                     id=component_instance_2_id,
@@ -130,12 +122,7 @@ def test_update_graph_runner():
                             order=None,
                         ),
                     ],
-                    tool_description=ToolDescriptionSchema(
-                        name="Graph Test Chatbot",
-                        description="Graph Test for Revaline",
-                        tool_properties={},
-                        required_tool_properties=[],
-                    ),
+                    tool_description_override="Graph Test for Revaline",
                 ),
             ],
             relationships=[],

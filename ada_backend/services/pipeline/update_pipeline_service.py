@@ -10,7 +10,6 @@ from ada_backend.repositories.component_repository import (
     delete_component_instance_parameters,
     get_component_by_id,
     get_component_parameter_definition_by_component_version,
-    get_or_create_tool_description,
     upsert_basic_parameter,
     upsert_component_instance,
 )
@@ -19,6 +18,10 @@ from ada_backend.repositories.integration_repository import (
     upsert_component_instance_integration,
 )
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
+from ada_backend.repositories.tool_port_configuration_repository import (
+    delete_tool_port_configurations_for_instance,
+    upsert_tool_port_configuration,
+)
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.services.entity_factory import get_llm_provider_and_model
 
@@ -31,25 +34,13 @@ def create_or_update_component_instance(
     project_id: UUID,
 ) -> UUID:
     """Creates or updates a component instance with its parameters"""
-    # Create tool description if needed
-    tool_description = None
-    if instance_data.tool_description:
-        tool_description = get_or_create_tool_description(
-            session=session,
-            name=instance_data.tool_description.name,
-            description=instance_data.tool_description.description,
-            tool_properties=instance_data.tool_description.tool_properties,
-            required_tool_properties=instance_data.tool_description.required_tool_properties,
-            id=instance_data.tool_description.id if instance_data.tool_description.id else None,
-        )
-
     component_instance = upsert_component_instance(
         session=session,
         component_version_id=instance_data.component_version_id,
         name=instance_data.name,
         ref=instance_data.ref,
-        tool_description_id=tool_description.id if tool_description else None,
-        id_=instance_data.id,  # Pass the ID if provided, None otherwise
+        tool_description_override=instance_data.tool_description_override,
+        id_=instance_data.id,
     )
     instance_id = component_instance.id
 
@@ -170,5 +161,24 @@ def create_or_update_component_instance(
                     ),  # Convert to string for storage
                     order=param.display_order,
                 )
+
+    if instance_data.port_configurations is not None:
+        delete_tool_port_configurations_for_instance(session, instance_id)
+        for tool_port_config in instance_data.port_configurations:
+            upsert_tool_port_configuration(
+                session=session,
+                component_instance_id=instance_id,
+                setup_mode=tool_port_config.setup_mode,
+                port_definition_id=tool_port_config.parameter_id,
+                input_port_instance_id=tool_port_config.input_port_instance_id,
+                ai_name_override=tool_port_config.ai_name_override,
+                ai_description_override=tool_port_config.ai_description_override,
+                is_required_override=tool_port_config.is_required_override,
+                custom_parameter_type=tool_port_config.custom_parameter_type,
+                json_schema_override=tool_port_config.json_schema_override,
+                expression_json=tool_port_config.expression_json,
+                custom_ui_component_properties=tool_port_config.custom_ui_component_properties,
+                id_=tool_port_config.id,
+            )
 
     return instance_id

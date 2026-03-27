@@ -29,7 +29,6 @@ from ada_backend.schemas.components_schema import (
 )
 from ada_backend.schemas.integration_schema import IntegrationSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO, ParameterGroupSchema
-from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
 from ada_backend.utils.component_utils import get_ui_component_properties_with_llm_options
 
 LOGGER = logging.getLogger(__name__)
@@ -63,7 +62,6 @@ class ComponentWithVersionDTO:
     is_protected: bool
     integration_id: Optional[UUID]
     icon: Optional[str] = None
-    default_tool_description_id: Optional[UUID] = None
     category_ids: Optional[list[UUID]] = None
 
 
@@ -454,74 +452,6 @@ def get_base_component_from_version(
     return result[0] if result else None
 
 
-def get_tool_description(
-    session: Session,
-    component_instance_id: UUID,
-) -> Optional[db.ToolDescription]:
-    """
-    Retrieves the tool description associated with a specific component instance.
-    """
-    return (
-        session.query(db.ToolDescription)
-        .join(
-            db.ComponentInstance,
-            db.ComponentInstance.tool_description_id == db.ToolDescription.id,
-        )
-        .filter(db.ComponentInstance.id == component_instance_id)
-        .first()
-    )
-
-
-def get_tool_description_component(
-    session: Session,
-    component_version_id: UUID,
-) -> Optional[db.ToolDescription]:
-    """
-    Retrieves the tool description associated with a specific component version id.
-    """
-    return (
-        session.query(db.ToolDescription)
-        .join(
-            db.ComponentVersion,
-            db.ComponentVersion.default_tool_description_id == db.ToolDescription.id,
-        )
-        .filter(db.ComponentVersion.id == component_version_id)
-        .first()
-    )
-
-
-def is_tool_description_used_by_multiple_instances(
-    session: Session,
-    tool_description_id: UUID,
-) -> bool:
-    """
-    Checks if a tool description is used by multiple component instances.
-    Returns True if used by more than one instance, False otherwise.
-    """
-    count = (
-        session.query(db.ComponentInstance)
-        .filter(db.ComponentInstance.tool_description_id == tool_description_id)
-        .count()
-    )
-    return count > 1
-
-
-def is_tool_description_default_for_component(
-    session: Session,
-    tool_description_id: UUID,
-) -> bool:
-    """
-    Checks if a tool description is used as a default tool description for any component version.
-    Returns True if it's a default tool description, False otherwise.
-    """
-    count = (
-        session.query(db.ComponentVersion)
-        .filter(db.ComponentVersion.default_tool_description_id == tool_description_id)
-        .count()
-    )
-    return count > 0
-
-
 def get_tool_parameter_by_component_version(
     session: Session,
     component_version_id: UUID,
@@ -557,7 +487,6 @@ def _build_component_with_version_dto(
         can_use_function_calling=comp.can_use_function_calling,
         is_protected=comp.is_protected,
         integration_id=ver.integration_id,
-        default_tool_description_id=ver.default_tool_description_id,
         category_ids=category_ids or [],
     )
 
@@ -703,9 +632,10 @@ def process_components_with_versions(
         )
         .all()
     ):
-        subcomponent_definitions_by_component_version[param_definition.component_version_id].append(
-            (param_definition, child_relationship)
-        )
+        subcomponent_definitions_by_component_version[param_definition.component_version_id].append((
+            param_definition,
+            child_relationship,
+        ))
 
     parameter_groups_by_component_version: dict[UUID, list[db.ComponentParameterGroup]] = defaultdict(list)
     for parameter_group in (
@@ -717,24 +647,12 @@ def process_components_with_versions(
     ):
         parameter_groups_by_component_version[parameter_group.component_version_id].append(parameter_group)
 
-    tool_descriptions_by_component_version: dict[UUID, db.ToolDescription] = {
-        component_version_id: tool_description
-        for component_version_id, tool_description in (
-            session.query(db.ComponentVersion.id, db.ToolDescription)
-            .join(db.ToolDescription, db.ComponentVersion.default_tool_description_id == db.ToolDescription.id)
-            .filter(db.ComponentVersion.id.in_(component_version_ids))
-            .all()
-        )
-    }
-
     integration_ids = {c.integration_id for c in components_with_version if c.integration_id}
     integrations_by_id: dict[UUID, db.Integration] = {}
     if integration_ids:
         integrations_by_id = {
             integration.id: integration
-            for integration in session.query(db.Integration)
-            .filter(db.Integration.id.in_(integration_ids))
-            .all()
+            for integration in session.query(db.Integration).filter(db.Integration.id.in_(integration_ids)).all()
         }
 
     llm_options_cache: dict[frozenset, list] = {}
@@ -742,17 +660,13 @@ def process_components_with_versions(
     result = []
     for component_with_version in components_with_version:
         try:
-            parameters = param_definitions_by_component_version.get(
-                component_with_version.component_version_id, []
-            )
+            parameters = param_definitions_by_component_version.get(component_with_version.component_version_id, [])
 
             # Hide parameters enforced globally for this component from the UI
             global_parameters = global_parameters_by_component_version.get(
                 component_with_version.component_version_id, []
             )
-            global_param_def_ids = {
-                global_parameter.parameter_definition_id for global_parameter in global_parameters
-            }
+            global_param_def_ids = {global_parameter.parameter_definition_id for global_parameter in global_parameters}
 
             subcomponent_params = subcomponent_definitions_by_component_version.get(
                 component_with_version.component_version_id, []
@@ -817,21 +731,6 @@ def process_components_with_versions(
                         )
                     )
 
-            default_tool_description_db = tool_descriptions_by_component_version.get(
-                component_with_version.component_version_id
-            )
-            tool_description = (
-                ToolDescriptionSchema(
-                    id=default_tool_description_db.id,
-                    name=default_tool_description_db.name,
-                    description=default_tool_description_db.description,
-                    tool_properties=default_tool_description_db.tool_properties,
-                    required_tool_properties=default_tool_description_db.required_tool_properties,
-                ).model_dump()
-                if default_tool_description_db
-                else None
-            )
-
             integration = integrations_by_id.get(component_with_version.integration_id)
             component_cost = component_costs.get(component_with_version.component_version_id)
 
@@ -857,7 +756,7 @@ def process_components_with_versions(
                     function_callable=component_with_version.function_callable,
                     release_stage=component_with_version.release_stage,
                     can_use_function_calling=component_with_version.can_use_function_calling,
-                    tool_description=tool_description,
+                    tool_description=None,
                     parameters=parameters_to_fill,
                     icon=component_with_version.icon,
                     parameter_groups=parameter_groups_dto,
@@ -914,7 +813,7 @@ def upsert_component_instance(
     component_version_id: UUID,
     name: Optional[str] = None,
     ref: Optional[str] = None,
-    tool_description_id: Optional[UUID] = None,
+    tool_description_override: Optional[str] = None,
     id_: Optional[UUID] = None,
 ) -> db.ComponentInstance:
     """
@@ -931,7 +830,7 @@ def upsert_component_instance(
         component_version_id=component_version_id,
         name=name,
         ref=ref,
-        tool_description_id=tool_description_id,
+        tool_description_override=tool_description_override,
         id=id_,
     )
 
@@ -1068,53 +967,6 @@ def upsert_sub_component_input(
     return sub_input
 
 
-def get_or_create_tool_description(
-    session: Session,
-    name: str,
-    description: str,
-    tool_properties: dict,
-    required_tool_properties: list[str],
-    id: Optional[UUID] = None,
-) -> db.ToolDescription:
-    # TODO: use id
-    # First try to find by name and description only
-    tool_description = (
-        session.query(db.ToolDescription)
-        .filter(
-            db.ToolDescription.name == name,
-            db.ToolDescription.description == description,
-        )
-        .first()
-    )
-
-    # TODO: remove when front sends id
-    # If found, check if the JSON fields match
-    if tool_description:
-        # Compare the actual JSON values
-        if (
-            tool_description.tool_properties == tool_properties
-            and tool_description.required_tool_properties == required_tool_properties
-        ):
-            return tool_description
-        else:
-            # JSON fields don't match, create a new one
-            tool_description = None
-
-    if not tool_description:
-        # Create new tool description
-        tool_description = db.ToolDescription(
-            name=name,
-            description=description,
-            tool_properties=tool_properties,
-            required_tool_properties=required_tool_properties,
-        )
-        session.add(tool_description)
-
-    session.commit()
-    session.refresh(tool_description)
-    return tool_description
-
-
 # --- DELETE operations ---
 def delete_component_instances(
     session: Session,
@@ -1123,7 +975,6 @@ def delete_component_instances(
     """
     Deletes all component instances for a given component.
     Ensures cascading deletes on related entities.
-    Also deletes tool descriptions that are specific to these instances (not shared or default).
     """
 
     query = session.query(db.ComponentInstance)
@@ -1135,29 +986,12 @@ def delete_component_instances(
         query = query.filter(db.ComponentInstance.id.in_(component_instance_ids))
 
     instances = query.all()
-    tool_descriptions_to_delete = []
 
     for instance in instances:
-        if instance.tool_description_id:
-            tool_description_id = instance.tool_description_id
-            if not is_tool_description_used_by_multiple_instances(
-                session, tool_description_id
-            ) and not is_tool_description_default_for_component(session, tool_description_id):
-                tool_descriptions_to_delete.append(tool_description_id)
-                LOGGER.info(f"Marking tool description {tool_description_id} for deletion (instance-specific)")
-
         if get_component_instance_integration_relationship(session, instance.id):
             delete_linked_integration(session, instance.id)
 
         session.delete(instance)
-
-    for tool_description_id in tool_descriptions_to_delete:
-        tool_description = (
-            session.query(db.ToolDescription).filter(db.ToolDescription.id == tool_description_id).first()
-        )
-        if tool_description:
-            session.delete(tool_description)
-            LOGGER.info(f"Deleted instance-specific tool description {tool_description_id}")
 
     session.commit()
 
@@ -1289,20 +1123,6 @@ def upsert_specific_api_component_with_defaults(
     upsert_release_stage_to_current_version_mapping(
         session, component.id, component_version.release_stage, component_version.id
     )
-    return component_version
-
-
-def set_component_version_default_tool_description(
-    session: Session,
-    component_version_id: UUID,
-    tool_description_id: UUID,
-) -> db.ComponentVersion:
-    component_version = get_component_version_by_id(session, component_version_id)
-    if component_version is None:
-        raise ValueError("Component version not found when setting default tool description")
-    component_version.default_tool_description_id = tool_description_id
-    session.commit()
-    session.refresh(component_version)
     return component_version
 
 

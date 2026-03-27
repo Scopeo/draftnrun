@@ -22,4 +22,3 @@ class CreateSpecificApiToolRequest(BaseModel):
 class CreatedSpecificApiToolResponse(BaseModel):
     component_version_id: UUID
     name: Optional[str]
-    tool_description_id: Optional[UUID]

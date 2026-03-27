@@ -236,6 +236,21 @@ class PortType(StrEnum):
     OUTPUT = "OUTPUT"
 
 
+class PortSetupMode(StrEnum):
+    AI_FILLED = "ai_filled"
+    USER_SET = "user_set"
+    DEACTIVATED = "deactivated"
+
+
+class JsonSchemaType(StrEnum):
+    STRING = "string"
+    INTEGER = "integer"
+    NUMBER = "number"
+    BOOLEAN = "boolean"
+    OBJECT = "object"
+    ARRAY = "array"
+
+
 class EntityType(StrEnum):
     LLM = "llm"
     COMPONENT = "component"
@@ -376,12 +391,8 @@ class ComponentVersion(Base):
 
     description = mapped_column(Text, nullable=True)
     integration_id = mapped_column(UUID(as_uuid=True), ForeignKey("integrations.id"), nullable=True)
-    default_tool_description_id = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tool_descriptions.id"),
-        nullable=True,
-    )
     release_stage = mapped_column(make_pg_enum(ReleaseStage), nullable=False, default=ReleaseStage.BETA)
+    default_tool_description_id = mapped_column(UUID(as_uuid=True), nullable=True)
 
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -761,11 +772,11 @@ class ComponentInstance(Base):
     )
     name = mapped_column(String, nullable=True, index=True)
     ref = mapped_column(String, nullable=True, index=True)
-    tool_description_id = mapped_column(UUID(as_uuid=True), ForeignKey("tool_descriptions.id"), nullable=True)
+    tool_description_override = mapped_column(Text, nullable=True)
+    tool_description_id = mapped_column(UUID(as_uuid=True), nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     component_version = relationship("ComponentVersion")
-    tool_description = relationship("ToolDescription")
     basic_parameters = relationship(
         "BasicParameter",
         back_populates="component_instance",
@@ -814,6 +825,11 @@ class ComponentInstance(Base):
         "OutputPortInstance",
         viewonly=True,
         overlaps="port_instances,component_instance",
+    )
+    tool_port_configurations = relationship(
+        "ToolPortConfiguration",
+        back_populates="component_instance",
+        cascade="all, delete-orphan",
     )
 
     def __str__(self):
@@ -1314,6 +1330,85 @@ class OutputPortInstance(PortInstance):
     id = mapped_column(UUID(as_uuid=True), ForeignKey("port_instances.id", ondelete="CASCADE"), primary_key=True)
 
     __mapper_args__ = {"polymorphic_identity": PortType.OUTPUT}
+
+
+class ToolPortConfiguration(Base):
+    """Per-instance configuration for tool-eligible input ports (is_tool_input=True).
+
+    Controls how each input port behaves when the component is used as a tool
+    by an AI agent: whether the LLM fills it, the user pre-configures it, or
+    it is excluded entirely.
+
+    Ports with PortDefinition.is_tool_input=False are NEVER represented here;
+    they are purely configuration ports outside the tool interface.
+    """
+
+    __tablename__ = "tool_port_configurations"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    component_instance_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("component_instances.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    input_port_instance_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("input_port_instances.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    port_definition_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("port_definitions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    setup_mode = mapped_column(
+        make_pg_enum(PortSetupMode),
+        nullable=False,
+        default=PortSetupMode.AI_FILLED,
+    )
+    ai_name_override = mapped_column(String, nullable=True)
+    ai_description_override = mapped_column(Text, nullable=True)
+    is_required_override = mapped_column(
+        Boolean,
+        nullable=True,
+        comment="Override required status: True=mandatory, False=optional, None=use port definition default",
+    )
+    custom_parameter_type = mapped_column(
+        make_pg_enum(JsonSchemaType),
+        nullable=True,
+    )
+    json_schema_override = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Full JSON Schema for complex parameter types. Overrides simple type mapping.",
+    )
+    expression_json = mapped_column(JSONB, nullable=True)
+    custom_ui_component_properties = mapped_column(JSONB, nullable=True)
+
+    component_instance = relationship(
+        "ComponentInstance",
+        back_populates="tool_port_configurations",
+    )
+    input_port_instance = relationship("InputPortInstance", foreign_keys=[input_port_instance_id])
+    port_definition = relationship("PortDefinition", foreign_keys=[port_definition_id])
+
+    __table_args__ = (
+        UniqueConstraint(
+            "component_instance_id",
+            "port_definition_id",
+            name="uq_tool_port_config_instance_port_def",
+        ),
+        Index(
+            "uq_tool_port_config_instance_ai_name",
+            "component_instance_id",
+            "ai_name_override",
+            unique=True,
+            postgresql_where=sa.text("port_definition_id IS NULL AND ai_name_override IS NOT NULL"),
+        ),
+    )
 
 
 class Project(Base):

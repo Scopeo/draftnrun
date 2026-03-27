@@ -35,8 +35,6 @@ MOCK_UUIDS: dict[str, UUID] = {
     "component_3": uuid4(),
     "component_4": uuid4(),
     "component_5": uuid4(),
-    "tool_description_1": uuid4(),
-    "tool_description_2": uuid4(),
     "component_instance_1": uuid4(),
     "component_instance_2": uuid4(),
     "component_instance_3": uuid4(),
@@ -134,24 +132,6 @@ def populate_ada_backend_db_with_mock_data(session: Session):
         description="Embedding Service Component.",
     )
 
-    # --- Tool Descriptions ---
-    tool_description_1 = db.ToolDescription(
-        id=MOCK_UUIDS["tool_description_1"],
-        name="MockTool1",
-        description="Mock tool description 1.",
-        tool_properties={"prop1": "value1"},
-        required_tool_properties={"req1": "value1"},
-    )
-    tool_description_2 = db.ToolDescription(
-        id=MOCK_UUIDS["tool_description_2"],
-        name="MockTool2",
-        description="Mock tool description 2.",
-        tool_properties={"prop2": "value2"},
-        required_tool_properties={"req2": "value2"},
-    )
-    session.add_all([tool_description_1, tool_description_2])
-    session.commit()
-
     # --- Component Instances ---
     component_instance_1 = db.ComponentInstance(
         id=MOCK_UUIDS["component_instance_1"],
@@ -172,13 +152,13 @@ def populate_ada_backend_db_with_mock_data(session: Session):
         id=MOCK_UUIDS["component_instance_4"],
         component_version_id=component_version_4.id,
         ref="react_agent_a",
-        tool_description_id=tool_description_1.id,
+        tool_description_override="Mock tool description 1.",
     )
     component_instance_5 = db.ComponentInstance(
         id=MOCK_UUIDS["component_instance_5"],
         component_version_id=component_version_5.id,
         ref="rag_agent_b",
-        tool_description_id=tool_description_2.id,
+        tool_description_override="Mock tool description 2.",
     )
     component_instance_6 = db.ComponentInstance(
         id=MOCK_UUIDS["component_instance_6"],
