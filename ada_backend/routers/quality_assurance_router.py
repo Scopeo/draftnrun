@@ -9,8 +9,13 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import RunStatus
 from ada_backend.database.setup_db import get_db
+from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.qa_session_repository import update_qa_session_status
-from ada_backend.routers.auth_router import UserRights, user_has_access_to_project_dependency
+from ada_backend.routers.auth_router import (
+    UserRights,
+    user_has_access_to_organization_dependency,
+    user_has_access_to_project_dependency,
+)
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.dataset_schema import (
     DatasetCreateList,
@@ -40,7 +45,7 @@ from ada_backend.services.qa.qa_error import (
     CSVMissingDatasetColumnError,
     CSVNonUniquePositionError,
     QAColumnNotFoundError,
-    QADatasetNotInProjectError,
+    QADatasetNotInOrgError,
     QADuplicatePositionError,
     QAPartialPositionError,
 )
@@ -51,13 +56,12 @@ from ada_backend.services.qa.qa_metadata_service import (
     rename_qa_column_service,
 )
 from ada_backend.services.qa.quality_assurance_service import (
-    create_datasets_service,
+    create_datasets_for_organization_service,
     create_inputs_groundtruths_service,
-    create_qa_session_service,
-    delete_datasets_service,
+    delete_datasets_from_organization_service,
     delete_inputs_groundtruths_service,
     export_qa_data_to_csv_service,
-    get_datasets_by_project_service,
+    get_datasets_by_organization_service,
     get_inputs_groundtruths_with_version_outputs_service,
     get_outputs_by_graph_runner_service,
     get_qa_session_service,
@@ -66,7 +70,7 @@ from ada_backend.services.qa.quality_assurance_service import (
     list_qa_sessions_service,
     run_qa_service,
     save_conversation_to_groundtruth_service,
-    update_dataset_service,
+    update_dataset_in_organization_service,
     update_inputs_groundtruths_service,
     validate_qa_run_request,
 )
@@ -82,6 +86,7 @@ LOGGER = logging.getLogger(__name__)
     response_model=List[DatasetResponse],
     summary="Get Datasets by Project",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def get_datasets_by_project_endpoint(
     project_id: UUID,
@@ -94,14 +99,20 @@ def get_datasets_by_project_endpoint(
     """
     Get all datasets for a project.
 
-    This endpoint allows users to retrieve all datasets associated with a specific project
-    for quality assurance purposes.
+    **DEPRECATED**: This endpoint is deprecated. Use `/organizations/{organization_id}/qa/datasets` instead.
+
+    This endpoint returns all datasets from the project's organization.
+    Datasets are now organization-scoped and shared across all projects in the organization.
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     try:
-        return get_datasets_by_project_service(session, project_id)
+        return get_datasets_by_organization_service(session, project.organization_id)
     except ValueError as e:
         LOGGER.error(f"Failed to get datasets for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -115,6 +126,7 @@ def get_datasets_by_project_endpoint(
     response_model=DatasetListResponse,
     summary="Create Datasets",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def create_dataset_endpoint(
     project_id: UUID,
@@ -128,14 +140,20 @@ def create_dataset_endpoint(
     """
     Create datasets for a project.
 
-    This endpoint allows users to create multiple datasets for quality assurance purposes.
-    All datasets will be associated with the specified project.
+    **DEPRECATED**: This endpoint is deprecated. Use `POST /organizations/{organization_id}/qa/datasets` instead.
+
+    This endpoint creates datasets at the organization level (using the project's organization).
+    Datasets are now organization-scoped and shared across all projects in the organization.
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     try:
-        return create_datasets_service(session, project_id, dataset_data)
+        return create_datasets_for_organization_service(session, project.organization_id, dataset_data)
     except ValueError as e:
         LOGGER.error(f"Failed to create datasets for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -149,6 +167,7 @@ def create_dataset_endpoint(
     response_model=DatasetResponse,
     summary="Update Dataset",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def update_dataset_endpoint(
     project_id: UUID,
@@ -163,17 +182,25 @@ def update_dataset_endpoint(
     """
     Update dataset.
 
-    This endpoint allows users to update a single dataset.
-    Only the fields provided in the request will be updated.
+    **DEPRECATED**: This endpoint is deprecated.
+    Use `PATCH /organizations/{organization_id}/qa/datasets/{dataset_id}` instead.
+
+    This endpoint updates datasets at the organization level.
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     try:
-        return update_dataset_service(session, project_id, dataset_id, dataset_name)
-    except QADatasetNotInProjectError as e:
+        return update_dataset_in_organization_service(session, project.organization_id, dataset_id, dataset_name)
+    except QADatasetNotInOrgError as e:
         LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        raise
     except ValueError as e:
         LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -186,6 +213,7 @@ def update_dataset_endpoint(
     "/projects/{project_id}/qa/datasets",
     summary="Delete Datasets",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def delete_dataset_endpoint(
     project_id: UUID,
@@ -199,16 +227,22 @@ def delete_dataset_endpoint(
     """
     Delete datasets.
 
-    This endpoint allows users to delete multiple datasets at once.
+    **DEPRECATED**: This endpoint is deprecated. Use `DELETE /organizations/{organization_id}/qa/datasets` instead.
+
+    This endpoint deletes datasets at the organization level.
     This action cannot be undone.
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     try:
-        deleted_count = delete_datasets_service(session, project_id, delete_data)
+        deleted_count = delete_datasets_from_organization_service(session, project.organization_id, delete_data)
         return {"message": f"Deleted {deleted_count} datasets successfully"}
-    except QADatasetNotInProjectError as e:
+    except QADatasetNotInOrgError as e:
         LOGGER.error(f"Failed to delete datasets for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
@@ -225,6 +259,7 @@ def delete_dataset_endpoint(
     response_model=List[QAColumnResponse],
     summary="Get Custom Columns for Dataset",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def get_columns_by_dataset_endpoint(
     project_id: UUID,
@@ -235,12 +270,22 @@ def get_columns_by_dataset_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> List[QAColumnResponse]:
+    """
+    **DEPRECATED**: This endpoint is deprecated.
+    Use `GET /organizations/{organization_id}/qa/datasets/{dataset_id}/custom-columns` instead.
+
+    Custom columns are now organization-scoped and shared across all projects in the organization.
+    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     try:
-        return get_qa_columns_by_dataset_service(session, project_id, dataset_id)
-    except QADatasetNotInProjectError as e:
+        return get_qa_columns_by_dataset_service(session, project.organization_id, dataset_id)
+    except QADatasetNotInOrgError as e:
         LOGGER.error(
             f"Failed to get columns for dataset {dataset_id} in project {project_id}: {str(e)}", exc_info=True
         )
@@ -257,6 +302,7 @@ def get_columns_by_dataset_endpoint(
     response_model=QAColumnResponse,
     summary="Add Custom Column to Dataset",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def add_column_to_dataset_endpoint(
     project_id: UUID,
@@ -268,12 +314,22 @@ def add_column_to_dataset_endpoint(
     session: Session = Depends(get_db),
     column_name: str = Body(..., embed=True),
 ) -> QAColumnResponse:
+    """
+    **DEPRECATED**: This endpoint is deprecated.
+    Use `POST /organizations/{organization_id}/qa/datasets/{dataset_id}/custom-columns` instead.
+
+    Custom columns are now organization-scoped and shared across all projects in the organization.
+    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     try:
-        return create_qa_column_service(session, project_id, dataset_id, column_name)
-    except QADatasetNotInProjectError as e:
+        return create_qa_column_service(session, project.organization_id, dataset_id, column_name)
+    except QADatasetNotInOrgError as e:
         LOGGER.error(f"Failed to add column to dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -286,6 +342,7 @@ def add_column_to_dataset_endpoint(
     response_model=QAColumnResponse,
     summary="Rename Custom Column",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def rename_column_endpoint(
     project_id: UUID,
@@ -298,12 +355,22 @@ def rename_column_endpoint(
     session: Session = Depends(get_db),
     column_name: str = Body(..., embed=True),
 ) -> QAColumnResponse:
+    """
+    **DEPRECATED**: This endpoint is deprecated.
+    Use `PATCH /organizations/{organization_id}/qa/datasets/{dataset_id}/custom-columns/{column_id}` instead.
+
+    Custom columns are now organization-scoped and shared across all projects in the organization.
+    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     try:
-        return rename_qa_column_service(session, project_id, dataset_id, column_id, column_name)
-    except QADatasetNotInProjectError as e:
+        return rename_qa_column_service(session, project.organization_id, dataset_id, column_id, column_name)
+    except QADatasetNotInOrgError as e:
         LOGGER.error(
             f"Failed to rename column {column_id} in dataset {dataset_id} for project {project_id}: {str(e)}",
             exc_info=True,
@@ -327,6 +394,7 @@ def rename_column_endpoint(
     "/projects/{project_id}/qa/datasets/{dataset_id}/custom-columns/{column_id}",
     summary="Delete Custom Column",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def delete_column_endpoint(
     project_id: UUID,
@@ -338,12 +406,22 @@ def delete_column_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> dict:
+    """
+    **DEPRECATED**: This endpoint is deprecated.
+    Use `DELETE /organizations/{organization_id}/qa/datasets/{dataset_id}/custom-columns/{column_id}` instead.
+
+    Custom columns are now organization-scoped and shared across all projects in the organization.
+    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     try:
-        return delete_qa_column_service(session, project_id, dataset_id, column_id)
-    except QADatasetNotInProjectError as e:
+        return delete_qa_column_service(session, project.organization_id, dataset_id, column_id)
+    except QADatasetNotInOrgError as e:
         LOGGER.error(
             f"Failed to delete column {column_id} from dataset {dataset_id} for project {project_id}: {str(e)}",
             exc_info=True,
@@ -363,12 +441,171 @@ def delete_column_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
+# QA Metadata (Custom Columns) org-level endpoints
+@router.get(
+    "/organizations/{organization_id}/qa/datasets/{dataset_id}/custom-columns",
+    response_model=List[QAColumnResponse],
+    summary="Get Custom Columns for Dataset",
+    tags=["Quality Assurance"],
+)
+def get_columns_by_dataset_org_endpoint(
+    organization_id: UUID,
+    dataset_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> List[QAColumnResponse]:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        return get_qa_columns_by_dataset_service(session, organization_id, dataset_id)
+    except QADatasetNotInOrgError as e:
+        LOGGER.error(
+            f"Failed to get columns for dataset {dataset_id} in organization {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to get columns for dataset {dataset_id} in organization {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post(
+    "/organizations/{organization_id}/qa/datasets/{dataset_id}/custom-columns",
+    response_model=QAColumnResponse,
+    summary="Add Custom Column to Dataset",
+    tags=["Quality Assurance"],
+)
+def add_column_to_dataset_org_endpoint(
+    organization_id: UUID,
+    dataset_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+    session: Session = Depends(get_db),
+    column_name: str = Body(..., embed=True),
+) -> QAColumnResponse:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        return create_qa_column_service(session, organization_id, dataset_id, column_name)
+    except QADatasetNotInOrgError as e:
+        LOGGER.error(
+            f"Failed to add column to dataset {dataset_id} for organization {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to add column to dataset {dataset_id} for organization {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.patch(
+    "/organizations/{organization_id}/qa/datasets/{dataset_id}/custom-columns/{column_id}",
+    response_model=QAColumnResponse,
+    summary="Rename Custom Column",
+    tags=["Quality Assurance"],
+)
+def rename_column_org_endpoint(
+    organization_id: UUID,
+    dataset_id: UUID,
+    column_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+    session: Session = Depends(get_db),
+    column_name: str = Body(..., embed=True),
+) -> QAColumnResponse:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        return rename_qa_column_service(session, organization_id, dataset_id, column_id, column_name)
+    except QADatasetNotInOrgError as e:
+        LOGGER.error(
+            f"Failed to rename column {column_id} in dataset {dataset_id} "
+            f"for organization {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except QAColumnNotFoundError as e:
+        LOGGER.error(
+            f"Failed to rename column {column_id} in dataset {dataset_id} "
+            f"for organization {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to rename column {column_id} in dataset {dataset_id} "
+            f"for organization {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.delete(
+    "/organizations/{organization_id}/qa/datasets/{dataset_id}/custom-columns/{column_id}",
+    summary="Delete Custom Column",
+    tags=["Quality Assurance"],
+)
+def delete_column_org_endpoint(
+    organization_id: UUID,
+    dataset_id: UUID,
+    column_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> dict:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        return delete_qa_column_service(session, organization_id, dataset_id, column_id)
+    except QADatasetNotInOrgError as e:
+        LOGGER.error(
+            f"Failed to delete column {column_id} from dataset {dataset_id} "
+            f"for organization {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except QAColumnNotFoundError as e:
+        LOGGER.error(
+            f"Failed to delete column {column_id} from dataset {dataset_id} "
+            f"for organization {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to delete column {column_id} from dataset {dataset_id} "
+            f"for organization {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
 # Input Groundtruth endpoints
 @router.get(
     "/projects/{project_id}/qa/datasets/{dataset_id}/entries",
     response_model=PaginatedInputGroundtruthResponse,
     summary="Get Input-Groundtruth Entries by Dataset",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def get_inputs_groundtruths_by_dataset_endpoint(
     project_id: UUID,
@@ -383,6 +620,9 @@ def get_inputs_groundtruths_by_dataset_endpoint(
 ) -> PaginatedInputGroundtruthResponse:
     """
     Get all input-groundtruth entries for a dataset WITHOUT outputs.
+
+    **DEPRECATED**: This endpoint is deprecated.
+    Use `GET /organizations/{organization_id}/qa/datasets/{dataset_id}/entries` instead.
 
     This endpoint returns only the base input-groundtruth pairs for a dataset.
     Use the /outputs endpoint to get outputs for a specific graph_runner.
@@ -475,6 +715,7 @@ def get_version_output_ids_endpoint(
     response_model=InputGroundtruthResponseList,
     summary="Create Input-Groundtruth Entries",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def create_input_groundtruth_endpoint(
     project_id: UUID,
@@ -488,6 +729,9 @@ def create_input_groundtruth_endpoint(
 ) -> InputGroundtruthResponseList:
     """
     Create input-groundtruth entries.
+
+    **DEPRECATED**: This endpoint is deprecated.
+    Use `POST /organizations/{organization_id}/qa/datasets/{dataset_id}/entries` instead.
 
     This endpoint allows users to create multiple input-groundtruth pairs for quality assurance purposes.
     All entries will be associated with the specified dataset.
@@ -513,6 +757,7 @@ def create_input_groundtruth_endpoint(
     response_model=InputGroundtruthResponseList,
     summary="Update Input-Groundtruth Entries",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def update_input_groundtruth_endpoint(
     project_id: UUID,
@@ -526,6 +771,9 @@ def update_input_groundtruth_endpoint(
 ) -> InputGroundtruthResponseList:
     """
     Update input-groundtruth entries.
+
+    **DEPRECATED**: This endpoint is deprecated.
+    Use `PATCH /organizations/{organization_id}/qa/datasets/{dataset_id}/entries` instead.
 
     This endpoint allows users to update multiple input-groundtruth pairs.
     Only the fields provided in the request will be updated.
@@ -547,6 +795,7 @@ def update_input_groundtruth_endpoint(
     "/projects/{project_id}/qa/datasets/{dataset_id}/entries",
     summary="Delete Input-Groundtruth Entries",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def delete_input_groundtruth_endpoint(
     project_id: UUID,
@@ -560,6 +809,9 @@ def delete_input_groundtruth_endpoint(
 ) -> dict:
     """
     Delete input-groundtruth entries.
+
+    **DEPRECATED**: This endpoint is deprecated.
+    Use `DELETE /organizations/{organization_id}/qa/datasets/{dataset_id}/entries` instead.
 
     This endpoint allows users to delete multiple input-groundtruth pairs at once.
     This action cannot be undone.
@@ -683,7 +935,8 @@ async def run_qa_async_endpoint(
         run_request_data=run_request.model_dump(mode="json"),
     ):
         update_qa_session_status(
-            session, qa_session.id,
+            session,
+            qa_session.id,
             status=RunStatus.FAILED,
             error={"message": "Failed to enqueue QA run; Redis unavailable.", "type": "EnqueueError"},
         )
@@ -823,12 +1076,16 @@ async def import_qa_data_from_csv_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     try:
         await file.seek(0)
 
         result = import_qa_data_from_csv_service(
             session=session,
-            project_id=project_id,
+            organization_id=project.organization_id,
             dataset_id=dataset_id,
             csv_file=file.file,
         )
@@ -842,7 +1099,7 @@ async def import_qa_data_from_csv_endpoint(
         CSVInvalidPositionError,
     ) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except QADatasetNotInProjectError as e:
+    except QADatasetNotInOrgError as e:
         LOGGER.error(
             f"Failed to import QA data for dataset {dataset_id} in project {project_id}: {str(e)}", exc_info=True
         )
