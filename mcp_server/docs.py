@@ -202,6 +202,21 @@ To customize the tool description shown to the AI, set `tool_description_overrid
 component instance in the graph payload. The computed `tool_description` (read-only) reflects \
 the final name, description, and JSON Schema properties the AI will see.
 
+## skip_tools_with_missing_oauth
+
+Advanced boolean parameter on the AI Agent node (default: `True`).
+
+At agent startup, each attached tool's `is_available()` is checked. When this flag is `True`, any \
+tool that returns `False` (e.g. an OAuth-backed tool with no active connection) is silently excluded \
+from the LLM's tool registry — the agent loads cleanly and the LLM never sees that tool.
+
+When `False`, all configured tools are registered regardless of OAuth status; the agent loads, but \
+runtime calls to OAuth-backed tools will fail if the connection is missing.
+
+To change this value use `configure_agent` (AGENT projects) or `update_component_parameters` \
+(WORKFLOW projects). It is an advanced parameter, so it may not appear in the basic parameter list — \
+inspect the full parameter list from `get_graph()` to find it.
+
 ## Tool Selection Habits
 
 - For web research, prefer dedicated search components (use `search_components("search")` to \
@@ -1396,6 +1411,13 @@ to connect in the UI.
 If a component catalog entry includes an `integration` block, treat it as unsafe for the generic \
 agent-tool helper unless the helper explicitly supports it.
 
+### Runtime behavior when OAuth is missing
+
+If an OAuth connection is missing at agent runtime and `skip_tools_with_missing_oauth` is `True` \
+(default), the engine silently drops that tool from the LLM's context at startup — the agent loads \
+and runs, the LLM just cannot see or call the missing tool. See `docs://agent-config` for how to \
+inspect or change this parameter.
+
 ## Preflight Checklist: Graph with Integration-Backed Components
 
 Building a graph that uses OAuth-dependent components (Gmail, Slack, HubSpot, etc.) requires a \
@@ -1704,8 +1726,10 @@ DOMAIN_DESCRIPTIONS: dict[str, str] = {
 
 def _make_resource_fn(content: str):
     """Create a named function returning static content (FastMCP rejects lambdas)."""
+
     def resource_fn() -> str:
         return content
+
     return resource_fn
 
 

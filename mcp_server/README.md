@@ -135,7 +135,7 @@ Custom tools (validation, multi-step, client-side logic) are still defined as `@
 | Monitoring | Duration clamped 1–365 days. |
 | Response size | Responses > 50KB are trimmed by default. `ToolSpec.trim=False` disables trimming per tool (e.g. `get_graph`, `list_components` for round-trip safety). |
 | Session diagnostics | `get_current_context` includes `session.session_id` and `session.storage_backend` ("redis" or "memory"). |
-| Agent tools | `add_tool_to_agent` rejects non-`function_callable`, duplicate, or integration-backed tools that it cannot wire safely. Use the display name from `search_components()`, not hard-coded names. |
+| Agent tools | `add_tool_to_agent` rejects non-`function_callable`, duplicate, or integration-backed tools that it cannot wire safely. Use the display name from `search_components()`, not hard-coded names. The AI Agent's `skip_tools_with_missing_oauth` parameter (default `True`) silently drops any tool whose OAuth connection is missing at agent startup. |
 | Model validation | `configure_agent` validates the requested model against the agent's available options and rejects unknown or deprecated names with a clear error listing valid choices. |
 | Source creation | `create_source` validates type-specific required fields and only supports `website`/`database` (developer+ role). |
 | Knowledge mutation | `update_document_chunks` is blocked by default unless the caller explicitly confirms a full replacement. |
