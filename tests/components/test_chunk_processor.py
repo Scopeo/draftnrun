@@ -5,13 +5,12 @@ Tests the ability to split input data, process each chunk with a graph runner, a
 
 import asyncio
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import networkx as nx
 import pytest
 
 from engine.components.chunk_processor import (
-    DEFAULT_CHUNK_PROCESSOR_TOOL_DESCRIPTION,
     ChunkProcessor,
     ChunkProcessorInputs,
     ChunkProcessorOutputs,
