@@ -295,3 +295,30 @@ def test_chunk_processor_injects_messages_for_chunks(mock_trace_manager):
     assert captured_calls[0]["messages"] == [{"role": "user", "content": "hello"}]
     assert captured_calls[1]["messages"] == [{"role": "user", "content": "world"}]
     assert result.output == "processed: hello, processed: world"
+
+
+def test_chunk_processor_handles_none_content(mock_trace_manager):
+    """Regression: None content in inner graph response must not raise TypeError in _merge."""
+
+    async def fake_run(data):
+        return AgentPayload(messages=[ChatMessage(role="assistant", content=None)])
+
+    mock_graph_runner = MagicMock()
+    mock_graph_runner.run = fake_run
+    mock_graph_runner.reset = MagicMock()
+
+    chunk_processor = ChunkProcessor(
+        trace_manager=mock_trace_manager,
+        graph_runner=mock_graph_runner,
+        component_attributes=ComponentAttributes(
+            component_instance_id=uuid.uuid4(),
+            component_instance_name="none_content_test",
+        ),
+        split_char=" ",
+        join_char=", ",
+    )
+
+    inputs = ChunkProcessorInputs(input="hello world")
+    result = asyncio.run(chunk_processor._run_without_io_trace(inputs, ctx={}))
+
+    assert result.output == ", "

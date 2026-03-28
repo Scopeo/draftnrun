@@ -140,7 +140,7 @@ class ChunkProcessor(Component):
             #   result: NodeData = await self._graph_runner.run(chunk_data)
             #   results.append(result.data.get("output", ""))
             result: AgentPayload = await self._graph_runner.run(chunk_data)
-            output = result.last_message.content if result.messages else ""
+            output = (result.last_message.content or "") if result.messages else ""
             results.append(output)
 
         return ChunkProcessorOutputs(output=self._merge(results))
