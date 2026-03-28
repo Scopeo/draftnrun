@@ -1,3 +1,7 @@
+from typing import Any, Type
+
+from pydantic import BaseModel
+
 from engine.components.component import Component
 from engine.components.types import AgentPayload, ComponentAttributes, ToolDescription
 from engine.graph_runner.graph_runner import GraphRunner
@@ -11,7 +15,33 @@ DEFAULT_GRAPH_RUNNER_BLOCK_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
+class GraphRunnerBlockInputs(BaseModel):
+    messages: Any = None
+
+    model_config = {"extra": "allow"}
+
+
+class GraphRunnerBlockOutputs(BaseModel):
+    output: Any = None
+
+    model_config = {"extra": "allow"}
+
+
 class GraphRunnerBlock(Component):
+    migrated = True
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return GraphRunnerBlockInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return GraphRunnerBlockOutputs
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "messages", "output": "output"}
+
     def __init__(
         self,
         trace_manager: TraceManager,
@@ -26,13 +56,24 @@ class GraphRunnerBlock(Component):
         )
         self._graph_runner = graph_runner
 
-    async def _run_without_io_trace(self, *inputs: AgentPayload, **kwargs) -> AgentPayload:
-        input_data: AgentPayload = inputs[0]
+    async def _run_without_io_trace(
+        self,
+        inputs: GraphRunnerBlockInputs,
+        ctx: dict,
+    ) -> GraphRunnerBlockOutputs:
+        input_data = inputs.model_dump(exclude_none=True)
 
-        result = await self._graph_runner.run(input_data)
+        # TODO (dynamic I/O): Remove this string wrapping once project_reference supports
+        # dynamic ports inherited from the inner project's schema. With dynamic ports,
+        # the canonical input will match the inner project's fields directly and callers
+        # will never coerce a string into the messages field.
+        if isinstance(input_data.get("messages"), str):
+            input_data["messages"] = [{"role": "user", "content": input_data["messages"]}]
 
-        # TODO: This should be enforced on the GraphRunner level
-        if not isinstance(result, AgentPayload):
-            raise ValueError("GraphRunnerBlock must return an AgentPayload")
-
-        return result
+        # TODO (legacy cleanup): GraphRunner.run() still returns AgentPayload via collect_legacy_outputs().
+        # Once GraphRunner returns NodeData instead, replace this block with:
+        #   result: NodeData = await self._graph_runner.run(input_data)
+        #   return GraphRunnerBlockOutputs(output=result.data.get("output"))
+        result: AgentPayload = await self._graph_runner.run(input_data)
+        output = result.last_message.content if result.messages else None
+        return GraphRunnerBlockOutputs(output=output)

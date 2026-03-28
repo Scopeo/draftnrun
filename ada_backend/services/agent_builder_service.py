@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ada_backend.context import set_current_project_id
 from ada_backend.database.models import PortSetupMode
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 from ada_backend.repositories.component_repository import (
@@ -360,7 +361,7 @@ async def instantiate_component(
         base_component = get_base_component_from_version(session, component_version_id)
         if base_component and base_component == "API Call":
             component_version_id = COMPONENT_VERSION_UUIDS["api_call_tool"]
-        # Create component instance using the component version ID
+        set_current_project_id(project_id)
         return await FACTORY_REGISTRY.create(
             component_version_id=component_version_id,
             **input_params,
