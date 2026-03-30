@@ -77,6 +77,7 @@ class GmailSenderInputs(BaseModel):
         },
     )
     mail_body: Optional[str] = Field(
+        default=None,
         description="The body of the email to be sent.",
         json_schema_extra={
             "is_tool_input": True,
