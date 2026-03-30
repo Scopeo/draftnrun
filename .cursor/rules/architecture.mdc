@@ -45,7 +45,7 @@ DAG of ComponentInstances connected via PortMappings. Data flows through FieldEx
 
 ### Analytics
 
-Mixpanel Python SDK (`mixpanel_analytics.py`). `non_breaking_track` decorator wraps every tracking function with try/except internally — never add try/except at call sites. Only active when `ENV == "production"` **and** `MIXPANEL_TOKEN` is set; otherwise all calls silently no-op (no errors). Events cover: identity, project/agent lifecycle, deployment, run completion, ingestion, cron, API keys, OAuth, and observability page views. New user-facing actions should get a corresponding `track_*` call in the **service layer** (not routers).
+Mixpanel Python SDK (`mixpanel_analytics.py`). `non_breaking_track` decorator wraps every tracking function with try/except internally — never add try/except at call sites. Lazy init via `_refresh_client()` (thread-safe, re-checks settings on every call). Only active when `ENV == "production"` **and** `MIXPANEL_TOKEN` is set; otherwise all calls silently no-op (no errors). Events cover: identity, project/agent lifecycle, deployment, run completion, ingestion, cron, API keys, OAuth, and observability page views. New user-facing actions should get a corresponding `track_*` call in the **service layer** (not routers). Integration tests (`@pytest.mark.mixpanel`) hit the real Mixpanel API and run in CI only when `mixpanel_analytics.py` or `tests/ada_backend/test_mixpanel_analytics.py` changes.
 
 ### MCP Server
 

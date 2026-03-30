@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       migration-or-seed-changed: ${{ steps.filter.outputs.migration-or-seed }}
+      mixpanel-changed: ${{ steps.filter.outputs.mixpanel }}
       traces-schema-touched: ${{ steps.traces-schema-check.outputs.traces-schema-touched }}
       migration-strategy: ${{ steps.classify-strategy.outputs.migration_strategy }}
       migration-has-unclassifiable: ${{ steps.classify-strategy.outputs.has_unclassifiable }}
@@ -36,6 +37,9 @@ jobs:
           filters: |
             migration-or-seed:
               - 'ada_backend/database/**'
+            mixpanel:
+              - 'ada_backend/mixpanel_analytics.py'
+              - 'tests/ada_backend/test_mixpanel_analytics.py'
 
       - name: Detect traces schema changes in Alembic migrations
         id: traces-schema-check
@@ -530,10 +534,24 @@ jobs:
             echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
             echo "===> Running tests for RUN_ID: ${{ env.RUN_ID }}"
-            uv run coverage run -m pytest --ignore=tests/external_api_calls --ignore=tests/qdrant --ignore=tests/e2b -m "not pdf_integration" --durations=10
+            uv run coverage run -m pytest --ignore=tests/external_api_calls --ignore=tests/qdrant --ignore=tests/e2b -m "not alembic and not pdf_integration and not mixpanel" --durations=10
             uv run coverage report -i
             uv run coverage html -i
             uv run coverage xml -i
+
+      - name: Run Mixpanel integration tests
+        if: needs.detect-changes.outputs.mixpanel-changed == 'true' || github.event_name == 'workflow_dispatch'
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
+            echo "===> Running Mixpanel integration tests"
+            uv run pytest --ignore=tests/external_api_calls --ignore=tests/qdrant --ignore=tests/e2b -m mixpanel --durations=10
 
       - name: Cleanup EC2 folder and Docker resources
         if: always()
