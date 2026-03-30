@@ -363,7 +363,7 @@ async def upload_source(
         )
     except Exception as e:
         error_msg = f"Failed to get data from the database: {str(e)}"
-        LOGGER.error(error_msg)
+        LOGGER.error(error_msg, exc_info=True)
         ingestion_task = IngestionTaskUpdate(
             id=task_id,
             source_name=source_name,
