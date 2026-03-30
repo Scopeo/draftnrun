@@ -24,8 +24,24 @@ from ada_backend.repositories.tool_port_configuration_repository import (
 )
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.services.entity_factory import get_llm_provider_and_model
+from engine.field_expressions.parser import parse_expression_flexible
+from engine.field_expressions.serializer import to_json as expression_to_json
 
 LOGGER = getLogger(__name__)
+
+
+def _normalize_expression_json(raw: object) -> dict | None:
+    """Convert a raw expression_json value to a proper AST dict.
+
+    The frontend may send a raw scalar (e.g. ``"pablo@draftnrun.com"``) instead
+    of the canonical ``{"type": "literal", "value": "..."}`` shape.  This
+    normalizes any supported value into a serialized AST dict before storage.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, (str, dict, list)):
+        return expression_to_json(parse_expression_flexible(raw))
+    return {"type": "literal", "value": str(raw)}
 
 
 def create_or_update_component_instance(
@@ -176,7 +192,7 @@ def create_or_update_component_instance(
                 is_required_override=tool_port_config.is_required_override,
                 custom_parameter_type=tool_port_config.custom_parameter_type,
                 json_schema_override=tool_port_config.json_schema_override,
-                expression_json=tool_port_config.expression_json,
+                expression_json=_normalize_expression_json(tool_port_config.expression_json),
                 custom_ui_component_properties=tool_port_config.custom_ui_component_properties,
                 id_=tool_port_config.id,
             )

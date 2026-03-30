@@ -18,7 +18,10 @@ from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.component_repository import get_instance_parameters_with_definition
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
-from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
+from ada_backend.services.pipeline.update_pipeline_service import (
+    _normalize_expression_json,
+    create_or_update_component_instance,
+)
 from tests.ada_backend.test_utils import create_project_and_graph_runner
 
 AI_AGENT_COMPONENT_ID = COMPONENT_UUIDS["base_ai_agent"]
@@ -128,3 +131,50 @@ def test_non_nullable_param_without_default_raises():
         ):
             with pytest.raises(ValueError, match="cannot be None"):
                 create_or_update_component_instance(session, instance_data, project_id)
+
+
+class TestNormalizeExpressionJson:
+    """Regression tests for DRA-1151: raw scalars in ToolPortConfiguration.expression_json."""
+
+    def test_none_returns_none(self):
+        assert _normalize_expression_json(None) is None
+
+    def test_raw_string_becomes_literal_ast(self):
+        result = _normalize_expression_json("pablo@draftnrun.com")
+        assert result == {"type": "literal", "value": "pablo@draftnrun.com"}
+
+    def test_raw_numeric_string_becomes_literal_ast(self):
+        result = _normalize_expression_json("42")
+        assert result == {"type": "literal", "value": "42"}
+
+    def test_proper_ast_dict_is_preserved(self):
+        ast_dict = {"type": "literal", "value": "hello"}
+        result = _normalize_expression_json(ast_dict)
+        assert result == {"type": "literal", "value": "hello"}
+
+    def test_var_ast_dict_is_preserved(self):
+        ast_dict = {"type": "var", "name": "my_secret"}
+        result = _normalize_expression_json(ast_dict)
+        assert result == {"type": "var", "name": "my_secret"}
+
+    def test_raw_dict_becomes_literal_json(self):
+        raw = {"foo": "bar"}
+        result = _normalize_expression_json(raw)
+        assert result == {"type": "literal", "value": '{"foo": "bar"}'}
+
+    def test_raw_list_becomes_literal_json(self):
+        raw = [1, 2, 3]
+        result = _normalize_expression_json(raw)
+        assert result == {"type": "literal", "value": "[1, 2, 3]"}
+
+    def test_raw_int_becomes_literal_ast(self):
+        result = _normalize_expression_json(42)
+        assert result == {"type": "literal", "value": "42"}
+
+    def test_raw_bool_becomes_literal_ast(self):
+        result = _normalize_expression_json(True)
+        assert result == {"type": "literal", "value": "True"}
+
+    def test_string_with_ref_becomes_ref_ast(self):
+        result = _normalize_expression_json("@{{comp.port}}")
+        assert result == {"type": "ref", "instance": "comp", "port": "port"}
