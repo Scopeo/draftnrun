@@ -236,12 +236,15 @@ class DBService(CloseMixin, ABC):
 
         LOGGER.info(f"Diff: {len(ids_to_add)} to add, {len(ids_to_update)} to update, {len(ids_to_delete)} to delete")
 
+        source_id_filter = f"source_id = '{source_id}'" if source_id else None
+
         if ids_to_delete:
             self.delete_rows_from_table(
                 table_name=table_name,
                 ids=list(ids_to_delete),
                 id_column_name=id_column_name,
                 schema_name=schema_name,
+                sql_query_filter=source_id_filter,
             )
 
         if ids_to_update:
@@ -250,6 +253,7 @@ class DBService(CloseMixin, ABC):
                 ids=list(ids_to_update),
                 id_column_name=id_column_name,
                 schema_name=schema_name,
+                sql_query_filter=source_id_filter,
             )
             self._fetch_and_insert_batched(ids_to_update, fetch_rows_fn, table_name, schema_name, batch_size)
 
@@ -263,6 +267,7 @@ class DBService(CloseMixin, ABC):
         ids: list[str | int],
         schema_name: Optional[str] = None,
         id_column_name: str = CHUNK_ID_COLUMN,
+        sql_query_filter: Optional[str] = None,
     ):
         pass
 

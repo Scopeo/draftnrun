@@ -333,9 +333,12 @@ class SnowflakeService(DBService):
         schema_name: str,
         ids: list[str | int],
         id_column_name: str = "FILE_ID",
+        sql_query_filter: Optional[str] = None,
     ):
         placeholders = ",".join(["%s"] * len(ids))
         query = f'DELETE FROM {schema_name}.{table_name} WHERE "{id_column_name}" IN ({placeholders})'
+        if sql_query_filter:
+            query += f" AND {sql_query_filter}"
         self.connector.cursor().execute(query, ids)
 
     def get_db_description(
