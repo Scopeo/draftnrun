@@ -34,7 +34,6 @@ from engine.components.errors import (
 )
 from engine.components.types import ComponentAttributes
 from engine.field_expressions.ast import ConcatNode, JsonBuildNode, LiteralNode, VarNode
-from engine.field_expressions.errors import FieldExpressionError
 from engine.field_expressions.serializer import from_json as expression_from_json
 from engine.graph_runner.field_expression_management import evaluate_expression
 
@@ -110,9 +109,10 @@ def _resolve_literal_field_expressions(
 ) -> dict[str, Any]:
     """Return pre-configured field expression values for a sub-tool component instance.
 
-    LiteralNode expressions are returned as-is. VarNode and JsonBuildNode expressions
-    are evaluated using the resolved variables dict (which contains decrypted secrets).
-    RefNode and ConcatNode expressions depend on runtime graph context and are skipped.
+    LiteralNode values are directly assigned to resolved_values[ipi.name].
+    VarNode, JsonBuildNode, and ConcatNode expressions are evaluated via
+    evaluate_expression when variables is not None. RefNode expressions depend
+    on runtime graph context and are not handled here.
 
     Only ports whose ToolPortConfiguration setup_mode is USER_SET (or tool-eligible
     ports without an explicit config, which default to AI_FILLED and are therefore
@@ -150,8 +150,8 @@ def _resolve_literal_field_expressions(
                 resolved_values[ipi.name] = evaluate_expression(
                     expr_ast, ipi.name, tasks={}, variables=variables
                 )
-            except FieldExpressionError:
-                pass
+            except Exception as exc:
+                LOGGER.warning("Failed to evaluate field expression for port %s: %s", ipi.name, exc)
 
     # 2. Resolve from ToolPortConfiguration.expression_json (custom ports + overrides)
     for config in configs:
@@ -176,8 +176,8 @@ def _resolve_literal_field_expressions(
         elif variables is not None:
             try:
                 resolved_values[port_name] = evaluate_expression(expr_ast, port_name, tasks={}, variables=variables)
-            except FieldExpressionError:
-                pass
+            except Exception as exc:
+                LOGGER.warning("Failed to evaluate field expression for port %s: %s", port_name, exc)
     return resolved_values
 
 
