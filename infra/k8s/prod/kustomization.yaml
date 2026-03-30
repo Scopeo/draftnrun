@@ -23,6 +23,7 @@ images:
 
 patches:
   - path: api-resources-patch.yaml
+  - path: webhook-worker-resources-patch.yaml
 
 labels:
   - pairs:
