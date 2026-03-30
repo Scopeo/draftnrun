@@ -104,7 +104,7 @@ def get_db_source_ids(
     if timestamp_column_name:
         columns.append(timestamp_column_name)
 
-    rows = sql_local_service.fetch_selected_columns(
+    id_timestamp_data = sql_local_service.fetch_selected_columns(
         table_name=table_name,
         columns=columns,
         schema_name=source_schema_name,
@@ -115,7 +115,7 @@ def get_db_source_ids(
         build_file_id(table_name, row[id_column_name]): _serialize_value(row.get(timestamp_column_name))
         if timestamp_column_name
         else None
-        for row in rows
+        for row in id_timestamp_data
     }
 
 
@@ -136,8 +136,8 @@ def fetch_db_source_chunks(
     if not file_ids:
         return []
 
-    raw_row_ids = [extract_row_id_from_file_id(fid, table_name) for fid in file_ids]
-    id_filter = f"{id_column_name} IN ({','.join(repr(str(rid)) for rid in raw_row_ids)})"
+    raw_row_ids = [extract_row_id_from_file_id(file_id, table_name) for file_id in file_ids]
+    id_filter = f"{id_column_name} IN ({','.join(repr(str(raw_id)) for raw_id in raw_row_ids)})"
 
     source_rows = sql_local_service.get_table_rows(
         table_name=table_name,
