@@ -28,6 +28,7 @@ class RunResponseSchema(BaseModel):
     trigger: CallType
     webhook_id: Optional[UUID] = None
     integration_trigger_id: Optional[UUID] = None
+    event_id: Optional[str] = None
     trace_id: Optional[str] = None
     result_id: Optional[str] = None
     error: Optional[dict] = None

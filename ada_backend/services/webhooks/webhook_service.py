@@ -1,12 +1,14 @@
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 from uuid import UUID
 
 from sqlalchemy.orm.session import Session
 
-from ada_backend.database.models import CallType, EnvType, Webhook, WebhookProvider
+from ada_backend.database.models import CallType, EnvType, RunStatus, Webhook, WebhookProvider
 from ada_backend.database.setup_db import get_db_session
+from ada_backend.repositories import run_repository
 from ada_backend.repositories.webhook_repository import get_enabled_webhook_triggers
 from ada_backend.schemas.webhook_schema import (
     FilterExpression,
@@ -20,7 +22,7 @@ from ada_backend.schemas.webhook_schema import (
 )
 from ada_backend.services.agent_runner_service import run_env_agent
 from ada_backend.services.errors import EnvironmentNotFound, MissingDataSourceError, MissingIntegrationError
-from ada_backend.services.run_service import run_with_tracking
+from ada_backend.services.run_service import create_run, run_with_tracking
 from ada_backend.services.webhooks.aircall_service import get_aircall_event_id
 from ada_backend.services.webhooks.errors import (
     WebhookEventIdNotFoundError,
@@ -134,6 +136,7 @@ async def process_webhook_event(
 
 
 async def process_direct_trigger_event(
+    session: Session,
     project_id: UUID,
     env: str,
     payload: Dict[str, Any],
@@ -148,18 +151,34 @@ async def process_direct_trigger_event(
 
     LOGGER.info(f"Direct trigger validated: event_id={event_id}, project_id={project_id}")
 
+    run = create_run(
+        session,
+        project_id=project_id,
+        trigger=CallType.WEBHOOK,
+        event_id=event_id,
+    )
+    run_id = str(run.id)
+
     queued = push_webhook_event(
         webhook_id=project_id,
         provider="direct_trigger",
         payload={**payload, "env": env},
         event_id=event_id,
+        run_id=run_id,
     )
 
     if not queued:
-        LOGGER.error(f"Failed to queue direct trigger: event_id={event_id}, project_id={project_id}")
+        LOGGER.error(f"Failed to queue direct trigger: event_id={event_id}, project_id={project_id}, run_id={run_id}")
+        run_repository.update_run_status(
+            session,
+            run_id=UUID(run_id),
+            status=RunStatus.FAILED,
+            error={"message": f"Failed to queue direct trigger event {event_id}", "type": "QueueFailure"},
+            finished_at=datetime.now(timezone.utc),
+        )
         raise WebhookServiceError(f"Failed to queue direct trigger event {event_id} for project {project_id}")
 
-    LOGGER.info(f"Direct trigger queued: event_id={event_id}, project_id={project_id}, env={env}")
+    LOGGER.info(f"Direct trigger queued: event_id={event_id}, project_id={project_id}, env={env}, run_id={run_id}")
 
     return WebhookProcessingResponseSchema(status=WebhookProcessingStatus.RECEIVED, processed=False, event_id=event_id)
 
@@ -238,7 +257,7 @@ async def execute_webhook(
     out: List[WebhookExecuteResult] = []
     for trigger in triggers:
         try:
-            r = await _run_trigger(trigger, input_base)
+            r = await _run_trigger(trigger, input_base, event_id=event_id)
             out.append(r)
         except Exception as e:
             LOGGER.exception("Unexpected error in execute_webhook", exc_info=e)
@@ -262,6 +281,7 @@ async def execute_webhook(
 async def _run_trigger(
     trigger: IntegrationTriggerResponse,
     input_base: Dict[str, Any],
+    event_id: str | None = None,
 ) -> WebhookExecuteResult:
     project_id = UUID(trigger.project_id)
     try:
@@ -270,6 +290,7 @@ async def _run_trigger(
             trigger=CallType.WEBHOOK,
             webhook_id=UUID(trigger.webhook_id),
             integration_trigger_id=UUID(trigger.id),
+            event_id=event_id,
             runner_coro=run_env_agent(
                 project_id=project_id,
                 input_data=input_base,

@@ -1493,6 +1493,7 @@ class Run(Base):
         nullable=True,
         index=True,
     )
+    event_id = mapped_column(String, nullable=True, index=True)
     result_id = mapped_column(String, nullable=True)
     error = mapped_column(JSONB, nullable=True)
     started_at = mapped_column(DateTime(timezone=True), nullable=True)
