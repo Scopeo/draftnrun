@@ -84,7 +84,7 @@ class GmailSenderV2(Component):
     def gmail_create_draft(
         self,
         email_subject: str,
-        email_body: str,
+        email_body: Optional[str] = None,
         email_recipients: Optional[list[str]] = None,
         cc: Optional[list[str]] = None,
         bcc: Optional[list[str]] = None,
@@ -113,7 +113,7 @@ class GmailSenderV2(Component):
     def gmail_send_email(
         self,
         email_subject: str,
-        email_body: str,
+        email_body: Optional[str] = None,
         email_recipients: Optional[list[str]] = None,
         cc: Optional[list[str]] = None,
         bcc: Optional[list[str]] = None,
