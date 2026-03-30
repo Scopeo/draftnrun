@@ -3,7 +3,7 @@ import json
 import logging
 import re
 import uuid
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -93,16 +93,6 @@ UNIFIED_QDRANT_SCHEMA = QdrantCollectionSchema(
 )
 
 
-def _make_json_safe(value):
-    if value is None:
-        return None
-    if isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, (datetime, date)):
-        return value.isoformat()
-    return str(value)
-
-
 def _build_flattened_metadata(row) -> str:
     """Build flattened metadata by merging metadata dict into top level."""
     metadata_dict = {
@@ -121,10 +111,7 @@ def _build_flattened_metadata(row) -> str:
     if isinstance(metadata_value, dict):
         metadata_dict.update(metadata_value)
 
-    return json.dumps(
-        {k: _make_json_safe(v) for k, v in metadata_dict.items()},
-        ensure_ascii=False,
-    )
+    return json.dumps(metadata_dict, ensure_ascii=False)
 
 
 _COLUMN_RENAME_MAP = {

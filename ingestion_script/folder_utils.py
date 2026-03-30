@@ -1,7 +1,19 @@
 import json
+from datetime import date, datetime
+from decimal import Decimal
 from uuid import UUID
 
-from ingestion_script.utils import METADATA_COLUMN_NAME, SOURCE_ID_COLUMN_NAME
+from ingestion_script.utils import METADATA_COLUMN_NAME
+
+
+def _json_safe(value):
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, (UUID, Decimal)):
+        return str(value)
+    return value
 
 
 def flatten_metadata_json(metadata_value):
@@ -30,19 +42,15 @@ def flatten_metadata_json(metadata_value):
 
 
 def prepare_rows_for_qdrant(rows: list[dict]) -> list[dict]:
-    """Prepare rows for Qdrant by flattening metadata JSON column."""
+    """Prepare rows for Qdrant by flattening metadata JSON column and ensuring JSON-safe values."""
     prepared_rows: list[dict] = []
     for row in rows:
-        new_row = dict(row)
-        if SOURCE_ID_COLUMN_NAME in new_row:
-            source_id_value = new_row[SOURCE_ID_COLUMN_NAME]
-            if isinstance(source_id_value, UUID):
-                new_row[SOURCE_ID_COLUMN_NAME] = str(source_id_value)
+        new_row = {k: _json_safe(v) for k, v in row.items()}
         if METADATA_COLUMN_NAME in new_row:
             flattened_metadata = flatten_metadata_json(new_row.pop(METADATA_COLUMN_NAME))
             for key, value in flattened_metadata.items():
                 if key not in new_row:
-                    new_row[key] = value
+                    new_row[key] = _json_safe(value)
         prepared_rows.append(new_row)
     return prepared_rows
 
