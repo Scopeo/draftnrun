@@ -55,7 +55,9 @@ def _serialize_value(value):
         return str(value)
     if isinstance(value, (bytes, bytearray)):
         return value.decode("utf-8", errors="replace")
-    return value
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
 
 
 def _validate_source_columns(
