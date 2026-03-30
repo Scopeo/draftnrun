@@ -33,7 +33,7 @@ from engine.components.errors import (
     MissingKeyPromptTemplateError,
 )
 from engine.components.types import ComponentAttributes
-from engine.field_expressions.ast import LiteralNode
+from engine.field_expressions.ast import ConcatNode, JsonBuildNode, LiteralNode, VarNode
 from engine.field_expressions.errors import FieldExpressionError
 from engine.field_expressions.serializer import from_json as expression_from_json
 from engine.graph_runner.field_expression_management import evaluate_expression
@@ -135,8 +135,6 @@ def _resolve_literal_field_expressions(
         if not (ipi.field_expression and ipi.field_expression.expression_json):
             continue
         expr_ast = expression_from_json(ipi.field_expression.expression_json)
-        if not isinstance(expr_ast, LiteralNode):
-            continue
 
         if ipi.port_definition_id:
             port_def = ipi.port_definition
@@ -145,7 +143,15 @@ def _resolve_literal_field_expressions(
                 if mode != PortSetupMode.USER_SET:
                     continue
 
-        resolved_values[ipi.name] = expr_ast.value
+        if isinstance(expr_ast, LiteralNode):
+            resolved_values[ipi.name] = expr_ast.value
+        elif isinstance(expr_ast, (VarNode, JsonBuildNode, ConcatNode)) and variables is not None:
+            try:
+                resolved_values[ipi.name] = evaluate_expression(
+                    expr_ast, ipi.name, tasks={}, variables=variables
+                )
+            except FieldExpressionError:
+                pass
 
     # 2. Resolve from ToolPortConfiguration.expression_json (custom ports + overrides)
     for config in configs:
