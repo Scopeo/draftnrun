@@ -110,7 +110,7 @@ def get_db_source_ids(
         schema_name=source_schema_name,
         sql_query_filter=sql_query_filter,
     )
-
+    # TODO: Have a sync_id column in the source table and use it to track the sync progress
     return {
         build_file_id(table_name, row[id_column_name]): _serialize_value(row.get(timestamp_column_name))
         if timestamp_column_name
