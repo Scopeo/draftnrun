@@ -1,17 +1,16 @@
 import asyncio
-import json
 import logging
 import re
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Callable, Optional, Union
 
 import httpx
-import pandas as pd
 
 from engine.components.types import SourceChunk
+from engine.datetime_utils import make_naive_utc, parse_datetime
 from engine.llm_services.llm_service import EmbeddingService
 from settings import settings
 
@@ -21,51 +20,6 @@ DEFAULT_MAX_CHUNKS = 10
 MAX_BATCH_SIZE_FOR_CHUNK_UPLOAD = 50
 DEFAULT_TIMEOUT = 20.0
 SOURCE_ID_COLUMN_NAME = "source_id"
-
-# Common datetime formats to try when parsing
-DATETIME_FORMATS = [
-    "%Y-%m-%d %H:%M:%S",
-    "%Y-%m-%d %H:%M:%S.%f",
-    "%Y-%m-%dT%H:%M:%S",
-    "%Y-%m-%dT%H:%M:%S.%f",
-    "%Y-%m-%dT%H:%M:%SZ",
-    "%Y-%m-%dT%H:%M:%S.%fZ",
-    "%Y-%m-%dT%H:%M:%S%z",
-    "%Y-%m-%dT%H:%M:%S.%f%z",
-    "%Y-%m-%d %H:%M:%S%z",
-    "%Y-%m-%d %H:%M:%S.%f%z",
-    "%Y-%m-%d",
-    "%d/%m/%Y",
-    "%m/%d/%Y",
-    "%Y/%m/%d",
-    "%d-%m-%Y",
-    "%m-%d-%Y",
-    "%Y-%m-%d %H:%M",
-    "%d/%m/%Y %H:%M:%S",
-    "%m/%d/%Y %H:%M:%S",
-    "%Y/%m/%d %H:%M:%S",
-    "%d-%m-%Y %H:%M:%S",
-    "%m-%d-%Y %H:%M:%S",
-]
-
-
-def parse_datetime(date_string: str) -> Optional[datetime]:
-    if not date_string:
-        return None
-
-    if isinstance(date_string, datetime):
-        return date_string
-
-    # Try each format until one works
-    for fmt in DATETIME_FORMATS:
-        try:
-            return datetime.strptime(date_string, fmt)
-        except ValueError:
-            continue
-
-    # If none of the formats work, log a warning and return None
-    LOGGER.warning(f"Could not parse datetime string: {date_string}")
-    return None
 
 
 class FieldSchema(Enum):
@@ -91,25 +45,17 @@ def map_internal_type_to_qdrant_field_schema(internal_type: str) -> FieldSchema:
     return type_mapping.get(internal_type, FieldSchema.KEYWORD)
 
 
-def map_pandas_dtype_to_qdrant_field_schema(pandas_dtype) -> FieldSchema:
-    """Map pandas dtype to Qdrant FieldSchema types."""
-    if pd.api.types.is_integer_dtype(pandas_dtype):
-        return FieldSchema.INTEGER
-
-    if pd.api.types.is_float_dtype(pandas_dtype):
-        return FieldSchema.FLOAT
-
-    if pd.api.types.is_bool_dtype(pandas_dtype):
-        return FieldSchema.BOOLEAN
-
-    if pd.api.types.is_datetime64_any_dtype(pandas_dtype):
+def map_sql_type_to_qdrant_field_schema(sql_type: str) -> FieldSchema:
+    """Map a SQL column type string (e.g. from SQLAlchemy reflection) to a Qdrant FieldSchema."""
+    t = sql_type.upper()
+    if "TIMESTAMP" in t or "DATETIME" in t or t == "DATE":
         return FieldSchema.DATETIME
-
-    if pd.api.types.is_string_dtype(pandas_dtype):
-        return FieldSchema.KEYWORD
-
-    # For object dtype and everything else, default to KEYWORD
-    # (covers VARIANT, ARRAY, JSONB, etc.)
+    if "INT" in t:
+        return FieldSchema.INTEGER
+    if any(x in t for x in ("DOUBLE", "FLOAT", "NUMERIC", "DECIMAL", "REAL")):
+        return FieldSchema.FLOAT
+    if "BOOL" in t:
+        return FieldSchema.BOOLEAN
     return FieldSchema.KEYWORD
 
 
@@ -223,6 +169,14 @@ class QdrantService:
             collection_name (str): The name of the collection.
         """
         return self._schemas.get(collection_name, self.default_schema)
+
+    @staticmethod
+    def _should_update(incoming_ts_raw, existing_ts_raw) -> bool:
+        incoming_dt = parse_datetime(incoming_ts_raw)
+        existing_dt = parse_datetime(existing_ts_raw)
+        if incoming_dt is not None and existing_dt is not None:
+            return make_naive_utc(incoming_dt) > make_naive_utc(existing_dt)
+        return False
 
     @classmethod
     def from_defaults(
@@ -932,30 +886,43 @@ class QdrantService:
         self,
         collection_name: str,
         filter: Optional[dict] = None,
+        with_payload: Union[bool, dict] = True,
     ) -> list[dict]:
-        return asyncio.run(self.get_points_async(collection_name, filter))
+        return asyncio.run(self.get_points_async(collection_name, filter, with_payload))
 
     async def get_points_async(
         self,
         collection_name: str,
         filter: Optional[dict] = None,
+        with_payload: Union[bool, dict] = True,
+        batch_size: Optional[int] = None,
     ) -> list[dict]:
-        payload = {
-            "offset": None,
-            "limit": max(
-                await self.count_points_async(
-                    filter=filter,
-                    collection_name=collection_name,
-                ),
-                1,
-            ),
-        }
-        if filter:
-            payload["filter"] = filter
-        response = await self._send_request_async(
-            method="POST", endpoint=f"collections/{collection_name}/points/scroll?wait=true", payload=payload
-        )
-        return response.get("result", {}).get("points", [])
+        if batch_size is None:
+            batch_size = settings.INGESTION_BATCH_SIZE
+        all_points: list[dict] = []
+        offset = None
+        while True:
+            request_body: dict[str, Any] = {
+                "limit": batch_size,
+                "with_payload": with_payload,
+                "with_vector": False,
+            }
+            if offset is not None:
+                request_body["offset"] = offset
+            if filter:
+                request_body["filter"] = filter
+            response = await self._send_request_async(
+                method="POST",
+                endpoint=f"collections/{collection_name}/points/scroll?wait=true",
+                payload=request_body,
+            )
+            result = response.get("result", {})
+            points = result.get("points", [])
+            all_points.extend(points)
+            offset = result.get("next_page_offset")
+            if not offset or not points:
+                break
+        return all_points
 
     def collection_exists(self, collection_name: str) -> bool:
         """
@@ -1162,126 +1129,96 @@ class QdrantService:
         collections = response.get("result", {}).get("collections", [])
         return [collection["name"] for collection in collections]
 
-    def get_collection_data(
+    async def sync_batched_with_collection_async(
         self,
+        incoming_ids_with_timestamp: dict[str, Optional[str]],
+        fetch_rows: Callable[[list[str]], list[dict]],
         collection_name: str,
         query_filter_qdrant: Optional[dict] = None,
-    ) -> pd.DataFrame:
-        return asyncio.run(self.get_collection_data_async(collection_name, query_filter_qdrant))
+        batch_size: Optional[int] = None,
+    ) -> bool:
+        """Diff-based sync that fetches full rows only for chunks that need insert/update.
 
-    async def get_collection_data_async(
-        self,
-        collection_name: str,
-        query_filter_qdrant: Optional[dict] = None,
-    ) -> pd.DataFrame:
-        if not await self.collection_exists_async(collection_name):
-            raise ValueError(f"Collection {collection_name} does not exist.")
-
+        Phase 1: diff incoming IDs+timestamps against Qdrant existing IDs+timestamps.
+        Phase 2: delete stale chunks.
+        Phase 3: fetch full rows via fetch_rows in batches and insert them.
+        """
+        if batch_size is None:
+            batch_size = settings.INGESTION_BATCH_SIZE
         schema = self._get_schema(collection_name)
+        chunk_id_field = schema.chunk_id_field
+        timestamp_field = schema.last_edited_ts_field
 
-        all_points = await self.get_points_async(
-            collection_name=collection_name,
-            filter=query_filter_qdrant,
-        )
-
-        rows = []
-        for point in all_points:
-            payload = point.get("payload", {})
-            row = {
-                schema.chunk_id_field: payload.get(schema.chunk_id_field),
-                schema.content_field: payload.get(schema.content_field),
-                schema.file_id_field: payload.get(schema.file_id_field),
-            }
-            if schema.url_id_field:
-                row[schema.url_id_field] = payload.get(schema.url_id_field)
-            if schema.file_id_field:
-                row[schema.file_id_field] = payload.get(schema.file_id_field)
-            if schema.last_edited_ts_field:
-                row[schema.last_edited_ts_field] = payload.get(schema.last_edited_ts_field)
-            if schema.source_id_field:
-                row[schema.source_id_field] = payload.get(schema.source_id_field)
-
-            # Add custom metadata fields if any
-            metadata_fields = schema.metadata_fields_to_keep or payload.keys()
-            for field in metadata_fields:
-                if field not in row:
-                    row[field] = payload.get(field)
-            rows.append(row)
-
-        return pd.DataFrame(rows)
-
-    def sync_df_with_collection(
-        self,
-        df: pd.DataFrame,
-        collection_name: str,
-        query_filter_qdrant: Optional[dict] = None,
-    ) -> bool:
-        return asyncio.run(self.sync_df_with_collection_async(df, collection_name, query_filter_qdrant))
-
-    async def sync_df_with_collection_async(
-        self,
-        df: pd.DataFrame,
-        collection_name: str,
-        query_filter_qdrant: Optional[dict] = None,
-    ) -> bool:
         collection_count = await self.count_points_async(
             collection_name=collection_name,
             filter=query_filter_qdrant,
         )
         if collection_count == 0:
-            await self.add_chunks_async(json.loads(df.to_json(orient="records", date_format="iso")), collection_name)
-            LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
-            return True
-
-        old_df = await self.get_collection_data_async(collection_name, query_filter_qdrant)
-
-        incoming_ids = set(df[self.default_schema.chunk_id_field])
-        existing_ids = set(old_df[self.default_schema.chunk_id_field])
-        ids_to_delete = existing_ids - incoming_ids
-        new_ids_to_add = incoming_ids - existing_ids
-
-        common_df = df.merge(old_df, on=self.default_schema.chunk_id_field, how="inner")
-
-        if query_filter_qdrant:
-            ids_to_update = set(common_df[self.default_schema.chunk_id_field])
-        elif self.default_schema.last_edited_ts_field:
-            ids_to_update = set(
-                common_df[
-                    common_df[self.default_schema.last_edited_ts_field + "_x"]
-                    > common_df[self.default_schema.last_edited_ts_field + "_y"]
-                ][self.default_schema.chunk_id_field]
-            )
+            ids_to_upsert = set(incoming_ids_with_timestamp.keys())
         else:
-            ids_to_update = set(common_df[self.default_schema.chunk_id_field])
-
-        ids_to_delete = ids_to_delete.union(ids_to_update)
-        ids_to_upsert = new_ids_to_add.union(ids_to_update)
-
-        if len(ids_to_delete) > 0:
-            await self.delete_chunks_async(
-                point_ids=list(ids_to_delete),
-                id_field=self.default_schema.chunk_id_field,
+            fields = [chunk_id_field] + ([timestamp_field] if timestamp_field else [])
+            points = await self.get_points_async(
                 collection_name=collection_name,
+                filter=query_filter_qdrant,
+                with_payload={"include": fields},
             )
-            LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
-        if len(ids_to_upsert) > 0:
-            chunks_to_upsert = df[df[self.default_schema.chunk_id_field].isin(ids_to_upsert)]
-            list_payloads = json.loads(chunks_to_upsert.to_json(orient="records", date_format="iso"))
-            await self.add_chunks_async(list_payloads, collection_name)
-            LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
+            existing_ids_with_timestamp: dict[str, Optional[str]] = {
+                point["payload"][chunk_id_field]: point["payload"].get(timestamp_field) if timestamp_field else None
+                for point in points
+                if chunk_id_field in point.get("payload", {})
+            }
 
-        n_points = await self.count_points_async(
+            ids_to_add = incoming_ids_with_timestamp.keys() - existing_ids_with_timestamp.keys()
+            ids_to_delete = existing_ids_with_timestamp.keys() - incoming_ids_with_timestamp.keys()
+            common_ids = incoming_ids_with_timestamp.keys() & existing_ids_with_timestamp.keys()
+
+            if not timestamp_field:
+                ids_to_update = common_ids
+            else:
+                ids_to_update = {
+                    chunk_id
+                    for chunk_id in common_ids
+                    if self._should_update(
+                        incoming_ids_with_timestamp[chunk_id],
+                        existing_ids_with_timestamp[chunk_id],
+                    )
+                }
+
+            ids_to_delete = ids_to_delete | ids_to_update
+            ids_to_upsert = ids_to_add | ids_to_update
+
+            if ids_to_delete:
+                await self.delete_chunks_async(
+                    point_ids=list(ids_to_delete),
+                    id_field=chunk_id_field,
+                    collection_name=collection_name,
+                )
+                LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
+
+        if ids_to_upsert:
+            upsert_list = list(ids_to_upsert)
+            for i in range(0, len(upsert_list), batch_size):
+                batch_ids = upsert_list[i : i + batch_size]
+                batch_rows = fetch_rows(batch_ids)
+                if not batch_rows:
+                    LOGGER.warning(f"Batch {i // batch_size + 1}: fetch_rows returned 0 rows for {len(batch_ids)} IDs")
+                    continue
+                success = await self.add_chunks_async(batch_rows, collection_name)
+                if not success:
+                    LOGGER.error(f"Batch {i // batch_size + 1}: add_chunks_async failed for {len(batch_rows)} rows")
+                    return False
+                LOGGER.info(f"Inserted batch {i // batch_size + 1} ({len(batch_rows)} rows) to Qdrant")
+
+        total_incoming = len(incoming_ids_with_timestamp)
+        point_count = await self.count_points_async(
             collection_name=collection_name,
             filter=query_filter_qdrant,
         )
-        if n_points != len(df):
+        if point_count != total_incoming:
             LOGGER.error(
-                (
-                    f"Sync failed : number of points in Qdrant ({n_points}) is not equal to the "
-                    f"number of points in the dataframe ({len(df)})"
-                )
+                f"Sync failed : number of points in Qdrant ({point_count}) is not equal to "
+                f"the number of incoming rows ({total_incoming})"
             )
             return False
-        else:
-            LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
-            return True
+        LOGGER.info(f"Sync successful : number of points in Qdrant is {point_count}")
+        return True

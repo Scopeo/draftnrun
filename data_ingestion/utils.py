@@ -70,14 +70,15 @@ def get_last_modification_time_from_local_file(file_path: str) -> str:
     return datetime.fromtimestamp(modification_time).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def read_chunk_table(table_name: str, db_service: DBService) -> dict:
+def read_chunk_table(table_name: str, db_service: DBService) -> list[dict]:
     """
     Read the chunk table from the database
     """
-    df = db_service.get_table_df(table_name=table_name)
-    if "bounding_boxes" in df.columns:
-        df["bounding_boxes"] = df["bounding_boxes"].apply(json.loads)
-    return df.to_dict(orient="records")
+    rows = db_service.get_table_rows(table_name=table_name)
+    for row in rows:
+        if "bounding_boxes" in row and isinstance(row["bounding_boxes"], str):
+            row["bounding_boxes"] = json.loads(row["bounding_boxes"])
+    return rows
 
 
 def sanitize_filename(filename, remove_extension_dot=True):

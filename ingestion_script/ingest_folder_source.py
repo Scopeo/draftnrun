@@ -20,7 +20,7 @@ from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import create_db_if_not_exists
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
-from ingestion_script.folder_utils import prepare_df_for_qdrant, sanitize_for_json
+from ingestion_script.folder_utils import prepare_rows_for_qdrant, sanitize_for_json
 from ingestion_script.utils import (
     CHUNK_ID_COLUMN_NAME,
     SOURCE_ID_COLUMN_NAME,
@@ -91,17 +91,20 @@ async def sync_chunks_to_qdrant(
     else:
         combined_filter = sql_query_filter
 
-    chunks_df = db_service.get_table_df(
+    id_rows = db_service.fetch_selected_columns(
         table_name,
+        columns=[CHUNK_ID_COLUMN_NAME, TIMESTAMP_COLUMN_NAME],
         schema_name=table_schema,
         sql_query_filter=combined_filter,
     )
+    incoming_ids_with_timestamp: dict[str, Optional[str]] = {
+        row[CHUNK_ID_COLUMN_NAME]: row.get(TIMESTAMP_COLUMN_NAME) for row in id_rows
+    }
+
     LOGGER.info(
-        f"Found {len(chunks_df)} chunks to sync to Qdrant from table {table_name} "
+        f"Found {len(incoming_ids_with_timestamp)} chunks to sync to Qdrant from table {table_name} "
         f"in schema {table_schema} with filter {combined_filter}"
     )
-
-    chunks_df = prepare_df_for_qdrant(chunks_df)
 
     if source_id:
         source_id_filter = {"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(source_id)}}
@@ -112,16 +115,27 @@ async def sync_chunks_to_qdrant(
     else:
         combined_filter_qdrant = query_filter_qdrant
 
-    LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunks_df)} rows")
+    LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(incoming_ids_with_timestamp)} rows")
     if not await qdrant_service.collection_exists_async(collection_name):
         await qdrant_service.create_collection_async(collection_name)
+        # TODO: Remove because create collection creates indexes
         await qdrant_service.create_index_if_needed_async(collection_name, SOURCE_ID_COLUMN_NAME, FieldSchema.KEYWORD)
         await qdrant_service.create_index_if_needed_async(collection_name, CHUNK_ID_COLUMN_NAME, FieldSchema.KEYWORD)
-    await qdrant_service.sync_df_with_collection_async(
-        df=chunks_df,
+    success = await qdrant_service.sync_batched_with_collection_async(
+        incoming_ids_with_timestamp=incoming_ids_with_timestamp,
+        fetch_rows=lambda ids: prepare_rows_for_qdrant(
+            db_service.get_rows_by_ids(
+                table_name=table_name,
+                chunk_ids=ids,
+                schema_name=table_schema,
+                sql_query_filter=combined_filter,
+            )
+        ),
         collection_name=collection_name,
         query_filter_qdrant=combined_filter_qdrant,
     )
+    if not success:
+        raise RuntimeError(f"Qdrant sync failed for collection '{collection_name}': point count mismatch after sync")
 
 
 async def ingest_google_drive_source(
@@ -448,10 +462,14 @@ async def _ingest_folder_source(
             all_chunks_df["url"] = all_chunks_df["url"].apply(sanitize_for_json)
 
         all_chunks_df_for_db = transform_chunks_df_for_unified_table(all_chunks_df, source_id)
+        all_rows = all_chunks_df_for_db.to_dict(orient="records")
+        rows_by_id = {row[CHUNK_ID_COLUMN_NAME]: row for row in all_rows}
+        ids_with_ts = {row[CHUNK_ID_COLUMN_NAME]: row.get(TIMESTAMP_COLUMN_NAME) for row in all_rows}
 
-        LOGGER.info(f"Syncing {len(all_chunks_df_for_db)} total chunks to db table {db_table_name}")
+        LOGGER.info(f"Syncing {len(all_rows)} total chunks to db table {db_table_name}")
         db_service.update_table(
-            new_df=all_chunks_df_for_db,
+            incoming_ids_with_timestamp=ids_with_ts,
+            fetch_rows_fn=lambda ids: [rows_by_id[id_] for id_ in ids if id_ in rows_by_id],
             table_name=db_table_name,
             table_definition=UNIFIED_TABLE_DEFINITION,
             id_column_name=CHUNK_ID_COLUMN_NAME,

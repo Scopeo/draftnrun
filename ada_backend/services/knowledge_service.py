@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 from uuid import UUID
 
-import pandas as pd
 import tiktoken
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -292,13 +291,14 @@ async def update_document_chunks_service(
     )
 
     try:
-        chunks_df = pd.DataFrame(chunks_dict)
-
-        await qdrant_service.sync_df_with_collection_async(
-            df=chunks_df,
+        chunk_ids = [row[CHUNK_ID_COLUMN_NAME] for row in chunks_dict]
+        schema = qdrant_service._get_schema(source.qdrant_collection_name)
+        await qdrant_service.delete_chunks_async(
+            point_ids=chunk_ids,
+            id_field=schema.chunk_id_field,
             collection_name=source.qdrant_collection_name,
-            query_filter_qdrant={"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(source_id)}}]},
         )
+        await qdrant_service.add_chunks_async(chunks_dict, source.qdrant_collection_name)
         LOGGER.info(f"Upserted {len(chunks)} chunks to Qdrant collection {source.qdrant_collection_name}")
     except Exception as e:
         LOGGER.error(

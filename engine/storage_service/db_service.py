@@ -1,12 +1,14 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Any, Callable, Iterator, Optional
 
 import pandas as pd
 
 from engine.components.close_mixin import CloseMixin
 from engine.components.component import ComponentAttributes
-from engine.storage_service.db_utils import CHUNK_ID_COLUMN, DBDefinition, convert_to_correct_pandas_type
+from engine.datetime_utils import make_naive_utc, parse_datetime
+from engine.storage_service.db_utils import CHUNK_ID_COLUMN, DBDefinition, cast_id_value
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -45,12 +47,40 @@ class DBService(CloseMixin, ABC):
         pass
 
     @abstractmethod
-    def get_table_df(
+    def get_table_df(self, table_name: str, schema_name: Optional[str] = None, sql_query_filter: Optional[str] = None):
+        pass
+
+    @abstractmethod
+    def iter_table_rows(
         self,
         table_name: str,
         schema_name: Optional[str] = None,
         sql_query_filter: Optional[str] = None,
-    ) -> pd.DataFrame:
+    ) -> Iterator[list[dict]]:
+        """Yield batches of rows as list[dict]."""
+        pass
+
+    @abstractmethod
+    def fetch_selected_columns(
+        self,
+        table_name: str,
+        columns: list[str],
+        schema_name: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
+    ) -> list[dict]:
+        """Return rows containing only the specified columns."""
+        pass
+
+    @abstractmethod
+    def get_rows_by_ids(
+        self,
+        table_name: str,
+        chunk_ids: list[str],
+        schema_name: Optional[str] = None,
+        id_column_name: str = CHUNK_ID_COLUMN,
+        sql_query_filter: Optional[str] = None,
+    ) -> list[dict]:
+        """Get multiple rows by their chunk IDs."""
         pass
 
     @abstractmethod
@@ -69,8 +99,27 @@ class DBService(CloseMixin, ABC):
         pass
 
     @abstractmethod
-    def insert_df_to_table(self, df: pd.DataFrame, table_name: str, schema_name: Optional[str] = None) -> None:
+    def insert_rows(self, rows: list[dict], table_name: str, schema_name: Optional[str] = None) -> None:
+        """Insert a list of row dicts into a table."""
         pass
+
+    @abstractmethod
+    def upsert_rows(
+        self,
+        table_name: str,
+        rows: list[dict],
+        schema_name: Optional[str] = None,
+        id_column_names: Optional[list[str]] = None,
+    ) -> None:
+        """Insert rows or update them on primary key conflict."""
+        pass
+
+    def insert_df_to_table(self, df, table_name: str, schema_name: Optional[str] = None) -> None:
+        """Convenience method that accepts a pandas DataFrame. Prefer insert_rows."""
+        if hasattr(df, "empty") and df.empty:
+            return
+        rows = df.to_dict(orient="records") if hasattr(df, "to_dict") else list(df)
+        self.insert_rows(rows, table_name, schema_name=schema_name)
 
     @abstractmethod
     def grant_select_on_table(
@@ -95,9 +144,42 @@ class DBService(CloseMixin, ABC):
         """
         pass
 
+    @abstractmethod
+    def _fetch_sql_query_as_dicts(self, query: str) -> list[dict]:
+        """Execute a SQL query and return the result as a list of dicts."""
+        pass
+
+    def _fetch_sql_query_as_dataframe(self, query: str):
+        """Convenience method that returns a pandas DataFrame. Prefer _fetch_sql_query_as_dicts."""
+        rows = self._fetch_sql_query_as_dicts(query)
+        return pd.DataFrame(rows)
+
+    def _fetch_and_upsert_batches(
+        self,
+        ids: set[str],
+        fetch_rows_fn: Callable[[set[str]], list[dict]],
+        table_name: str,
+        schema_name: Optional[str],
+        batch_size: int,
+        id_column_names: Optional[list[str]] = None,
+    ) -> None:
+        """Fetch rows via callback and upsert them in batches.
+
+        Uses upsert (ON CONFLICT DO UPDATE) instead of plain insert to be idempotent:
+        if the process crashes mid-batch and retries, already-inserted rows are updated
+        rather than causing a UniqueViolation.
+        """
+        id_list = list(ids)
+        for i in range(0, len(id_list), batch_size):
+            batch_ids = set(id_list[i : i + batch_size])
+            rows = fetch_rows_fn(batch_ids)
+            if rows:
+                self.upsert_rows(table_name, rows, schema_name=schema_name, id_column_names=id_column_names)
+
     def update_table(
         self,
-        new_df: pd.DataFrame,
+        incoming_ids_with_timestamp: dict[str, Any],
+        fetch_rows_fn: Callable[[set[str]], list[dict]],
         table_name: str,
         table_definition: DBDefinition,
         id_column_name: str,
@@ -106,113 +188,117 @@ class DBService(CloseMixin, ABC):
         append_mode: bool = True,
         sql_query_filter: Optional[str] = None,
         source_id: Optional[str] = None,
+        batch_size: Optional[int] = None,
     ) -> None:
         """
-        Update a table on Database with a new DataFrame.
-        If the table does not exist, it will be created.
+        Update a table with incoming data identified by IDs and timestamps.
+
+        Accepts a lightweight dict of {id: timestamp} for diffing and a callback
+        that is called only for IDs that actually need to be inserted or updated.
+        Creates the table if it does not exist.
         """
-        if schema_name:
-            target_table_name = f"{schema_name}.{table_name}"
-        else:
-            target_table_name = table_name
+        if not incoming_ids_with_timestamp:
+            LOGGER.info("Empty incoming IDs provided, skipping update")
+            return
 
-        table_exists = self.table_exists(table_name, schema_name=schema_name)
+        if batch_size is None:
+            batch_size = settings.INGESTION_BATCH_SIZE
 
-        if not table_exists:
+        target_table_name = f"{schema_name}.{table_name}" if schema_name else table_name
+
+        # Used by upsert_rows for ON CONFLICT — must match the composite PK (e.g. chunk_id + source_id)
+        primary_key_columns = [col.name for col in table_definition.columns if col.is_primary]
+
+        if not self.table_exists(table_name, schema_name=schema_name):
             LOGGER.info(f"Table {target_table_name} does not exist. Creating it...")
-            self.create_table(
-                table_name=table_name,
-                table_definition=table_definition,
-                schema_name=schema_name,
+            self.create_table(table_name=table_name, table_definition=table_definition, schema_name=schema_name)
+            self._fetch_and_upsert_batches(
+                set(incoming_ids_with_timestamp.keys()),
+                fetch_rows_fn,
+                table_name,
+                schema_name,
+                batch_size,
+                id_column_names=primary_key_columns,
             )
-            # Convert pandas NaT to None for datetime-like columns before insert
-            for col in new_df.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
-                new_df[col] = new_df[col].astype(object).where(new_df[col].notna(), None)
-            self.insert_df_to_table(df=new_df, table_name=table_name, schema_name=schema_name)
+            return
+
+        query = (
+            f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name}"
+            if timestamp_column_name
+            else f"SELECT {id_column_name} FROM {target_table_name}"
+        )
+        filters = []
+        if source_id is not None:
+            filters.append(f"source_id = '{source_id}'")
+        if sql_query_filter:
+            filters.append(f"({sql_query_filter})")
+        final_query = f"{query} WHERE {' AND '.join(filters)};" if filters else f"{query};"
+        existing_id_ts_pairs = self._fetch_sql_query_as_dicts(final_query)
+
+        existing_ids_with_ts = {
+            cast_id_value(pair[id_column_name], id_column_name, table_definition): pair.get(timestamp_column_name)
+            for pair in existing_id_ts_pairs
+        }
+
+        incoming_ids = set(incoming_ids_with_timestamp.keys())
+        existing_ids = set(existing_ids_with_ts.keys())
+        common_ids = incoming_ids & existing_ids
+        ids_to_add = incoming_ids - existing_ids
+
+        if timestamp_column_name:
+            ids_to_update = set()
+            for shared_id in common_ids:
+                incoming_dt = parse_datetime(incoming_ids_with_timestamp[shared_id])
+                existing_dt = parse_datetime(existing_ids_with_ts[shared_id])
+                if incoming_dt is not None and existing_dt is not None:
+                    if make_naive_utc(incoming_dt) > make_naive_utc(existing_dt):
+                        ids_to_update.add(shared_id)
+                elif incoming_ids_with_timestamp[shared_id] != existing_ids_with_ts[shared_id]:
+                    ids_to_update.add(shared_id)
         else:
-            # For checking existing IDs and preventing duplicates, get IDs as a set
-            # If source_id is provided, filter by source_id to avoid cross-source chunk_id collisions
-            all_existing_ids = self._fetch_column_as_set(
+            ids_to_update = common_ids
+
+        ids_to_delete = existing_ids - incoming_ids if not append_mode else set()
+
+        LOGGER.info(f"Diff: {len(ids_to_add)} to add, {len(ids_to_update)} to update, {len(ids_to_delete)} to delete")
+
+        source_id_filter = f"source_id = '{source_id}'" if source_id else None
+
+        if ids_to_delete:
+            self.delete_rows_from_table(
                 table_name=table_name,
-                column_name=id_column_name,
+                ids=list(ids_to_delete),
+                id_column_name=id_column_name,
                 schema_name=schema_name,
-                source_id=source_id,
+                sql_query_filter=source_id_filter,
             )
 
-            # For UPDATE operations, use the filtered query if provided
-            query = (
-                f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name}"
-                if timestamp_column_name
-                else f"SELECT {id_column_name} FROM {target_table_name}"
+        if ids_to_update:
+            self.delete_rows_from_table(
+                table_name=table_name,
+                ids=list(ids_to_update),
+                id_column_name=id_column_name,
+                schema_name=schema_name,
+                sql_query_filter=source_id_filter,
             )
-            final_query = f"{query} WHERE {sql_query_filter};" if sql_query_filter else f"{query};"
-            old_df = self._fetch_sql_query_as_dataframe(final_query)
-            old_df = convert_to_correct_pandas_type(old_df, id_column_name, table_definition)
+            self._fetch_and_upsert_batches(
+                ids_to_update,
+                fetch_rows_fn,
+                table_name,
+                schema_name,
+                batch_size,
+                id_column_names=primary_key_columns,
+            )
 
-            common_df = new_df.merge(old_df, on=id_column_name, how="inner")
-
-            if timestamp_column_name and not sql_query_filter:
-                ids_to_update = set(
-                    common_df[common_df[timestamp_column_name + "_x"] > common_df[timestamp_column_name + "_y"]][
-                        id_column_name
-                    ]
-                )
-            else:
-                ids_to_update = set(common_df[id_column_name])
-
-            LOGGER.info(f"Found {len(ids_to_update)} rows to update in the table")
-            updated_data = new_df[new_df[id_column_name].isin(ids_to_update)].copy()
-
-            if not updated_data.empty:
-                for col in updated_data.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
-                    updated_data[col] = updated_data[col].astype(object).where(updated_data[col].notna(), None)
-                self._refresh_table_from_df(
-                    df=updated_data,
-                    table_name=table_name,
-                    id_column=id_column_name,
-                    table_definition=table_definition,
-                    schema_name=schema_name,
-                )
-            else:
-                LOGGER.info("No rows to update, skipping update operation")
-
-            new_df["exists"] = new_df[id_column_name].isin(all_existing_ids)
-            LOGGER.info(f"Found {new_df['exists'][new_df['exists']].sum()} existing rows in the table")
-            new_data = new_df[~new_df["exists"]].copy()
-            new_data.drop(columns=["exists"], inplace=True)
-            # Convert pandas NaT to None for datetime-like columns before insert
-            for col in new_data.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
-                new_data[col] = new_data[col].astype(object).where(new_data[col].notna(), None)
-            self.insert_df_to_table(new_data, table_name, schema_name=schema_name)
-
-            if not append_mode:
-                filtered_existing_ids = set(old_df[id_column_name]) if len(old_df) > 0 else set()
-                new_ids_in_scope = set(new_df[id_column_name])
-                ids_to_delete = filtered_existing_ids - new_ids_in_scope
-
-                LOGGER.info(f"Found {len(ids_to_delete)} rows to delete in the filtered scope")
-                if ids_to_delete:
-                    self.delete_rows_from_table(
-                        table_name=table_name,
-                        ids=list(ids_to_delete),
-                        id_column_name=id_column_name,
-                        schema_name=schema_name,
-                    )
-
-    @abstractmethod
-    def _refresh_table_from_df(
-        self,
-        df: pd.DataFrame,
-        table_name: str,
-        id_column: str,
-        table_definition: DBDefinition,
-        schema_name: Optional[str] = None,
-    ) -> None:
-        pass
-
-    @abstractmethod
-    def _fetch_sql_query_as_dataframe(self, query: str) -> pd.DataFrame:
-        pass
+        if ids_to_add:
+            self._fetch_and_upsert_batches(
+                ids_to_add,
+                fetch_rows_fn,
+                table_name,
+                schema_name,
+                batch_size,
+                id_column_names=primary_key_columns,
+            )
 
     @abstractmethod
     def delete_rows_from_table(
@@ -221,6 +307,7 @@ class DBService(CloseMixin, ABC):
         ids: list[str | int],
         schema_name: Optional[str] = None,
         id_column_name: str = CHUNK_ID_COLUMN,
+        sql_query_filter: Optional[str] = None,
     ):
         pass
 
@@ -229,7 +316,7 @@ class DBService(CloseMixin, ABC):
         pass
 
     @abstractmethod
-    def run_query(self, query: str):
+    def run_query(self, query: str) -> pd.DataFrame:
         pass
 
     @abstractmethod

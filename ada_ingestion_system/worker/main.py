@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import resource
 import subprocess
 from pathlib import Path
 from typing import Any, Dict
@@ -39,6 +40,15 @@ def _is_real_error(line: str) -> bool:
 # Redis configuration
 STREAM_NAME = os.getenv("REDIS_INGESTION_STREAM", "ada_ingestion_stream")
 MAX_CONCURRENT_INGESTIONS = int(os.getenv("MAX_CONCURRENT_INGESTIONS", 2))
+SUBPROCESS_MEMORY_LIMIT_MB = int(os.getenv("SUBPROCESS_MEMORY_LIMIT_MB", "4096"))
+
+
+def _set_memory_limit() -> None:
+    """preexec_fn callback: cap virtual address space for the child process."""
+    if SUBPROCESS_MEMORY_LIMIT_MB > 0:
+        limit_bytes = SUBPROCESS_MEMORY_LIMIT_MB * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
+
 
 # Default API base URL - use HTTP for localhost
 DEFAULT_API_BASE_URL = "http://localhost:8000"
@@ -182,8 +192,9 @@ class Worker(BaseWorker):
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                env=env,  # Use our custom environment with the Fernet key
-                cwd=str(Path(__file__).parents[2]),  # Run from repository root
+                env=env,
+                cwd=str(Path(__file__).parents[2]),
+                preexec_fn=_set_memory_limit,
             )
 
             # Real-time logging - stream output as it happens
@@ -262,7 +273,7 @@ class Worker(BaseWorker):
                             stderr_lines.append(line.strip())
                         logger.log(_parse_log_level(line), "script_final_error output=%s", line.strip())
 
-            # Generate error summary if we have stderr content
+            error_summary = {}
             if stderr_lines:
                 stderr_text = "\n".join(stderr_lines)
                 error_summary = self._parse_error_message(stderr_text)
@@ -275,10 +286,20 @@ class Worker(BaseWorker):
 
             if process.returncode != 0:
                 logger.error("script_failed return_code=%s", process.returncode)
-                # Update task status to FAILED when subprocess fails
+
+                error_type = error_summary.get("error_type")
+                error_msg = error_summary.get("error_message")
+                solution = error_summary.get("possible_solution")
+                if error_type and error_msg:
+                    parts = [f"{error_type}: {error_msg}"]
+                    if solution:
+                        parts.append(f"Possible solution: {solution}")
+                    message = ". ".join(parts)
+                else:
+                    message = f"Ingestion subprocess failed with return code {process.returncode}"
 
                 result_metadata = TaskResultMetadata(
-                    message=f"Ingestion subprocess failed with return code {process.returncode}",
+                    message=message,
                     type=ResultType.ERROR,
                 )
                 self._update_task_status_to_failed(
@@ -339,7 +360,11 @@ class Worker(BaseWorker):
             result["error_message"] = "SSL connection failed to localhost"
             result["possible_solution"] = "Set API_BASE_URL environment variable to http://localhost:8000"
 
-        # Add new error pattern for module not found
+        elif "MemoryError" in stderr_text or "Cannot allocate memory" in stderr_text:
+            result["error_type"] = "Out of Memory"
+            result["error_message"] = "Subprocess exceeded memory limit"
+            result["possible_solution"] = "Reduce source size or increase SUBPROCESS_MEMORY_LIMIT_MB"
+
         elif "ModuleNotFoundError" in stderr_text:
             module_match = "No module named" in stderr_text
             if module_match:

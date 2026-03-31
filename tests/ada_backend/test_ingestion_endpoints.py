@@ -16,12 +16,7 @@ from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from ingestion_script.ingest_folder_source import ingest_local_folder_source
-from ingestion_script.utils import (
-    CHUNK_COLUMN_NAME,
-    FILE_ID_COLUMN_NAME,
-    SOURCE_ID_COLUMN_NAME,
-    get_sanitize_names,
-)
+from ingestion_script.utils import CHUNK_COLUMN_NAME, FILE_ID_COLUMN_NAME, SOURCE_ID_COLUMN_NAME, get_sanitize_names
 from settings import settings
 
 client = TestClient(app)
@@ -128,8 +123,8 @@ def test_ingest_local_folder_source():
     mock_qdrant_instance.collection_exists_async = AsyncMock(return_value=False)  # Collection doesn't exist initially
     mock_qdrant_instance.create_collection_async = AsyncMock()
     mock_qdrant_instance.create_index_if_needed_async = AsyncMock()
-    mock_qdrant_instance.sync_df_with_collection_async = AsyncMock()
-    mock_qdrant_instance.count_points = MagicMock(return_value=0)  # No points after deletion
+    mock_qdrant_instance.sync_batched_with_collection_async = AsyncMock()
+    mock_qdrant_instance.count_points = MagicMock(return_value=0)
 
     with (
         patch("ingestion_script.ingest_folder_source.create_source", side_effect=mock_create_source),
@@ -168,19 +163,21 @@ def test_ingest_local_folder_source():
             break
     assert found_source
 
-    # Verify Qdrant operations were called correctly
-    # sync_df_with_collection_async is called once after all files are processed (optimized batch sync)
-    mock_qdrant_instance.sync_df_with_collection_async.assert_called_once()
+    mock_qdrant_instance.sync_batched_with_collection_async.assert_called_once()
     mock_qdrant_instance.create_collection_async.assert_called_once()
 
     db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
-    chunk_df = db_service.get_table_df(
-        table_name=database_table_name,
-        schema_name=database_schema,
-    )
-    assert not chunk_df.empty
-    assert CHUNK_COLUMN_NAME in chunk_df.columns
-    assert FILE_ID_COLUMN_NAME in chunk_df.columns
+    chunk_rows = [
+        row
+        for row in db_service.get_table_rows(
+            table_name=database_table_name,
+            schema_name=database_schema,
+        )
+        if str(row.get(SOURCE_ID_COLUMN_NAME)) == test_source_id
+    ]
+    assert len(chunk_rows) > 0
+    assert CHUNK_COLUMN_NAME in chunk_rows[0]
+    assert FILE_ID_COLUMN_NAME in chunk_rows[0]
 
     delete_response = client.delete(f"/ingestion_task/{ORGANIZATION_ID}/{task_id}", headers=HEADERS_JWT)
     assert delete_response.status_code == 204
@@ -201,13 +198,11 @@ def test_ingest_local_folder_source():
         table_name=database_table_name,
         schema_name=database_schema,
     )
-    # Check that rows for this source_id have been deleted from the database
-    remaining_chunks_df = db_service.get_table_df(
+    remaining_rows = db_service.get_table_rows(
         table_name=database_table_name,
         schema_name=database_schema,
     )
-    if not remaining_chunks_df.empty:
-        source_chunks = remaining_chunks_df[remaining_chunks_df[SOURCE_ID_COLUMN_NAME] == test_source_id]
-        assert source_chunks.empty, f"Expected no chunks for source {test_source_id}, but found {len(source_chunks)}"
+    source_rows = [r for r in remaining_rows if str(r.get(SOURCE_ID_COLUMN_NAME)) == test_source_id]
+    assert len(source_rows) == 0, f"Expected no chunks for source {test_source_id}, but found {len(source_rows)}"
 
     assert not file_exists_in_bucket(s3_client=S3_CLIENT, bucket_name=settings.S3_BUCKET_NAME, key=sanitized_file_name)

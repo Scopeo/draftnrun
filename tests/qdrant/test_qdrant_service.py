@@ -1,12 +1,24 @@
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
-
-import pandas as pd
 
 from engine.components.types import SourceChunk
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import FieldSchema, QdrantCollectionSchema, QdrantService
 from tests.mocks.trace_manager import MockTraceManager
+
+
+def _sync_batched(qdrant_service: QdrantService, rows: list[dict], collection_name: str) -> bool:
+    rows_by_id = {row["chunk_id"]: row for row in rows}
+    incoming_ids = {row["chunk_id"]: row.get("last_edited_ts") for row in rows}
+    return asyncio.run(
+        qdrant_service.sync_batched_with_collection_async(
+            incoming_ids_with_timestamp=incoming_ids,
+            fetch_rows=lambda ids: [rows_by_id[chunk_id] for chunk_id in ids if chunk_id in rows_by_id],
+            collection_name=collection_name,
+        )
+    )
+
 
 TEST_COLLECTION_NAME = f"test_agentic_ci_collection_{uuid4()}"
 
@@ -80,7 +92,7 @@ def test_qdrant_service():
     )
     assert retrieved_chunks[0] == correct_chunk
 
-    new_df_1 = pd.DataFrame([
+    new_rows_1 = [
         {
             "chunk_id": "1",
             "content": "chunk1",
@@ -95,15 +107,18 @@ def test_qdrant_service():
             "file_id": "file_id2",
             "last_edited_ts": "2025-01-2 10:40:40",
         },
-    ])
-    qdrant_agentic_service.sync_df_with_collection(new_df_1, TEST_COLLECTION_NAME)
+    ]
+    _sync_batched(qdrant_agentic_service, new_rows_1, TEST_COLLECTION_NAME)
     assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 2
-    synced_df = qdrant_agentic_service.get_collection_data(TEST_COLLECTION_NAME)
-    synced_df.sort_values(by="chunk_id", inplace=True)
-    synced_df.reset_index(drop=True, inplace=True)
-    assert synced_df.equals(new_df_1)
+    synced_points = qdrant_agentic_service.get_points(TEST_COLLECTION_NAME)
+    synced_payloads = sorted([p["payload"] for p in synced_points], key=lambda r: r["chunk_id"])
+    expected_by_id = {r["chunk_id"]: r for r in new_rows_1}
+    for payload in synced_payloads:
+        expected = expected_by_id[payload["chunk_id"]]
+        for key in expected:
+            assert payload[key] == expected[key]
 
-    new_df_2 = pd.DataFrame([
+    new_rows_2 = [
         {
             "chunk_id": "1",
             "content": "chunk1",
@@ -118,13 +133,16 @@ def test_qdrant_service():
             "url": "https//www.dummy3.com",
             "last_edited_ts": "2025-01-2 10:40:40",
         },
-    ])
-    qdrant_agentic_service.sync_df_with_collection(new_df_2, TEST_COLLECTION_NAME)
+    ]
+    _sync_batched(qdrant_agentic_service, new_rows_2, TEST_COLLECTION_NAME)
     assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 2
-    synced_df = qdrant_agentic_service.get_collection_data(TEST_COLLECTION_NAME)
-    synced_df.sort_values(by="chunk_id", inplace=True)
-    synced_df.reset_index(drop=True, inplace=True)
-    assert synced_df.equals(new_df_2)
+    synced_points = qdrant_agentic_service.get_points(TEST_COLLECTION_NAME)
+    synced_payloads = sorted([p["payload"] for p in synced_points], key=lambda r: r["chunk_id"])
+    expected_by_id = {r["chunk_id"]: r for r in new_rows_2}
+    for payload in synced_payloads:
+        expected = expected_by_id[payload["chunk_id"]]
+        for key in expected:
+            assert payload[key] == expected[key]
 
     assert qdrant_agentic_service.delete_collection(TEST_COLLECTION_NAME)
     assert not qdrant_agentic_service.collection_exists(TEST_COLLECTION_NAME)

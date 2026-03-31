@@ -1,7 +1,6 @@
 import logging
-from typing import Optional
+from typing import Iterable, Optional
 
-import pandas as pd
 from pydantic import BaseModel, field_validator
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine.url import make_url
@@ -12,20 +11,15 @@ CREATED_AT_COLUMN = "created_at"
 UPDATED_AT_COLUMN = "updated_at"
 
 LOGGER = logging.getLogger(__name__)
-PANDAS_DTYPE_MAPPING: dict[str, str] = {
-    "STRING": "str",
-    "VARCHAR": "str",
-    "TEXT": "str",
-    "TIMESTAMP": "datetime64[ns]",
-    "DATETIME": "datetime64[ns]",
-    "INTEGER": "int64",
-    "FLOAT": "float64",
-    "BOOLEAN": "bool",
-    "ARRAY": "object",
-    "VARIANT": "object",
-    "JSONB": "object",
-    "TIMESTAMP_TZ": "datetime64[ns]",
-    "UUID": "str",
+
+PYTHON_TYPE_CAST: dict[str, type] = {
+    "STRING": str,
+    "VARCHAR": str,
+    "TEXT": str,
+    "INTEGER": int,
+    "FLOAT": float,
+    "BOOLEAN": bool,
+    "UUID": str,
 }
 
 
@@ -89,20 +83,24 @@ def create_db_if_not_exists(target_db_url: str, admin_db_name: str = "postgres")
             print(f"Database '{target_db_name}' already exists.")
 
 
-def convert_to_correct_pandas_type(df: pd.DataFrame, column_name: str, db_definition: DBDefinition) -> pd.DataFrame:
-    column_type = next((column.type for column in db_definition.columns if column.name == column_name), None)
+def cast_id_value(value, column_name: str, db_definition: DBDefinition):
+    """Cast *value* to the Python type that matches the DB column definition."""
+    column_type = next((col.type for col in db_definition.columns if col.name == column_name), None)
     if column_type is not None:
-        pandas_dtype = PANDAS_DTYPE_MAPPING.get(column_type, "object")
-        df[column_name] = df[column_name].astype(pandas_dtype)
-    return df
+        python_type = PYTHON_TYPE_CAST.get(column_type)
+        if python_type is not None and value is not None:
+            return python_type(value)
+    return value
 
 
-def check_columns_matching_between_data_and_database_table(columns_data, table_description):
+def check_columns_matching_between_data_and_database_table(
+    columns_data: Iterable[str],
+    table_description: list[dict],
+) -> None:
     AUTO_MANAGED_COLUMNS = {PROCESSED_DATETIME_FIELD, CREATED_AT_COLUMN, UPDATED_AT_COLUMN}
 
-    column_table = [column["name"].lower() for column in table_description]
-    columns_data = set(columns_data) - AUTO_MANAGED_COLUMNS
-    column_table = set(column_table) - AUTO_MANAGED_COLUMNS
-    if set(columns_data) != set(column_table):
-        LOGGER.error(f"Columns in data and table do not match : data {columns_data}, table {column_table}")
+    table_columns = {column["name"].lower() for column in table_description} - AUTO_MANAGED_COLUMNS
+    data_columns = set(columns_data) - AUTO_MANAGED_COLUMNS
+    if data_columns != table_columns:
+        LOGGER.error(f"Columns in data and table do not match : data {data_columns}, table {table_columns}")
         raise ValueError("Columns in data and table do not match")

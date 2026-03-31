@@ -2,7 +2,7 @@ import json
 import logging
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Iterator, Optional, Type
 
 import pandas as pd
 import sqlalchemy
@@ -182,12 +182,7 @@ class SQLLocalService(DBService):
         LOGGER.info(f"Dropping table {table_name} from schema {schema_name}")
         table.drop(self.engine)
 
-    def get_table_df(
-        self,
-        table_name: str,
-        schema_name: Optional[str] = None,
-        sql_query_filter: Optional[str] = None,
-    ) -> pd.DataFrame:
+    def get_table_df(self, table_name: str, schema_name: Optional[str] = None, sql_query_filter: Optional[str] = None):
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
             stmt = sqlalchemy.select(table)
@@ -195,6 +190,64 @@ class SQLLocalService(DBService):
                 stmt = stmt.where(text(sql_query_filter))
             result = session.execute(stmt)
             return pd.DataFrame(result.fetchall(), columns=result.keys())
+
+    def iter_table_rows(
+        self,
+        table_name: str,
+        schema_name: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
+    ) -> Iterator[list[dict]]:
+        """Yield table rows as list[dict] in a single chunk."""
+        table = self.get_table(table_name, schema_name)
+        with self.Session() as session:
+            stmt = sqlalchemy.select(table)
+            if sql_query_filter:
+                stmt = stmt.where(text(sql_query_filter))
+            result = session.execute(stmt)
+            keys = list(result.keys())
+            rows = result.fetchall()
+            if rows:
+                yield [dict(zip(keys, row)) for row in rows]
+
+    def fetch_selected_columns(
+        self,
+        table_name: str,
+        columns: list[str],
+        schema_name: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
+    ) -> list[dict]:
+        """Return rows containing only the specified columns."""
+        table = self.get_table(table_name, schema_name)
+        selected_cols = [table.c[col] for col in columns]
+        with self.Session() as session:
+            stmt = sqlalchemy.select(*selected_cols)
+            if sql_query_filter:
+                stmt = stmt.where(text(sql_query_filter))
+            result = session.execute(stmt)
+            keys = list(result.keys())
+            return [dict(zip(keys, row)) for row in result.fetchall()]
+
+    def get_table_rows(
+        self,
+        table_name: str,
+        schema_name: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
+    ) -> list[dict]:
+        """Return all rows as list[dict]. Prefer iter_table_rows for large tables."""
+        all_rows: list[dict] = []
+        for batch in self.iter_table_rows(
+            table_name,
+            schema_name=schema_name,
+            sql_query_filter=sql_query_filter,
+        ):
+            all_rows.extend(batch)
+        return all_rows
+
+    def get_column_info(self, table_name: str, schema_name: Optional[str] = None) -> dict[str, str]:
+        """Return {column_name: sql_type_string} for the table."""
+        inspector = sqlalchemy.inspect(self.engine)
+        columns = inspector.get_columns(table_name, schema=schema_name)
+        return {col["name"]: str(col["type"]) for col in columns}
 
     def describe_table(self, table_name: str, schema_name: Optional[str] = None) -> list[dict]:
         table_name = table_name.lower()
@@ -259,46 +312,48 @@ class SQLLocalService(DBService):
             session.execute(stmt)
             session.commit()
 
-    def _parse_jsonb_columns(self, df: pd.DataFrame, jsonb_columns: set[str]) -> pd.DataFrame:
-        df = df.copy()
-        for col_name in jsonb_columns:
-            if col_name in df.columns:
+    @staticmethod
+    def _parse_jsonb_value(value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                return value if value else None
+        return value
 
-                def parse_jsonb_value(value):
-                    if pd.isna(value):
-                        return None
-                    if isinstance(value, str):
-                        try:
-                            return json.loads(value)
-                        except (json.JSONDecodeError, TypeError):
-                            # If it's not valid JSON, return as-is (might be None or empty)
-                            return value if value else None
-                    # If it's already a dict/list, return as-is
-                    return value
+    @staticmethod
+    def _parse_jsonb_in_rows(rows: list[dict], jsonb_columns: set[str]) -> list[dict]:
+        if not jsonb_columns:
+            return rows
+        parsed_rows = []
+        for row in rows:
+            new_row = dict(row)
+            for column_name in jsonb_columns:
+                if column_name in new_row:
+                    new_row[column_name] = SQLLocalService._parse_jsonb_value(new_row[column_name])
+            parsed_rows.append(new_row)
+        return parsed_rows
 
-                df[col_name] = df[col_name].apply(parse_jsonb_value)
-        return df
-
-    def insert_df_to_table(
+    def insert_rows(
         self,
-        df: pd.DataFrame,
+        rows: list[dict],
         table_name: str,
         schema_name: Optional[str] = None,
-    ):
-        # Skip if dataframe is empty
-        if df.empty:
-            LOGGER.info("Empty DataFrame provided, skipping insert")
+    ) -> None:
+        if not rows:
+            LOGGER.info("Empty row list provided, skipping insert")
             return
         table = self.get_table(table_name, schema_name)
         description_table = self.describe_table(table_name, schema_name)
-        check_columns_matching_between_data_and_database_table(df.columns, description_table)
+        check_columns_matching_between_data_and_database_table(rows[0].keys(), description_table)
 
         jsonb_columns = {col["name"] for col in description_table if "jsonb" in str(col.get("type", "")).lower()}
-        df = self._parse_jsonb_columns(df, jsonb_columns)
+        rows = self._parse_jsonb_in_rows(rows, jsonb_columns)
 
         with self.Session() as session:
-            data = df.to_dict(orient="records")
-            session.execute(table.insert(), data)
+            session.execute(table.insert(), rows)
             session.commit()
 
     def grant_select_on_table(
@@ -312,8 +367,10 @@ class SQLLocalService(DBService):
         with self.execute_query(f"GRANT SELECT ON {qualified_table_name} TO {role}"):
             pass
 
-    def _fetch_sql_query_as_dataframe(self, query: str) -> pd.DataFrame:
-        return pd.read_sql(query, self.engine)
+    def _fetch_sql_query_as_dicts(self, query: str) -> list[dict]:
+        with self.Session() as session:
+            result = session.execute(text(query))
+            return [dict(row._mapping) for row in result.fetchall()]
 
     def _fetch_column_as_set(
         self,
@@ -333,64 +390,6 @@ class SQLLocalService(DBService):
                 stmt = stmt.where(table.c["source_id"] == source_id)
             result = session.execute(stmt)
             return set(result.scalars().all())
-
-    def _refresh_table_from_df(
-        self,
-        df: pd.DataFrame,
-        table_name: str,
-        id_column: str,
-        table_definition: DBDefinition,
-        schema_name: Optional[str] = None,
-    ) -> None:
-        """
-        Update a table based on the `id_column` column.
-        It only updates ids that already exist in the table.
-        df is the DataFrame with ONLY the updated values.
-        """
-        table = self.get_table(table_name, schema_name)
-        sql_alchemy_columns = self.convert_table_definition_to_sqlalchemy(table_definition)
-
-        jsonb_columns = {col.name for col in table_definition.columns if col.type in ("JSONB", "VARIANT")}
-        df = self._parse_jsonb_columns(df, jsonb_columns)
-
-        # Remove the temporary table if it exists in metadata
-        if "updated_values" in self.metadata.tables:
-            self.metadata.remove(self.metadata.tables["updated_values"])
-
-        # Create new temporary table
-        temp_table = sqlalchemy.Table("updated_values", self.metadata, *sql_alchemy_columns)
-
-        try:
-            # Drop the table if it exists in the database
-            temp_table.drop(self.engine, checkfirst=True)
-            temp_table.create(self.engine)
-            LOGGER.info(f"Temporary table created to update {table_name}")
-
-            with self.Session() as session:
-                session.execute(temp_table.insert(), df.to_dict(orient="records"))
-                session.commit()
-
-            # Exclude _processed_datetime field from the temp table values, but set it explicitly to current timestamp
-            columns_to_update = {
-                col.name: temp_table.c[col.name]
-                for col in table.columns
-                if col.name != PROCESSED_DATETIME_FIELD and col.name in temp_table.c
-            }
-
-            columns_to_update = self.add_processed_datetime_if_exists(table, columns_to_update)
-
-            update_stmt = table.update().where(table.c[id_column] == temp_table.c[id_column]).values(columns_to_update)
-
-            with self.Session() as session:
-                session.execute(update_stmt)
-                session.commit()
-        finally:
-            # Always try to drop the temporary table and remove it from metadata
-            try:
-                temp_table.drop(self.engine, checkfirst=True)
-                self.metadata.remove(temp_table)
-            except Exception as e:
-                LOGGER.warning(f"Failed to cleanup temporary table: {str(e)}")
 
     def delete_rows_from_table(
         self,
@@ -633,6 +632,10 @@ class SQLLocalService(DBService):
         for id_column_name in id_column_names:
             if id_column_name not in table.c:
                 raise ValueError(f"Column '{id_column_name}' not found in table '{table_name}'.")
+
+        description_table = self.describe_table(table_name, schema_name)
+        jsonb_columns = {col["name"] for col in description_table if "jsonb" in str(col.get("type", "")).lower()}
+        rows = self._parse_jsonb_in_rows(rows, jsonb_columns)
 
         row_keys: set[str] = set().union(*(r.keys() for r in rows))
         excluded_cols = set(id_column_names)

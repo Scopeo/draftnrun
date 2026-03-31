@@ -114,49 +114,47 @@ def _build_flattened_metadata(row) -> str:
     return json.dumps(metadata_dict, ensure_ascii=False)
 
 
-def transform_chunks_df_for_unified_table(
-    chunks_df: pd.DataFrame,
+_COLUMN_RENAME_MAP = {
+    "chunk_id": CHUNK_ID_COLUMN_NAME,
+    "file_id": FILE_ID_COLUMN_NAME,
+    "document_title": DOCUMENT_TITLE_COLUMN_NAME,
+    "url": URL_COLUMN_NAME,
+    "content": CHUNK_COLUMN_NAME,
+    "last_edited_ts": TIMESTAMP_COLUMN_NAME,
+}
+
+
+def transform_chunks_for_unified_table(
+    chunks: list[dict],
     source_id: UUID,
-) -> pd.DataFrame:
+) -> list[dict]:
     """
-    Transform a raw chunks DataFrame into the unified table schema format.
+    Transform raw chunk dicts into the unified table schema format.
 
     This function:
     1. Builds flattened metadata from document_title, url, and existing metadata
     2. Renames columns to match unified table schema
     3. Adds source_id column
     4. Returns only the required columns for the database
-
-    Args:
-        chunks_df: Raw DataFrame from document chunking (with columns like file_id,
-                   chunk_id, content, document_title, url, metadata, etc.)
-        source_id: UUID of the source to associate with all chunks
-
-    Returns:
-        DataFrame with only the unified table columns ready for database insertion
     """
-    df = chunks_df.copy()
+    result: list[dict] = []
+    source_id_str = str(source_id)
+    for row in chunks:
+        new_row: dict = {}
+        for original_key, value in row.items():
+            mapped_key = _COLUMN_RENAME_MAP.get(original_key, original_key)
+            new_row[mapped_key] = value
+        new_row[METADATA_COLUMN_NAME] = _build_flattened_metadata(new_row)
+        new_row[SOURCE_ID_COLUMN_NAME] = source_id_str
+        result.append({column: new_row.get(column) for column in UNIFIED_TABLE_COLUMNS})
+    return result
 
-    # Build flattened metadata JSON from document_title, url, and existing metadata
-    df[METADATA_COLUMN_NAME] = df.apply(_build_flattened_metadata, axis=1)
 
-    # Rename columns to match unified table schema
-    df = df.rename(
-        columns={
-            "chunk_id": CHUNK_ID_COLUMN_NAME,
-            "file_id": FILE_ID_COLUMN_NAME,
-            "document_title": DOCUMENT_TITLE_COLUMN_NAME,
-            "url": URL_COLUMN_NAME,
-            "content": CHUNK_COLUMN_NAME,
-            "last_edited_ts": TIMESTAMP_COLUMN_NAME,
-        }
-    )
-
-    # Add source_id column
-    df[SOURCE_ID_COLUMN_NAME] = str(source_id)
-
-    # Select only the required columns for the database
-    return df[UNIFIED_TABLE_COLUMNS]
+def transform_chunks_df_for_unified_table(chunks_df, source_id: UUID):
+    """Legacy wrapper that accepts a pandas DataFrame and returns a DataFrame."""
+    rows = chunks_df.to_dict(orient="records")
+    transformed = transform_chunks_for_unified_table(rows, source_id)
+    return pd.DataFrame(transformed)
 
 
 def get_sanitize_names(
@@ -365,7 +363,7 @@ async def upload_source(
         )
     except Exception as e:
         error_msg = f"Failed to get data from the database: {str(e)}"
-        LOGGER.error(error_msg)
+        LOGGER.error(error_msg, exc_info=True)
         ingestion_task = IngestionTaskUpdate(
             id=task_id,
             source_name=source_name,
@@ -613,9 +611,6 @@ def map_source_filter_to_unified_table_filter(
 
         if col_lower not in unified_columns:
             replacement = f"{METADATA_COLUMN_NAME}->>'{col}'"
-            mapped_filter = replace_column_name(mapped_filter, col, replacement)
-        elif timestamp_column_name and col_lower == timestamp_column_name.lower():
-            replacement = TIMESTAMP_COLUMN_NAME
             mapped_filter = replace_column_name(mapped_filter, col, replacement)
 
     return mapped_filter
