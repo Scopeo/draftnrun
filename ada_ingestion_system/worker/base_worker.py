@@ -178,7 +178,7 @@ class BaseWorker:
                 consumer_name,
                 _PENDING_IDLE_THRESHOLD_MS,
                 start_id="0-0",
-                count=100,
+                count=1,
             )
             if messages:
                 # Filter out any messages we just dead-lettered
