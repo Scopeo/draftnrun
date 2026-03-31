@@ -71,6 +71,27 @@ class TestAdditive:
         result = classify_file(path)
         assert result.strategy == DeployStrategy.MIGRATE_FIRST
 
+    def test_op_f_naming_convention_is_ignored(self, tmp_path: Path):
+        path = _write_migration(tmp_path, """
+            from alembic import op
+            import sqlalchemy as sa
+
+            revision = "abc"
+            down_revision = None
+
+            def upgrade():
+                op.add_column("t", sa.Column("x", sa.String(), nullable=True))
+                op.create_index(op.f("ix_t_x"), "t", ["x"], unique=False)
+
+            def downgrade():
+                op.drop_index(op.f("ix_t_x"), table_name="t")
+                op.drop_column("t", "x")
+        """)
+        result = classify_file(path)
+        assert result.strategy == DeployStrategy.MIGRATE_FIRST
+        assert not result.has_unclassifiable
+        assert all(op.name != "op.f" for op in result.ops)
+
 
 class TestDestructive:
     def test_drop_column(self, tmp_path: Path):

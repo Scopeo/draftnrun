@@ -80,6 +80,10 @@ CONTAINER_OPS = frozenset({
     "batch_alter_table",
 })
 
+IGNORED_OPS = frozenset({
+    "f",
+})
+
 
 @dataclass
 class ClassifiedOp:
@@ -197,6 +201,9 @@ def _classify_op_call(
         )
 
     if method in CONTAINER_OPS:
+        return None
+
+    if method in IGNORED_OPS:
         return None
 
     return ClassifiedOp(
