@@ -3,11 +3,12 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
-from ada_backend.database.models import CallType, EnvType, ResponseFormat, RunStatus
+from ada_backend.database.models import CallType, EnvType, GraphRunner, ResponseFormat, RunStatus
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories import run_repository
-from ada_backend.services.agent_runner_service import run_env_agent
+from ada_backend.services.agent_runner_service import run_agent, run_env_agent
 from ada_backend.services.run_service import _upload_result_to_s3, update_run_status
+from ada_backend.services.tag_service import compose_tag_name
 from ada_backend.utils.redis_client import publish_run_event
 from ada_backend.workers.base_queue_worker import BaseQueueWorker
 from settings import settings
@@ -51,7 +52,7 @@ class RunQueueWorker(BaseQueueWorker):
 
         try:
             try:
-                env = EnvType(env_str)
+                env = EnvType(env_str) if env_str else None
             except ValueError as e:
                 LOGGER.warning("Invalid env in run %s: %s", run_id, env_str)
                 raise e
@@ -85,11 +86,29 @@ class RunQueueWorker(BaseQueueWorker):
                 publish_run_event(run_id, evt)
 
             async def execute_agent():
-                return await run_env_agent(
+                if env:
+                    return await run_env_agent(
+                        project_id=project_id,
+                        env=env,
+                        input_data=input_data,
+                        call_type=call_type,
+                        response_format=response_format,
+                        event_callback=event_callback,
+                    )
+                raw_gr_id = payload.get("graph_runner_id")
+                if not raw_gr_id:
+                    raise ValueError("Payload has no env and no graph_runner_id")
+                graph_runner_id = UUID(raw_gr_id)
+                with get_db_session() as sess:
+                    gr = sess.get(GraphRunner, graph_runner_id)
+                    tag_name = compose_tag_name(gr.tag_version, gr.version_name) if gr else None
+                return await run_agent(
                     project_id=project_id,
-                    env=env,
+                    graph_runner_id=graph_runner_id,
                     input_data=input_data,
+                    environment=None,
                     call_type=call_type,
+                    tag_name=tag_name,
                     response_format=response_format,
                     event_callback=event_callback,
                 )
