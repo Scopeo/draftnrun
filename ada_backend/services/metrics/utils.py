@@ -145,18 +145,8 @@ def query_root_trace_duration(
       GROUP BY s.trace_rowid
     )
     SELECT roots.*,
-           LEFT(COALESCE(
-               m.input_content::jsonb->0->'messages'->-1->>'content',
-               m.input_content::jsonb->0->>'content',
-               m.input_content::jsonb->>0,
-               m.input_content
-           ), 500) as input_preview,
-           LEFT(COALESCE(
-               m.output_content::jsonb->0->'messages'->-1->>'content',
-               m.output_content::jsonb->0->>'content',
-               m.output_content::jsonb->>0,
-               m.output_content
-           ), 500) as output_preview,
+           LEFT(m.input_content, 5000) as raw_input_content,
+           LEFT(m.output_content, 5000) as raw_output_content,
            COALESCE(ttc.total_credits, 0) as total_credits,
            total.total_count
     FROM paginated_roots roots
@@ -171,9 +161,47 @@ def query_root_trace_duration(
     rows = [dict(row._mapping) for row in result.fetchall()]
     session.close()
 
+    for row in rows:
+        row["input_preview"] = _extract_preview(row.pop("raw_input_content", None))
+        row["output_preview"] = _extract_preview(row.pop("raw_output_content", None))
+
     total_count = int(rows[0]["total_count"]) if rows else 0
     total_pages = max((total_count + page_size - 1) // page_size, 1)
     return rows, total_pages
+
+
+def _extract_preview(raw_content: str | None, max_len: int = 500) -> str:
+    if not raw_content:
+        return ""
+    try:
+        parsed = json.loads(raw_content)
+        if isinstance(parsed, list) and len(parsed) > 0:
+            first = parsed[0]
+            if isinstance(first, dict):
+                if "messages" in first:
+                    messages = first["messages"]
+                    if isinstance(messages, list) and messages:
+                        last_msg = messages[-1]
+                        if isinstance(last_msg, dict) and "content" in last_msg:
+                            return str(last_msg["content"])[:max_len]
+                if "content" in first:
+                    return str(first["content"])[:max_len]
+            return str(first)[:max_len]
+        return str(parsed)[:max_len]
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return ""
+
+
+def _safe_jsonb_first_element(raw_content: str | None) -> dict:
+    if not raw_content:
+        return {}
+    try:
+        parsed = json.loads(raw_content)
+        if isinstance(parsed, list) and len(parsed) > 0:
+            return parsed[0] if isinstance(parsed[0], dict) else {}
+        return parsed if isinstance(parsed, dict) else {}
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return {}
 
 
 def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
@@ -304,8 +332,8 @@ def query_conversation_messages(trace_id: str) -> tuple[dict, dict]:
     query = text(
         """
     SELECT
-        (m.input_content::jsonb->0) as input_payload,
-        (m.output_content::jsonb->0) as output_payload
+        m.input_content,
+        m.output_content
 
     FROM traces.spans s
     LEFT JOIN traces.span_messages m ON m.span_id = s.span_id
@@ -323,7 +351,7 @@ def query_conversation_messages(trace_id: str) -> tuple[dict, dict]:
     if not result:
         return {}, {}
 
-    input_payload = result[0] if result[0] else {}
-    output_payload = result[1] if result[1] else {}
+    input_payload = _safe_jsonb_first_element(result[0])
+    output_payload = _safe_jsonb_first_element(result[1])
 
     return input_payload, output_payload
