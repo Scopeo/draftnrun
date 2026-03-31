@@ -171,6 +171,11 @@ spec:
           envFrom:
             - secretRef:
                 name: ada-secrets
+          env:
+            - name: MAX_CONCURRENT_WEBHOOKS
+              value: "2"
+            - name: ADA_URL
+              value: "https://ada-staging.scopeo.studio"
           resources:
             requests:
               memory: "128Mi"

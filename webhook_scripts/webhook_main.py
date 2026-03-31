@@ -1,11 +1,10 @@
 import asyncio
 import logging
+import os
 from typing import Any, Dict, Optional
 from uuid import UUID
 
 import httpx
-
-from settings import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -73,11 +72,11 @@ async def webhook_main_async(
         f"Org: {organization_id if organization_id else 'None'}"
     )
 
-    api_base_url = settings.ADA_URL
+    api_base_url = os.environ.get("ADA_URL")
     if not api_base_url:
         LOGGER.error("[WEBHOOK_MAIN] ADA_URL not set in environment")
         raise ValueError("ADA_URL environment variable is required")
-    webhook_api_key = settings.WEBHOOK_API_KEY
+    webhook_api_key = os.environ.get("WEBHOOK_API_KEY")
     if not webhook_api_key:
         LOGGER.error("[WEBHOOK_MAIN] WEBHOOK_API_KEY not set in environment")
         raise ValueError("WEBHOOK_API_KEY environment variable is required")
