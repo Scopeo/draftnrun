@@ -9,6 +9,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
+from ada_backend.database.models import EnvType
 from ada_backend.routers.project_router import chat_async
 
 
@@ -54,6 +55,32 @@ class TestChatAsyncNoneEnvironment:
         assert result.run_id == run.id
         mock_push.assert_called_once()
         assert mock_push.call_args.kwargs["env"] is None
+        assert mock_push.call_args.kwargs["graph_runner_id"] == gr_id
+
+    @pytest.mark.asyncio
+    @patch("ada_backend.routers.project_router.push_run_task", return_value=True)
+    @patch("ada_backend.routers.project_router.create_run")
+    @patch("ada_backend.routers.project_router.get_project_env_binding")
+    async def test_passes_env_value_when_environment_is_present(
+        self, mock_get_binding, mock_create_run, mock_push
+    ):
+        mock_env = EnvType.DRAFT
+        run = _make_run()
+        gr_id = uuid4()
+        mock_get_binding.return_value = _make_binding(environment=mock_env)
+        mock_create_run.return_value = run
+
+        result = await chat_async(
+            project_id=uuid4(),
+            graph_runner_id=gr_id,
+            user=_make_fake_user(),
+            input_data={"messages": [{"role": "user", "content": "hi"}]},
+            session=MagicMock(),
+        )
+
+        assert result.run_id == run.id
+        mock_push.assert_called_once()
+        assert mock_push.call_args.kwargs["env"] == mock_env.value
         assert mock_push.call_args.kwargs["graph_runner_id"] == gr_id
 
     @pytest.mark.asyncio

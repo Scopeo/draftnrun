@@ -101,7 +101,11 @@ class RunQueueWorker(BaseQueueWorker):
                 graph_runner_id = UUID(raw_gr_id)
                 with get_db_session() as sess:
                     gr = sess.get(GraphRunner, graph_runner_id)
-                    tag_name = compose_tag_name(gr.tag_version, gr.version_name) if gr else None
+                    if gr is None:
+                        raise ValueError(
+                            f"GraphRunner {graph_runner_id} not found for project {project_id}"
+                        )
+                    tag_name = compose_tag_name(gr.tag_version, gr.version_name)
                 return await run_agent(
                     project_id=project_id,
                     graph_runner_id=graph_runner_id,
