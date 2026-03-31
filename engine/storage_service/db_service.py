@@ -103,6 +103,17 @@ class DBService(CloseMixin, ABC):
         """Insert a list of row dicts into a table."""
         pass
 
+    @abstractmethod
+    def upsert_rows(
+        self,
+        table_name: str,
+        rows: list[dict],
+        schema_name: Optional[str] = None,
+        id_column_names: Optional[list[str]] = None,
+    ) -> None:
+        """Insert rows or update them on primary key conflict."""
+        pass
+
     def insert_df_to_table(self, df, table_name: str, schema_name: Optional[str] = None) -> None:
         """Convenience method that accepts a pandas DataFrame. Prefer insert_rows."""
         if hasattr(df, "empty") and df.empty:
@@ -143,20 +154,27 @@ class DBService(CloseMixin, ABC):
         rows = self._fetch_sql_query_as_dicts(query)
         return pd.DataFrame(rows)
 
-    def _fetch_and_insert_batched(
+    def _fetch_and_upsert_batches(
         self,
         ids: set[str],
         fetch_rows_fn: Callable[[set[str]], list[dict]],
         table_name: str,
         schema_name: Optional[str],
         batch_size: int,
+        id_column_names: Optional[list[str]] = None,
     ) -> None:
+        """Fetch rows via callback and upsert them in batches.
+
+        Uses upsert (ON CONFLICT DO UPDATE) instead of plain insert to be idempotent:
+        if the process crashes mid-batch and retries, already-inserted rows are updated
+        rather than causing a UniqueViolation.
+        """
         id_list = list(ids)
         for i in range(0, len(id_list), batch_size):
             batch_ids = set(id_list[i : i + batch_size])
             rows = fetch_rows_fn(batch_ids)
             if rows:
-                self.insert_rows(rows, table_name, schema_name=schema_name)
+                self.upsert_rows(table_name, rows, schema_name=schema_name, id_column_names=id_column_names)
 
     def update_table(
         self,
@@ -188,11 +206,19 @@ class DBService(CloseMixin, ABC):
 
         target_table_name = f"{schema_name}.{table_name}" if schema_name else table_name
 
+        # Used by upsert_rows for ON CONFLICT — must match the composite PK (e.g. chunk_id + source_id)
+        primary_key_columns = [col.name for col in table_definition.columns if col.is_primary]
+
         if not self.table_exists(table_name, schema_name=schema_name):
             LOGGER.info(f"Table {target_table_name} does not exist. Creating it...")
             self.create_table(table_name=table_name, table_definition=table_definition, schema_name=schema_name)
-            self._fetch_and_insert_batched(
-                set(incoming_ids_with_timestamp.keys()), fetch_rows_fn, table_name, schema_name, batch_size
+            self._fetch_and_upsert_batches(
+                set(incoming_ids_with_timestamp.keys()),
+                fetch_rows_fn,
+                table_name,
+                schema_name,
+                batch_size,
+                id_column_names=primary_key_columns,
             )
             return
 
@@ -255,10 +281,24 @@ class DBService(CloseMixin, ABC):
                 schema_name=schema_name,
                 sql_query_filter=source_id_filter,
             )
-            self._fetch_and_insert_batched(ids_to_update, fetch_rows_fn, table_name, schema_name, batch_size)
+            self._fetch_and_upsert_batches(
+                ids_to_update,
+                fetch_rows_fn,
+                table_name,
+                schema_name,
+                batch_size,
+                id_column_names=primary_key_columns,
+            )
 
         if ids_to_add:
-            self._fetch_and_insert_batched(ids_to_add, fetch_rows_fn, table_name, schema_name, batch_size)
+            self._fetch_and_upsert_batches(
+                ids_to_add,
+                fetch_rows_fn,
+                table_name,
+                schema_name,
+                batch_size,
+                id_column_names=primary_key_columns,
+            )
 
     @abstractmethod
     def delete_rows_from_table(

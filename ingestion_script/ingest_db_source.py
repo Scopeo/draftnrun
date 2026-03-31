@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from functools import partial
 from typing import Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from llama_index.core.node_parser import SentenceSplitter
 
@@ -156,7 +156,7 @@ def fetch_db_source_chunks(
         timestamp_value = source_row.get(timestamp_column_name) if timestamp_column_name else None
 
         for chunk_index, chunk_text in enumerate(chunks, start=1):
-            chunk_id = str(uuid4())
+            chunk_id = f"{row_id}_{chunk_index}"
 
             if url_pattern:
                 null_safe_row = {k: ("" if v is None else v) for k, v in source_row.items()}

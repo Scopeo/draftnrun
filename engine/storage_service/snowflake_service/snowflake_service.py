@@ -264,6 +264,15 @@ class SnowflakeService(DBService):
         df = pd.DataFrame(rows)
         self.insert_df_to_table(df, table_name, schema_name)
 
+    def upsert_rows(
+        self,
+        table_name: str,
+        rows: list[dict],
+        schema_name: Optional[str] = None,
+        id_column_names: Optional[list[str]] = None,
+    ) -> None:
+        self.insert_rows(rows, table_name, schema_name)
+
     def grant_select_on_table(self, table_name: str, schema_name: str, role: str) -> None:
         self.connector.cursor().execute(f"GRANT USAGE ON SCHEMA {schema_name} TO ROLE {role}")
         self.connector.cursor().execute(f"GRANT SELECT ON {schema_name}.{table_name} TO ROLE {role}")
