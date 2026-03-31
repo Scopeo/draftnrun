@@ -7,6 +7,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  pull-requests: write
+
 concurrency:
   group: ec2-runner-tests
   cancel-in-progress: false
@@ -17,6 +21,8 @@ jobs:
     outputs:
       migration-or-seed-changed: ${{ steps.filter.outputs.migration-or-seed }}
       traces-schema-touched: ${{ steps.traces-schema-check.outputs.traces-schema-touched }}
+      migration-strategy: ${{ steps.classify-strategy.outputs.migration_strategy }}
+      migration-has-unclassifiable: ${{ steps.classify-strategy.outputs.has_unclassifiable }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -65,6 +71,95 @@ jobs:
           else
             echo "traces-schema-touched=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Set up Python
+        if: ${{ steps.filter.outputs.migration-or-seed == 'true' }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Classify migration deploy strategy
+        id: classify-strategy
+        run: |
+          if [ "${{ steps.filter.outputs.migration-or-seed }}" != "true" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            echo "migration_strategy=none" >> "$GITHUB_OUTPUT"
+            echo "has_unclassifiable=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # For manual runs, check the last commit
+            MIGRATION_FILES="$(git diff --name-only HEAD~1..HEAD -- \
+              'ada_backend/database/alembic/versions/*.py' 2>/dev/null || echo "")"
+          else
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+            MIGRATION_FILES="$(git diff --name-only "$BASE_SHA...$HEAD_SHA" -- \
+              'ada_backend/database/alembic/versions/*.py' 2>/dev/null || echo "")"
+          fi
+
+          if [ -z "$MIGRATION_FILES" ]; then
+            echo "migration_strategy=none" >> "$GITHUB_OUTPUT"
+            echo "has_unclassifiable=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          EXISTING_FILES=""
+          while IFS= read -r f; do
+            [ -f "$f" ] && EXISTING_FILES="${EXISTING_FILES} ${f}"
+          done <<< "$MIGRATION_FILES"
+
+          if [ -z "$(echo $EXISTING_FILES | xargs)" ]; then
+            echo "migration_strategy=none" >> "$GITHUB_OUTPUT"
+            echo "has_unclassifiable=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          RESULT=$(python scripts/classify_migration.py $EXISTING_FILES 2>&1) || true
+          STRATEGY=$(echo "$RESULT" | python -c "import sys,json; print(json.load(sys.stdin)['strategy'])" 2>/dev/null || echo "breaking")
+          HAS_UNCLASSIFIABLE=$(echo "$RESULT" | python -c "import sys,json; print(str(json.load(sys.stdin)['has_unclassifiable']).lower())" 2>/dev/null || echo "false")
+
+          echo "migration_strategy=${STRATEGY}" >> "$GITHUB_OUTPUT"
+          echo "has_unclassifiable=${HAS_UNCLASSIFIABLE}" >> "$GITHUB_OUTPUT"
+          echo "📋 Migration deploy strategy: ${STRATEGY} (unclassifiable: ${HAS_UNCLASSIFIABLE})"
+          echo "$RESULT"
+
+          {
+            echo "## Migration Deploy Strategy"
+            echo ""
+            echo "| Property | Value |"
+            echo "|----------|-------|"
+            echo "| Strategy | \`${STRATEGY}\` |"
+            echo "| Has unclassifiable ops | \`${HAS_UNCLASSIFIABLE}\` |"
+            echo ""
+            echo "<details><summary>Classification details</summary>"
+            echo ""
+            echo '```json'
+            echo "$RESULT"
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment migration strategy on PR
+        if: >-
+          github.event_name == 'pull_request'
+          && steps.classify-strategy.outputs.migration_strategy != 'none'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          STRATEGY="${{ steps.classify-strategy.outputs.migration_strategy }}"
+          HAS_UNCLASSIFIABLE="${{ steps.classify-strategy.outputs.has_unclassifiable }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          BODY="## Migration Deploy Strategy
+
+          | Property | Value |
+          |----------|-------|
+          | Strategy | \`${STRATEGY}\` |
+          | Has unclassifiable ops | \`${HAS_UNCLASSIFIABLE}\` |"
+
+          gh pr comment "$PR_NUMBER" --body "$BODY" --edit-last 2>/dev/null \
+            || gh pr comment "$PR_NUMBER" --body "$BODY"
 
   ci-pipeline:
     needs: detect-changes
@@ -261,6 +356,26 @@ jobs:
 
             echo "===> Waiting for PostgreSQL to be ready"
             timeout 30s bash -c 'until docker compose exec postgres pg_isready; do sleep 1; done'
+
+      - name: Validate migration deploy strategy
+        if: needs.detect-changes.outputs.migration-or-seed-changed == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          STRATEGY="${{ needs.detect-changes.outputs.migration-strategy }}"
+          HAS_UNCLASSIFIABLE="${{ needs.detect-changes.outputs.migration-has-unclassifiable }}"
+
+          echo "Migration strategy: ${STRATEGY}"
+          echo "Has unclassifiable: ${HAS_UNCLASSIFIABLE}"
+
+          if [ "${HAS_UNCLASSIFIABLE}" = "true" ]; then
+            echo "::error::Migration contains unclassifiable operations or an invalid deploy_strategy."
+            echo "Possible triggers: op.execute(), op.get_bind(), op.get_context(), op.bulk_insert(), unknown op.* calls, or a missing/invalid deploy_strategy value."
+            echo "Fix: add a valid annotation to the migration file, e.g. deploy_strategy: Union[str, None] = \"migrate-first\" (or code-first / breaking), or refactor the flagged op calls."
+            exit 1
+          fi
+
+          if [ "${STRATEGY}" = "breaking" ]; then
+            echo "::warning::Migration strategy is 'breaking' — deploy will scale pods to zero. Ensure the PR has the 'breaking-migration' label if intended."
+          fi
 
       - name: Alembic migration checks
         if: needs.detect-changes.outputs.migration-or-seed-changed == 'true' || github.event_name == 'workflow_dispatch'
