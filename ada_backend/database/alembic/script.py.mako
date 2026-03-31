@@ -17,6 +17,10 @@ down_revision: Union[str, None] = ${repr(down_revision)}
 branch_labels: Union[str, Sequence[str], None] = ${repr(branch_labels)}
 depends_on: Union[str, Sequence[str], None] = ${repr(depends_on)}
 
+# Deploy ordering: set to "migrate-first", "code-first", or "breaking".
+# None = auto-detect from upgrade() ops. Required when using op.execute / op.get_bind.
+deploy_strategy: Union[str, None] = None
+
 
 def upgrade() -> None:
     ${upgrades if upgrades else "pass"}

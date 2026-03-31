@@ -51,7 +51,11 @@ Mixpanel Python SDK (`mixpanel_analytics.py`). `non_breaking_track` decorator wr
 
 `mcp_server/`: standalone pod calling the backend over HTTP + Supabase directly. See `mcp_server/README.md`.
 
+### Migration Deploy Strategy
+
+Alembic migrations are auto-classified by `scripts/classify_migration.py` (AST-based) to determine CD deploy order: `migrate-first` (additive), `code-first` (destructive), or `breaking` (rename / mixed / scale-to-zero). Migrations using `op.execute()` or `op.get_bind()` must set `deploy_strategy` in the file. See `ada_backend/docs/migration-deploy-strategy.md`.
+
 ### Documentation
 
-- `ada_backend/docs/` for domain docs (auth, API reference, engine, webhooks, QA, credits).
+- `ada_backend/docs/` for domain docs (auth, API reference, engine, webhooks, QA, credits, migration strategy).
 - `README.md` files for setup and overview.

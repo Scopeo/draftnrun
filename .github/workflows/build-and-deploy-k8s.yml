@@ -32,11 +32,12 @@ jobs:
       breaking: ${{ steps.breaking.outputs.breaking }}
       has_migration: ${{ steps.migration.outputs.has_migration }}
       migration_files: ${{ steps.migration.outputs.migration_files }}
+      migration_strategy: ${{ steps.strategy.outputs.migration_strategy }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Set environment
         id: env
@@ -85,11 +86,14 @@ jobs:
       - name: Check for alembic migrations
         id: migration
         run: |
-          # NOTE: this checks only the last commit in the push (HEAD~1..HEAD).
-          # If multiple commits are pushed together, earlier migration files may be missed.
-          CHANGED=$(git diff HEAD~1 HEAD --name-only -- \
-            'ada_backend/database/alembic/versions/*.py' \
-            'engine/trace/alembic/versions/*.py')
+          NULL_SHA="0000000000000000000000000000000000000000"
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "${NULL_SHA}" ]; then
+            DIFF_BASE="${{ github.event.before }}"
+          else
+            DIFF_BASE="HEAD~1"
+          fi
+          CHANGED=$(git diff "${DIFF_BASE}" HEAD --name-only -- \
+            'ada_backend/database/alembic/versions/*.py')
           if [ -n "$CHANGED" ]; then
             echo "has_migration=true" >> $GITHUB_OUTPUT
             echo "migration_files<<EOF" >> $GITHUB_OUTPUT
@@ -98,6 +102,57 @@ jobs:
           else
             echo "has_migration=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Set up Python
+        if: ${{ steps.migration.outputs.has_migration == 'true' }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Classify migration deploy strategy
+        id: strategy
+        run: |
+          if [ "${{ steps.breaking.outputs.breaking }}" = "true" ]; then
+            echo "migration_strategy=breaking" >> $GITHUB_OUTPUT
+            echo "⚠️ Strategy forced to breaking (manual override / PR label)"
+            exit 0
+          fi
+
+          if [ "${{ steps.migration.outputs.has_migration }}" != "true" ]; then
+            echo "migration_strategy=none" >> $GITHUB_OUTPUT
+            echo "✅ No migrations detected — strategy: none"
+            exit 0
+          fi
+
+          FILES="${{ steps.migration.outputs.migration_files }}"
+          EXISTING_FILES=""
+          while IFS= read -r f; do
+            [ -f "$f" ] && EXISTING_FILES="${EXISTING_FILES} ${f}"
+          done <<< "$FILES"
+
+          if [ -z "$EXISTING_FILES" ]; then
+            echo "migration_strategy=none" >> $GITHUB_OUTPUT
+            echo "✅ No existing migration files to classify — strategy: none"
+            exit 0
+          fi
+
+          RESULT=$(python scripts/classify_migration.py $EXISTING_FILES 2>&1) && CODE=$? || CODE=$?
+
+          if [ "$CODE" -eq 3 ]; then
+            STRATEGY="breaking"
+          elif [ "$CODE" -ne 0 ]; then
+            echo "❌ classify_migration.py crashed (exit $CODE):"
+            echo "$RESULT"
+            exit 1
+          elif ! STRATEGY=$(echo "$RESULT" | python -c "import sys,json; print(json.load(sys.stdin)['strategy'])" 2>&1); then
+            echo "❌ Failed to parse classifier JSON output:"
+            echo "$RESULT"
+            exit 1
+          fi
+
+          echo "migration_strategy=${STRATEGY}" >> $GITHUB_OUTPUT
+          echo "📋 Auto-detected migration strategy: ${STRATEGY}"
+          echo "$RESULT"
 
   # --- PARALLEL BUILD JOBS (ARM64 only) ---
   build-api:
@@ -311,8 +366,8 @@ jobs:
             echo "namespace=ada-staging" >> $GITHUB_OUTPUT
           fi
 
-      - name: Scale down (breaking migration only)
-        if: ${{ needs.setup.outputs.breaking == 'true' }}
+      - name: Scale down (breaking migration)
+        if: ${{ needs.setup.outputs.migration_strategy == 'breaking' }}
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets[steps.k8s.outputs.host_secret] }}
@@ -320,11 +375,83 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            echo "⚠️ Breaking migration - scaling down..."
+            echo "⚠️ Breaking migration — scaling down all pods..."
             kubectl scale deployment --all -n ${{ steps.k8s.outputs.namespace }} --replicas=0
             kubectl wait --for=delete pod -l app -n ${{ steps.k8s.outputs.namespace }} --timeout=300s || true
 
-      - name: Deploy and wait for rollouts
+      - name: Deploy (migrate-first strategy)
+        if: ${{ needs.setup.outputs.migration_strategy == 'migrate-first' }}
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets[steps.k8s.outputs.host_secret] }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 15m
+          script: |
+            set -e
+            REGISTRY="${{ env.REGISTRY }}"
+            PREFIX=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+            TAG="sha-$(echo '${{ github.sha }}' | cut -c1-7)"
+            NS="${{ steps.k8s.outputs.namespace }}"
+            ENV="${{ needs.setup.outputs.environment }}"
+            API_IMAGE="${REGISTRY}/${PREFIX}-api:${TAG}"
+
+            echo "🚀 migrate-first: running migrations BEFORE code rollout"
+
+            REPO_DIR="/tmp/draftnrun-deploy"
+            rm -rf "$REPO_DIR"
+            git clone --branch ${{ github.ref_name }} --depth 1 --sparse --filter=blob:none https://github.com/${{ github.repository }}.git "$REPO_DIR"
+            cd "$REPO_DIR"
+            git sparse-checkout set infra/k8s
+
+            echo "📦 Applying Kubernetes manifests..."
+            cd infra/k8s/${ENV}
+            kubectl apply -k .
+
+            echo "🗄️ Running migrations (before code deploy)..."
+            kubectl delete pod db-migrate -n ${NS} --ignore-not-found
+            kubectl run db-migrate -n ${NS} \
+              --image=${API_IMAGE} \
+              --restart=Never \
+              --overrides='{"spec":{"containers":[{"name":"db-migrate","image":"'"${API_IMAGE}"'","command":["alembic","-c","ada_backend/database/alembic.ini","upgrade","head"],"envFrom":[{"secretRef":{"name":"ada-secrets"}}]}]}}'
+            kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/db-migrate -n ${NS} --timeout=300s
+            kubectl delete pod db-migrate -n ${NS}
+
+            echo "🌱 Running seed..."
+            kubectl delete pod db-seed -n ${NS} --ignore-not-found
+            kubectl run db-seed -n ${NS} \
+              --image=${API_IMAGE} \
+              --restart=Never \
+              --overrides='{"spec":{"containers":[{"name":"db-seed","image":"'"${API_IMAGE}"'","command":["python","-m","ada_backend.database.seed_db"],"envFrom":[{"secretRef":{"name":"ada-secrets"}}]}]}}'
+            kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/db-seed -n ${NS} --timeout=300s
+            kubectl delete pod db-seed -n ${NS}
+
+            echo "🔄 Now deploying new code..."
+            kubectl set image deployment/ada-api -n ${NS} \
+              ada-api=${REGISTRY}/${PREFIX}-api:${TAG}
+            kubectl set image deployment/ada-ingestion-worker -n ${NS} \
+              ada-ingestion-worker=${REGISTRY}/${PREFIX}-worker:${TAG}
+            kubectl set image deployment/ada-webhook-worker -n ${NS} \
+              ada-webhook-worker=${REGISTRY}/${PREFIX}-webhook-worker:${TAG}
+            kubectl set image deployment/ada-scheduler -n ${NS} \
+              ada-scheduler=${REGISTRY}/${PREFIX}-scheduler:${TAG}
+            kubectl set image deployment/ada-mcp -n ${NS} \
+              ada-mcp=${REGISTRY}/${PREFIX}-mcp-server:${TAG}
+
+            echo "⏳ Waiting for rollouts..."
+            kubectl rollout status deployment/ada-api -n ${NS} --timeout=10m
+            kubectl rollout status deployment/ada-ingestion-worker -n ${NS} --timeout=10m
+            kubectl rollout status deployment/ada-webhook-worker -n ${NS} --timeout=10m
+            kubectl rollout status deployment/ada-scheduler -n ${NS} --timeout=10m
+            kubectl rollout status deployment/ada-mcp -n ${NS} --timeout=5m \
+              || echo "⚠️ MCP server rollout did not complete (non-critical)"
+
+            echo "✅ Deploy complete (migrate-first)!"
+            kubectl get pods -n ${NS}
+
+      - name: Deploy (code-first / breaking / no-migration strategy)
+        if: ${{ needs.setup.outputs.migration_strategy != 'migrate-first' }}
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets[steps.k8s.outputs.host_secret] }}
@@ -340,21 +467,18 @@ jobs:
             NS="${{ steps.k8s.outputs.namespace }}"
             ENV="${{ needs.setup.outputs.environment }}"
 
-            echo "🚀 Deploying images tagged: ${TAG}"
+            echo "🚀 Deploying images tagged: ${TAG} (strategy: ${{ needs.setup.outputs.migration_strategy }})"
 
-            # Fetch only k8s manifests
             REPO_DIR="/tmp/draftnrun-deploy"
             rm -rf "$REPO_DIR"
             git clone --branch ${{ github.ref_name }} --depth 1 --sparse --filter=blob:none https://github.com/${{ github.repository }}.git "$REPO_DIR"
             cd "$REPO_DIR"
             git sparse-checkout set infra/k8s
 
-            # Apply all manifests
             echo "📦 Applying Kubernetes manifests..."
             cd infra/k8s/${ENV}
             kubectl apply -k .
 
-            # Update images to the specific tagged versions
             echo "🔄 Updating images to ${TAG}..."
             kubectl set image deployment/ada-api -n ${NS} \
               ada-api=${REGISTRY}/${PREFIX}-api:${TAG}
@@ -419,13 +543,14 @@ jobs:
                   type: mrkdwn
                   text: |
                     ⚠️ *Alembic migration deployed to staging*
+                    *Strategy:* `${{ needs.setup.outputs.migration_strategy }}`
                     *Commit:* `${{ github.sha }}`
                     *By:* ${{ github.actor }}
                     *Files:*
                     ```${{ needs.setup.outputs.migration_files }}```
 
-      - name: Scale up (breaking migration only)
-        if: ${{ needs.setup.outputs.breaking == 'true' }}
+      - name: Scale up (breaking migration)
+        if: ${{ always() && needs.setup.outputs.migration_strategy == 'breaking' }}
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets[steps.k8s.outputs.host_secret] }}
