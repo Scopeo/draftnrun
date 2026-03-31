@@ -100,12 +100,10 @@ class RunQueueWorker(BaseQueueWorker):
                     raise ValueError("Payload has no env and no graph_runner_id")
                 graph_runner_id = UUID(raw_gr_id)
                 with get_db_session() as sess:
-                    gr = sess.get(GraphRunner, graph_runner_id)
-                    if gr is None:
-                        raise ValueError(
-                            f"GraphRunner {graph_runner_id} not found for project {project_id}"
-                        )
-                    tag_name = compose_tag_name(gr.tag_version, gr.version_name)
+                    graph_runner = sess.get(GraphRunner, graph_runner_id)
+                    if graph_runner is None:
+                        raise ValueError(f"GraphRunner {graph_runner_id} not found for project {project_id}")
+                    tag_name = compose_tag_name(graph_runner.tag_version, graph_runner.version_name)
                 return await run_agent(
                     project_id=project_id,
                     graph_runner_id=graph_runner_id,
