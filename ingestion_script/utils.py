@@ -609,10 +609,7 @@ def map_source_filter_to_unified_table_filter(
     for col in columns_in_filter:
         col_lower = col.lower()
 
-        if timestamp_column_name and col_lower == timestamp_column_name.lower():
-            replacement = TIMESTAMP_COLUMN_NAME
-            mapped_filter = replace_column_name(mapped_filter, col, replacement)
-        elif col_lower not in unified_columns:
+        if col_lower not in unified_columns:
             replacement = f"{METADATA_COLUMN_NAME}->>'{col}'"
             mapped_filter = replace_column_name(mapped_filter, col, replacement)
 

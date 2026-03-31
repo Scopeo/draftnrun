@@ -1172,7 +1172,7 @@ class QdrantService:
             ids_to_delete = existing_ids_with_timestamp.keys() - incoming_ids_with_timestamp.keys()
             common_ids = incoming_ids_with_timestamp.keys() & existing_ids_with_timestamp.keys()
 
-            if query_filter_qdrant or not timestamp_field:
+            if not timestamp_field:
                 ids_to_update = common_ids
             else:
                 ids_to_update = {

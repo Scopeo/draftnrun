@@ -245,7 +245,7 @@ class DBService(CloseMixin, ABC):
         common_ids = incoming_ids & existing_ids
         ids_to_add = incoming_ids - existing_ids
 
-        if timestamp_column_name and not sql_query_filter:
+        if timestamp_column_name:
             ids_to_update = set()
             for shared_id in common_ids:
                 incoming_dt = parse_datetime(incoming_ids_with_timestamp[shared_id])

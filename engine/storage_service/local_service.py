@@ -633,6 +633,10 @@ class SQLLocalService(DBService):
             if id_column_name not in table.c:
                 raise ValueError(f"Column '{id_column_name}' not found in table '{table_name}'.")
 
+        description_table = self.describe_table(table_name, schema_name)
+        jsonb_columns = {col["name"] for col in description_table if "jsonb" in str(col.get("type", "")).lower()}
+        rows = self._parse_jsonb_in_rows(rows, jsonb_columns)
+
         row_keys: set[str] = set().union(*(r.keys() for r in rows))
         excluded_cols = set(id_column_names)
         updatable_cols = [k for k in row_keys if k not in excluded_cols and k in table.c]
