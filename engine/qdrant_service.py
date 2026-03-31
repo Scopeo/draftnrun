@@ -1200,8 +1200,13 @@ class QdrantService:
             for i in range(0, len(upsert_list), batch_size):
                 batch_ids = upsert_list[i : i + batch_size]
                 batch_rows = fetch_rows(batch_ids)
-                if batch_rows:
-                    await self.add_chunks_async(batch_rows, collection_name)
+                if not batch_rows:
+                    LOGGER.warning(f"Batch {i // batch_size + 1}: fetch_rows returned 0 rows for {len(batch_ids)} IDs")
+                    continue
+                success = await self.add_chunks_async(batch_rows, collection_name)
+                if not success:
+                    LOGGER.error(f"Batch {i // batch_size + 1}: add_chunks_async failed for {len(batch_rows)} rows")
+                    return False
                 LOGGER.info(f"Inserted batch {i // batch_size + 1} ({len(batch_rows)} rows) to Qdrant")
 
         total_incoming = len(incoming_ids_with_timestamp)
