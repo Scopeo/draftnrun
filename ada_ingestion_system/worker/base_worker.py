@@ -145,57 +145,54 @@ class BaseWorker:
 
     def _reclaim_pending(self, consumer_name: str) -> None:
         """
-        Reclaim PEL entries that have been idle long enough to indicate their
-        previous consumer crashed without acknowledging them.
+        On startup, reclaim PEL entries that have been idle long enough to
+        indicate their previous consumer crashed without acknowledging them.
 
-        Dead-letters messages that exceeded _MAX_DELIVERY_ATTEMPTS, then
-        reclaims remaining messages **one at a time**, only while the worker
-        has capacity.  This prevents xautoclaim from inflating the delivery
-        count of messages that cannot be dispatched yet.
+        Before re-dispatching, check delivery count via XPENDING.  Messages
+        that exceeded _MAX_DELIVERY_ATTEMPTS are dead-lettered instead of
+        reprocessed — this breaks the OOM crash-loop cycle.
         """
         try:
+            # First, check for poison messages that have been delivered too many times.
+            # XPENDING with a range returns per-message detail including delivery count.
             pending_details = redis_client.xpending_range(self.stream_name, CONSUMER_GROUP, "-", "+", count=100)
-            logger.info("pending_entries stream=%s count=%s", self.stream_name, len(pending_details))
             poison_ids: set = set()
             for entry in pending_details:
                 mid = entry["message_id"]
                 deliveries = entry["times_delivered"]
                 idle_ms = entry["time_since_delivered"]
                 if deliveries >= _MAX_DELIVERY_ATTEMPTS and idle_ms >= _PENDING_IDLE_THRESHOLD_MS:
+                    # Read the original message so we can dead-letter it with its payload
                     msgs = redis_client.xrange(self.stream_name, min=mid, max=mid, count=1)
                     fields = msgs[0][1] if msgs else {}
                     reason = f"exceeded max delivery attempts ({deliveries}/{_MAX_DELIVERY_ATTEMPTS})"
                     self._dead_letter(mid, fields, deliveries, reason)
+                    # Notify subclass so it can mark the task as failed in the API
                     self._on_dead_letter(mid, fields, reason)
                     poison_ids.add(mid)
 
-            reclaimed = 0
-            start_id = "0-0"
-            while self._can_process():
-                start_id, messages, _deleted = redis_client.xautoclaim(
-                    self.stream_name,
-                    CONSUMER_GROUP,
-                    consumer_name,
-                    _PENDING_IDLE_THRESHOLD_MS,
-                    start_id=start_id,
-                    count=1,
-                )
-                if not messages:
-                    if start_id == "0-0":
-                        break
-                    continue
-                mid, fields = messages[0]
-                if mid in poison_ids:
-                    continue
-                self._dispatch(mid, fields, consumer_name)
-                reclaimed += 1
-            if reclaimed:
-                logger.info(
-                    "reclaimed_pending_messages stream=%s count=%s",
-                    self.stream_name,
-                    reclaimed,
-                )
+            # Now reclaim remaining non-poison messages
+            _next, messages, _deleted = redis_client.xautoclaim(
+                self.stream_name,
+                CONSUMER_GROUP,
+                consumer_name,
+                _PENDING_IDLE_THRESHOLD_MS,
+                start_id="0-0",
+                count=100,
+            )
+            if messages:
+                # Filter out any messages we just dead-lettered
+                safe_messages = [(mid, fields) for mid, fields in messages if mid not in poison_ids]
+                if safe_messages:
+                    logger.info(
+                        "reclaimed_pending_messages stream=%s count=%s",
+                        self.stream_name,
+                        len(safe_messages),
+                    )
+                    for message_id, fields in safe_messages:
+                        self._dispatch(message_id, fields, consumer_name)
         except redis.exceptions.ResponseError as e:
+            # Stream or group may not exist yet on a completely fresh deployment.
             if "ERR" in str(e) or "NOGROUP" in str(e):
                 logger.debug("xautoclaim_skipped stream=%s error=%s", self.stream_name, str(e))
             else:
@@ -240,8 +237,6 @@ class BaseWorker:
                 logger.error("xack_failed stream=%s message_id=%s error=%s", self.stream_name, message_id, str(e))
             self._decrement_thread_count()
 
-    _RECLAIM_INTERVAL_S = 30
-
     def run(self) -> None:
         """Main worker loop — crash-safe via Redis Streams consumer groups."""
         consumer_name = self._consumer_name()
@@ -252,21 +247,15 @@ class BaseWorker:
             CONSUMER_GROUP,
         )
 
+        # Recover any messages that were mid-flight when a previous instance crashed.
         self._reclaim_pending(consumer_name)
-        last_reclaim = time.monotonic()
 
         while True:
             try:
+                # Back-pressure: don't pull new work while at capacity.
                 if not self._can_process():
                     time.sleep(0.5)
                     continue
-
-                now = time.monotonic()
-                if now - last_reclaim >= self._RECLAIM_INTERVAL_S:
-                    self._reclaim_pending(consumer_name)
-                    last_reclaim = now
-                    if not self._can_process():
-                        continue
 
                 results = redis_client.xreadgroup(
                     CONSUMER_GROUP,
@@ -277,6 +266,7 @@ class BaseWorker:
                 )
 
                 if not results:
+                    # Timeout — loop to check capacity and try again.
                     continue
 
                 _stream, messages = results[0]
