@@ -78,11 +78,7 @@ def build_graph_test_chatbot(
             component_version_id=components["synthesizer"],
             name="Synthesizer",
             ref=f"{agent_name}_synthesizer_instance",
-            parameters=[
-                PipelineParameterSchema(
-                    name="completion_model", value="openai:gpt-5-mini", kind=ParameterKind.INPUT
-                ),
-            ],
+            parameters=[],
         ),
         ComponentInstanceSchema(
             id=COMPONENT_INSTANCES_IDS["retriever_instance"],

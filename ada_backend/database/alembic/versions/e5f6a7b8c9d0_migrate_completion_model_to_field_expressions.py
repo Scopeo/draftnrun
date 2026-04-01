@@ -1,7 +1,9 @@
 """Migrate completion_model from BasicParameter to FieldExpression + InputPortInstance.
 
-Creates INPUT PortDefinitions for completion_model on all 13 affected component versions
+Creates INPUT PortDefinitions for completion_model on 10 migrated component versions
 and migrates existing BasicParameter rows to FieldExpression LiteralNodes + InputPortInstances.
+Unmigrated components (Synthesizer, HybridSynthesizer, RelevantChunkSelector) keep
+completion_model as a BasicParameter.
 
 Revision ID: e5f6a7b8c9d0
 Revises: d3e4f5a6b7c8
@@ -29,9 +31,6 @@ COMPLETION_MODEL_CPD_IDS = [
     "329f22ec-0382-4fcf-963f-3281e68e6224",  # OCR Call
     "12345678-9012-3456-7890-123456789012",  # ReAct SQL
     "134a4ddb-6906-4a22-b6b9-404f48543cc7",  # RAG Agent v3
-    "8d4a2304-55f9-4b94-9206-67f56a6ac750",  # Synthesizer
-    "7c5d0eae-d865-430e-a6d0-b8f4060a6b23",  # Hybrid Synthesizer
-    "3be1a99a-29c4-4ff1-bef0-63122f786c61",  # Relevant Chunk Selector
     "69ae956a-31f0-4349-8d87-115fd42c3356",  # Smart RAG (Document React Loader)
     "a1b2c3d4-e5f6-7890-abcd-ef1234567890",  # DOCX Template Agent
 ]
@@ -72,9 +71,6 @@ COMPONENT_VERSIONS = [
         CAP_FUNCTION_CALLING,
     ),
     ("f1a5b6c7-d8e9-4f0a-1b2c-3d4e5f6a7b8c", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5fd", DEFAULT_MODEL, CAP_COMPLETION),
-    ("6f790dd1-06f6-4489-a655-1a618763a114", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5fe", DEFAULT_MODEL, CAP_COMPLETION),
-    ("303ff9a5-3264-472c-b69f-c2da5be3bac8", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5ff", DEFAULT_MODEL, CAP_COMPLETION),
-    ("9870dd91-53fd-426b-aa99-7639da706f45", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e600", DEFAULT_MODEL, CAP_COMPLETION),
     (
         "1c2fdf5b-4a8d-4788-acb6-86b00124c7ce",
         "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e601",

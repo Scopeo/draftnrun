@@ -14,6 +14,7 @@ from ada_backend.database.component_definition_seeding import (
 )
 from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database.seed.constants import (
+    COMPLETION_MODEL_IN_DB,
     REASONING_IN_DB,
     TEMPERATURE_IN_DB,
     VERBOSITY_IN_DB,
@@ -1074,6 +1075,10 @@ def seed_rag_components(session: Session):
                 component_version_id=synthesizer_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
+                        param_name=COMPLETION_MODEL_IN_DB,
+                        param_id=UUID("8d4a2304-55f9-4b94-9206-67f56a6ac750"),
+                    ),
+                    ParameterLLMConfig(
                         param_name="api_key",
                         param_id=UUID("989b3cec-7f01-4098-847b-a6ad7c07af24"),
                     ),
@@ -1113,6 +1118,10 @@ def seed_rag_components(session: Session):
                 component_version_id=hybrid_synthesizer_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
+                        param_name=COMPLETION_MODEL_IN_DB,
+                        param_id=UUID("7c5d0eae-d865-430e-a6d0-b8f4060a6b23"),
+                    ),
+                    ParameterLLMConfig(
                         param_name="api_key",
                         param_id=UUID("3703e3a4-bd6d-4aea-b8d3-9196c11f9727"),
                     ),
@@ -1147,6 +1156,10 @@ def seed_rag_components(session: Session):
             *build_completion_service_config_definitions(
                 component_version_id=chunk_selector_version.id,
                 params_to_seed=[
+                    ParameterLLMConfig(
+                        param_name=COMPLETION_MODEL_IN_DB,
+                        param_id=UUID("3be1a99a-29c4-4ff1-bef0-63122f786c61"),
+                    ),
                     ParameterLLMConfig(
                         param_name="api_key",
                         param_id=UUID("7fc840a0-fdb4-4582-bf5d-c9b0d4af0ef1"),
