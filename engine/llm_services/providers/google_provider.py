@@ -23,6 +23,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 class GoogleProvider(BaseProvider):
+    _sdk_exceptions = (openai.APIError,)
+
     async def complete(
         self,
         messages: list[dict] | str,

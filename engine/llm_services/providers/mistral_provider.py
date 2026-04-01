@@ -20,6 +20,16 @@ LOGGER = logging.getLogger(__name__)
 
 
 class MistralProvider(BaseProvider):
+    _sdk_exceptions = (openai.APIError, mistralai.SDKError)
+
+    @staticmethod
+    def extract_error_message(exc: Exception) -> tuple[str, int | None]:
+        if isinstance(exc, mistralai.SDKError):
+            raw = getattr(exc, "raw_response", None)
+            status_code = raw.status_code if raw is not None else None
+            return str(exc), status_code
+        return BaseProvider.extract_error_message(exc)
+
     def _convert_messages_to_mistral_format(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not isinstance(messages, list):
             return messages

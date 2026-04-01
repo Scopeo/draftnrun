@@ -24,6 +24,8 @@ class CustomProvider(BaseProvider):
     follow the OpenAI API interface. All methods accept OpenAI format.
     """
 
+    _sdk_exceptions = (openai.APIError,)
+
     def __init__(self, api_key: str, base_url: Optional[str], model_name: str, provider_name: str, **kwargs):
         super().__init__(api_key, base_url, model_name, **kwargs)
         self._provider_name = provider_name

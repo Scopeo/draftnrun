@@ -39,6 +39,8 @@ def _force_additional_properties_false_for_object_schemas(schema: object) -> Non
 
 
 class AnthropicProvider(BaseProvider):
+    _sdk_exceptions = (openai.APIError,)
+
     def _build_anthropic_text_messages(self, messages: list[dict] | str) -> tuple[list[dict], str | None]:
         if isinstance(messages, str):
             return [{"role": "user", "content": [{"type": "text", "text": messages}]}], None

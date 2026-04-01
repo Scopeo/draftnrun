@@ -28,6 +28,8 @@ class OpenAIProvider(BaseProvider):
     All methods accept and return data in OpenAI format.
     """
 
+    _sdk_exceptions = (openai.APIError,)
+
     def __init__(self, api_key: str, base_url: Optional[str], model_name: str, **kwargs):
         self._require_base_url = False  # OpenAI doesn't require base_url
         super().__init__(api_key, base_url, model_name, **kwargs)

@@ -20,6 +20,8 @@ class CerebrasProvider(BaseProvider):
     All methods accept OpenAI format.
     """
 
+    _sdk_exceptions = (openai.APIError,)
+
     def _convert_messages_for_cerebras(self, messages: list[dict] | str) -> list[dict] | str:
         """
         Convert OpenAI format messages to Cerebras-compatible format.

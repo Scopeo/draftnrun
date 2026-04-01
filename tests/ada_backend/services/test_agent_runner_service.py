@@ -4,9 +4,9 @@ from types import SimpleNamespace
 import httpx
 import openai
 
-from ada_backend.services.agent_runner_service import _extract_provider_message
 from ada_backend.services.graph_reachability import find_reachable_nodes
 from engine.components.errors import LLMProviderError
+from engine.llm_services.providers.base_provider import BaseProvider
 
 
 def _node(node_id: str, *, is_trigger: bool = False, name: str = ""):
@@ -212,7 +212,7 @@ class TestExtractProviderMessage:
             response=resp,
             body={"message": "Invalid model: mistral-medium-c21211-r0-75", "type": "invalid_model"},
         )
-        msg, status = _extract_provider_message(exc)
+        msg, status = BaseProvider.extract_error_message(exc)
         assert msg == "Invalid model: mistral-medium-c21211-r0-75"
         assert status == 400
 
@@ -223,7 +223,7 @@ class TestExtractProviderMessage:
             response=resp,
             body={"message": "Invalid API key", "type": "auth_error"},
         )
-        msg, status = _extract_provider_message(exc)
+        msg, status = BaseProvider.extract_error_message(exc)
         assert msg == "Invalid API key"
         assert status == 401
 
@@ -234,13 +234,13 @@ class TestExtractProviderMessage:
             response=resp,
             body="Internal server error",
         )
-        msg, status = _extract_provider_message(exc)
+        msg, status = BaseProvider.extract_error_message(exc)
         assert msg == "Internal server error"
         assert status == 500
 
     def test_openai_api_connection_error(self):
         exc = openai.APIConnectionError(request=httpx.Request("POST", "https://api.example.com"))
-        msg, status = _extract_provider_message(exc)
+        msg, status = BaseProvider.extract_error_message(exc)
         assert "Connection error" in msg
         assert status is None
 

@@ -5,9 +5,7 @@ from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
 
-import mistralai
 import networkx as nx
-import openai
 from sqlalchemy.orm import Session
 
 from ada_backend.context import set_run_variables
@@ -56,27 +54,6 @@ from engine.trace.span_context import get_tracing_span, set_tracing_span
 from engine.trace.trace_context import get_trace_manager
 
 LOGGER = logging.getLogger(__name__)
-
-
-def _extract_provider_message(exc: Exception) -> tuple[str, int | None]:
-    if isinstance(exc, openai.APIStatusError):
-        status_code = exc.status_code
-        body = exc.body
-        if isinstance(body, dict):
-            msg = body.get("message") or body.get("error", {}).get("message") or str(body)
-        else:
-            msg = str(body) if body else exc.message
-        return msg, status_code
-
-    if isinstance(exc, openai.APIError):
-        return exc.message, None
-
-    if isinstance(exc, mistralai.SDKError):
-        status_code = getattr(exc, "raw_response", None)
-        status_code = status_code.status_code if status_code is not None else None
-        return str(exc), status_code
-
-    return str(exc), None
 
 
 def _extract_set_ids(input_data: dict) -> list[str]:
@@ -392,9 +369,6 @@ async def run_agent(
         LLMProviderError,
     ):
         raise
-    except (openai.APIError, mistralai.SDKError) as e:
-        provider_message, status_code = _extract_provider_message(e)
-        raise LLMProviderError(provider_message, status_code=status_code) from e
     except Exception as e:
         tb = traceback.format_exc()
         params = get_tracing_span()
