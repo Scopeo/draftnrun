@@ -19,9 +19,17 @@ from engine.trace.nested_utils import split_nested_keys
 LOGGER = logging.getLogger(__name__)
 
 
-def sanitize_json_string(text: str) -> str:
-    """Remove PostgreSQL-incompatible \\u0000 (null byte) escapes from a JSON-serialized string."""
-    return text.replace("\\u0000", "")
+def remove_null_bytes(obj: Any) -> Any:
+    """Recursively strip PostgreSQL-incompatible null bytes (U+0000) from all strings in a nested structure."""
+    if isinstance(obj, str):
+        return obj.replace("\x00", "")
+    if isinstance(obj, dict):
+        return {remove_null_bytes(k): remove_null_bytes(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [remove_null_bytes(item) for item in obj]
+    if isinstance(obj, tuple):
+        return tuple(remove_null_bytes(item) for item in obj)
+    return obj
 
 
 _TraceSession = sessionmaker(bind=_trace_engine)
@@ -208,9 +216,8 @@ class SQLSpanExporter(SpanExporter):
         input, output, formatted_attributes = extract_messages_from_attributes(formatted_attributes)
 
         openinference_span_kind = json_span["attributes"].get(SpanAttributes.OPENINFERENCE_SPAN_KIND, "UNKNOWN")
-        sanitized_attr_json = sanitize_json_string(json.dumps(formatted_attributes))
-        sanitized_attributes = json.loads(sanitized_attr_json)
-        sanitized_events = sanitize_json_string(json.dumps([event_to_dict(event) for event in span.events]))
+        sanitized_attributes = remove_null_bytes(formatted_attributes)
+        sanitized_events = json.dumps(remove_null_bytes([event_to_dict(event) for event in span.events]))
         span_row = Span(
             span_id=json_span["context"]["span_id"],
             trace_rowid=json_span["context"]["trace_id"],
@@ -297,7 +304,7 @@ class SQLSpanExporter(SpanExporter):
         session.add(
             SpanMessage(
                 span_id=span_row.span_id,
-                input_content=sanitize_json_string(json.dumps(input)) if input is not None else None,
-                output_content=sanitize_json_string(json.dumps(output)) if output is not None else None,
+                input_content=json.dumps(remove_null_bytes(input)) if input is not None else None,
+                output_content=json.dumps(remove_null_bytes(output)) if output is not None else None,
             )
         )
