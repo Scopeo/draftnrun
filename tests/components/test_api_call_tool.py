@@ -222,7 +222,23 @@ def test_make_api_call_error_handling(mock_client_class, api_tool):
 
     assert result["success"] is False
     assert result["error"] == "API Error"
-    assert result["status_code"] is None
+    assert result["status_code"] == 0
+
+
+@patch("httpx.AsyncClient")
+def test_run_without_io_trace_connection_error_does_not_crash(mock_client_class, api_tool):
+    """Regression: HTTPError without a response (e.g. DNS/timeout) used to produce status_code=None,
+    which caused a pydantic ValidationError when constructing APICallToolOutputs."""
+    mock_client = AsyncMock()
+    mock_client.request.side_effect = HTTPError("Connection refused")
+    mock_client_class.return_value.__aenter__.return_value = mock_client
+
+    inputs = APICallToolInputs(endpoint=ENDPOINT, headers={}, fixed_parameters={})
+    result = asyncio.run(api_tool._run_without_io_trace(inputs))
+
+    assert isinstance(result, APICallToolOutputs)
+    assert result.success is False
+    assert result.status_code == 0
 
 
 @patch("httpx.AsyncClient")

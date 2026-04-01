@@ -134,6 +134,7 @@ class RunQueueWorker(BaseQueueWorker):
             LOGGER.info("Run %s completed", run_id)
         except Exception as e:
             LOGGER.exception("Run %s failed: %s", run_id, e)
+            trace_id = getattr(e, "trace_id", None)
             try:
                 with get_db_session() as session:
                     update_run_status(
@@ -142,6 +143,7 @@ class RunQueueWorker(BaseQueueWorker):
                         project_id=project_id,
                         status=RunStatus.FAILED,
                         error={"message": str(e), "type": type(e).__name__},
+                        trace_id=trace_id,
                         finished_at=datetime.now(timezone.utc),
                     )
             except Exception as status_exc:

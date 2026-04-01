@@ -125,15 +125,24 @@ async def run_with_tracking(
     except Exception as e:
         finished_at = datetime.now(timezone.utc)
         duration_ms = int((finished_at - now).total_seconds() * 1000)
-        with get_db_session() as session:
-            update_run_status(
-                session,
-                run_id=run_id,
-                project_id=project_id,
-                status=RunStatus.FAILED,
-                error={"message": str(e), "type": type(e).__name__},
-                finished_at=finished_at,
-            )
+        trace_id = getattr(e, "trace_id", None)
+        try:
+            with get_db_session() as session:
+                update_run_status(
+                    session,
+                    run_id=run_id,
+                    project_id=project_id,
+                    status=RunStatus.FAILED,
+                    error={"message": str(e), "type": type(e).__name__},
+                    trace_id=trace_id,
+                    finished_at=finished_at,
+                )
+        except Exception:
+            LOGGER.exception("Failed to persist FAILED status: run_id=%s project_id=%s", run_id, project_id)
+        LOGGER.exception(
+            "Run failed: run_id=%s project_id=%s duration_ms=%s trace_id=%s",
+            run_id, project_id, duration_ms, trace_id,
+        )
         track_run_completed(
             user_id=None, project_id=project_id,
             status="failed", trigger=trigger.value, duration_ms=duration_ms,
