@@ -13,7 +13,7 @@ from mcp_server.tools.context_tools import _get_auth
 
 DEFAULT_DURATION_DAYS = 30
 MIN_DURATION_DAYS = 1
-MAX_DURATION_DAYS = 365
+MAX_DURATION_DAYS = 90
 
 PROXY_SPECS: list[ToolSpec] = [
     ToolSpec(
@@ -21,7 +21,13 @@ PROXY_SPECS: list[ToolSpec] = [
         description="Get the full span tree for a specific trace.",
         method="get",
         path="/traces/{trace_id}/tree",
-        path_params=(Param("trace_id", UUID, description="The trace ID (from list_traces or run)."),),
+        path_params=(
+            Param(
+                "trace_id",
+                str,
+                description="The trace ID (hex string, e.g. '0x6d4e...'). Obtain from list_runs or list_traces.",
+            ),
+        ),
     ),
     ToolSpec(
         name="get_credit_usage",
@@ -35,11 +41,11 @@ PROXY_SPECS: list[ToolSpec] = [
 
 def _normalize_duration(duration: int) -> int:
     if isinstance(duration, bool):
-        raise ValueError("Duration must be an integer number of days between 1 and 365.")
+        raise ValueError("Duration must be an integer number of days between 1 and 90.")
     try:
         duration_int = int(duration)
     except (TypeError, ValueError) as exc:
-        raise ValueError("Duration must be an integer number of days between 1 and 365.") from exc
+        raise ValueError("Duration must be an integer number of days between 1 and 90.") from exc
     return max(MIN_DURATION_DAYS, min(duration_int, MAX_DURATION_DAYS))
 
 
@@ -49,6 +55,10 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool()
     async def list_traces(
         project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
+        duration: Annotated[
+            int,
+            Field(description="Number of days to include. Clamped to 1-90."),
+        ] = DEFAULT_DURATION_DAYS,
         page: Annotated[int, Field(description="Page number (1-based).")] = 1,
         page_size: Annotated[int, Field(description="Results per page (max 100).")] = 50,
     ) -> dict:
@@ -57,11 +67,13 @@ def register(mcp: FastMCP) -> None:
             raise ValueError("page must be >= 1")
         if page_size < 1:
             raise ValueError("page_size must be >= 1")
+        duration = _normalize_duration(duration)
 
         jwt, _ = _get_auth()
         return await api.get(
             f"/projects/{project_id}/traces",
             jwt,
+            duration=duration,
             page=page,
             page_size=min(page_size, 100),
         )
@@ -70,7 +82,7 @@ def register(mcp: FastMCP) -> None:
     async def get_org_charts(
         duration: Annotated[
             int,
-            Field(description="Number of days to include. Clamped to 1-365."),
+            Field(description="Number of days to include. Clamped to 1-90."),
         ] = DEFAULT_DURATION_DAYS,
     ) -> dict:
         """Get organization-level monitoring charts."""
@@ -83,7 +95,7 @@ def register(mcp: FastMCP) -> None:
     async def get_org_kpis(
         duration: Annotated[
             int,
-            Field(description="Number of days to include. Clamped to 1-365."),
+            Field(description="Number of days to include. Clamped to 1-90."),
         ] = DEFAULT_DURATION_DAYS,
     ) -> dict:
         """Get organization-level KPI metrics."""

@@ -28,7 +28,9 @@ PROXY_SPECS: list[ToolSpec] = [
         description=(
             "Get details of a specific run.\n\n"
             "Use this after `run` timeouts or when you need to inspect status "
-            "transitions before fetching the final result."
+            "transitions before fetching the final result.\n\n"
+            "Note: does not include the original input payload. To retrieve input, "
+            "extract `trace_id` from the response and call `get_trace_tree(trace_id)`."
         ),
         method="get",
         path="/projects/{project_id}/runs/{run_id}",
@@ -38,6 +40,8 @@ PROXY_SPECS: list[ToolSpec] = [
         name="get_run_result",
         description=(
             "Get the output result of a completed run.\n\n"
+            "Returns output only — not the original input. For input data, use "
+            "`get_trace_tree` with the run's `trace_id`.\n\n"
             "Large results may be trimmed to `_truncated` / `partial_data`. Generated "
             "files, when present, are typically surfaced as `files[].s3_key` for this "
             "MCP surface."
