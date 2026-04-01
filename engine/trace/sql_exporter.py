@@ -18,6 +18,12 @@ from engine.trace.nested_utils import split_nested_keys
 
 LOGGER = logging.getLogger(__name__)
 
+
+def sanitize_json_string(text: str) -> str:
+    """Remove PostgreSQL-incompatible \\u0000 (null byte) escapes from a JSON-serialized string."""
+    return text.replace("\\u0000", "")
+
+
 _TraceSession = sessionmaker(bind=_trace_engine)
 
 
@@ -168,6 +174,9 @@ class SQLSpanExporter(SpanExporter):
             input, output, formatted_attributes = extract_messages_from_attributes(formatted_attributes)
 
             openinference_span_kind = json_span["attributes"].get(SpanAttributes.OPENINFERENCE_SPAN_KIND, "UNKNOWN")
+            sanitized_attr_json = sanitize_json_string(json.dumps(formatted_attributes))
+            sanitized_attributes = json.loads(sanitized_attr_json)
+            sanitized_events = sanitize_json_string(json.dumps([event_to_dict(event) for event in span.events]))
             span_row = Span(
                 span_id=json_span["context"]["span_id"],
                 trace_rowid=json_span["context"]["trace_id"],
@@ -176,8 +185,8 @@ class SQLSpanExporter(SpanExporter):
                 name=span.name,
                 start_time=datetime.fromtimestamp(span.start_time / 1e9, tz=timezone.utc),
                 end_time=datetime.fromtimestamp(span.end_time / 1e9, tz=timezone.utc),
-                attributes=formatted_attributes,
-                events=json.dumps([event_to_dict(event) for event in span.events]),
+                attributes=sanitized_attributes,
+                events=sanitized_events,
                 status_code=span.status.status_code,
                 status_message=span.status.description or "",
                 cumulative_error_count=cumulative_error_count,
@@ -263,8 +272,8 @@ class SQLSpanExporter(SpanExporter):
             session.add(
                 SpanMessage(
                     span_id=span_row.span_id,
-                    input_content=json.dumps(input) if input is not None else None,
-                    output_content=json.dumps(output) if output is not None else None,
+                    input_content=sanitize_json_string(json.dumps(input)) if input is not None else None,
+                    output_content=sanitize_json_string(json.dumps(output)) if output is not None else None,
                 )
             )
         session.commit()

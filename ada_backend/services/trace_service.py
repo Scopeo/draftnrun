@@ -22,8 +22,18 @@ from ada_backend.services.metrics.utils import (
 LOGGER = logging.getLogger(__name__)
 
 
+def _safe_json_loads(raw: str | None) -> list:
+    if not raw:
+        return []
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        LOGGER.warning("Skipping unparseable span content (len=%d)", len(raw))
+        return []
+
+
 def get_attributes_with_messages(span_kind: str, row: pd.Series, filter_to_last_message: bool = False) -> dict:
-    input_data = json.loads(row["input_content"]) if row["input_content"] else []
+    input_data = _safe_json_loads(row["input_content"])
     input = []
     try:
         if filter_to_last_message and input_data and isinstance(input_data[0], dict) and "messages" in input_data[0]:
@@ -36,7 +46,7 @@ def get_attributes_with_messages(span_kind: str, row: pd.Series, filter_to_last_
     except Exception as e:
         LOGGER.error(f"Error extracting last user message: {e}, input_data: {input_data}")
         input = input_data
-    output = json.loads(row["output_content"]) if row["output_content"] else []
+    output = _safe_json_loads(row["output_content"])
     documents = []
     tool_info = {}
     model_name = ""
