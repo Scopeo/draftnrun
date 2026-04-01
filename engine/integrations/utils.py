@@ -1,7 +1,10 @@
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from urllib.parse import urlparse
 from uuid import UUID
 
+import httpx
 import requests
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -11,6 +14,23 @@ from ada_backend.database import models as db
 from ada_backend.repositories.integration_repository import get_integration_secret, update_integration_secret
 
 LOGGER = logging.getLogger(__name__)
+
+
+def is_url(value: str) -> bool:
+    return isinstance(value, str) and value.startswith(("http://", "https://"))
+
+
+def download_to_local(url: str, output_dir: Path) -> Path:
+    parsed = urlparse(url)
+    filename = Path(parsed.path).name or "attachment"
+    path = output_dir / filename
+    LOGGER.info("Downloading attachment from URL to %s", path)
+    with httpx.stream("GET", url, follow_redirects=True) as resp:
+        resp.raise_for_status()
+        with path.open("wb") as f:
+            for chunk in resp.iter_bytes():
+                f.write(chunk)
+    return path
 
 
 # TODO: Delete after full migration to Nango

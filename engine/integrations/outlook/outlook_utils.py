@@ -7,6 +7,7 @@ from typing import Any, Iterable, Optional
 import httpx
 
 from engine.integrations.outlook.errors import AttachmentNotFoundError, AttachmentPathError, AttachmentTooLargeError
+from engine.integrations.utils import download_to_local, is_url
 from engine.temps_folder_utils import get_output_dir
 
 LOGGER = logging.getLogger(__name__)
@@ -21,13 +22,20 @@ def _ensure_paths(attachments: Optional[Iterable[str | Path]]) -> list[Path]:
     if not attachments:
         return []
     paths: list[Path] = []
-    for att in attachments:
-        p = (output_dir / Path(att)).resolve()
-        if not p.is_relative_to(output_dir):
-            raise AttachmentPathError(str(att))
-        if not p.is_file():
-            raise AttachmentNotFoundError(str(p))
-        paths.append(p)
+    for attachment in attachments:
+        if is_url(str(attachment)):
+            local_path = download_to_local(str(attachment), output_dir)
+        else:
+            attachment_path = Path(attachment)
+            if attachment_path.is_absolute():
+                local_path = attachment_path.resolve()
+            else:
+                local_path = (output_dir / attachment_path).resolve()
+            if not local_path.is_relative_to(output_dir):
+                raise AttachmentPathError(str(attachment))
+        if not local_path.is_file():
+            raise AttachmentNotFoundError(str(local_path))
+        paths.append(local_path)
     return paths
 
 
@@ -57,19 +65,21 @@ def _build_attachments(attachments: Optional[Iterable[str | Path]]) -> list[dict
 
 def build_graph_mail_payload(
     subject: str,
-    body: str,
+    body: Optional[str] = None,
     recipients: Optional[list[str]] = None,
     cc: Optional[list[str]] = None,
     bcc: Optional[list[str]] = None,
     attachments: Optional[Iterable[str | Path]] = None,
+    html_body: Optional[str] = None,
 ) -> dict[str, Any]:
     """Build a Microsoft Graph API message resource JSON payload."""
+    if html_body:
+        body_payload = {"contentType": "HTML", "content": html_body}
+    else:
+        body_payload = {"contentType": "Text", "content": body}
     message: dict[str, Any] = {
         "subject": subject,
-        "body": {
-            "contentType": "Text",
-            "content": body,
-        },
+        "body": body_payload,
         "toRecipients": _build_recipients(recipients),
         "ccRecipients": _build_recipients(cc),
         "bccRecipients": _build_recipients(bcc),
