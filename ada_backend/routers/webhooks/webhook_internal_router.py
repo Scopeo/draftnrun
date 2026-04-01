@@ -3,7 +3,7 @@ import logging
 from typing import Annotated, Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType, EnvType
@@ -16,8 +16,14 @@ from ada_backend.schemas.webhook_schema import (
     WebhookExecuteResponse,
 )
 from ada_backend.services.agent_runner_service import run_env_agent
-from ada_backend.services.errors import EnvironmentNotFound, MissingDataSourceError, MissingIntegrationError
-from ada_backend.services.run_service import create_run, run_with_tracking
+from ada_backend.services.errors import (
+    EnvironmentNotFound,
+    InvalidRunStatusTransition,
+    MissingDataSourceError,
+    MissingIntegrationError,
+    RunNotFound,
+)
+from ada_backend.services.run_service import create_run, fail_pending_run, run_with_tracking
 from ada_backend.services.webhooks.webhook_service import (
     execute_webhook,
     get_webhook_triggers_service,
@@ -112,6 +118,8 @@ async def run_project_internal(
     env: EnvType,
     background_tasks: BackgroundTasks,
     input_data: Dict[str, Any] = Body(...),
+    run_id: Optional[UUID] = Query(None, description="Pre-created run ID to reuse instead of creating a new one"),
+    event_id: Optional[str] = Query(None, description="Webhook event ID for run tracking"),
     session: Session = Depends(get_db),
     verified_webhook_api_key: Annotated[None, Depends(verify_webhook_api_key_dependency)] = None,
 ) -> dict:
@@ -120,20 +128,48 @@ async def run_project_internal(
     Returns 202 immediately with run_id so the client can poll run status; execution runs in background.
     Internal endpoint called by the webhook worker for direct trigger events.
     Requires X-Webhook-API-Key.
+
+    If run_id is provided, reuses the existing PENDING run row (created before enqueue).
     """
-    run = create_run(
-        session=session,
-        project_id=project_id,
-        trigger=CallType.WEBHOOK,
-    )
+    if run_id is None:
+        run = create_run(
+            session=session,
+            project_id=project_id,
+            trigger=CallType.WEBHOOK,
+            event_id=event_id,
+        )
+        run_id = run.id
     background_tasks.add_task(
         _run_project_background,
-        run_id=run.id,
+        run_id=run_id,
         project_id=project_id,
         env=env,
         input_data=input_data,
     )
-    return {"status": "accepted", "run_id": str(run.id)}
+    return {"status": "accepted", "run_id": str(run_id)}
+
+
+@router.patch("/projects/{project_id}/runs/{run_id}/fail", status_code=200)
+async def fail_run_internal(
+    project_id: UUID,
+    run_id: UUID,
+    body: Dict[str, Any] = Body(...),
+    session: Session = Depends(get_db),
+    verified_webhook_api_key: Annotated[None, Depends(verify_webhook_api_key_dependency)] = None,
+) -> dict:
+    """
+    Mark a pre-created PENDING run as FAILED. Called by the webhook worker when a message
+    is dead-lettered (repeated crashes before execution could start).
+    Returns 409 if the run is no longer pending (already picked up by another worker).
+    """
+    error = body.get("error", {"message": "Unknown failure", "type": "DeadLetter"})
+    try:
+        fail_pending_run(session, run_id=run_id, error=error, project_id=project_id)
+    except RunNotFound:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+    except InvalidRunStatusTransition:
+        raise HTTPException(status_code=409, detail=f"Run {run_id} is not in pending status")
+    return {"status": "failed", "run_id": str(run_id)}
 
 
 @router.post(

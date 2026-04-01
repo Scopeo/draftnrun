@@ -39,24 +39,47 @@ Called by the webhook worker after consuming from the Redis stream:
 | Endpoint | Purpose |
 |---|---|
 | `POST /internal/webhooks/{webhook_id}/execute` | Resolve triggers, prepare input, run workflows |
-| `POST /internal/webhooks/projects/{project_id}/envs/{env}/run` | Enqueue workflow run (202) |
+| `POST /internal/webhooks/projects/{project_id}/envs/{env}/run` | Enqueue workflow run (202). Accepts optional `run_id` query param to reuse a pre-created run |
+| `PATCH /internal/webhooks/projects/{project_id}/runs/{run_id}/fail` | Mark a pre-created run as FAILED (called by worker on dead-letter). Validates project ownership. |
 
 Authenticated via `X-Webhook-API-Key` (internal service key).
 
 ## Event Routing
 
+### Provider webhooks (Aircall, Resend)
+
 ```text
-Webhook Event → Redis Stream → Webhook Worker → /internal/webhooks/{webhook_id}/execute
+Provider → POST /webhooks/{provider}
+  → Dedup (Redis SET NX)
+  → XADD to Redis Stream
+  → Webhook Worker picks up
+  → Subprocess calls POST /internal/webhooks/{webhook_id}/execute
     → Resolve IntegrationTriggers
     → For each trigger:
-        → Evaluate filter (FilterExpression: AND/OR of conditions)
-        → If match: execute workflow with prepared input
+      → Evaluate filter
+      → run_with_tracking() → creates Run (PENDING→RUNNING→COMPLETED/FAILED)
+      → Run.event_id links back to the original webhook event
+```
+
+### Direct triggers (user-triggered)
+
+```text
+API user → POST /webhooks/trigger/{project_id}/envs/{env}
+  → Dedup (Redis SET NX)
+  → Create Run (PENDING) in DB ← run exists BEFORE Redis enqueue
+  → XADD to Redis Stream (payload includes run_id)
+  → Webhook Worker picks up
+  → Subprocess calls POST /internal/webhooks/projects/{project_id}/envs/{env}/run?run_id=...
+    → Reuses existing Run row
+    → Background: RUNNING → COMPLETED/FAILED
+  → If dead-lettered: PATCH /internal/webhooks/projects/{project_id}/runs/{run_id}/fail → Run marked FAILED
 ```
 
 ## Data Model
 
 - **`Webhook`** (`webhooks`): `organization_id`, `provider`, `external_client_id`. Indexed by `(provider, external_client_id)`.
 - **`IntegrationTrigger`** (`integration_triggers`): Links webhook → project. Has `events` (JSONB), `events_hash`, `enabled`, `filter_options` (JSONB). Unique on `(webhook_id, events_hash, project_id)`.
+- **`Run`** (`runs`): `event_id` (nullable) links the run back to the originating webhook event. For direct triggers, the Run is created before enqueue so it's visible in DB throughout the entire lifecycle.
 
 ## Filter System
 

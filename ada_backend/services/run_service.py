@@ -73,6 +73,7 @@ async def run_with_tracking(
     webhook_id: UUID | None = None,
     integration_trigger_id: UUID | None = None,
     run_id: UUID | None = None,
+    event_id: str | None = None,
 ) -> ChatResponse:
     """
     Create a run record (or use existing run_id), set it to RUNNING, execute the runner coroutine,
@@ -90,6 +91,7 @@ async def run_with_tracking(
                 trigger=trigger,
                 webhook_id=webhook_id,
                 integration_trigger_id=integration_trigger_id,
+                event_id=event_id,
             )
             run_id = run.id
         now = datetime.now(timezone.utc)
@@ -209,6 +211,7 @@ def create_run(
     trigger: CallType = CallType.API,
     webhook_id: UUID | None = None,
     integration_trigger_id: UUID | None = None,
+    event_id: str | None = None,
 ) -> RunResponseSchema:
     project = get_project(session, project_id=project_id)
     if not project:
@@ -219,6 +222,7 @@ def create_run(
         trigger=trigger,
         webhook_id=webhook_id,
         integration_trigger_id=integration_trigger_id,
+        event_id=event_id,
     )
     return RunResponseSchema.model_validate(run, from_attributes=True)
 
@@ -265,6 +269,30 @@ def get_runs(
     runs = run_repository.get_runs_by_project(session, project_id=project_id, limit=page_size, offset=offset)
     items = [RunResponseSchema.model_validate(r, from_attributes=True) for r in runs]
     return items, total
+
+
+def fail_pending_run(
+    session: Session,
+    run_id: UUID,
+    error: dict,
+    project_id: UUID | None = None,
+) -> RunResponseSchema:
+    updated = run_repository.fail_run_if_pending(
+        session,
+        run_id=run_id,
+        error=error,
+        finished_at=datetime.now(timezone.utc),
+        project_id=project_id,
+    )
+    if updated is None:
+        run = run_repository.get_run(session, run_id)
+        if not run:
+            raise RunNotFound(run_id)
+        if project_id is not None and run.project_id != project_id:
+            raise RunNotFound(run_id)
+        current = run.status if isinstance(run.status, RunStatus) else RunStatus(str(run.status))
+        raise InvalidRunStatusTransition(current.value, RunStatus.FAILED.value)
+    return RunResponseSchema.model_validate(updated, from_attributes=True)
 
 
 def update_run_status(

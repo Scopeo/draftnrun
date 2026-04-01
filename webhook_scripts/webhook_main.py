@@ -20,7 +20,13 @@ WEBHOOK_EXECUTE_TIMEOUT = 1860  # Slightly above 30 min to allow for long-runnin
 DIRECT_TRIGGER_PROVIDER = "direct_trigger"
 
 
-async def _post(url: str, body: Dict[str, Any], webhook_api_key: str, context: str) -> Dict[str, Any]:
+async def _post(
+    url: str,
+    body: Dict[str, Any],
+    webhook_api_key: str,
+    context: str,
+    params: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
     """POST to an internal endpoint with shared auth headers and error handling.
 
     Args:
@@ -28,6 +34,7 @@ async def _post(url: str, body: Dict[str, Any], webhook_api_key: str, context: s
         body: JSON-serialisable request body.
         webhook_api_key: Value for the X-Webhook-API-Key header.
         context: Short label used in log messages to identify the call site.
+        params: Optional query parameters.
 
     Returns:
         Parsed JSON response body.
@@ -37,6 +44,7 @@ async def _post(url: str, body: Dict[str, Any], webhook_api_key: str, context: s
             response = await client.post(
                 url,
                 json=body,
+                params=params,
                 headers={
                     "X-Webhook-API-Key": webhook_api_key,
                     "Content-Type": "application/json",
@@ -65,6 +73,7 @@ async def webhook_main_async(
     event_id: str,
     payload: Dict[str, Any],
     organization_id: Optional[UUID] = None,
+    run_id: Optional[str] = None,
 ):
     LOGGER.info(
         f"[WEBHOOK_MAIN] Starting webhook processing - "
@@ -88,6 +97,7 @@ async def webhook_main_async(
             event_id=event_id,
             api_base_url=api_base_url,
             webhook_api_key=webhook_api_key,
+            run_id=run_id,
         )
         return
 
@@ -118,20 +128,33 @@ async def _run_direct_trigger(
     event_id: str,
     api_base_url: str,
     webhook_api_key: str,
+    run_id: Optional[str] = None,
 ) -> None:
     """Call the internal direct-trigger run endpoint for a specific project and env."""
     env = payload.pop("env", None)
     if not env:
         raise ValueError("Missing 'env' in direct trigger payload")
-    LOGGER.info(f"[WEBHOOK_MAIN] Direct trigger: project_id={project_id}, env={env}, event_id={event_id}")
+    LOGGER.info(
+        f"[WEBHOOK_MAIN] Direct trigger: project_id={project_id}, env={env}, "
+        f"event_id={event_id}, run_id={run_id}"
+    )
+
+    url = f"{api_base_url}/internal/webhooks/projects/{project_id}/envs/{env}/run"
+    params: Dict[str, str] = {"event_id": event_id}
+    if run_id:
+        params["run_id"] = run_id
 
     await _post(
-        url=f"{api_base_url}/internal/webhooks/projects/{project_id}/envs/{env}/run",
+        url=url,
         body=payload,
         webhook_api_key=webhook_api_key,
         context="direct trigger",
+        params=params,
     )
-    LOGGER.info(f"[WEBHOOK_MAIN] Direct trigger completed: project_id={project_id}, env={env}, event_id={event_id}")
+    LOGGER.info(
+        f"[WEBHOOK_MAIN] Direct trigger completed: project_id={project_id}, env={env}, "
+        f"event_id={event_id}, run_id={run_id}"
+    )
 
 
 def webhook_main(
@@ -140,17 +163,11 @@ def webhook_main(
     event_id: str,
     organization_id: str,
     payload: Dict[str, Any],
+    run_id: Optional[str] = None,
 ):
     """
     Entry point for webhook processing script.
     Called by the worker subprocess.
-
-    Args:
-        webhook_id: UUID string of the webhook configuration
-        provider: Webhook provider name (e.g., 'aircall')
-        event_id: Unique event identifier from the webhook payload
-        organization_id: UUID string of the organization
-        payload: The webhook payload data
     """
     LOGGER.info("[WEBHOOK_MAIN] Entry point called")
     try:
@@ -161,6 +178,7 @@ def webhook_main(
                 event_id=event_id,
                 organization_id=UUID(organization_id) if organization_id else None,
                 payload=payload,
+                run_id=run_id,
             )
         )
         LOGGER.info("[WEBHOOK_MAIN] Completed successfully")

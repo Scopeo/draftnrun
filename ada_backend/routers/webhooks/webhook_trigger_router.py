@@ -3,8 +3,10 @@ from typing import Annotated, Optional
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
 
 from ada_backend.database.models import EnvType
+from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import verify_api_key_dependency
 from ada_backend.schemas.auth_schema import VerifiedApiKey
 from ada_backend.schemas.webhook_schema import WebhookProcessingResponseSchema
@@ -24,6 +26,7 @@ async def trigger_workflow_webhook(
         None,
         description="Optional idempotency key. If not provided, one is auto-generated.",
     ),
+    session: Session = Depends(get_db),
     verified_api_key: Annotated[VerifiedApiKey, Depends(verify_api_key_dependency)] = None,
 ) -> WebhookProcessingResponseSchema:
     """
@@ -37,6 +40,7 @@ async def trigger_workflow_webhook(
 
     try:
         return await process_direct_trigger_event(
+            session=session,
             project_id=project_id,
             env=env.value,
             payload=payload,

@@ -309,6 +309,7 @@ def push_webhook_event(
     payload: Dict[str, Any],
     event_id: str,
     organization_id: Optional[UUID] = None,
+    run_id: Optional[str] = None,
 ) -> bool:
     """
     Push a webhook event onto the Redis Stream for async processing.
@@ -331,6 +332,8 @@ def push_webhook_event(
             "organization_id": str(organization_id) if organization_id else None,
             "payload": payload,
         }
+        if run_id:
+            queue_payload["run_id"] = run_id
 
         safe_payload = queue_payload.copy()
         if "payload" in safe_payload:

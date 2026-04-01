@@ -1,9 +1,12 @@
 import fcntl
+import json
 import os
 import select
 import subprocess
 from pathlib import Path
 from typing import Any, Dict
+
+import httpx
 
 from ada_ingestion_system.worker.base_worker import BaseWorker, logger
 
@@ -36,13 +39,15 @@ class WebhookWorker(BaseWorker):
             event_id = payload["event_id"]
             organization_id = payload["organization_id"]
             webhook_payload = payload["payload"]
+            run_id = payload.get("run_id")
 
             logger.info(
-                "processing_webhook webhook_id=%s provider=%s event_id=%s organization_id=%s",
+                "processing_webhook webhook_id=%s provider=%s event_id=%s organization_id=%s run_id=%s",
                 webhook_id,
                 provider,
                 event_id,
                 organization_id,
+                run_id,
             )
 
             # Get the ada_backend path - assumes a standard structure
@@ -59,6 +64,7 @@ class WebhookWorker(BaseWorker):
 
             # Create command to run the script as a separate process
             module_path = "webhook_scripts.webhook_main"
+            run_id_arg = f"run_id={repr(run_id)}, " if run_id else ""
             cmd = [
                 python_cmd,
                 "-c",
@@ -70,6 +76,7 @@ class WebhookWorker(BaseWorker):
                     f"provider={repr(provider)}, "
                     f"event_id={repr(event_id)}, "
                     f"organization_id={repr(organization_id)}, "
+                    f"{run_id_arg}"
                     f"payload={repr(webhook_payload)}"
                     f")"
                 ),
@@ -169,6 +176,42 @@ class WebhookWorker(BaseWorker):
         except Exception as e:
             logger.error("webhook_processing_error error=%s", str(e), exc_info=True)
             raise
+
+    def _on_dead_letter(self, message_id: str, fields: Dict[str, str], reason: str = "") -> None:
+        """Mark the pre-created run as FAILED when a direct-trigger message is dead-lettered."""
+        try:
+            raw = fields.get("data", "")
+            payload = json.loads(raw) if raw else {}
+        except (json.JSONDecodeError, TypeError):
+            logger.error("dead_letter_unparseable message_id=%s", message_id)
+            return
+
+        run_id = payload.get("run_id")
+        project_id = payload.get("webhook_id")
+        if not run_id or not project_id:
+            return
+
+        api_base_url = os.getenv("ADA_URL", "http://localhost:8000")
+        webhook_api_key = os.getenv("WEBHOOK_API_KEY", "")
+
+        logger.error(
+            "dead_letter_failing_run run_id=%s project_id=%s event_id=%s reason=%s",
+            run_id,
+            project_id,
+            payload.get("event_id"),
+            reason,
+        )
+
+        try:
+            response = httpx.patch(
+                f"{api_base_url}/internal/webhooks/projects/{project_id}/runs/{run_id}/fail",
+                json={"error": {"message": f"Webhook processing failed after repeated crashes: {reason}"}},
+                headers={"X-Webhook-API-Key": webhook_api_key, "Content-Type": "application/json"},
+                timeout=10,
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as e:
+            logger.error("dead_letter_fail_run_request_failed run_id=%s error=%s", run_id, str(e))
 
     def _log_queued_task(self, payload: Dict[str, Any]) -> None:
         """Log queued webhook task."""
