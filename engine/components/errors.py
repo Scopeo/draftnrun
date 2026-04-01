@@ -53,11 +53,13 @@ class CategorizationError(Exception):
 class LLMProviderError(Exception):
     """Raised when an LLM provider (OpenAI, Mistral, Anthropic, custom) returns an API error."""
 
-    def __init__(self, provider_message: str, status_code: int | None = None):
+    def __init__(self, provider_message: str, status_code: int | None = None, provider_name: str | None = None):
         self.provider_message = provider_message
         self.status_code = status_code
+        self.provider_name = provider_name
+        label = provider_name or "LLM provider"
         if status_code:
-            message = f"LLM provider error ({status_code}): {provider_message}"
+            message = f"{label} error ({status_code}): {provider_message}"
         else:
-            message = f"LLM provider error: {provider_message}"
+            message = f"{label} error: {provider_message}"
         super().__init__(message)

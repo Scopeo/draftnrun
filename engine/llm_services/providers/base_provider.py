@@ -24,7 +24,7 @@ def _wrap_provider_errors(method):
         except Exception as e:
             if self._sdk_exceptions and isinstance(e, self._sdk_exceptions):
                 msg, status_code = self.extract_error_message(e)
-                raise LLMProviderError(msg, status_code=status_code) from e
+                raise LLMProviderError(msg, status_code=status_code, provider_name=self.provider_display_name) from e
             raise
     return wrapper
 
@@ -48,6 +48,10 @@ class BaseProvider(ABC):
 
         require_base_url = getattr(self, "_require_base_url", True)
         self._validate_credentials(require_base_url=require_base_url)
+
+    @property
+    def provider_display_name(self) -> str:
+        return self.__class__.__name__.replace("Provider", "")
 
     def _validate_credentials(self, require_base_url: bool) -> None:
         provider_name = self.__class__.__name__.replace("Provider", "").upper()

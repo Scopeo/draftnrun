@@ -30,6 +30,10 @@ class CustomProvider(BaseProvider):
         super().__init__(api_key, base_url, model_name, **kwargs)
         self._provider_name = provider_name
 
+    @property
+    def provider_display_name(self) -> str:
+        return self._provider_name
+
     async def complete(
         self,
         messages: list[dict] | str,

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import httpx
 import openai
+import pytest
 
 from ada_backend.services.graph_reachability import find_reachable_nodes
 from engine.components.errors import LLMProviderError
@@ -249,8 +250,84 @@ class TestExtractProviderMessage:
         assert str(err) == "LLM provider error (400): Invalid model: foo-bar"
         assert err.provider_message == "Invalid model: foo-bar"
         assert err.status_code == 400
+        assert err.provider_name is None
 
     def test_llm_provider_error_str_no_status(self):
         err = LLMProviderError("Connection timed out")
         assert str(err) == "LLM provider error: Connection timed out"
         assert err.status_code is None
+        assert err.provider_name is None
+
+    def test_llm_provider_error_with_provider_name(self):
+        err = LLMProviderError("Unauthorized", status_code=401, provider_name="OpenAI")
+        assert str(err) == "OpenAI error (401): Unauthorized"
+        assert err.provider_message == "Unauthorized"
+        assert err.status_code == 401
+        assert err.provider_name == "OpenAI"
+
+    def test_llm_provider_error_with_provider_name_no_status(self):
+        err = LLMProviderError("Rate limit exceeded", provider_name="Anthropic")
+        assert str(err) == "Anthropic error: Rate limit exceeded"
+        assert err.provider_name == "Anthropic"
+
+
+class TestProviderDisplayName:
+    def test_base_provider_display_name(self):
+        from engine.llm_services.providers.openai_provider import OpenAIProvider
+
+        provider = OpenAIProvider(api_key="test-key", base_url=None, model_name="gpt-4")
+        assert provider.provider_display_name == "OpenAI"
+
+    def test_custom_provider_display_name(self):
+        from engine.llm_services.providers.custom_provider import CustomProvider
+
+        provider = CustomProvider(
+            api_key="test-key", base_url="https://api.example.com", model_name="my-model", provider_name="Acme LLM"
+        )
+        assert provider.provider_display_name == "Acme LLM"
+
+    @pytest.mark.asyncio
+    async def test_wrap_provider_errors_includes_provider_name(self):
+        class _FakeProvider(BaseProvider):
+            _sdk_exceptions = (openai.APIStatusError,)
+            _require_base_url = False
+
+            async def complete(self, *a, **kw):
+                resp = httpx.Response(401, request=httpx.Request("POST", "https://x"))
+                raise openai.AuthenticationError(
+                    message="401", response=resp, body={"message": "Incorrect API key"},
+                )
+
+            async def embed(self, *a, **kw):
+                pass
+
+            async def constrained_complete_with_pydantic(self, *a, **kw):
+                pass
+
+            async def constrained_complete_with_json_schema(self, *a, **kw):
+                pass
+
+            async def function_call_without_structured_output(self, *a, **kw):
+                pass
+
+            async def function_call_with_structured_output(self, *a, **kw):
+                pass
+
+            async def web_search(self, *a, **kw):
+                pass
+
+            async def vision(self, *a, **kw):
+                pass
+
+            async def ocr(self, *a, **kw):
+                pass
+
+        provider = _FakeProvider(api_key="k", base_url=None, model_name="m")
+        assert provider.provider_display_name == "_Fake"
+
+        with pytest.raises(LLMProviderError) as exc_info:
+            await provider.complete()
+
+        assert exc_info.value.provider_name == "_Fake"
+        assert exc_info.value.status_code == 401
+        assert "Incorrect API key" in str(exc_info.value)
