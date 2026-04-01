@@ -1,7 +1,6 @@
 import ast
 import json
 import logging
-import re
 from datetime import datetime, timezone
 from typing import Any, cast
 
@@ -19,26 +18,10 @@ from engine.trace.nested_utils import split_nested_keys
 
 LOGGER = logging.getLogger(__name__)
 
-_SURROGATE_RE = re.compile(r"\\u[dD][89a-fA-F][0-9a-fA-F]{2}")
-_INVALID_ESCAPE_RE = re.compile(r'\\([^"\\/bfnrtu])')
-
 
 def sanitize_json_string(text: str) -> str:
-    """Remove PostgreSQL-incompatible sequences from a JSON-serialized string.
-
-    Handles: \\u0000 (null byte escape), lone Unicode surrogates, and
-    invalid JSON backslash escapes that some LLM outputs produce.
-    Falls back to a safe representation if the result is still not valid JSON.
-    """
-    result = text.replace("\\u0000", "")
-    result = _SURROGATE_RE.sub("", result)
-    result = _INVALID_ESCAPE_RE.sub(r"\1", result)
-    try:
-        json.loads(result)
-        return result
-    except json.JSONDecodeError:
-        LOGGER.warning("Span content produced invalid JSON after sanitization, storing raw fallback")
-        return "[]"
+    """Remove PostgreSQL-incompatible \\u0000 (null byte) escapes from a JSON-serialized string."""
+    return text.replace("\\u0000", "")
 
 
 _TraceSession = sessionmaker(bind=_trace_engine)
