@@ -663,7 +663,7 @@ class QdrantService:
 
             list_payloads = [
                 {
-                    "id": self.get_uuid(chunk[schema.chunk_id_field]),
+                    "id": self.get_uuid(self._build_point_id_seed(chunk, schema)),
                     "payload": {field: chunk[field] for field in chunk.keys()},
                     "vector": vector,
                 }
@@ -718,6 +718,16 @@ class QdrantService:
         """Generate a UUID."""
         namespace = uuid.NAMESPACE_DNS
         return str(uuid.uuid5(namespace, string_id))
+
+    @staticmethod
+    def _build_point_id_seed(chunk: dict[str, Any], schema: QdrantCollectionSchema) -> str:
+        # TODO: Remove this workaround once chunk_id will be unique uuid
+        seed = chunk[schema.chunk_id_field]
+        if schema.source_id_field:
+            source_id = chunk.get(schema.source_id_field)
+            if source_id:
+                seed = f"{source_id}:{seed}"
+        return seed
 
     def _build_timestamp_filter(
         self,
@@ -1192,6 +1202,7 @@ class QdrantService:
                     point_ids=list(ids_to_delete),
                     id_field=chunk_id_field,
                     collection_name=collection_name,
+                    filter=query_filter_qdrant,
                 )
                 LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
 
