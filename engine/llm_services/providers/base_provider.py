@@ -1,15 +1,46 @@
+import asyncio
+import functools
 import json
 import logging
 from abc import ABC, abstractmethod
 from typing import Optional
 
+import openai
 from openai.types.chat import ChatCompletion
 from pydantic import BaseModel
+
+from engine.components.errors import LLMProviderError
 
 LOGGER = logging.getLogger(__name__)
 
 
+def _wrap_provider_errors(method):
+    @functools.wraps(method)
+    async def wrapper(self, *args, **kwargs):
+        try:
+            return await method(self, *args, **kwargs)
+        except LLMProviderError:
+            raise
+        except Exception as e:
+            if self._sdk_exceptions and isinstance(e, self._sdk_exceptions):
+                msg, status_code = self.extract_error_message(e)
+                raise LLMProviderError(msg, status_code=status_code, provider_name=self.provider_display_name) from e
+            raise
+    return wrapper
+
+
 class BaseProvider(ABC):
+    _sdk_exceptions: tuple[type[Exception], ...] = ()
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if not cls._sdk_exceptions:
+            return
+        for name in list(vars(cls)):
+            method = vars(cls)[name]
+            if asyncio.iscoroutinefunction(method) and not name.startswith("_"):
+                setattr(cls, name, _wrap_provider_errors(method))
+
     def __init__(self, api_key: str, base_url: Optional[str], model_name: str, **kwargs):
         self._api_key = api_key
         self._base_url = base_url
@@ -17,6 +48,10 @@ class BaseProvider(ABC):
 
         require_base_url = getattr(self, "_require_base_url", True)
         self._validate_credentials(require_base_url=require_base_url)
+
+    @property
+    def provider_display_name(self) -> str:
+        return self.__class__.__name__.replace("Provider", "")
 
     def _validate_credentials(self, require_base_url: bool) -> None:
         provider_name = self.__class__.__name__.replace("Provider", "").upper()
@@ -116,6 +151,19 @@ class BaseProvider(ABC):
     @abstractmethod
     async def ocr(self, messages: list[dict], **kwargs) -> tuple[str, int, int, int]:
         pass
+
+    @staticmethod
+    def extract_error_message(exc: Exception) -> tuple[str, int | None]:
+        if isinstance(exc, openai.APIStatusError):
+            body = exc.body
+            if isinstance(body, dict):
+                msg = body.get("message") or body.get("error", {}).get("message") or str(body)
+            else:
+                msg = str(body) if body else exc.message
+            return msg, exc.status_code
+        if isinstance(exc, openai.APIError):
+            return exc.message, None
+        return str(exc), None
 
     def _convert_tool_call_to_content(self, response: ChatCompletion, tool_call) -> ChatCompletion:
         try:

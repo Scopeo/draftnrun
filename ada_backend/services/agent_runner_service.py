@@ -43,6 +43,7 @@ from ada_backend.services.variable_resolution_service import resolve_variables
 from engine.components.errors import (
     CategorizationError,
     KeyTypePromptTemplateError,
+    LLMProviderError,
     MissingKeyPromptTemplateError,
     NoMatchingRouteError,
 )
@@ -360,7 +361,13 @@ async def run_agent(
             is_root_execution=True,
         )
         params = get_tracing_span()
-    except (MissingKeyPromptTemplateError, KeyTypePromptTemplateError, NoMatchingRouteError, CategorizationError):
+    except (
+        MissingKeyPromptTemplateError,
+        KeyTypePromptTemplateError,
+        NoMatchingRouteError,
+        CategorizationError,
+        LLMProviderError,
+    ):
         raise
     except Exception as e:
         tb = traceback.format_exc()

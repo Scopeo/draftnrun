@@ -24,9 +24,15 @@ class CustomProvider(BaseProvider):
     follow the OpenAI API interface. All methods accept OpenAI format.
     """
 
+    _sdk_exceptions = (openai.APIError,)
+
     def __init__(self, api_key: str, base_url: Optional[str], model_name: str, provider_name: str, **kwargs):
         super().__init__(api_key, base_url, model_name, **kwargs)
         self._provider_name = provider_name
+
+    @property
+    def provider_display_name(self) -> str:
+        return self._provider_name
 
     async def complete(
         self,
@@ -94,7 +100,7 @@ class CustomProvider(BaseProvider):
                 stream=stream,
             )
             return result, prompt_tokens, completion_tokens, total_tokens
-        except (openai.BadRequestError, openai.UnprocessableEntityError, TypeError, ValueError) as e:
+        except (TypeError, ValueError) as e:
             LOGGER.error(f"Error in constrained_complete_with_pydantic: {e}")
             raise ValueError(
                 f"Error processing constrained completion with "
@@ -142,6 +148,12 @@ class CustomProvider(BaseProvider):
                 response.usage.total_tokens,
             )
         except Exception as e:
+            if self._sdk_exceptions and isinstance(e, self._sdk_exceptions):
+                raise
+            LOGGER.exception(
+                "Error in _fallback_constrained_complete_with_json_format for provider %s model %s",
+                self._provider_name, self._model_name,
+            )
             raise ValueError(
                 f"Error processing constrained completion with pydantic schema on the provider {self._provider_name} "
                 f"with model {self._model_name}: {str(e)}"
@@ -208,7 +220,12 @@ class CustomProvider(BaseProvider):
             )
 
         except Exception as e:
-            LOGGER.error(f"Error in constrained_complete_with_json_schema: {e}")
+            if self._sdk_exceptions and isinstance(e, self._sdk_exceptions):
+                raise
+            LOGGER.exception(
+                "Error in constrained_complete_with_json_schema for provider %s model %s",
+                self._provider_name, self._model_name,
+            )
             raise ValueError(
                 f"Error processing constrained completion with JSON schema on the provider {self._provider_name} "
                 f"with model {self._model_name}: {str(e)}"

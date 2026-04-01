@@ -1,7 +1,15 @@
 import uuid
 from types import SimpleNamespace
 
+import httpx
+import openai
+import pytest
+from google.genai import errors as google_genai_errors
+
 from ada_backend.services.graph_reachability import find_reachable_nodes
+from engine.components.errors import LLMProviderError
+from engine.llm_services.providers.base_provider import BaseProvider
+from engine.llm_services.providers.google_provider import GoogleProvider
 
 
 def _node(node_id: str, *, is_trigger: bool = False, name: str = ""):
@@ -191,3 +199,166 @@ class TestIsTriggerFiltering:
 
         assert reachable == {ID_A, ID_B, ID_C}
         assert ID_D not in reachable
+
+
+class TestExtractProviderMessage:
+    """Regression tests for LLM provider error extraction (DRA-1181)."""
+
+    def _make_httpx_response(self, status_code: int = 400) -> httpx.Response:
+        resp = httpx.Response(status_code=status_code, request=httpx.Request("POST", "https://api.example.com"))
+        return resp
+
+    def test_openai_bad_request_with_body_dict(self):
+        resp = self._make_httpx_response(400)
+        exc = openai.BadRequestError(
+            message="Error code: 400",
+            response=resp,
+            body={"message": "Invalid model: mistral-medium-c21211-r0-75", "type": "invalid_model"},
+        )
+        msg, status = BaseProvider.extract_error_message(exc)
+        assert msg == "Invalid model: mistral-medium-c21211-r0-75"
+        assert status == 400
+
+    def test_openai_auth_error(self):
+        resp = self._make_httpx_response(401)
+        exc = openai.AuthenticationError(
+            message="Error code: 401",
+            response=resp,
+            body={"message": "Invalid API key", "type": "auth_error"},
+        )
+        msg, status = BaseProvider.extract_error_message(exc)
+        assert msg == "Invalid API key"
+        assert status == 401
+
+    def test_openai_api_status_error_with_string_body(self):
+        resp = self._make_httpx_response(500)
+        exc = openai.InternalServerError(
+            message="Error code: 500",
+            response=resp,
+            body="Internal server error",
+        )
+        msg, status = BaseProvider.extract_error_message(exc)
+        assert msg == "Internal server error"
+        assert status == 500
+
+    def test_openai_api_connection_error(self):
+        exc = openai.APIConnectionError(request=httpx.Request("POST", "https://api.example.com"))
+        msg, status = BaseProvider.extract_error_message(exc)
+        assert "Connection error" in msg
+        assert status is None
+
+    def test_google_client_error(self):
+        exc = google_genai_errors.ClientError(400, {"message": "Invalid model", "status": "INVALID_ARGUMENT"})
+        msg, status = GoogleProvider.extract_error_message(exc)
+        assert msg == "Invalid model"
+        assert status == 400
+
+    def test_google_server_error(self):
+        exc = google_genai_errors.ServerError(503, {"message": "Service unavailable", "status": "UNAVAILABLE"})
+        msg, status = GoogleProvider.extract_error_message(exc)
+        assert msg == "Service unavailable"
+        assert status == 503
+
+    def test_google_api_error_no_message_falls_back_to_str(self):
+        exc = google_genai_errors.APIError(429, {})
+        msg, status = GoogleProvider.extract_error_message(exc)
+        assert status == 429
+        assert msg  # should be a non-empty fallback string
+
+    def test_google_extract_delegates_openai_to_base(self):
+        resp = self._make_httpx_response(400)
+        exc = openai.BadRequestError(
+            message="Error code: 400",
+            response=resp,
+            body={"message": "Bad request from OpenAI path"},
+        )
+        msg, status = GoogleProvider.extract_error_message(exc)
+        assert msg == "Bad request from OpenAI path"
+        assert status == 400
+
+    def test_llm_provider_error_str_clean(self):
+        err = LLMProviderError("Invalid model: foo-bar", status_code=400)
+        assert str(err) == "LLM provider error (400): Invalid model: foo-bar"
+        assert err.provider_message == "Invalid model: foo-bar"
+        assert err.status_code == 400
+        assert err.provider_name is None
+
+    def test_llm_provider_error_str_no_status(self):
+        err = LLMProviderError("Connection timed out")
+        assert str(err) == "LLM provider error: Connection timed out"
+        assert err.status_code is None
+        assert err.provider_name is None
+
+    def test_llm_provider_error_with_provider_name(self):
+        err = LLMProviderError("Unauthorized", status_code=401, provider_name="OpenAI")
+        assert str(err) == "OpenAI error (401): Unauthorized"
+        assert err.provider_message == "Unauthorized"
+        assert err.status_code == 401
+        assert err.provider_name == "OpenAI"
+
+    def test_llm_provider_error_with_provider_name_no_status(self):
+        err = LLMProviderError("Rate limit exceeded", provider_name="Anthropic")
+        assert str(err) == "Anthropic error: Rate limit exceeded"
+        assert err.provider_name == "Anthropic"
+
+
+class TestProviderDisplayName:
+    def test_base_provider_display_name(self):
+        from engine.llm_services.providers.openai_provider import OpenAIProvider
+
+        provider = OpenAIProvider(api_key="test-key", base_url=None, model_name="gpt-4")
+        assert provider.provider_display_name == "OpenAI"
+
+    def test_custom_provider_display_name(self):
+        from engine.llm_services.providers.custom_provider import CustomProvider
+
+        provider = CustomProvider(
+            api_key="test-key", base_url="https://api.example.com", model_name="my-model", provider_name="Acme LLM"
+        )
+        assert provider.provider_display_name == "Acme LLM"
+
+    @pytest.mark.asyncio
+    async def test_wrap_provider_errors_includes_provider_name(self):
+        class _FakeProvider(BaseProvider):
+            _sdk_exceptions = (openai.APIStatusError,)
+            _require_base_url = False
+
+            async def complete(self, *a, **kw):
+                resp = httpx.Response(401, request=httpx.Request("POST", "https://x"))
+                raise openai.AuthenticationError(
+                    message="401", response=resp, body={"message": "Incorrect API key"},
+                )
+
+            async def embed(self, *a, **kw):
+                pass
+
+            async def constrained_complete_with_pydantic(self, *a, **kw):
+                pass
+
+            async def constrained_complete_with_json_schema(self, *a, **kw):
+                pass
+
+            async def function_call_without_structured_output(self, *a, **kw):
+                pass
+
+            async def function_call_with_structured_output(self, *a, **kw):
+                pass
+
+            async def web_search(self, *a, **kw):
+                pass
+
+            async def vision(self, *a, **kw):
+                pass
+
+            async def ocr(self, *a, **kw):
+                pass
+
+        provider = _FakeProvider(api_key="k", base_url=None, model_name="m")
+        assert provider.provider_display_name == "_Fake"
+
+        with pytest.raises(LLMProviderError) as exc_info:
+            await provider.complete()
+
+        assert exc_info.value.provider_name == "_Fake"
+        assert exc_info.value.status_code == 401
+        assert "Incorrect API key" in str(exc_info.value)
