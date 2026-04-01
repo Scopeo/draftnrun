@@ -23,7 +23,12 @@ LOGGER = logging.getLogger(__name__)
 
 
 class GoogleProvider(BaseProvider):
-    _sdk_exceptions = (openai.APIError,)
+    _sdk_exceptions = (
+        openai.APIError,
+        google_genai_errors.APIError,
+        google_genai_errors.ClientError,
+        google_genai_errors.ServerError,
+    )
 
     async def complete(
         self,
@@ -318,13 +323,7 @@ class GoogleProvider(BaseProvider):
             # Google doesn't provide token usage in the standard format
             return result, 0, 0, 0
 
-        except (
-            google_genai_errors.APIError,
-            google_genai_errors.ClientError,
-            google_genai_errors.ServerError,
-            ValueError,
-            TypeError,
-        ) as e:
+        except (ValueError, TypeError) as e:
             raise ValueError(f"Google vision request failed: {e}") from e
 
     async def ocr(self, messages: list[dict], **kwargs) -> tuple[str, int, int, int]:

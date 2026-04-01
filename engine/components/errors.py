@@ -58,7 +58,7 @@ class LLMProviderError(Exception):
         self.status_code = status_code
         self.provider_name = provider_name
         label = provider_name or "LLM provider"
-        if status_code:
+        if status_code is not None:
             message = f"{label} error ({status_code}): {provider_message}"
         else:
             message = f"{label} error: {provider_message}"

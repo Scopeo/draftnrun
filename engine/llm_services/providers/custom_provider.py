@@ -100,7 +100,7 @@ class CustomProvider(BaseProvider):
                 stream=stream,
             )
             return result, prompt_tokens, completion_tokens, total_tokens
-        except (openai.BadRequestError, openai.UnprocessableEntityError, TypeError, ValueError) as e:
+        except (TypeError, ValueError) as e:
             LOGGER.error(f"Error in constrained_complete_with_pydantic: {e}")
             raise ValueError(
                 f"Error processing constrained completion with "
@@ -148,6 +148,12 @@ class CustomProvider(BaseProvider):
                 response.usage.total_tokens,
             )
         except Exception as e:
+            if self._sdk_exceptions and isinstance(e, self._sdk_exceptions):
+                raise
+            LOGGER.exception(
+                "Error in _fallback_constrained_complete_with_json_format for provider %s model %s",
+                self._provider_name, self._model_name,
+            )
             raise ValueError(
                 f"Error processing constrained completion with pydantic schema on the provider {self._provider_name} "
                 f"with model {self._model_name}: {str(e)}"
