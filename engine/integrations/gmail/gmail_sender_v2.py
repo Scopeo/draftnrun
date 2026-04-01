@@ -139,8 +139,8 @@ class GmailSenderV2(Component):
         return sent_message
 
     async def _run_without_io_trace(self, inputs: GmailSenderInputs, ctx: dict) -> GmailSenderOutputs:
-        if not inputs.mail_subject or not inputs.mail_body:
-            raise ValueError("Both email_subject and email_body must be provided")
+        if not inputs.mail_subject:
+            raise ValueError("Email subject must be provided")
         span = get_current_span()
         span.set_attributes({
             SpanAttributes.INPUT_VALUE: serialize_to_json(
