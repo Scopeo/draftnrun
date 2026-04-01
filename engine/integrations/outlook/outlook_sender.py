@@ -11,10 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.integrations.outlook.errors import OutlookAPIError
-from engine.integrations.outlook.outlook_utils import (
-    GRAPH_API_BASE,
-    build_graph_mail_payload,
-)
+from engine.integrations.outlook.outlook_utils import GRAPH_API_BASE, build_graph_mail_payload
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
@@ -35,6 +32,10 @@ OUTLOOK_SENDER_TOOL_DESCRIPTION = ToolDescription(
         "mail_body": {
             "type": "string",
             "description": "The body of the email to be sent.",
+        },
+        "mail_html_body": {
+            "type": "string",
+            "description": "Optional HTML body of the email. When provided, used instead of mail_body.",
         },
         "email_recipients": {
             "type": "array",
@@ -60,7 +61,7 @@ OUTLOOK_SENDER_TOOL_DESCRIPTION = ToolDescription(
             "description": "List of file paths to attach to the email.",
         },
     },
-    required_tool_properties=["mail_subject", "mail_body"],
+    required_tool_properties=["mail_subject"],
 )
 
 
@@ -74,7 +75,8 @@ class OutlookSenderInputs(BaseModel):
             "parameter_order_within_group": 1,
         },
     )
-    mail_body: str = Field(
+    mail_body: Optional[str] = Field(
+        default=None,
         description="The body of the email to be sent.",
         json_schema_extra={
             "is_tool_input": True,
@@ -83,13 +85,23 @@ class OutlookSenderInputs(BaseModel):
             "parameter_order_within_group": 2,
         },
     )
+    mail_html_body: Optional[str] = Field(
+        default=None,
+        description="Optional HTML body of the email. When provided, used instead of mail_body.",
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 3,
+            "parameter_group_id": OUTLOOK_GROUP_EMAIL_CONTENT_ID,
+            "parameter_order_within_group": 3,
+        },
+    )
     email_recipients: Optional[list[str]] = Field(
         default=None,
         description="List of email addresses to send the email to. "
         "If not provided, the email will be saved as a draft.",
         json_schema_extra={
             "is_tool_input": True,
-            "display_order": 3,
+            "display_order": 4,
             "parameter_group_id": OUTLOOK_GROUP_RECIPIENTS_ID,
             "parameter_order_within_group": 1,
         },
@@ -99,7 +111,7 @@ class OutlookSenderInputs(BaseModel):
         description="List of CC email addresses to send the email to.",
         json_schema_extra={
             "is_tool_input": True,
-            "display_order": 4,
+            "display_order": 5,
             "parameter_group_id": OUTLOOK_GROUP_RECIPIENTS_ID,
             "parameter_order_within_group": 2,
         },
@@ -109,7 +121,7 @@ class OutlookSenderInputs(BaseModel):
         description="List of BCC email addresses to send the email to.",
         json_schema_extra={
             "is_tool_input": True,
-            "display_order": 5,
+            "display_order": 6,
             "parameter_group_id": OUTLOOK_GROUP_RECIPIENTS_ID,
             "parameter_order_within_group": 3,
         },
@@ -119,7 +131,7 @@ class OutlookSenderInputs(BaseModel):
         description="List of file paths to attach to the email.",
         json_schema_extra={
             "is_tool_input": True,
-            "display_order": 6,
+            "display_order": 7,
             "parameter_group_id": OUTLOOK_GROUP_ATTACHMENTS_ID,
             "parameter_order_within_group": 1,
         },
@@ -188,11 +200,12 @@ class OutlookSender(Component):
     async def outlook_create_draft(
         self,
         email_subject: str,
-        email_body: str,
+        email_body: Optional[str] = None,
         email_recipients: Optional[list[str]] = None,
         cc: Optional[list[str]] = None,
         bcc: Optional[list[str]] = None,
         attachments: Optional[Iterable[str | Path]] = None,
+        html_body: Optional[str] = None,
     ) -> dict:
         message_payload = build_graph_mail_payload(
             subject=email_subject,
@@ -201,6 +214,7 @@ class OutlookSender(Component):
             cc=cc,
             bcc=bcc,
             attachments=attachments,
+            html_body=html_body,
         )
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -219,11 +233,12 @@ class OutlookSender(Component):
     async def outlook_send_email(
         self,
         email_subject: str,
-        email_body: str,
+        email_body: Optional[str] = None,
         email_recipients: Optional[list[str]] = None,
         cc: Optional[list[str]] = None,
         bcc: Optional[list[str]] = None,
         attachments: Optional[Iterable[str | Path]] = None,
+        html_body: Optional[str] = None,
     ) -> None:
         message_payload = build_graph_mail_payload(
             subject=email_subject,
@@ -232,6 +247,7 @@ class OutlookSender(Component):
             cc=cc,
             bcc=bcc,
             attachments=attachments,
+            html_body=html_body,
         )
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -250,8 +266,8 @@ class OutlookSender(Component):
                 "Outlook Sender requires a configured OAuth connection. "
                 "Please select an Outlook connection in the component settings."
             )
-        if not inputs.mail_subject or not inputs.mail_body:
-            raise ValueError("Both email_subject and email_body must be provided")
+        if not inputs.mail_subject:
+            raise ValueError("Email subject must be provided")
         span = get_current_span()
         span.set_attributes({
             SpanAttributes.INPUT_VALUE: serialize_to_json(
@@ -262,6 +278,7 @@ class OutlookSender(Component):
                     "cc": inputs.cc,
                     "bcc": inputs.bcc,
                     "email_attachments": inputs.email_attachments,
+                    "mail_html_body": inputs.mail_html_body,
                     "save_as_draft": self.save_as_draft,
                 },
                 shorten_string=True,
@@ -276,6 +293,7 @@ class OutlookSender(Component):
                 cc=inputs.cc,
                 bcc=inputs.bcc,
                 attachments=inputs.email_attachments,
+                html_body=inputs.mail_html_body,
             )
             status = f"Draft created successfully with ID: {draft['id']}"
             message_id = draft["id"]
@@ -287,6 +305,7 @@ class OutlookSender(Component):
                 cc=inputs.cc,
                 bcc=inputs.bcc,
                 attachments=inputs.email_attachments,
+                html_body=inputs.mail_html_body,
             )
             status = "Email sent successfully"
             message_id = None
