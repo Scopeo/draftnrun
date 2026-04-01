@@ -276,7 +276,7 @@ async def run_agent(
     project_id: UUID,
     graph_runner_id: UUID,
     input_data: dict,
-    environment: EnvType,
+    environment: Optional[EnvType],
     call_type: CallType,
     tag_name: Optional[str] = None,
     response_format: Optional[ResponseFormat] = None,

@@ -484,10 +484,11 @@ async def chat_async(
         pushed = push_run_task(
             run_id=run.id,
             project_id=project_id,
-            env=environment.value,
+            env=environment.value if environment else None,
             input_data=input_data,
             trigger=CallType.SANDBOX.value,
             response_format=ResponseFormat.S3_KEY.value,
+            graph_runner_id=graph_runner_id,
         )
         if not pushed:
             update_run_status(

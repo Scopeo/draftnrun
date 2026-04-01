@@ -364,10 +364,11 @@ def push_webhook_event(
 def push_run_task(
     run_id: UUID,
     project_id: UUID,
-    env: str,
+    env: Optional[str],
     input_data: Dict[str, Any],
     trigger: str = "api",
     response_format: Optional[str] = None,
+    graph_runner_id: Optional[UUID] = None,
 ) -> bool:
     """
     Push an async run task to the Redis runs queue.
@@ -386,6 +387,7 @@ def push_run_task(
             "input_data": input_data,
             "trigger": trigger,
             "response_format": response_format,
+            "graph_runner_id": str(graph_runner_id) if graph_runner_id else None,
         }
         json_payload = json.dumps(payload)
         result = client.rpush(settings.REDIS_RUNS_QUEUE_NAME, json_payload)
