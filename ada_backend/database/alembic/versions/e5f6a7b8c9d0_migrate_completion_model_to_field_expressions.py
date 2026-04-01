@@ -21,6 +21,7 @@ revision: str = "e5f6a7b8c9d0"
 down_revision: Union[str, None] = "d3e4f5a6b7c8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+deploy_strategy: Union[str, None] = "breaking"
 
 COMPLETION_MODEL_CPD_IDS = [
     "e2d157b4-f26d-41b4-9e47-62b5b041a9ff",  # AI Agent
