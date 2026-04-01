@@ -1,7 +1,12 @@
 import uuid
 from types import SimpleNamespace
 
+import httpx
+import openai
+
+from ada_backend.services.agent_runner_service import _extract_provider_message
 from ada_backend.services.graph_reachability import find_reachable_nodes
+from engine.components.errors import LLMProviderError
 
 
 def _node(node_id: str, *, is_trigger: bool = False, name: str = ""):
@@ -191,3 +196,61 @@ class TestIsTriggerFiltering:
 
         assert reachable == {ID_A, ID_B, ID_C}
         assert ID_D not in reachable
+
+
+class TestExtractProviderMessage:
+    """Regression tests for LLM provider error extraction (DRA-1181)."""
+
+    def _make_httpx_response(self, status_code: int = 400) -> httpx.Response:
+        resp = httpx.Response(status_code=status_code, request=httpx.Request("POST", "https://api.example.com"))
+        return resp
+
+    def test_openai_bad_request_with_body_dict(self):
+        resp = self._make_httpx_response(400)
+        exc = openai.BadRequestError(
+            message="Error code: 400",
+            response=resp,
+            body={"message": "Invalid model: mistral-medium-c21211-r0-75", "type": "invalid_model"},
+        )
+        msg, status = _extract_provider_message(exc)
+        assert msg == "Invalid model: mistral-medium-c21211-r0-75"
+        assert status == 400
+
+    def test_openai_auth_error(self):
+        resp = self._make_httpx_response(401)
+        exc = openai.AuthenticationError(
+            message="Error code: 401",
+            response=resp,
+            body={"message": "Invalid API key", "type": "auth_error"},
+        )
+        msg, status = _extract_provider_message(exc)
+        assert msg == "Invalid API key"
+        assert status == 401
+
+    def test_openai_api_status_error_with_string_body(self):
+        resp = self._make_httpx_response(500)
+        exc = openai.InternalServerError(
+            message="Error code: 500",
+            response=resp,
+            body="Internal server error",
+        )
+        msg, status = _extract_provider_message(exc)
+        assert msg == "Internal server error"
+        assert status == 500
+
+    def test_openai_api_connection_error(self):
+        exc = openai.APIConnectionError(request=httpx.Request("POST", "https://api.example.com"))
+        msg, status = _extract_provider_message(exc)
+        assert "Connection error" in msg
+        assert status is None
+
+    def test_llm_provider_error_str_clean(self):
+        err = LLMProviderError("Invalid model: foo-bar", status_code=400)
+        assert str(err) == "LLM provider error (400): Invalid model: foo-bar"
+        assert err.provider_message == "Invalid model: foo-bar"
+        assert err.status_code == 400
+
+    def test_llm_provider_error_str_no_status(self):
+        err = LLMProviderError("Connection timed out")
+        assert str(err) == "LLM provider error: Connection timed out"
+        assert err.status_code is None

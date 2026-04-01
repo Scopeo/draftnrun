@@ -48,3 +48,16 @@ class CategorizationError(Exception):
         message = f"Categorization failed: {detail}"
         message += f"\nLLM output was: {llm_output}"
         super().__init__(message)
+
+
+class LLMProviderError(Exception):
+    """Raised when an LLM provider (OpenAI, Mistral, Anthropic, custom) returns an API error."""
+
+    def __init__(self, provider_message: str, status_code: int | None = None):
+        self.provider_message = provider_message
+        self.status_code = status_code
+        if status_code:
+            message = f"LLM provider error ({status_code}): {provider_message}"
+        else:
+            message = f"LLM provider error: {provider_message}"
+        super().__init__(message)

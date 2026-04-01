@@ -55,6 +55,7 @@ from ada_backend.utils.redis_client import push_run_task
 from engine.components.errors import (
     CategorizationError,
     KeyTypePromptTemplateError,
+    LLMProviderError,
     MissingKeyPromptTemplateError,
     NoMatchingRouteError,
 )
@@ -259,6 +260,9 @@ async def run_env_agent_endpoint(
     except MissingIntegrationError as e:
         LOGGER.error(f"Missing integration for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except LLMProviderError as e:
+        LOGGER.warning("LLM provider error for project %s env %s: %s", project_id, env, e.provider_message)
+        raise HTTPException(status_code=502, detail=f"LLM provider error: {e.provider_message}") from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id} in environment {env}: {str(e)}", exc_info=True
@@ -418,6 +422,12 @@ async def chat(
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except LLMProviderError as e:
+        LOGGER.warning(
+            "LLM provider error for project %s graph_runner %s: %s",
+            project_id, graph_runner_id, e.provider_message,
+        )
+        raise HTTPException(status_code=502, detail=f"LLM provider error: {e.provider_message}") from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
@@ -584,6 +594,9 @@ async def chat_env(
     except MissingIntegrationError as e:
         LOGGER.error(f"Missing integration for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except LLMProviderError as e:
+        LOGGER.warning("LLM provider error for project %s env %s: %s", project_id, env, e.provider_message)
+        raise HTTPException(status_code=502, detail=f"LLM provider error: {e.provider_message}") from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id} in environment {env}: {str(e)}", exc_info=True
