@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 from uuid import UUID
@@ -145,8 +146,8 @@ def query_root_trace_duration(
       GROUP BY s.trace_rowid
     )
     SELECT roots.*,
-           LEFT(m.input_content, 5000) as raw_input_content,
-           LEFT(m.output_content, 5000) as raw_output_content,
+           m.input_content as raw_input_content,
+           m.output_content as raw_output_content,
            COALESCE(ttc.total_credits, 0) as total_credits,
            total.total_count
     FROM paginated_roots roots
@@ -170,6 +171,9 @@ def query_root_trace_duration(
     return rows, total_pages
 
 
+_CONTENT_RE = re.compile(r'"content"\s*:\s*"((?:[^"\\]|\\.)*)"')
+
+
 def _extract_preview(raw_content: str | None, max_len: int = 500) -> str:
     if not raw_content:
         return ""
@@ -189,7 +193,10 @@ def _extract_preview(raw_content: str | None, max_len: int = 500) -> str:
             return str(first)[:max_len]
         return str(parsed)[:max_len]
     except (json.JSONDecodeError, TypeError, ValueError):
-        return ""
+        match = _CONTENT_RE.search(raw_content)
+        if match:
+            return match.group(1)[:max_len]
+        return raw_content[:max_len]
 
 
 def _safe_jsonb_first_element(raw_content: str | None) -> dict:
