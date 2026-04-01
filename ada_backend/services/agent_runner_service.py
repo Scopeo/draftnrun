@@ -30,6 +30,7 @@ from ada_backend.services.errors import (
     GraphNotFound,
     OrganizationLimitExceededError,
     ProjectNotFound,
+    RunError,
 )
 from ada_backend.services.file_response_service import (
     process_files_for_response,
@@ -363,7 +364,10 @@ async def run_agent(
         raise
     except Exception as e:
         tb = traceback.format_exc()
-        raise ValueError(f"Error running agent: {tb}") from e
+        params = get_tracing_span()
+        trace_id = params.trace_id if params else None
+        LOGGER.error("Agent run failed (trace_id=%s): %s", trace_id, tb, exc_info=True)
+        raise RunError(f"Error running agent: {tb}", trace_id=trace_id) from e
     finally:
         try:
             await agent.close()

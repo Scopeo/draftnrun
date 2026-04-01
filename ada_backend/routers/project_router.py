@@ -39,6 +39,7 @@ from ada_backend.services.errors import (
     MissingIntegrationError,
     OrganizationLimitExceededError,
     ProjectNotFound,
+    RunError,
 )
 from ada_backend.services.metrics.monitor_kpis_service import get_monitoring_kpis_by_projects
 from ada_backend.services.project_service import (
@@ -263,6 +264,8 @@ async def run_env_agent_endpoint(
             f"Database connection failed for project {project_id} in environment {env}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
+    except RunError as e:
+        raise HTTPException(status_code=400, detail=f"Agent run failed for project {project_id}") from e
     except ValueError as e:
         LOGGER.error(f"Failed to run agent for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}") from e
@@ -421,6 +424,8 @@ async def chat(
             exc_info=True,
         )
         raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
+    except RunError as e:
+        raise HTTPException(status_code=400, detail=f"Agent run failed for project {project_id}") from e
     except ValueError as e:
         LOGGER.error(
             f"Failed to run agent chat for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
@@ -584,6 +589,8 @@ async def chat_env(
             f"Database connection failed for project {project_id} in environment {env}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
+    except RunError as e:
+        raise HTTPException(status_code=400, detail=f"Agent run failed for project {project_id}") from e
     except ValueError as e:
         LOGGER.error(
             f"Failed to run agent chat for project {project_id} in environment {env}: {str(e)}", exc_info=True

@@ -336,6 +336,14 @@ class OAuthSetProtectedError(Exception):
         super().__init__(f"OAuth set '{set_id}' is managed by OAuth and cannot be modified directly")
 
 
+class RunError(Exception):
+    """Raised when a graph execution fails, carrying the trace_id so callers can link the run to its trace."""
+
+    def __init__(self, message: str, trace_id: str | None = None):
+        self.trace_id = trace_id
+        super().__init__(message)
+
+
 class GraphConflictError(Exception):
     """Raised when a graph update conflicts with a more recent modification."""
 

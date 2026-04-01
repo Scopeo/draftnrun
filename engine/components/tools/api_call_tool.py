@@ -181,7 +181,7 @@ class APICallTool(Component):
                     response_body = e.response.text
             LOGGER.error(f"API request failed: {str(e)} | status={status_code} | response_body={response_body}")
             return {
-                "status_code": status_code,
+                "status_code": status_code or 0,
                 "error": str(e),
                 "response_body": response_body,
                 "success": False,

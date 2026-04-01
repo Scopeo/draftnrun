@@ -24,7 +24,7 @@ from ada_backend.schemas.widget_schema import (
     WidgetSchema,
     WidgetUpdateSchema,
 )
-from ada_backend.services.errors import EnvironmentNotFound, ProjectNotFound, WidgetDisabled, WidgetNotFound
+from ada_backend.services.errors import EnvironmentNotFound, ProjectNotFound, RunError, WidgetDisabled, WidgetNotFound
 from ada_backend.services.user_roles_service import get_user_access_to_organization
 from ada_backend.services.widget_service import (
     create_widget_service,
@@ -244,6 +244,8 @@ async def widget_chat(
     except ConnectionError as e:
         LOGGER.error(f"Database connection error for widget {widget_key}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=503, detail="Database connection error") from e
+    except RunError as e:
+        raise HTTPException(status_code=400, detail=f"Agent run failed for widget {widget_key}") from e
     except ValueError as e:
         LOGGER.error(f"Error running widget chat for {widget_key}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
