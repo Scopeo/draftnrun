@@ -196,6 +196,7 @@ def get_root_traces_by_project(
     page_size: int = 20,
     graph_runner_id: Optional[UUID] = None,
     organization_id: Optional[UUID] = None,
+    search: Optional[str] = None,
 ) -> PaginatedRootTracesResponse:
     if page_size <= 0:
         page_size = 20
@@ -210,6 +211,7 @@ def get_root_traces_by_project(
         graph_runner_id=graph_runner_id,
         page=page,
         page_size=page_size,
+        search=search,
     )
     track_monitoring_loaded(user_id, project_count=1, organization_id=organization_id)
     LOGGER.info(f"Querying root spans for project {project_id} with duration {duration} days")

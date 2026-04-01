@@ -39,6 +39,9 @@ async def get_root_traces(
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     page_size: int = Query(20, ge=1, le=1000, description="Number of items per page"),
     graph_runner_id: Optional[UUID] = None,
+    search: Optional[str] = Query(
+        None, min_length=1, max_length=500, description="Search traces by input message content"
+    ),
     session: Session = Depends(get_db),
 ) -> PaginatedRootTracesResponse:
     if not user.id:
@@ -56,17 +59,20 @@ async def get_root_traces(
             page_size,
             graph_runner_id,
             organization_id=organization_id,
+            search=search,
         )
         return response
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.warning("Invalid trace search parameters for project %s: %s", project_id, e)
+        raise HTTPException(status_code=400, detail=f"Invalid parameters for trace search on project {project_id}")
     except Exception as e:
         LOGGER.exception(
-            "Failed to get root traces for project %s (duration=%s, env=%s, call_type=%s)",
+            "Failed to get root traces for project %s (duration=%s, env=%s, call_type=%s, search=%s)",
             project_id,
             duration,
             environment,
             call_type,
+            search,
         )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 

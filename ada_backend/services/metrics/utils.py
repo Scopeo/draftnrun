@@ -100,6 +100,7 @@ def query_root_trace_duration(
     graph_runner_id: Optional[UUID] = None,
     page: int = 1,
     page_size: int = 20,
+    search: Optional[str] = None,
 ) -> Tuple[List[dict], int]:
     """Query root traces with server-side pagination.
 
@@ -119,6 +120,16 @@ def query_root_trace_duration(
         filters += f"\n        AND call_type = '{call_type.value}'"
     if graph_runner_id is not None:
         filters += f"\n        AND graph_runner_id = '{graph_runner_id}'"
+
+    params = {}
+    if search is not None:
+        filters += """
+        AND EXISTS (
+            SELECT 1 FROM traces.span_messages m_s
+            WHERE m_s.span_id = traces.spans.span_id
+            AND m_s.input_content ILIKE :search
+        )"""
+        params["search"] = f"%{search}%"
 
     query = f"""
     WITH total AS (
@@ -158,7 +169,7 @@ def query_root_trace_duration(
     """
 
     session = get_session_trace()
-    result = session.execute(text(query))
+    result = session.execute(text(query), params)
     rows = [dict(row._mapping) for row in result.fetchall()]
     session.close()
 

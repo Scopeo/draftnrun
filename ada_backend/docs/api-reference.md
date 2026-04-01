@@ -153,7 +153,7 @@ Run input data is persisted in the `run_inputs` table (keyed by `retry_group_id`
 |---|---|---|---|
 | GET | `/monitor/org/{organization_id}/charts` | JWT(Member) | Org charts |
 | GET | `/monitor/org/{organization_id}/kpis` | JWT(Member) | Org KPIs |
-| GET | `/projects/{project_id}/traces` | JWT(Member) | List traces |
+| GET | `/projects/{project_id}/traces` | JWT(Member) | List traces (optional `search` query param for keyword filtering on input content) |
 | GET | `/traces/{trace_id}/tree` | JWT | Trace span tree |
 
 ## Cron Jobs (`cron_router.py`)
