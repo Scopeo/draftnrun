@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 
 from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from engine.components.component import Component
-from engine.components.errors import ScorerError
 from engine.components.llm_call import LLMCallAgent, LLMCallInputs
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService
@@ -184,19 +183,19 @@ class Scorer(Component):
         try:
             result = json.loads(llm_outputs.output)
         except json.JSONDecodeError as e:
-            raise ScorerError(detail=f"Failed to parse LLM output as JSON: {e}", llm_output=llm_outputs.output)
+            raise ValueError(f"Evaluation scoring failed: Failed to parse LLM output as JSON: {e}") from e
 
         score = result.get("score")
         reason = result.get("reason")
 
         if score is None:
-            raise ScorerError(detail="LLM response missing 'score' field", llm_output=result)
+            raise ValueError("Evaluation scoring failed: LLM response missing 'score' field")
         if not reason:
-            raise ScorerError(detail="LLM response missing 'reason' field", llm_output=result)
+            raise ValueError("Evaluation scoring failed: LLM response missing 'reason' field")
 
         try:
             score = int(score)
         except (ValueError, TypeError) as e:
-            raise ScorerError(detail=f"Invalid score value: {score}", llm_output=result) from e
+            raise ValueError(f"Evaluation scoring failed: Invalid score value: {score}") from e
 
         return ScorerOutputs(score=score, reason=reason, output=json.dumps({"score": score, "reason": reason}))

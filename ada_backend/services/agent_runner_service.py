@@ -46,7 +46,6 @@ from engine.components.errors import (
     LLMProviderError,
     MissingKeyPromptTemplateError,
     NoMatchingRouteError,
-    ScorerError,
 )
 from engine.field_expressions.serializer import from_json as expression_from_json
 from engine.graph_runner.graph_runner import GraphRunner
