@@ -30,4 +30,4 @@ def create_table_in_database(
             organization_id,
             source_id,
         )
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Failed to create ingestion table") from e

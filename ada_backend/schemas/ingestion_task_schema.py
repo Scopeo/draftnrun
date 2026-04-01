@@ -85,5 +85,13 @@ class IngestionTaskQueue(IngestionTask):
     source_attributes: SourceAttributes
 
 
+class IngestionRunRequest(BaseModel):
+    task_id: UUID
+    source_name: str
+    source_type: db.SourceType
+    source_id: UUID | None = None
+    source_attributes: SourceAttributes
+
+
 class S3UploadedInformation(BaseModel):
     s3_path_file: str

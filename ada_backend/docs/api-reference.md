@@ -219,6 +219,18 @@ Complete endpoint reference for the Draft'n Run backend.
 | POST | `/ingestion_task/{organization_id}` | JWT\|ApiKey(Developer) | Create task |
 | DELETE | `/ingestion_task/{organization_id}/{source_id}` | JWT(Developer) | Delete task |
 
+## Ingestion Database (`ingestion_database_router.py`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/organizations/{org_id}/ingestion_database` | IngestionKey | Create ingestion table |
+
+## Ingestion Internal (`ingestion_internal_router.py`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/internal/ingestion/organizations/{org_id}/run` | IngestionKey | Run ingestion (worker-to-API). Dispatches by `source_type`; returns 501 for unsupported types. Currently supports: DATABASE. |
+
 ## S3 Files (`s3_files_router.py`)
 
 | Method | Path | Auth | Description |

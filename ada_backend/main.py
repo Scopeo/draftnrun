@@ -27,6 +27,7 @@ from ada_backend.routers.cron_router import router as cron_router
 from ada_backend.routers.global_secret_router import router as global_secret_router
 from ada_backend.routers.graph_router import router as graph_router
 from ada_backend.routers.ingestion_database_router import router as ingestion_database_router
+from ada_backend.routers.ingestion_internal_router import router as ingestion_internal_router
 from ada_backend.routers.ingestion_task_router import router as ingestion_task_router
 from ada_backend.routers.integration_router import router as integration_router
 from ada_backend.routers.knowledge_router import router as knowledge_router
@@ -270,6 +271,7 @@ app.include_router(widget_router)
 app.include_router(provider_webhooks_router)
 app.include_router(webhook_internal_router)
 app.include_router(webhook_trigger_router)
+app.include_router(ingestion_internal_router)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)

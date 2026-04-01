@@ -26,7 +26,6 @@ logging.basicConfig(
 LOGGER = logging.getLogger(__name__)
 DEFAULT_CHUNK_SIZE = 1024
 DEFAULT_CHUNK_OVERLAP = 0
-DEFAULT_UPDATE_EXISTING = False
 
 
 def check_missing_params(
@@ -82,9 +81,6 @@ async def ingestion_main_async(
     chunk_overlap = source_attributes.get("chunk_overlap")
     if chunk_overlap is None:
         chunk_overlap = DEFAULT_CHUNK_OVERLAP
-    update_existing = source_attributes.get("update_existing")
-    if update_existing is None:
-        update_existing = DEFAULT_UPDATE_EXISTING
     document_reading_mode = source_attributes.get("document_reading_mode")
 
     failed_ingestion_task = IngestionTaskUpdate(
@@ -164,56 +160,6 @@ async def ingestion_main_async(
             )
         except Exception as e:
             error_msg = f"Error during local ingestion: {str(e)}"
-            LOGGER.error(error_msg)
-            failed_ingestion_task.result_metadata = TaskResultMetadata(
-                message=error_msg,
-                type=ResultType.ERROR,
-            )
-            update_ingestion_task(
-                organization_id=organization_id,
-                ingestion_task=failed_ingestion_task,
-            )
-            raise  # Re-raise the exception to ensure subprocess exits with non-zero code
-
-    elif source_type == SourceType.DATABASE:
-        if check_missing_params(
-            source_attributes=source_attributes,
-            required_params=[
-                "source_db_url",
-                "source_table_name",
-                "id_column_name",
-                "text_column_names",
-            ],
-            organization_id=organization_id,
-            ingestion_task=failed_ingestion_task,
-        ):
-            return
-
-        from ingestion_script.ingest_db_source import ingestion_database
-
-        try:
-            await ingestion_database(
-                source_name=source_name,
-                organization_id=organization_id,
-                task_id=task_id,
-                source_db_url=source_attributes["source_db_url"],
-                source_table_name=source_attributes["source_table_name"],
-                id_column_name=source_attributes["id_column_name"],
-                text_column_names=source_attributes["text_column_names"],
-                source_schema_name=source_attributes.get("source_schema_name"),
-                metadata_column_names=source_attributes.get("metadata_column_names"),
-                timestamp_column_name=source_attributes.get("timestamp_column_name"),
-                url_pattern=source_attributes.get("url_pattern"),
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap,
-                update_existing=update_existing,
-                query_filter=source_attributes.get("query_filter"),
-                timestamp_filter=source_attributes.get("timestamp_filter"),
-                source_attributes=source_attributes,
-                source_id=source_id,
-            )
-        except Exception as e:
-            error_msg = f"Error during database ingestion: {str(e)}"
             LOGGER.error(error_msg)
             failed_ingestion_task.result_metadata = TaskResultMetadata(
                 message=error_msg,

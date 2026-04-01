@@ -108,6 +108,18 @@ class Worker(BaseWorker):
                 list(source_attributes.keys()) if source_attributes else [],
             )
 
+            if source_type == db.SourceType.DATABASE.value:
+                self._run_ingestion_via_api(
+                    organization_id=organization_id,
+                    task_id=task_id,
+                    source_name=source_name,
+                    source_type=source_type,
+                    source_id=source_id,
+                    source_attributes=source_attributes,
+                    ingestion_id=ingestion_id,
+                )
+                return
+
             # Get the ada_backend path - assumes a standard structure
             ada_backend_path = Path(__file__).parents[2] / "ada_backend"
             script_path = ada_backend_path / "scripts" / "main.py"
@@ -332,6 +344,84 @@ class Worker(BaseWorker):
             except Exception as update_error:
                 logger.error("failed_to_update_task_status error=%s", str(update_error))
 
+    def _run_ingestion_via_api(
+        self,
+        organization_id: str,
+        task_id: str,
+        source_name: str,
+        source_type: str,
+        source_id: str | None,
+        source_attributes: dict,
+        ingestion_id: str,
+    ) -> None:
+        """Dispatch ingestion to the internal API endpoint."""
+        api_base_url = os.getenv("API_BASE_URL", DEFAULT_API_BASE_URL)
+        ingestion_api_key = os.getenv("INGESTION_API_KEY")
+        if not ingestion_api_key:
+            logger.error("INGESTION_API_KEY not configured, cannot dispatch ingestion")
+            raise ValueError("INGESTION_API_KEY not configured, cannot dispatch ingestion")
+        url = f"{api_base_url}/internal/ingestion/organizations/{organization_id}/run"
+
+        body = {
+            "task_id": task_id,
+            "source_name": source_name,
+            "source_type": source_type,
+            "source_attributes": source_attributes or {},
+        }
+        if source_id:
+            body["source_id"] = source_id
+
+        logger.info("ingestion_via_api ingestion_type=%s ingestion_id=%s url=%s", source_type, ingestion_id, url)
+
+        try:
+            response = requests.post(
+                url,
+                json=body,
+                headers={
+                    "x-ingestion-api-key": ingestion_api_key,
+                    "Content-Type": "application/json",
+                },
+                timeout=30,
+            )
+
+            if response.status_code == 202:
+                logger.info("ingestion_accepted ingestion_type=%s ingestion_id=%s", source_type, ingestion_id)
+                return
+
+            logger.error(
+                "ingestion_api_failed ingestion_type=%s ingestion_id=%s status=%s body=%s",
+                source_type,
+                ingestion_id,
+                response.status_code,
+                response.text[:500],
+            )
+            self._update_task_status_to_failed(
+                organization_id=organization_id,
+                task_id=task_id,
+                source_name=source_name,
+                source_type=source_type,
+                ingestion_id=ingestion_id,
+                result_metadata=TaskResultMetadata(
+                    message=f"Ingestion API for {source_type} returned {response.status_code}",
+                    type=ResultType.ERROR,
+                ),
+            )
+        except requests.exceptions.RequestException as e:
+            logger.error(
+                "ingestion_api_error ingestion_type=%s ingestion_id=%s error=%s", source_type, ingestion_id, str(e)
+            )
+            self._update_task_status_to_failed(
+                organization_id=organization_id,
+                task_id=task_id,
+                source_name=source_name,
+                source_type=source_type,
+                ingestion_id=ingestion_id,
+                result_metadata=TaskResultMetadata(
+                    message=f"Failed to reach ingestion API for {source_type}: {type(e).__name__}",
+                    type=ResultType.ERROR,
+                ),
+            )
+
     def _parse_error_message(self, stderr_text: str) -> dict:
         """Parse error messages to provide a cleaner summary."""
         result = {
@@ -406,7 +496,10 @@ class Worker(BaseWorker):
 
             # Get API base URL from environment or use default
             api_base_url = os.getenv("API_BASE_URL", DEFAULT_API_BASE_URL)
-            ingestion_api_key = os.getenv("INGESTION_API_KEY", "default-key")
+            ingestion_api_key = os.getenv("INGESTION_API_KEY")
+            if not ingestion_api_key:
+                logger.error("INGESTION_API_KEY not configured, cannot update task status")
+                raise ValueError("INGESTION_API_KEY not configured, cannot update task status")
 
             # Make the API call to update task status
             response = requests.patch(
