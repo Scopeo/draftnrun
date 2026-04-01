@@ -30,6 +30,14 @@ class GoogleProvider(BaseProvider):
         google_genai_errors.ServerError,
     )
 
+    @staticmethod
+    def extract_error_message(exc: Exception) -> tuple[str, int | None]:
+        if isinstance(exc, google_genai_errors.APIError):
+            msg = exc.message or str(exc)
+            status_code = exc.code if exc.code else None
+            return msg, status_code
+        return BaseProvider.extract_error_message(exc)
+
     async def complete(
         self,
         messages: list[dict] | str,

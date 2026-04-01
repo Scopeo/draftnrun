@@ -220,7 +220,12 @@ class CustomProvider(BaseProvider):
             )
 
         except Exception as e:
-            LOGGER.error(f"Error in constrained_complete_with_json_schema: {e}")
+            if self._sdk_exceptions and isinstance(e, self._sdk_exceptions):
+                raise
+            LOGGER.exception(
+                "Error in constrained_complete_with_json_schema for provider %s model %s",
+                self._provider_name, self._model_name,
+            )
             raise ValueError(
                 f"Error processing constrained completion with JSON schema on the provider {self._provider_name} "
                 f"with model {self._model_name}: {str(e)}"

@@ -4,10 +4,12 @@ from types import SimpleNamespace
 import httpx
 import openai
 import pytest
+from google.genai import errors as google_genai_errors
 
 from ada_backend.services.graph_reachability import find_reachable_nodes
 from engine.components.errors import LLMProviderError
 from engine.llm_services.providers.base_provider import BaseProvider
+from engine.llm_services.providers.google_provider import GoogleProvider
 
 
 def _node(node_id: str, *, is_trigger: bool = False, name: str = ""):
@@ -244,6 +246,35 @@ class TestExtractProviderMessage:
         msg, status = BaseProvider.extract_error_message(exc)
         assert "Connection error" in msg
         assert status is None
+
+    def test_google_client_error(self):
+        exc = google_genai_errors.ClientError(400, {"message": "Invalid model", "status": "INVALID_ARGUMENT"})
+        msg, status = GoogleProvider.extract_error_message(exc)
+        assert msg == "Invalid model"
+        assert status == 400
+
+    def test_google_server_error(self):
+        exc = google_genai_errors.ServerError(503, {"message": "Service unavailable", "status": "UNAVAILABLE"})
+        msg, status = GoogleProvider.extract_error_message(exc)
+        assert msg == "Service unavailable"
+        assert status == 503
+
+    def test_google_api_error_no_message_falls_back_to_str(self):
+        exc = google_genai_errors.APIError(429, {})
+        msg, status = GoogleProvider.extract_error_message(exc)
+        assert status == 429
+        assert msg  # should be a non-empty fallback string
+
+    def test_google_extract_delegates_openai_to_base(self):
+        resp = self._make_httpx_response(400)
+        exc = openai.BadRequestError(
+            message="Error code: 400",
+            response=resp,
+            body={"message": "Bad request from OpenAI path"},
+        )
+        msg, status = GoogleProvider.extract_error_message(exc)
+        assert msg == "Bad request from OpenAI path"
+        assert status == 400
 
     def test_llm_provider_error_str_clean(self):
         err = LLMProviderError("Invalid model: foo-bar", status_code=400)
