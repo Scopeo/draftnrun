@@ -20,8 +20,24 @@ from ada_backend.database.models import (
 from ada_backend.database.seed.integrations.seed_integration import INTEGRATION_UUIDS
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
-from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
+from ada_backend.database.seed.utils import (
+    COMPONENT_UUIDS,
+    COMPONENT_VERSION_UUIDS,
+    build_parameters_group,
+    build_parameters_group_definitions,
+)
+from engine.integrations.gmail.gmail_sender import (
+    GMAIL_GROUP_ATTACHMENTS_ID,
+    GMAIL_GROUP_EMAIL_CONTENT_ID,
+    GMAIL_GROUP_RECIPIENTS_ID,
+)
 from engine.integrations.providers import OAuthProvider
+
+GMAIL_PARAMETER_GROUP_UUIDS: dict[str, UUID] = {
+    "email_content": GMAIL_GROUP_EMAIL_CONTENT_ID,
+    "recipients": GMAIL_GROUP_RECIPIENTS_ID,
+    "attachments": GMAIL_GROUP_ATTACHMENTS_ID,
+}
 
 
 def seed_gmail_components(session: Session):
@@ -177,3 +193,42 @@ def seed_gmail_components(session: Session):
         component_id=gmail_sender_component.id,
         category_ids=[CATEGORY_UUIDS["messaging"], CATEGORY_UUIDS["integrations"]],
     )
+
+
+def seed_gmail_parameter_groups(session: Session):
+    """Seed parameter groups for Gmail Sender input ports."""
+
+    parameter_groups = [
+        db.ParameterGroup(
+            id=GMAIL_PARAMETER_GROUP_UUIDS["email_content"],
+            name="Email Content",
+        ),
+        db.ParameterGroup(
+            id=GMAIL_PARAMETER_GROUP_UUIDS["recipients"],
+            name="Recipients",
+        ),
+        db.ParameterGroup(
+            id=GMAIL_PARAMETER_GROUP_UUIDS["attachments"],
+            name="Attachments",
+        ),
+    ]
+    build_parameters_group(session, parameter_groups)
+
+    component_parameter_groups = [
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["gmail_sender_v3"],
+            parameter_group_id=GMAIL_PARAMETER_GROUP_UUIDS["email_content"],
+            group_order_within_component=1,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["gmail_sender_v3"],
+            parameter_group_id=GMAIL_PARAMETER_GROUP_UUIDS["recipients"],
+            group_order_within_component=2,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["gmail_sender_v3"],
+            parameter_group_id=GMAIL_PARAMETER_GROUP_UUIDS["attachments"],
+            group_order_within_component=3,
+        ),
+    ]
+    build_parameters_group_definitions(session, component_parameter_groups)

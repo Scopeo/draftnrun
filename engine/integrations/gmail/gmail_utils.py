@@ -37,13 +37,13 @@ def _guess_mimetype(path: Path) -> tuple[str, str]:
 
 def create_raw_mail_message(
     subject: str,
-    body: str,
     sender_email_address: str,
     recipients: Optional[list[str]] = None,
     cc: Optional[list[str]] = None,
     bcc: Optional[list[str]] = None,
     attachments: Optional[Iterable[str | Path]] = None,
     html_body: Optional[str] = None,
+    body: Optional[str] = None,
 ) -> dict:
     message = EmailMessage()
     if html_body:

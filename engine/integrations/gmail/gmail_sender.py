@@ -1,11 +1,12 @@
 import logging
 from pathlib import Path
 from typing import Iterable, Optional, Type
+from uuid import UUID
 
 from googleapiclient.errors import HttpError
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 from ada_backend.database.setup_db import get_db_session
 from engine.components.component import Component
@@ -16,6 +17,10 @@ from engine.trace.trace_manager import TraceManager
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
+
+GMAIL_GROUP_EMAIL_CONTENT_ID = UUID("d6e4f5a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a")
+GMAIL_GROUP_RECIPIENTS_ID = UUID("e7f5a6b8-c9d0-4e1f-2a3b-4c5d6e7f8a9b")
+GMAIL_GROUP_ATTACHMENTS_ID = UUID("f8a6b7c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c")
 
 GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
     name="Gmail Sender",
@@ -57,43 +62,84 @@ GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
             "description": ("List of file paths to attach to the email."),
         },
     },
-    required_tool_properties=["mail_subject", "mail_body"],
+    required_tool_properties=["mail_subject"],
 )
 
 
 class GmailSenderInputs(BaseModel):
     mail_subject: str = Field(
-        description="The subject of the email to be sent.", json_schema_extra={"is_tool_input": True}
+        description="The subject of the email to be sent.",
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 1,
+            "parameter_group_id": GMAIL_GROUP_EMAIL_CONTENT_ID,
+            "parameter_order_within_group": 1,
+        },
     )
-    mail_body: str = Field(description="The body of the email to be sent.", json_schema_extra={"is_tool_input": True})
+    mail_body: Optional[str] = Field(
+        default=None,
+        description="The body of the email to be sent.",
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 2,
+            "parameter_group_id": GMAIL_GROUP_EMAIL_CONTENT_ID,
+            "parameter_order_within_group": 2,
+        },
+    )
     mail_html_body: Optional[str] = Field(
         default=None,
         description="Optional HTML body of the email. When provided, used instead of mail_body.",
-        json_schema_extra={"is_tool_input": True},
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 3,
+            "parameter_group_id": GMAIL_GROUP_EMAIL_CONTENT_ID,
+            "parameter_order_within_group": 3,
+        },
     )
     email_recipients: Optional[list[str]] = Field(
         default=None,
-        description="""List of email addresses to send the email to.
-            If not provided, the email will be saved as a draft.""",
-        json_schema_extra={"is_tool_input": True},
+        description="List of email addresses to send the email to. "
+        "If not provided, the email will be saved as a draft.",
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 4,
+            "parameter_group_id": GMAIL_GROUP_RECIPIENTS_ID,
+            "parameter_order_within_group": 1,
+        },
     )
     cc: Optional[list[str]] = Field(
         default=None,
         description="List of CC email addresses to send the email to.",
-        json_schema_extra={"is_tool_input": True},
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 5,
+            "parameter_group_id": GMAIL_GROUP_RECIPIENTS_ID,
+            "parameter_order_within_group": 2,
+        },
     )
     bcc: Optional[list[str]] = Field(
         default=None,
         description="List of BCC email addresses to send the email to.",
-        json_schema_extra={"is_tool_input": True},
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 6,
+            "parameter_group_id": GMAIL_GROUP_RECIPIENTS_ID,
+            "parameter_order_within_group": 3,
+        },
     )
     email_attachments: Optional[list[str]] = Field(
         default=None,
         description="List of file paths to attach to the email.",
-        json_schema_extra={"is_tool_input": True},
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 7,
+            "parameter_group_id": GMAIL_GROUP_ATTACHMENTS_ID,
+            "parameter_order_within_group": 1,
+        },
     )
 
-    @validator("email_recipients", pre=True)
+    @field_validator("email_recipients", mode="before")
+    @classmethod
     def validate_email_recipients(cls, v):
         if isinstance(v, str):
             return [v]
@@ -150,7 +196,7 @@ class GmailSender(Component):
     def gmail_create_draft(
         self,
         email_subject: str,
-        email_body: str,
+        email_body: Optional[str] = None,
         email_recipients: Optional[list[str]] = None,
         cc: Optional[list[str]] = None,
         bcc: Optional[list[str]] = None,
@@ -179,7 +225,7 @@ class GmailSender(Component):
     def gmail_send_email(
         self,
         email_subject: str,
-        email_body: str,
+        email_body: Optional[str] = None,
         email_recipients: Optional[list[str]] = None,
         cc: Optional[list[str]] = None,
         bcc: Optional[list[str]] = None,
