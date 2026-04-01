@@ -257,8 +257,8 @@ async def execute_webhook(
     out: List[WebhookExecuteResult] = []
     for trigger in triggers:
         try:
-            r = await _run_trigger(trigger, input_base, event_id=event_id)
-            out.append(r)
+            result = await _run_trigger(trigger, input_base, event_id=event_id)
+            out.append(result)
         except Exception as e:
             LOGGER.exception("Unexpected error in execute_webhook", exc_info=e)
             out.append(
