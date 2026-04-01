@@ -111,7 +111,7 @@ document content, or file outputs.
 ## Important Constraints
 
 - `list_runs` caps `page_size` at 100
-- `get_org_charts` and `get_org_kpis` clamp `duration` to 1–365 days
+- `get_org_charts`, `get_org_kpis`, and `list_traces` clamp `duration` to 1–90 days
 - Batch deletions: `delete_datasets`, `delete_entries`, `delete_judges` accept lists of IDs
 - Graph updates send the full graph structure — always `get_graph` first, modify, then `update_graph`
 - Secrets values are write-only; `list_secrets` returns masked values
@@ -872,8 +872,18 @@ Response:
 1. `list_runs(project_id)` → find the run
 2. `get_run(project_id, run_id)` → status and metadata
 3. `get_run_result(project_id, run_id)` → output data
-4. `list_traces(project_id)` → find trace for debugging
+4. `list_traces(project_id, duration=30)` → find trace for debugging
 5. `get_trace_tree(trace_id)` → full span tree with timings
+
+## Retrieve Run Input
+
+Run inputs (the original payload) are **not** stored on the Run record or in the run result. \
+To retrieve the original input for a run:
+
+1. `get_run(project_id, run_id)` → extract `trace_id`
+2. `get_trace_tree(trace_id)` → find the root span (no `parent_id`) → read its `input` field
+
+`list_traces` returns a truncated `input_preview` (~500 chars) which may not contain the full payload.
 
 ## Debugging a Run
 
@@ -1682,9 +1692,9 @@ read/revoke operations only; the actual connect flow happens in the web UI.
 
 ## Monitoring
 
-- `list_traces(project_id)` → recent traces
-- `get_trace_tree(trace_id)` → full span tree with timings
-- `get_org_charts(duration_days)` → usage charts (1–365 days)
+- `list_traces(project_id, duration=30)` → recent traces (duration in days, 1–90)
+- `get_trace_tree(trace_id)` → full span tree with timings (`trace_id` is an OTel hex string, e.g. `0x6d4e...`)
+- `get_org_charts(duration_days)` → usage charts (1–90 days)
 - `get_org_kpis(duration_days)` → key metrics
 - `get_credit_usage` → credit consumption
 """
