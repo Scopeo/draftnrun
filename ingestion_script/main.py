@@ -57,6 +57,7 @@ async def ingestion_main_async(
     source_type: SourceType,
     source_attributes: dict,
     source_id: Optional[UUID] = None,
+    batch_size: Optional[int] = None,
 ):
     LOGGER.info(
         f"[INGESTION_MAIN] Starting ingestion - Source: '{source_name}', Type: {source_type}, "
@@ -124,6 +125,7 @@ async def ingestion_main_async(
                 document_reading_mode=document_reading_mode,
                 llamaparse_api_key=settings.LLAMACLOUD_API_KEY,
                 mistral_ocr_api_key=settings.MISTRAL_API_KEY,
+                batch_size=batch_size,
             )
         except Exception as e:
             error_msg = f"Error during google drive ingestion: {str(e)}"
@@ -161,6 +163,7 @@ async def ingestion_main_async(
                 document_reading_mode=document_reading_mode,
                 llamaparse_api_key=settings.LLAMACLOUD_API_KEY,
                 mistral_ocr_api_key=settings.MISTRAL_API_KEY,
+                batch_size=batch_size,
             )
         except Exception as e:
             error_msg = f"Error during local ingestion: {str(e)}"
@@ -211,6 +214,7 @@ async def ingestion_main_async(
                 timestamp_filter=source_attributes.get("timestamp_filter"),
                 source_attributes=source_attributes,
                 source_id=source_id,
+                batch_size=batch_size,
             )
         except Exception as e:
             error_msg = f"Error during database ingestion: {str(e)}"
@@ -268,6 +272,7 @@ async def ingestion_main_async(
                 chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
                 source_id=source_id,
+                batch_size=batch_size,
             )
         except Exception as e:
             error_msg = f"Error during website ingestion: {str(e)}"

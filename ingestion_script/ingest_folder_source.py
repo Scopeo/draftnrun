@@ -113,6 +113,7 @@ async def sync_chunks_to_qdrant(
     column_info: Optional[dict] = None,
     metadata_column_names: Optional[list[str]] = None,
     timestamp_column_name: Optional[str] = None,
+    batch_size: Optional[int] = None,
 ) -> None:
     if source_id and sql_query_filter:
         combined_filter = f"({sql_query_filter}) AND {SOURCE_ID_COLUMN_NAME} = '{source_id}'"
@@ -168,6 +169,7 @@ async def sync_chunks_to_qdrant(
         ),
         collection_name=collection_name,
         query_filter_qdrant=combined_filter_qdrant,
+        batch_size=batch_size,
     )
     if not success:
         raise RuntimeError(f"Qdrant sync failed for collection '{collection_name}': point count mismatch after sync")
@@ -187,6 +189,7 @@ async def ingest_google_drive_source(
     document_reading_mode: DocumentReadingMode = DocumentReadingMode.STANDARD,
     llamaparse_api_key: Optional[str] = None,
     mistral_ocr_api_key: Optional[str] = None,
+    batch_size: Optional[int] = None,
 ) -> None:
     LOGGER.info(
         f"[INGESTION_SOURCE] Starting GOOGLE DRIVE ingestion - Source: '{source_name}', "
@@ -215,6 +218,7 @@ async def ingest_google_drive_source(
         document_reading_mode=document_reading_mode,
         llamaparse_api_key=llamaparse_api_key,
         mistral_ocr_api_key=mistral_ocr_api_key,
+        batch_size=batch_size,
     )
 
 
@@ -231,6 +235,7 @@ async def ingest_local_folder_source(
     document_reading_mode: DocumentReadingMode = DocumentReadingMode.STANDARD,
     llamaparse_api_key: Optional[str] = None,
     mistral_ocr_api_key: Optional[str] = None,
+    batch_size: Optional[int] = None,
 ) -> None:
     LOGGER.info(
         f"[INGESTION_SOURCE] Starting LOCAL ingestion - Source: '{source_name}', "
@@ -257,6 +262,7 @@ async def ingest_local_folder_source(
         document_reading_mode=document_reading_mode,
         llamaparse_api_key=llamaparse_api_key,
         mistral_ocr_api_key=mistral_ocr_api_key,
+        batch_size=batch_size,
     )
     folder_manager.clean_bucket()
 
@@ -275,6 +281,7 @@ async def _ingest_folder_source(
     document_reading_mode: DocumentReadingMode = DocumentReadingMode.STANDARD,
     llamaparse_api_key: Optional[str] = None,
     mistral_ocr_api_key: Optional[str] = None,
+    batch_size: Optional[int] = None,
 ) -> None:
     if source_id is None:
         source_id = uuid.uuid4()
@@ -512,6 +519,7 @@ async def _ingest_folder_source(
             append_mode=True,
             schema_name=db_table_schema,
             source_id=str(source_id),
+            batch_size=batch_size,
         )
 
         await sync_chunks_to_qdrant(
@@ -521,6 +529,7 @@ async def _ingest_folder_source(
             db_service=db_service,
             qdrant_service=qdrant_service,
             source_id=str(source_id),
+            batch_size=batch_size,
         )
     except Exception as e:
         error_msg = f"Failed to ingest folder source: {str(e)}, PDF reading mode: {document_reading_mode}"

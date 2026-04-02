@@ -8,7 +8,6 @@ from engine.components.close_mixin import CloseMixin
 from engine.components.component import ComponentAttributes
 from engine.datetime_utils import make_naive_utc, parse_datetime
 from engine.storage_service.db_utils import CHUNK_ID_COLUMN, DBDefinition, cast_id_value
-from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -188,7 +187,7 @@ class DBService(CloseMixin, ABC):
         append_mode: bool = True,
         sql_query_filter: Optional[str] = None,
         source_id: Optional[str] = None,
-        batch_size: Optional[int] = None,
+        batch_size: int = 500,
     ) -> None:
         """
         Update a table with incoming data identified by IDs and timestamps.
@@ -200,9 +199,6 @@ class DBService(CloseMixin, ABC):
         if not incoming_ids_with_timestamp:
             LOGGER.info("Empty incoming IDs provided, skipping update")
             return
-
-        if batch_size is None:
-            batch_size = settings.INGESTION_BATCH_SIZE
 
         target_table_name = f"{schema_name}.{table_name}" if schema_name else table_name
 
