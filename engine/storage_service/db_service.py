@@ -1,3 +1,4 @@
+import gc
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Iterator, Optional
@@ -189,6 +190,8 @@ class DBService(CloseMixin, ABC):
                     self.upsert_rows(
                         table_name, upsert_batch, schema_name=schema_name, id_column_names=id_column_names
                     )
+            del rows
+            gc.collect()
 
     def update_table(
         self,
