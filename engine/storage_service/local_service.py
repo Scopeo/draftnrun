@@ -245,6 +245,9 @@ class SQLLocalService(DBService):
 
     def get_column_info(self, table_name: str, schema_name: Optional[str] = None) -> dict[str, str]:
         """Return {column_name: sql_type_string} for the table."""
+        if not self.table_exists(table_name, schema_name):
+            full_name = f"{schema_name}.{table_name}" if schema_name else table_name
+            raise ValueError(f"Table '{full_name}' does not exist in the database")
         inspector = sqlalchemy.inspect(self.engine)
         columns = inspector.get_columns(table_name, schema=schema_name)
         return {col["name"]: str(col["type"]) for col in columns}

@@ -138,7 +138,7 @@ async def run_db_ingestion(
             source_name=source_name,
             source_type=source_type,
             status=db.TaskStatus.FAILED,
-            source_id=result_source_id,
+            source_id=source_id if is_update else None,
             result_metadata={"message": error_msg, "type": "error"},
         )
         raise
