@@ -81,6 +81,9 @@ async def _ensure_qdrant_indexes(
     metadata_column_names: Optional[list[str]] = None,
     timestamp_column_name: Optional[str] = None,
 ) -> None:
+    await qdrant_service.create_index_if_needed_async(collection_name, SOURCE_ID_COLUMN_NAME, FieldSchema.KEYWORD)
+    await qdrant_service.create_index_if_needed_async(collection_name, CHUNK_ID_COLUMN_NAME, FieldSchema.KEYWORD)
+
     if metadata_column_names and column_info:
         for metadata_col in metadata_column_names:
             qdrant_field_schema = map_sql_type_to_qdrant_field_schema(column_info.get(metadata_col, "VARCHAR"))
@@ -145,8 +148,7 @@ async def sync_chunks_to_qdrant(
     LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(incoming_ids_with_timestamp)} rows")
     if not await qdrant_service.collection_exists_async(collection_name):
         await qdrant_service.create_collection_async(collection_name)
-        await qdrant_service.create_index_if_needed_async(collection_name, SOURCE_ID_COLUMN_NAME, FieldSchema.KEYWORD)
-        await qdrant_service.create_index_if_needed_async(collection_name, CHUNK_ID_COLUMN_NAME, FieldSchema.KEYWORD)
+
     await _ensure_qdrant_indexes(
         qdrant_service,
         collection_name,
