@@ -169,8 +169,13 @@ class DBService(CloseMixin, ABC):
         rather than causing a UniqueViolation.
         """
         id_list = list(ids)
+        total_batches = (len(id_list) + batch_size - 1) // batch_size
         for i in range(0, len(id_list), batch_size):
+            batch_num = i // batch_size + 1
             batch_ids = set(id_list[i : i + batch_size])
+            LOGGER.info(
+                f"Batch {batch_num}/{total_batches}: fetching rows for {len(batch_ids)} IDs (batch_size={batch_size})"
+            )
             rows = fetch_rows_fn(batch_ids)
             if rows:
                 self.upsert_rows(table_name, rows, schema_name=schema_name, id_column_names=id_column_names)
