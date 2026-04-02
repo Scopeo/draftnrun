@@ -269,14 +269,6 @@ async def upload_db_source(
         metadata_column_names=metadata_column_names,
         timestamp_column_name=timestamp_column_name,
     )
-    await _ensure_qdrant_indexes(
-        qdrant_service,
-        qdrant_collection_name,
-        column_info,
-        metadata_column_names=metadata_column_names,
-        timestamp_column_name=timestamp_column_name,
-    )
-
     ids_with_ts = get_db_source_ids(
         db_url=source_db_url,
         table_name=source_table_name,
@@ -326,6 +318,14 @@ async def upload_db_source(
         sql_query_filter=combined_filter_sql_unified,
         query_filter_qdrant=combined_filter_qdrant,
         source_id=source_id,
+    )
+
+    await _ensure_qdrant_indexes(
+        qdrant_service,
+        qdrant_collection_name,
+        column_info,
+        metadata_column_names=metadata_column_names,
+        timestamp_column_name=timestamp_column_name,
     )
 
 
