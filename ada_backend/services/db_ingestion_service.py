@@ -13,7 +13,7 @@ from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
-from engine.trace.trace_manager import TraceManager
+from engine.trace.trace_context import get_trace_manager
 from ingestion_script.ingest_db_source import upload_db_source
 from ingestion_script.utils import (
     UNIFIED_QDRANT_SCHEMA,
@@ -71,9 +71,9 @@ async def run_db_ingestion(
     result_source_id = source_id if is_update else uuid.uuid4()
 
     embedding_service = EmbeddingService(
+        trace_manager=get_trace_manager(),
         provider=EMBEDDING_PROVIDER,
         model_name=EMBEDDING_MODEL_NAME,
-        trace_manager=TraceManager(project_name="ingestion"),
     )
 
     schema_name, table_name, qdrant_collection_name = get_sanitize_names(
