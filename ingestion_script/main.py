@@ -61,7 +61,7 @@ async def ingestion_main_async(
 ):
     LOGGER.info(
         f"[INGESTION_MAIN] Starting ingestion - Source: '{source_name}', Type: {source_type}, "
-        f"Organization: {organization_id}, Task: {task_id}"
+        f"Organization: {organization_id}, Task: {task_id}, Batch size: {batch_size}"
     )
 
     set_trace_manager(TraceManager(project_name="Ingestion"))
