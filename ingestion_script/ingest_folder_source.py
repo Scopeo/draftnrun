@@ -15,7 +15,7 @@ from data_ingestion.document.folder_management.s3_folder_management import S3Fol
 from data_ingestion.document.supabase_file_uploader import sync_files_to_supabase
 from data_ingestion.utils import DocumentReadingMode
 from engine.llm_services.llm_service import EmbeddingService, VisionService
-from engine.qdrant_service import FieldSchema, QdrantService
+from engine.qdrant_service import FieldSchema, QdrantService, map_sql_type_to_qdrant_field_schema
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import create_db_if_not_exists
 from engine.storage_service.local_service import SQLLocalService
@@ -74,6 +74,33 @@ def load_embedding_service():
         )
 
 
+async def _ensure_qdrant_indexes(
+    qdrant_service: QdrantService,
+    collection_name: str,
+    column_info: Optional[dict] = None,
+    metadata_column_names: Optional[list[str]] = None,
+    timestamp_column_name: Optional[str] = None,
+) -> None:
+    await qdrant_service.create_index_if_needed_async(collection_name, SOURCE_ID_COLUMN_NAME, FieldSchema.KEYWORD)
+    await qdrant_service.create_index_if_needed_async(collection_name, CHUNK_ID_COLUMN_NAME, FieldSchema.KEYWORD)
+
+    if metadata_column_names and column_info:
+        for metadata_col in metadata_column_names:
+            qdrant_field_schema = map_sql_type_to_qdrant_field_schema(column_info.get(metadata_col, "VARCHAR"))
+            LOGGER.info(f"Creating index for metadata column '{metadata_col}' with qdrant type {qdrant_field_schema}")
+            await qdrant_service.create_index_if_needed_async(
+                collection_name=collection_name,
+                field_name=metadata_col,
+                field_schema_type=qdrant_field_schema,
+            )
+    if timestamp_column_name:
+        await qdrant_service.create_index_if_needed_async(
+            collection_name=collection_name,
+            field_name=timestamp_column_name,
+            field_schema_type=FieldSchema.DATETIME,
+        )
+
+
 async def sync_chunks_to_qdrant(
     table_schema: str,
     table_name: str,
@@ -83,6 +110,9 @@ async def sync_chunks_to_qdrant(
     sql_query_filter: Optional[str] = None,
     query_filter_qdrant: Optional[dict] = None,
     source_id: Optional[str] = None,
+    column_info: Optional[dict] = None,
+    metadata_column_names: Optional[list[str]] = None,
+    timestamp_column_name: Optional[str] = None,
 ) -> None:
     if source_id and sql_query_filter:
         combined_filter = f"({sql_query_filter}) AND {SOURCE_ID_COLUMN_NAME} = '{source_id}'"
@@ -118,9 +148,14 @@ async def sync_chunks_to_qdrant(
     LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(incoming_ids_with_timestamp)} rows")
     if not await qdrant_service.collection_exists_async(collection_name):
         await qdrant_service.create_collection_async(collection_name)
-        # TODO: Remove because create collection creates indexes
-        await qdrant_service.create_index_if_needed_async(collection_name, SOURCE_ID_COLUMN_NAME, FieldSchema.KEYWORD)
-        await qdrant_service.create_index_if_needed_async(collection_name, CHUNK_ID_COLUMN_NAME, FieldSchema.KEYWORD)
+
+    await _ensure_qdrant_indexes(
+        qdrant_service,
+        collection_name,
+        column_info=column_info,
+        metadata_column_names=metadata_column_names,
+        timestamp_column_name=timestamp_column_name,
+    )
     success = await qdrant_service.sync_batched_with_collection_async(
         incoming_ids_with_timestamp=incoming_ids_with_timestamp,
         fetch_rows=lambda ids: prepare_rows_for_qdrant(
