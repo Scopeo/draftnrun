@@ -189,30 +189,6 @@ def fetch_db_source_chunks(
     return all_chunks
 
 
-async def _ensure_qdrant_indexes(
-    qdrant_service: QdrantService,
-    qdrant_collection_name: str,
-    column_info: dict,
-    metadata_column_names: Optional[list[str]] = None,
-    timestamp_column_name: Optional[str] = None,
-) -> None:
-    if metadata_column_names:
-        for metadata_col in metadata_column_names:
-            qdrant_field_schema = map_sql_type_to_qdrant_field_schema(column_info.get(metadata_col, "VARCHAR"))
-            LOGGER.info(f"Creating index for metadata column '{metadata_col}' with qdrant type {qdrant_field_schema}")
-            await qdrant_service.create_index_if_needed_async(
-                collection_name=qdrant_collection_name,
-                field_name=metadata_col,
-                field_schema_type=qdrant_field_schema,
-            )
-    if timestamp_column_name:
-        await qdrant_service.create_index_if_needed_async(
-            collection_name=qdrant_collection_name,
-            field_name=timestamp_column_name,
-            field_schema_type=FieldSchema.DATETIME,
-        )
-
-
 async def upload_db_source(
     db_service: DBService,
     qdrant_service: QdrantService,
@@ -269,6 +245,14 @@ async def upload_db_source(
         metadata_column_names=metadata_column_names,
         timestamp_column_name=timestamp_column_name,
     )
+    additional_payload_indexes: list[tuple[str, FieldSchema]] = []
+    if metadata_column_names:
+        for metadata_col in metadata_column_names:
+            qdrant_field_schema = map_sql_type_to_qdrant_field_schema(column_info.get(metadata_col, "VARCHAR"))
+            additional_payload_indexes.append((metadata_col, qdrant_field_schema))
+    if timestamp_column_name:
+        additional_payload_indexes.append((timestamp_column_name, FieldSchema.DATETIME))
+
     ids_with_ts = get_db_source_ids(
         db_url=source_db_url,
         table_name=source_table_name,
@@ -318,14 +302,7 @@ async def upload_db_source(
         sql_query_filter=combined_filter_sql_unified,
         query_filter_qdrant=combined_filter_qdrant,
         source_id=source_id,
-    )
-
-    await _ensure_qdrant_indexes(
-        qdrant_service,
-        qdrant_collection_name,
-        column_info,
-        metadata_column_names=metadata_column_names,
-        timestamp_column_name=timestamp_column_name,
+        additional_payload_indexes=additional_payload_indexes or None,
     )
 
 

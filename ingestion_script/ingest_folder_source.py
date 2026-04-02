@@ -83,6 +83,7 @@ async def sync_chunks_to_qdrant(
     sql_query_filter: Optional[str] = None,
     query_filter_qdrant: Optional[dict] = None,
     source_id: Optional[str] = None,
+    additional_payload_indexes: Optional[list[tuple[str, FieldSchema]]] = None,
 ) -> None:
     if source_id and sql_query_filter:
         combined_filter = f"({sql_query_filter}) AND {SOURCE_ID_COLUMN_NAME} = '{source_id}'"
@@ -118,9 +119,11 @@ async def sync_chunks_to_qdrant(
     LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(incoming_ids_with_timestamp)} rows")
     if not await qdrant_service.collection_exists_async(collection_name):
         await qdrant_service.create_collection_async(collection_name)
-        # TODO: Remove because create collection creates indexes
         await qdrant_service.create_index_if_needed_async(collection_name, SOURCE_ID_COLUMN_NAME, FieldSchema.KEYWORD)
         await qdrant_service.create_index_if_needed_async(collection_name, CHUNK_ID_COLUMN_NAME, FieldSchema.KEYWORD)
+    if additional_payload_indexes:
+        for field_name, field_schema in additional_payload_indexes:
+            await qdrant_service.create_index_if_needed_async(collection_name, field_name, field_schema)
     success = await qdrant_service.sync_batched_with_collection_async(
         incoming_ids_with_timestamp=incoming_ids_with_timestamp,
         fetch_rows=lambda ids: prepare_rows_for_qdrant(
