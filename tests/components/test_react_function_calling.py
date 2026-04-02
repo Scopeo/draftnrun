@@ -331,11 +331,6 @@ def test_structured_output_in_function_call_async(
         "is_final": {"type": "boolean", "description": "Whether this is the final response"},
     }
 
-    # Create a real CompletionService instance but mock the llm calls in the following
-    real_completion_service = CompletionService(
-        trace_manager=mock_trace_manager, provider="openai", model_name="test_model"
-    )
-
     # Create ReActAgent with structured output
     react_agent = AIAgent(
         temperature=1.0,
