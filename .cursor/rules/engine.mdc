@@ -1,6 +1,7 @@
 ---
 globs:
   - engine/**
+  - ingestion_script/**
 ---
 
 ## Execution Engine Conventions
@@ -14,6 +15,9 @@ globs:
 - Variable resolution: defaults → layered set overrides. See `ada_backend/services/variable_resolution_service.py`.
 - `requires_tool_name = True` for components that need a `tool_name` input (MCP tools, API tools).
 - Legacy system: some components still use `AgentPayload` pattern (`migrated = False`). New components MUST use the multi-port `NodeData` system (`migrated = True`).
+- `SQLLocalService` engine pools are cached per `engine_url` (process-level). Avoid patterns that instantiate many services for the same URL expecting independent pools.
+- In ingestion code paths, reuse one `SQLLocalService` per job when possible, and ensure `await close()` is called in a `finally` block.
+- For DB-source ingestion worker flow (`ingestion_script/ingest_db_source.py`), keep a single source `SQLLocalService` per run and share it across validation and fetch helpers.
 - Adding a new component: create class in `engine/components/`, register in `ada_backend/services/registry.py`, add DB seed data (Component, ComponentVersion, PortDefinition, ComponentParameterDefinition rows). Always set `migrated = True`, define Pydantic I/O schemas, define canonical ports.
 - Removing a component: delete the runtime class, registry entry, DB seed definitions, default tool description, and any wrapper components that only exist to invoke it in the same diff. Do not leave dead catalog entries that can still be instantiated through backend graphs or MCP.
 - `SQLSpanExporter` (`engine/trace/sql_exporter.py`): each span is parsed once (`_parse_span_or_error` → dict passed to `_export_span`); do not re-serialize the same span in the export path.

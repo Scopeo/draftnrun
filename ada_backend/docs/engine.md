@@ -133,6 +133,16 @@ Bridges unmigrated components (using `AgentPayload` in/out) with the new multi-p
 - Unmigrated components don't use coercion and receive the entire `task_result.data` dict
 - Port mapping validation is lenient when unmigrated components are involved
 
+## SQL Local Storage Lifecycle
+
+`SQLLocalService` caches SQLAlchemy engines by `engine_url` at process level instead of creating one pool per
+instantiation. This prevents connection-pool growth when services are repeatedly created for the same database URL
+(notably ingestion DB flows).
+In ingestion flows, prefer reusing an existing `SQLLocalService` instance inside the same job and always call
+`await close()` in `finally` blocks to release ref-counted engine ownership.
+In ingestion workers, `ingestion_script.ingest_db_source.upload_db_source()` should create one source
+`SQLLocalService` per ingestion run and reuse it across the run before closing it in `finally`.
+
 ## Key Files
 
 | Concept | File |

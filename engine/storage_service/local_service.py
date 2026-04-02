@@ -2,6 +2,7 @@ import json
 import logging
 from contextlib import contextmanager
 from pathlib import Path
+from threading import Lock
 from typing import Any, Dict, Iterator, Optional, Type
 
 import pandas as pd
@@ -46,10 +47,26 @@ DEFAULT_MAPPING = {"CURRENT_TIMESTAMP": sqlalchemy.func.current_timestamp()}
 
 
 class SQLLocalService(DBService):
+    _engine_cache: dict[str, dict[str, Any]] = {}
+    _engine_cache_lock = Lock()
+
     def __init__(
         self, engine_url: str, component_attributes: Optional[ComponentAttributes] = None, connection_timeout: int = 7
     ):
         super().__init__(component_attributes=component_attributes)
+        self._engine_url = engine_url
+
+        with self._engine_cache_lock:
+            cached = self._engine_cache.get(engine_url)
+            if cached is not None:
+                cached["ref_count"] += 1
+        if cached is not None:
+            self.engine = cached["engine"]
+            self.metadata = cached["metadata"]
+            self.Session = sessionmaker(bind=self.engine)
+            self.database_name = self.engine.url.database
+            LOGGER.debug(f"Reusing cached SQL engine for {self.database_name}")
+            return
 
         def _initialize_connection():
             """All connection logic wrapped in this function for timeout."""
@@ -67,7 +84,25 @@ class SQLLocalService(DBService):
 
         try:
             LOGGER.info(f"Connecting to database (timeout: {connection_timeout}s)...")
-            self.engine, self.metadata = func_timeout(connection_timeout, _initialize_connection)
+            new_engine, new_metadata = func_timeout(connection_timeout, _initialize_connection)
+            engine_to_dispose = None
+            with self._engine_cache_lock:
+                existing = self._engine_cache.get(engine_url)
+                if existing is not None:
+                    existing["ref_count"] += 1
+                    self.engine = existing["engine"]
+                    self.metadata = existing["metadata"]
+                    engine_to_dispose = new_engine
+                else:
+                    self.engine = new_engine
+                    self.metadata = new_metadata
+                    self._engine_cache[engine_url] = {
+                        "engine": new_engine,
+                        "metadata": new_metadata,
+                        "ref_count": 1,
+                    }
+            if engine_to_dispose is not None:
+                engine_to_dispose.dispose()
             LOGGER.info(f"Successfully connected to database: {self.engine.url.database}")
 
         except FunctionTimedOut:
@@ -81,6 +116,21 @@ class SQLLocalService(DBService):
 
         self.Session = sessionmaker(bind=self.engine)
         self.database_name = self.engine.url.database
+
+    async def close(self) -> None:
+        engine_to_dispose: Optional[sqlalchemy.Engine] = None
+        with self._engine_cache_lock:
+            cached = self._engine_cache.get(self._engine_url)
+            if cached is None:
+                return
+            if cached["engine"] is not self.engine:
+                return
+            cached["ref_count"] -= 1
+            if cached["ref_count"] <= 0:
+                self._engine_cache.pop(self._engine_url, None)
+                engine_to_dispose = cached["engine"]
+        if engine_to_dispose is not None:
+            engine_to_dispose.dispose()
 
     def get_table(self, table_name: str, schema_name: Optional[str] = None) -> sqlalchemy.Table:
         """

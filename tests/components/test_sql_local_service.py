@@ -1,5 +1,9 @@
+import asyncio
+from unittest.mock import patch
+
 import pytest
 
+from engine.storage_service.local_service import SQLLocalService
 from tests.mocks.db_service import TEST_SCHEMA_NAME
 
 
@@ -148,3 +152,26 @@ def test_error_when_inserting_new_column(postgres_service, sample_table_definiti
             data={"chunk_id": 1, "name": "value2", "created_at": "2024-12-10 11:45:45", "metadata": "tag"},
             schema_name=TEST_SCHEMA_NAME,
         )
+
+
+def test_sql_local_service_reuses_engine_pool_per_url_postgres(postgres_service):
+    for cached in SQLLocalService._engine_cache.values():
+        cached["engine"].dispose()
+    SQLLocalService._engine_cache.clear()
+
+    engine_url = str(postgres_service.engine.url)
+    service_a = SQLLocalService(engine_url=engine_url)
+    service_b = SQLLocalService(engine_url=engine_url)
+
+    assert service_a.engine is service_b.engine
+    assert SQLLocalService._engine_cache[engine_url]["ref_count"] == 2
+
+    shared_engine = service_a.engine
+
+    asyncio.run(service_a.close())
+    assert SQLLocalService._engine_cache[engine_url]["ref_count"] == 1
+
+    with patch.object(shared_engine, "dispose", wraps=shared_engine.dispose) as mock_dispose:
+        asyncio.run(service_b.close())
+        assert engine_url not in SQLLocalService._engine_cache
+        mock_dispose.assert_called_once()
