@@ -1,5 +1,6 @@
 import functools
 import logging
+import threading
 from typing import Optional
 from uuid import UUID
 
@@ -10,20 +11,50 @@ from settings import settings
 LOGGER = logging.getLogger(__name__)
 
 _mp: Mixpanel | None = None
+_mp_token: str | None = None
 _enabled: bool = False
+_init_lock = threading.Lock()
 
-if settings.MIXPANEL_TOKEN and settings.ENV == "production":
-    try:
-        _mp = Mixpanel(settings.MIXPANEL_TOKEN, consumer=Consumer(request_timeout=5))
-        _enabled = True
-    except Exception:
-        _mp = None
-        _enabled = False
+
+def _is_production_env() -> bool:
+    env = (settings.ENV or "").strip().lower()
+    return env == "production"
+
+
+def _refresh_client() -> None:
+    """Initialize (or reinitialize) the Mixpanel client based on current runtime settings."""
+    global _mp, _mp_token, _enabled
+
+    token = settings.MIXPANEL_TOKEN
+    if token and _is_production_env() and _enabled and _mp is not None and _mp_token == token:
+        return
+
+    with _init_lock:
+        token = settings.MIXPANEL_TOKEN
+        if not token or not _is_production_env():
+            _mp = None
+            _mp_token = None
+            _enabled = False
+            return
+
+        if _enabled and _mp is not None and _mp_token == token:
+            return
+
+        try:
+            _mp = Mixpanel(token, consumer=Consumer(request_timeout=5))
+            _mp_token = token
+            _enabled = True
+        except Exception:
+            LOGGER.exception("Mixpanel initialization failed")
+            _mp = None
+            _mp_token = None
+            _enabled = False
 
 
 def non_breaking_track(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
+        _refresh_client()
         if not _enabled:
             return
         try:

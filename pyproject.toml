@@ -190,6 +190,6 @@ directory = ".coverage/htmlcov"
 output = ".coverage/coverage.xml"
 
 [tool.pytest.ini_options]
-markers = ["alembic", "pdf_integration"]
-addopts = "-m 'not alembic'"
+markers = ["alembic", "pdf_integration", "mixpanel"]
+addopts = "-m 'not alembic and not pdf_integration and not mixpanel'"
 testpaths = ["tests"]
