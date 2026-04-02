@@ -210,7 +210,7 @@ async def upload_db_source(
     update_existing: bool = False,
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
-    batch_size: Optional[int] = None,
+    batch_size: int = 500,
 ):
     resolved_timestamp_filter = resolve_sql_timestamp_filter(timestamp_filter)
 
@@ -322,7 +322,7 @@ async def ingestion_database(
     timestamp_filter: Optional[str] = None,
     source_attributes: Optional[SourceAttributes] = None,
     source_id: Optional[UUID] = None,
-    batch_size: Optional[int] = None,
+    batch_size: int = 500,
 ) -> None:
     source_type = db.SourceType.DATABASE
     LOGGER.info("Start ingestion data from the database source...")

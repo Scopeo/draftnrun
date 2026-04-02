@@ -148,7 +148,7 @@ async def upload_website_source(
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
     update_existing: bool = False,
-    batch_size: Optional[int] = None,
+    batch_size: int = 500,
 ) -> None:
     LOGGER.info(f"Starting to scrape URL: {url} using Firecrawl")
 
@@ -288,7 +288,7 @@ async def ingest_website_source(
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
     source_id: Optional[UUID] = None,
-    batch_size: Optional[int] = None,
+    batch_size: int = 500,
 ) -> None:
     LOGGER.info(
         f"[INGESTION_SOURCE] Starting WEBSITE ingestion with Firecrawl - Source: '{source_name}', "

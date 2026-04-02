@@ -113,7 +113,7 @@ async def sync_chunks_to_qdrant(
     column_info: Optional[dict] = None,
     metadata_column_names: Optional[list[str]] = None,
     timestamp_column_name: Optional[str] = None,
-    batch_size: Optional[int] = None,
+    batch_size: int = 500,
 ) -> None:
     if source_id and sql_query_filter:
         combined_filter = f"({sql_query_filter}) AND {SOURCE_ID_COLUMN_NAME} = '{source_id}'"
@@ -189,7 +189,7 @@ async def ingest_google_drive_source(
     document_reading_mode: DocumentReadingMode = DocumentReadingMode.STANDARD,
     llamaparse_api_key: Optional[str] = None,
     mistral_ocr_api_key: Optional[str] = None,
-    batch_size: Optional[int] = None,
+    batch_size: int = 500,
 ) -> None:
     LOGGER.info(
         f"[INGESTION_SOURCE] Starting GOOGLE DRIVE ingestion - Source: '{source_name}', "
@@ -235,7 +235,7 @@ async def ingest_local_folder_source(
     document_reading_mode: DocumentReadingMode = DocumentReadingMode.STANDARD,
     llamaparse_api_key: Optional[str] = None,
     mistral_ocr_api_key: Optional[str] = None,
-    batch_size: Optional[int] = None,
+    batch_size: int = 500,
 ) -> None:
     LOGGER.info(
         f"[INGESTION_SOURCE] Starting LOCAL ingestion - Source: '{source_name}', "
@@ -281,7 +281,7 @@ async def _ingest_folder_source(
     document_reading_mode: DocumentReadingMode = DocumentReadingMode.STANDARD,
     llamaparse_api_key: Optional[str] = None,
     mistral_ocr_api_key: Optional[str] = None,
-    batch_size: Optional[int] = None,
+    batch_size: int = 500,
 ) -> None:
     if source_id is None:
         source_id = uuid.uuid4()
