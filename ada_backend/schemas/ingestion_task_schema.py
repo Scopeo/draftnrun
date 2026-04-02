@@ -90,6 +90,7 @@ class IngestionRunRequest(BaseModel):
     source_name: str
     source_type: db.SourceType
     source_id: UUID | None = None
+    ingestion_id: str | None = None
     source_attributes: SourceAttributes
 
 

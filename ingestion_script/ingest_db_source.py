@@ -234,6 +234,7 @@ async def upload_db_source(
     update_existing: bool = False,
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
+    ingestion_id: Optional[str] = None,
 ):
     resolved_timestamp_filter = resolve_sql_timestamp_filter(timestamp_filter)
 
@@ -289,7 +290,12 @@ async def upload_db_source(
     if not ids_with_ts:
         raise ValueError(f"The table '{source_table_name}' is empty. No data to ingest.")
 
-    LOGGER.info(f"Found {len(ids_with_ts)} source rows from table {source_table_name}")
+    LOGGER.info(
+        "upload_db_source ingestion_id=%s found %d source rows from table %s",
+        ingestion_id,
+        len(ids_with_ts),
+        source_table_name,
+    )
 
     db_service.update_table(
         incoming_ids_with_timestamp=ids_with_ts,

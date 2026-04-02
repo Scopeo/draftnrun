@@ -3,6 +3,8 @@ import uuid
 from typing import Optional
 from uuid import UUID
 
+import sentry_sdk
+
 from ada_backend.database import models as db
 from ada_backend.database.setup_db import SessionLocal
 from ada_backend.repositories.ingestion_task_repository import (
@@ -38,7 +40,19 @@ async def run_db_ingestion(
     source_name: str,
     source_attributes: SourceAttributes,
     source_id: Optional[UUID] = None,
+    ingestion_id: Optional[str] = None,
 ) -> None:
+    if ingestion_id:
+        sentry_sdk.set_tag("ingestion_id", ingestion_id)
+
+    LOGGER.info(
+        "run_db_ingestion ingestion_id=%s organization_id=%s task_id=%s source_name=%s",
+        ingestion_id,
+        organization_id,
+        task_id,
+        source_name,
+    )
+
     source_type = db.SourceType.DATABASE
 
     source_db_url = source_attributes.source_db_url
@@ -128,10 +142,11 @@ async def run_db_ingestion(
             update_existing=update_existing,
             query_filter=source_attributes.query_filter,
             timestamp_filter=source_attributes.timestamp_filter,
+            ingestion_id=ingestion_id,
         )
     except Exception as e:
         error_msg = f"Failed to ingest data from database: {e}"
-        LOGGER.error(error_msg, exc_info=True)
+        LOGGER.error("db_ingestion_failed ingestion_id=%s error=%s", ingestion_id, error_msg, exc_info=True)
         _update_task_status(
             organization_id=organization_id,
             task_id=task_id,
@@ -166,7 +181,12 @@ async def run_db_ingestion(
         source_id=result_source_id,
     )
 
-    LOGGER.info("Successfully ingested database source '%s' for organization %s", source_name, organization_id)
+    LOGGER.info(
+        "db_ingestion_completed ingestion_id=%s source_name=%s organization_id=%s",
+        ingestion_id,
+        source_name,
+        organization_id,
+    )
 
 
 def _update_task_status(

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import requests
+import sentry_sdk
 
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, ResultType, TaskResultMetadata
@@ -70,6 +71,7 @@ class Worker(BaseWorker):
         """Process a single ingestion task."""
         try:
             ingestion_id = payload["ingestion_id"]
+            sentry_sdk.set_tag("ingestion_id", ingestion_id)
             source_type = payload.get("source_type", "")
             organization_id = payload["organization_id"]
             source_name = payload.get("source_name", f"unnamed-{ingestion_id}")
@@ -366,6 +368,7 @@ class Worker(BaseWorker):
             "task_id": task_id,
             "source_name": source_name,
             "source_type": source_type,
+            "ingestion_id": ingestion_id,
             "source_attributes": source_attributes or {},
         }
         if source_id:

@@ -1,5 +1,5 @@
 import logging
-from typing import Annotated
+from typing import Annotated, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends
@@ -20,6 +20,7 @@ async def _run_db_ingestion_task(
     source_name: str,
     source_attributes: SourceAttributes,
     source_id: UUID,
+    ingestion_id: Optional[str] = None,
 ) -> None:
     try:
         await run_db_ingestion(
@@ -28,12 +29,14 @@ async def _run_db_ingestion_task(
             source_name=source_name,
             source_attributes=source_attributes,
             source_id=source_id,
+            ingestion_id=ingestion_id,
         )
     except Exception:
         LOGGER.exception(
-            "Ingestion failed for organization %s, task %s",
+            "Ingestion failed for organization %s, task %s, ingestion_id %s",
             organization_id,
             task_id,
+            ingestion_id,
         )
 
 
@@ -52,6 +55,7 @@ async def run_ingestion(
             source_name=request.source_name,
             source_attributes=request.source_attributes,
             source_id=request.source_id,
+            ingestion_id=request.ingestion_id,
         )
         return JSONResponse(status_code=202, content={"status": "accepted"})
 
