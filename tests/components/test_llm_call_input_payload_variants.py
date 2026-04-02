@@ -33,7 +33,9 @@ def test_file_url_from_api_input(get_span_mock, agent_calls_mock):
 
     agent = LLMCallAgent(
         trace_manager=trace_manager,
-        completion_service=llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         tool_description=ToolDescription(
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
@@ -83,7 +85,9 @@ def test_file_content_from_api_input(get_span_mock, agent_calls_mock):
 
     agent = LLMCallAgent(
         trace_manager=trace_manager,
-        completion_service=llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         tool_description=ToolDescription(
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
@@ -143,7 +147,9 @@ def test_template_vars_from_api_input(get_span_mock, agent_calls_mock):
 
     agent = LLMCallAgent(
         trace_manager=trace_manager,
-        completion_service=llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         tool_description=ToolDescription(
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
@@ -201,7 +207,9 @@ def test_file_url_as_tool_property(get_span_mock, agent_calls_mock):
     # Create LLM Call agent with file_url_key and tool_properties that include file_url
     llm_tool = LLMCallAgent(
         trace_manager=trace_manager,
-        completion_service=llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         tool_description=ToolDescription(
             name="AnalyzeDocument",
             description="Analyze a document from a URL",
@@ -220,7 +228,9 @@ def test_file_url_as_tool_property(get_span_mock, agent_calls_mock):
 
     # Create ReAct agent with the LLM tool
     react = AIAgent(
-        completion_service=llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="ReAct"),
         trace_manager=trace_manager,
         tool_description=ToolDescription(
@@ -270,7 +280,9 @@ def test_template_vars_as_tool_property(get_span_mock, agent_calls_mock):
     # Create LLM Call agent with template vars in tool_properties
     llm_tool = LLMCallAgent(
         trace_manager=trace_manager,
-        completion_service=llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         tool_description=ToolDescription(
             name="GenerateResponse",
             description="Generate a response with custom style",
@@ -296,7 +308,9 @@ def test_template_vars_as_tool_property(get_span_mock, agent_calls_mock):
 
     # Create ReAct agent with the LLM tool
     react = AIAgent(
-        completion_service=llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="ReAct"),
         trace_manager=trace_manager,
         tool_description=ToolDescription(

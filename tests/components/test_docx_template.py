@@ -33,11 +33,13 @@ def mock_completion_service():
 
 
 @pytest.fixture
-def docx_agent(mock_trace_manager, mock_completion_service):
+def docx_agent(mock_trace_manager):
     return DocxTemplateAgent(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(component_instance_name="test"),
-        completion_service=mock_completion_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
     )
 
 
@@ -238,7 +240,9 @@ async def test_run_without_io_trace_base64(mock_trace_manager, mock_completion_s
     agent = DocxTemplateAgent(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(component_instance_name="test"),
-        completion_service=mock_completion_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
     )
     with open(minimal_docx, "rb") as f:
         template_base64 = base64.b64encode(f.read()).decode("utf-8")

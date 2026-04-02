@@ -67,7 +67,9 @@ def agent_input():
 @pytest.fixture
 def react_agent(mock_agent, mock_trace_manager, mock_tool_description, mock_llm_service):
     return AIAgent(
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="Test React Agent"),
         agent_tools=[mock_agent],
         trace_manager=mock_trace_manager,
@@ -235,7 +237,9 @@ def test_max_iterations(agent_calls_mock, get_span_mock, react_agent, agent_inpu
 def test_react_agent_without_tools(mock_trace_manager, mock_tool_description, mock_llm_service):
     """Test that ReActAgent can be instantiated without tools."""
     react_agent = AIAgent(
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="Test React Agent Without Tools"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
@@ -257,7 +261,9 @@ def test_date_in_system_prompt_enabled(
     agent_calls_mock.labels.return_value = counter_mock
 
     react_agent = AIAgent(
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="Test React Agent With Date"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
@@ -289,7 +295,9 @@ def test_date_in_system_prompt_disabled(
     agent_calls_mock.labels.return_value = counter_mock
 
     react_agent = AIAgent(
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="Test React Agent Without Date"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
@@ -330,7 +338,9 @@ def test_structured_output_in_function_call_async(
 
     # Create ReActAgent with structured output
     react_agent = AIAgent(
-        completion_service=real_completion_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="Test Structured Output"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
@@ -378,7 +388,9 @@ def test_structured_output_in_function_call_async(
 
     # Create an agent instance that includes the tool from the start
     react_agent_with_tool = AIAgent(
-        completion_service=real_completion_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="Test Structured Output With Tool"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
@@ -438,7 +450,9 @@ def test_structured_output_in_function_call_async(
 
     # Test 4: Max iterations reached - tool_choice should be "none" and constrained_complete should be called
     react_agent_max_iter = AIAgent(
-        completion_service=real_completion_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="Test Max Iterations"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
@@ -519,7 +533,9 @@ def test_react_agent_with_null_output_format(mock_trace_manager, mock_tool_descr
     """
     # This should not raise an exception with the fix
     react_agent = AIAgent(
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="Test React Agent With Null Output"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
@@ -536,7 +552,9 @@ def test_react_agent_with_null_output_format(mock_trace_manager, mock_tool_descr
 def test_react_agent_with_none_output_format(mock_trace_manager, mock_tool_description, mock_llm_service):
     """Test that ReActAgent handles output_format=None correctly."""
     react_agent = AIAgent(
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="Test React Agent With None Output"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
@@ -578,7 +596,9 @@ def test_context_passed_to_tools(
 
     # Create the agent with the mock tool
     react_agent = AIAgent(
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="Test Context Agent"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,

@@ -50,7 +50,9 @@ def llm_agent(mock_trace_manager, mock_llm_service):
     mock_llm_service._provider = "test_provider"
     return LLMCallAgent(
         trace_manager=mock_trace_manager,
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         tool_description=ToolDescription(
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
@@ -63,7 +65,9 @@ def llm_agent(mock_trace_manager, mock_llm_service):
 def react_agent(mock_trace_manager, mock_llm_service):
     """ReAct agent with template in initial prompt."""
     return AIAgent(
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="Test React"),
         trace_manager=mock_trace_manager,
         tool_description=ToolDescription(
@@ -177,7 +181,9 @@ def test_llm_call_missing_template_var(get_span_mock, agent_calls_mock, mock_llm
     mock_llm_service._provider = "test_provider"
     agent = LLMCallAgent(
         trace_manager=tm,
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         tool_description=ToolDescription(
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
@@ -207,7 +213,9 @@ def test_llm_call_wrong_type_template_var(get_span_mock, agent_calls_mock, mock_
     mock_llm_service._provider = "test_provider"
     agent = LLMCallAgent(
         trace_manager=tm,
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         tool_description=ToolDescription(
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
@@ -238,7 +246,9 @@ def test_llm_call_with_input_var(get_span_mock, agent_calls_mock, llm_agent):
     llm_agent._completion_service._provider = "test_provider"
     agent = LLMCallAgent(
         trace_manager=tm,
-        completion_service=llm_agent._completion_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         tool_description=ToolDescription(
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
@@ -287,7 +297,9 @@ def test_react_agent_wrong_type_template_var(get_span_mock, agent_calls_mock, mo
     agent_calls_mock.labels.return_value = counter_mock
 
     react_agent = AIAgent(
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="Test React"),
         trace_manager=mock_trace_manager,
         tool_description=ToolDescription(
@@ -317,7 +329,9 @@ def test_template_vars_priority(get_span_mock, agent_calls_mock, mock_llm_servic
     tm = MagicMock(spec=TraceManager)
     agent = LLMCallAgent(
         trace_manager=tm,
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         tool_description=ToolDescription(
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
@@ -351,7 +365,9 @@ def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, mock_llm_s
     tm = MagicMock(spec=TraceManager)
     agent = LLMCallAgent(
         trace_manager=tm,
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         tool_description=ToolDescription(
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
@@ -427,7 +443,9 @@ def test_llm_call_with_flat_template_vars(get_span_mock, agent_calls_mock, mock_
     tm = MagicMock(spec=TraceManager)
     agent = LLMCallAgent(
         trace_manager=tm,
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         tool_description=ToolDescription(
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
@@ -466,7 +484,9 @@ def test_llm_call_template_vars_from_tool_args(get_span_mock, agent_calls_mock, 
     tm = MagicMock(spec=TraceManager)
     llm_tool = LLMCallAgent(
         trace_manager=tm,
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         tool_description=ToolDescription(
             name="Get_content", description="", tool_properties={}, required_tool_properties=[]
         ),
@@ -476,7 +496,9 @@ def test_llm_call_template_vars_from_tool_args(get_span_mock, agent_calls_mock, 
     )
 
     react = AIAgent(
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="ReAct"),
         trace_manager=tm,
         tool_description=ToolDescription(
@@ -534,7 +556,9 @@ def test_react_agent_two_tool_calls_different_urls(
     # Tool under test
     llm_tool = LLMCallAgent(
         trace_manager=mock_trace_manager,
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         tool_description=ToolDescription(
             name="Get_content", description="", tool_properties={}, required_tool_properties=[]
         ),
@@ -545,7 +569,9 @@ def test_react_agent_two_tool_calls_different_urls(
 
     # React agent with this single tool
     react = AIAgent(
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_attributes=ComponentAttributes(component_instance_name="ReAct"),
         trace_manager=mock_trace_manager,
         tool_description=ToolDescription(
