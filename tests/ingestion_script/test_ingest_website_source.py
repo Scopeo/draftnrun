@@ -170,4 +170,5 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
         db_service,
         qdrant_service,
         source_id=str(test_source_id),
+        batch_size=500,
     )
