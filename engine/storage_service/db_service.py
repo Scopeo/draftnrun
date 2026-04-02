@@ -183,10 +183,6 @@ class DBService(CloseMixin, ABC):
                 LOGGER.info(f"Batch {batch_num}: {len(rows)} rows to upsert in {total_upsert_batches} sub-batches")
                 for j in range(0, len(rows), batch_size):
                     upsert_batch = rows[j : j + batch_size]
-                    upsert_num = j // batch_size + 1
-                    LOGGER.info(
-                        f"Batch {batch_num}, upsert {upsert_num}/{total_upsert_batches}: {len(upsert_batch)} rows"
-                    )
                     self.upsert_rows(
                         table_name, upsert_batch, schema_name=schema_name, id_column_names=id_column_names
                     )
