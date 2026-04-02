@@ -91,12 +91,15 @@ async def sync_chunks_to_qdrant(
     else:
         combined_filter = sql_query_filter
 
+    LOGGER.info(f"Fetching id_rows from table {table_name} in schema {table_schema} with filter {combined_filter}")
+
     id_rows = db_service.fetch_selected_columns(
         table_name,
         columns=[CHUNK_ID_COLUMN_NAME, TIMESTAMP_COLUMN_NAME],
         schema_name=table_schema,
         sql_query_filter=combined_filter,
     )
+    LOGGER.info(f"Found {len(id_rows)} id_rows")
     incoming_ids_with_timestamp: dict[str, Optional[str]] = {
         row[CHUNK_ID_COLUMN_NAME]: row.get(TIMESTAMP_COLUMN_NAME) for row in id_rows
     }
