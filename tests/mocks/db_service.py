@@ -24,13 +24,13 @@ def postgres_service() -> Generator[SQLLocalService, None, None]:
     try:
         service = SQLLocalService(engine_url=engine_url)
 
-        # Clean up and recreate test schema for each test
         with service.engine.connect() as conn:
             conn.execute(text(f"DROP SCHEMA IF EXISTS {TEST_SCHEMA_NAME} CASCADE"))
             conn.commit()
         service.create_schema(TEST_SCHEMA_NAME)
 
         yield service
+        service.dispose()
     except Exception as e:
         if not os.getenv("CI"):
             pytest.skip(
@@ -45,6 +45,7 @@ def sqlite_service():
     engine_url = "sqlite:///:memory:"
     service = SQLLocalService(engine_url=engine_url)
     yield service
+    service.dispose()
 
 
 @pytest.fixture(scope="function")

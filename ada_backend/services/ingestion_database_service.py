@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 
 from engine.storage_service.db_utils import DBDefinition
@@ -5,9 +6,14 @@ from engine.storage_service.local_service import SQLLocalService
 from ingestion_script.utils import get_sanitize_names
 from settings import settings
 
+_ingestion_service: Optional[SQLLocalService] = None
+
 
 def get_sql_local_service_for_ingestion() -> SQLLocalService:
-    return SQLLocalService(engine_url=settings.INGESTION_DB_URL)
+    global _ingestion_service
+    if _ingestion_service is None:
+        _ingestion_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
+    return _ingestion_service
 
 
 def create_table_in_ingestion_db(

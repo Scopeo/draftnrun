@@ -52,7 +52,6 @@ class SQLLocalService(DBService):
         super().__init__(component_attributes=component_attributes)
 
         def _initialize_connection():
-            """All connection logic wrapped in this function for timeout."""
             engine = create_engine(
                 engine_url,
                 pool_pre_ping=True,
@@ -81,6 +80,19 @@ class SQLLocalService(DBService):
 
         self.Session = sessionmaker(bind=self.engine)
         self.database_name = self.engine.url.database
+
+    def dispose(self):
+        if hasattr(self, "engine") and self.engine:
+            self.engine.dispose()
+
+    async def close(self) -> None:
+        self.dispose()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.dispose()
 
     def get_table(self, table_name: str, schema_name: Optional[str] = None) -> sqlalchemy.Table:
         """

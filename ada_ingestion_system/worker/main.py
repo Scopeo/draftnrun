@@ -381,7 +381,7 @@ class Worker(BaseWorker):
                 url,
                 json=body,
                 headers={
-                    "x-ingestion-api-key": ingestion_api_key,
+                    "X-Ingestion-API-Key": ingestion_api_key,
                     "Content-Type": "application/json",
                 },
                 timeout=30,

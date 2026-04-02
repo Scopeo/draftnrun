@@ -320,7 +320,6 @@ async def upload_source(
     )
     if settings.INGESTION_DB_URL is None:
         raise ValueError("INGESTION_DB_URL is not set")
-    db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
     if source_id:
         result_source_id = source_id
         update_task = True
@@ -352,15 +351,16 @@ async def upload_source(
     )
 
     try:
-        await ingestion_function(
-            db_service=db_service,
-            qdrant_service=qdrant_service,
-            storage_schema_name=schema_name,
-            storage_table_name=table_name,
-            qdrant_collection_name=qdrant_collection_name,
-            update_existing=update_existing,
-            source_id=result_source_id,
-        )
+        with SQLLocalService(engine_url=settings.INGESTION_DB_URL) as db_service:
+            await ingestion_function(
+                db_service=db_service,
+                qdrant_service=qdrant_service,
+                storage_schema_name=schema_name,
+                storage_table_name=table_name,
+                qdrant_collection_name=qdrant_collection_name,
+                update_existing=update_existing,
+                source_id=result_source_id,
+            )
     except Exception as e:
         error_msg = f"Failed to get data from the database: {str(e)}"
         LOGGER.error(error_msg, exc_info=True)

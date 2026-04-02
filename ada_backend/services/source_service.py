@@ -171,14 +171,13 @@ def delete_source_service(
                 )
 
         if source.database_table_name:
-            db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
-            LOGGER.info(f"Deleting chunks for source {source_id} from table {source.database_table_name}")
-
-            db_service.delete_rows_from_table_by_filter(
-                table_name=source.database_table_name,
-                schema_name=source.database_schema,
-                filter_condition=f"{SOURCE_ID_COLUMN_NAME} = '{source_id}'",
-            )
+            with SQLLocalService(engine_url=settings.INGESTION_DB_URL) as db_service:
+                LOGGER.info(f"Deleting chunks for source {source_id} from table {source.database_table_name}")
+                db_service.delete_rows_from_table_by_filter(
+                    table_name=source.database_table_name,
+                    schema_name=source.database_schema,
+                    filter_condition=f"{SOURCE_ID_COLUMN_NAME} = '{source_id}'",
+                )
             LOGGER.info(f"Deleted chunks for source {source_id} from table {source.database_table_name}")
         delete_source(session, organization_id, source_id)
     except Exception as e:

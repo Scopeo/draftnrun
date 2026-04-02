@@ -84,14 +84,13 @@ def _validate_source_columns(
 
 
 def get_db_source_ids(
-    db_url: str,
     table_name: str,
     id_column_name: str,
+    sql_local_service: SQLLocalService,
     source_schema_name: Optional[str] = None,
     timestamp_column_name: Optional[str] = None,
     sql_query_filter: Optional[str] = None,
 ) -> dict[str, any]:
-    sql_local_service = SQLLocalService(engine_url=db_url)
     _validate_source_columns(
         sql_local_service,
         table_name,
@@ -260,68 +259,68 @@ async def upload_db_source(
 
     source_id_str = str(source_id)
 
-    sql_local_service = SQLLocalService(engine_url=source_db_url)
-    column_info = _validate_source_columns(
-        sql_local_service,
-        source_table_name,
-        id_column_name,
-        source_schema_name,
-        text_column_names=text_column_names,
-        metadata_column_names=metadata_column_names,
-        timestamp_column_name=timestamp_column_name,
-    )
-    await _ensure_qdrant_indexes(
-        qdrant_service,
-        qdrant_collection_name,
-        column_info,
-        metadata_column_names=metadata_column_names,
-        timestamp_column_name=timestamp_column_name,
-    )
-
-    ids_with_ts = get_db_source_ids(
-        db_url=source_db_url,
-        table_name=source_table_name,
-        id_column_name=id_column_name,
-        source_schema_name=source_schema_name,
-        timestamp_column_name=timestamp_column_name,
-        sql_query_filter=combined_filter_sql,
-    )
-
-    if not ids_with_ts:
-        raise ValueError(f"The table '{source_table_name}' is empty. No data to ingest.")
-
-    LOGGER.info(
-        "upload_db_source ingestion_id=%s found %d source rows from table %s",
-        ingestion_id,
-        len(ids_with_ts),
-        source_table_name,
-    )
-
-    db_service.update_table(
-        incoming_ids_with_timestamp=ids_with_ts,
-        fetch_rows_fn=partial(
-            fetch_db_source_chunks,
-            sql_local_service=sql_local_service,
-            table_name=source_table_name,
-            id_column_name=id_column_name,
+    with SQLLocalService(engine_url=source_db_url) as sql_local_service:
+        column_info = _validate_source_columns(
+            sql_local_service,
+            source_table_name,
+            id_column_name,
+            source_schema_name,
             text_column_names=text_column_names,
-            source_id=source_id_str,
-            source_schema_name=source_schema_name,
             metadata_column_names=metadata_column_names,
             timestamp_column_name=timestamp_column_name,
-            url_pattern=url_pattern,
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-        ),
-        table_name=storage_table_name,
-        table_definition=db_definition,
-        id_column_name=FILE_ID_COLUMN_NAME,
-        timestamp_column_name=TIMESTAMP_COLUMN_NAME,
-        append_mode=update_existing,
-        schema_name=storage_schema_name,
-        source_id=source_id_str,
-        sql_query_filter=combined_filter_sql_unified,
-    )
+        )
+        await _ensure_qdrant_indexes(
+            qdrant_service,
+            qdrant_collection_name,
+            column_info,
+            metadata_column_names=metadata_column_names,
+            timestamp_column_name=timestamp_column_name,
+        )
+
+        ids_with_ts = get_db_source_ids(
+            table_name=source_table_name,
+            id_column_name=id_column_name,
+            sql_local_service=sql_local_service,
+            source_schema_name=source_schema_name,
+            timestamp_column_name=timestamp_column_name,
+            sql_query_filter=combined_filter_sql,
+        )
+
+        if not ids_with_ts:
+            raise ValueError(f"The table '{source_table_name}' is empty. No data to ingest.")
+
+        LOGGER.info(
+            "upload_db_source ingestion_id=%s found %d source rows from table %s",
+            ingestion_id,
+            len(ids_with_ts),
+            source_table_name,
+        )
+
+        db_service.update_table(
+            incoming_ids_with_timestamp=ids_with_ts,
+            fetch_rows_fn=partial(
+                fetch_db_source_chunks,
+                sql_local_service=sql_local_service,
+                table_name=source_table_name,
+                id_column_name=id_column_name,
+                text_column_names=text_column_names,
+                source_id=source_id_str,
+                source_schema_name=source_schema_name,
+                metadata_column_names=metadata_column_names,
+                timestamp_column_name=timestamp_column_name,
+                url_pattern=url_pattern,
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+            ),
+            table_name=storage_table_name,
+            table_definition=db_definition,
+            id_column_name=FILE_ID_COLUMN_NAME,
+            timestamp_column_name=TIMESTAMP_COLUMN_NAME,
+            append_mode=update_existing,
+            schema_name=storage_schema_name,
+            source_id=source_id_str,
+            sql_query_filter=combined_filter_sql_unified,
+        )
 
     await sync_chunks_to_qdrant(
         storage_schema_name,
