@@ -4,7 +4,8 @@ import re
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Type
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type
+from uuid import UUID
 
 import requests
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -17,6 +18,7 @@ from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.constants import DEFAULT_MODEL
 from engine.llm_services.llm_service import CompletionService
+from engine.llm_services.utils import get_llm_provider_and_model
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
@@ -462,7 +464,9 @@ class DocxTemplateAgent(Component):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        completion_service: CompletionService,
+        temperature: float = 1.0,
+        llm_api_key: Optional[str] = None,
+        model_id_resolver: Optional[Callable[[str], Optional[UUID]]] = None,
         additional_instructions: Optional[str] = None,
         template_base64: Optional[str] = None,
         tool_description: ToolDescription = DOCX_TEMPLATE_TOOL_DESCRIPTION,
@@ -472,7 +476,9 @@ class DocxTemplateAgent(Component):
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
-        self._completion_service = completion_service
+        self._temperature = temperature
+        self._llm_api_key = llm_api_key
+        self._model_id_resolver = model_id_resolver or (lambda _: None)
         if DocxTemplate is None:
             raise ImportError(
                 "docxtpl library is required for DOCX template functionality. "
@@ -481,8 +487,20 @@ class DocxTemplateAgent(Component):
         self.additional_instructions = additional_instructions
         self.template_base64 = template_base64
 
+    def _build_completion_service(self, completion_model: str) -> CompletionService:
+        provider, model_name = get_llm_provider_and_model(completion_model)
+        return CompletionService(
+            provider=provider,
+            model_name=model_name,
+            trace_manager=self.trace_manager,
+            temperature=self._temperature,
+            api_key=self._llm_api_key,
+            model_id=self._model_id_resolver(model_name),
+        )
+
     async def _llm_generate_context(
         self,
+        completion_service: CompletionService,
         response_model: type[BaseModel],
         brief: str,
         image_specs: dict[str, dict] = None,
@@ -503,7 +521,7 @@ class DocxTemplateAgent(Component):
             user += f"\n\nAdditional instructions:\n{self.additional_instructions}"
         messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
 
-        return await self._completion_service.constrained_complete_with_pydantic_async(
+        return await completion_service.constrained_complete_with_pydantic_async(
             messages=messages,
             response_format=response_model,
             stream=False,
@@ -597,8 +615,10 @@ class DocxTemplateAgent(Component):
             image_keys = list(image_specs.keys())
 
             LOGGER.info("Generating context using LLM...")
+            completion_service = self._build_completion_service(inputs.completion_model)
             ResponseModel = build_context_response_model(analysis, image_keys)
             resp_obj = await self._llm_generate_context(
+                completion_service=completion_service,
                 response_model=ResponseModel,
                 brief=template_information_brief,
                 image_specs=image_specs,

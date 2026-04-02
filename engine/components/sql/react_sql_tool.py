@@ -1,9 +1,9 @@
-from typing import Optional
+from typing import Callable, Optional
+from uuid import UUID
 
 from engine.components.ai_agent import AIAgent, AIAgentInputs, AIAgentOutputs
 from engine.components.sql.run_sql_query_tool import RunSQLQueryTool
 from engine.components.types import ComponentAttributes, ToolDescription
-from engine.llm_services.llm_service import CompletionService
 from engine.storage_service.db_service import DBService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
 from engine.trace.trace_manager import TraceManager
@@ -53,9 +53,11 @@ class ReactSQLAgent(AIAgent):
     def __init__(
         self,
         trace_manager: TraceManager,
-        completion_service: CompletionService,
         component_attributes: ComponentAttributes,
         db_service: DBService,
+        temperature: float = 1.0,
+        llm_api_key: Optional[str] = None,
+        model_id_resolver: Optional[Callable[[str], Optional[UUID]]] = None,
         tool_description: ToolDescription = DEFAULT_REACT_SQL_TOOL_DESCRIPTION,
         db_schema_name: Optional[str] = None,
         include_tables: Optional[list[str]] = None,
@@ -90,7 +92,9 @@ class ReactSQLAgent(AIAgent):
             trace_manager=trace_manager,
             tool_description=tool_description,
             component_attributes=component_attributes,
-            completion_service=completion_service,
+            temperature=temperature,
+            llm_api_key=llm_api_key,
+            model_id_resolver=model_id_resolver,
             agent_tools=[RunSQLQueryTool(trace_manager, db_service, component_attributes=component_attributes)],
         )
 

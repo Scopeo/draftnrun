@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
-from typing import Optional, Type
+from typing import Callable, Optional, Type
+from uuid import UUID
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field
@@ -10,6 +11,7 @@ from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.constants import DEFAULT_MODEL
 from engine.llm_services.llm_service import CompletionService
+from engine.llm_services.utils import get_llm_provider_and_model
 from engine.storage_service.db_service import DBService
 from engine.trace.trace_manager import TraceManager
 
@@ -126,9 +128,11 @@ class SQLTool(Component):
     def __init__(
         self,
         trace_manager: TraceManager,
-        completion_service: CompletionService,
         db_service: DBService,
         component_attributes: ComponentAttributes,
+        temperature: float = 1.0,
+        llm_api_key: Optional[str] = None,
+        model_id_resolver: Optional[Callable[[str], Optional[UUID]]] = None,
         include_tables: Optional[list[str] | str] = None,
         additional_db_description: Optional[str] = None,
         tool_description: Optional[ToolDescription] = DEFAULT_SQL_TOOL_DESCRIPTION,
@@ -142,9 +146,11 @@ class SQLTool(Component):
             component_attributes=component_attributes,
         )
         self._db_service = db_service
+        self._temperature = temperature
+        self._llm_api_key = llm_api_key
+        self._model_id_resolver = model_id_resolver or (lambda _: None)
         self._include_tables = self._parse_include_tables(include_tables)
         self._additional_db_description = additional_db_description
-        self._completion_service = completion_service
         self._text_to_sql_prompt = text_to_sql_prompt
         self._synthesize = synthesize
         self._dialect = db_service.engine.dialect.name
@@ -157,17 +163,29 @@ class SQLTool(Component):
         tables = [t.strip() for t in value.replace(",", " ").split() if t.strip()]
         return tables or None
 
+    def _build_completion_service(self, completion_model: str) -> CompletionService:
+        provider, model_name = get_llm_provider_and_model(completion_model)
+        return CompletionService(
+            provider=provider,
+            model_name=model_name,
+            trace_manager=self.trace_manager,
+            temperature=self._temperature,
+            api_key=self._llm_api_key,
+            model_id=self._model_id_resolver(model_name),
+        )
+
     async def _run_without_io_trace(
         self,
         inputs: SQLToolInputs,
         ctx: Optional[dict] = None,
     ) -> SQLToolOutputs:
+        completion_service = self._build_completion_service(inputs.completion_model)
         query_str = inputs.natural_language_query
         schema = self._db_service.get_db_description(table_names=self._include_tables)
         if self._additional_db_description:
             schema += self._additional_db_description
         input_prompt = self._text_to_sql_prompt.format(query_str=query_str, schema=schema, dialect=self._dialect)
-        generate_sql_query = await self._completion_service.complete_async(
+        generate_sql_query = await completion_service.complete_async(
             messages=[{"role": "user", "content": input_prompt}]
         )
 
@@ -179,7 +197,7 @@ class SQLTool(Component):
             synthetize_prompt = self.synthesize_sql_prompt.format(
                 query_str=query_str, sql_query=sql_query, sql_answer=sql_output
             )
-            synthetize_answer = await self._completion_service.complete_async(
+            synthetize_answer = await completion_service.complete_async(
                 messages=[{"role": "assistant", "content": synthetize_prompt}]
             )
             output_message = synthetize_answer

@@ -29,7 +29,7 @@ from engine.components.rag.vocabulary_search import VocabularySearch
 from engine.components.synthesizer import Synthesizer
 from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import ToolDescription
-from engine.llm_services.llm_service import EmbeddingService, OCRService, WebSearchService
+from engine.llm_services.llm_service import EmbeddingService
 from engine.llm_services.utils import get_llm_provider_and_model
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.secret_utils import unwrap_secret, unwrap_secrets
@@ -134,7 +134,6 @@ class EntityFactory:
         """
         args, kwargs = self._process_parameters(*args, **kwargs)
         if self.constructor_method == "__init__":
-            # Call the constructor directly
             return self.entity_class(*args, **kwargs)
 
         constructor_method = getattr(self.entity_class, self.constructor_method, None)
@@ -601,36 +600,6 @@ def build_model_id_resolver_processor(
     return processor
 
 
-def build_old_completion_service_processor(
-    target_name: str = "completion_service",
-) -> ParameterProcessor:
-    """
-    Legacy processor that builds CompletionService at construction time.
-    Used by components that haven't been refactored to the new pattern yet.
-    """
-    from engine.llm_services.llm_service import CompletionService
-
-    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
-        model_id = fetch_model_id_by_name(model_name)
-
-        completion_service = CompletionService(
-            provider=provider,
-            model_name=model_name,
-            trace_manager=get_trace_manager(),
-            temperature=params.pop("temperature", 1.0),
-            api_key=params.pop("llm_api_key", None),
-            verbosity=params.pop("verbosity", None),
-            reasoning=params.pop("reasoning", None),
-            model_id=model_id,
-        )
-
-        params[target_name] = completion_service
-        return params
-
-    return processor
-
-
 def build_llm_capability_resolver_processor(
     target_name: str = "capability_resolver",
 ) -> ParameterProcessor:
@@ -651,58 +620,6 @@ def build_llm_capability_resolver_processor(
             return {option.value for option in options}
 
         params[target_name] = resolve_capabilities
-        return params
-
-    return processor
-
-
-def build_web_service_processor(
-    target_name: str = "web_service",
-) -> ParameterProcessor:
-    """
-    Returns a processor function to inject an LLM service into the parameters.
-    """
-
-    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
-
-        model_id = fetch_model_id_by_name(model_name)
-
-        web_service = WebSearchService(
-            trace_manager=get_trace_manager(),
-            provider=provider,
-            model_name=model_name,
-            api_key=params.pop("llm_api_key", None),
-            model_id=model_id,
-        )
-
-        params[target_name] = web_service
-        return params
-
-    return processor
-
-
-def build_ocr_service_processor(
-    target_name: str = "ocr_service",
-) -> ParameterProcessor:
-    """
-    Returns a processor function to inject an OCR service for OCR processing.
-    """
-
-    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
-
-        model_id = fetch_model_id_by_name(model_name)
-
-        ocr_service = OCRService(
-            trace_manager=get_trace_manager(),
-            provider=provider,
-            model_name=model_name,
-            api_key=params.pop("llm_api_key", None),
-            model_id=model_id,
-        )
-
-        params[target_name] = ocr_service
         return params
 
     return processor
