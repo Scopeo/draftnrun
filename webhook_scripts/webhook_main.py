@@ -20,6 +20,14 @@ WEBHOOK_EXECUTE_TIMEOUT = 1860  # Slightly above 30 min to allow for long-runnin
 DIRECT_TRIGGER_PROVIDER = "direct_trigger"
 
 
+class RetryableWebhookError(RuntimeError):
+    pass
+
+
+class FatalWebhookError(RuntimeError):
+    pass
+
+
 async def _post(
     url: str,
     body: Dict[str, Any],
@@ -54,17 +62,20 @@ async def _post(
             response.raise_for_status()
             return response.json()
     except httpx.HTTPStatusError as e:
+        status_code = e.response.status_code
         LOGGER.error(
-            f"[WEBHOOK_MAIN] HTTP error on {context}: status={e.response.status_code}, error={str(e)}",
+            f"[WEBHOOK_MAIN] HTTP error on {context}: status={status_code}, error={str(e)}",
             exc_info=True,
         )
-        raise
+        if status_code == 429 or status_code >= 500:
+            raise RetryableWebhookError(f"{context} failed with retryable HTTP status {status_code}") from e
+        raise FatalWebhookError(f"{context} failed with non-retryable HTTP status {status_code}") from e
     except httpx.RequestError as e:
         LOGGER.error(f"[WEBHOOK_MAIN] Request error on {context}: {str(e)}", exc_info=True)
-        raise
+        raise RetryableWebhookError(f"Network failure during {context}") from e
     except Exception as e:
         LOGGER.error(f"[WEBHOOK_MAIN] Error on {context}: {str(e)}", exc_info=True)
-        raise
+        raise RetryableWebhookError(f"Unexpected error during {context}") from e
 
 
 async def webhook_main_async(
@@ -84,11 +95,11 @@ async def webhook_main_async(
     api_base_url = os.environ.get("ADA_URL")
     if not api_base_url:
         LOGGER.error("[WEBHOOK_MAIN] ADA_URL not set in environment")
-        raise ValueError("ADA_URL environment variable is required")
+        raise FatalWebhookError("ADA_URL environment variable is required")
     webhook_api_key = os.environ.get("WEBHOOK_API_KEY")
     if not webhook_api_key:
         LOGGER.error("[WEBHOOK_MAIN] WEBHOOK_API_KEY not set in environment")
-        raise ValueError("WEBHOOK_API_KEY environment variable is required")
+        raise FatalWebhookError("WEBHOOK_API_KEY environment variable is required")
 
     if provider == DIRECT_TRIGGER_PROVIDER:
         await _run_direct_trigger(
@@ -133,7 +144,7 @@ async def _run_direct_trigger(
     """Call the internal direct-trigger run endpoint for a specific project and env."""
     env = payload.pop("env", None)
     if not env:
-        raise ValueError("Missing 'env' in direct trigger payload")
+        raise FatalWebhookError("Missing 'env' in direct trigger payload")
     LOGGER.info(
         f"[WEBHOOK_MAIN] Direct trigger: project_id={project_id}, env={env}, "
         f"event_id={event_id}, run_id={run_id}"
@@ -182,6 +193,12 @@ def webhook_main(
             )
         )
         LOGGER.info("[WEBHOOK_MAIN] Completed successfully")
+    except FatalWebhookError as e:
+        LOGGER.error(f"[WEBHOOK_MAIN] WEBHOOK_FAILURE_CLASS=fatal error={str(e)}")
+        raise
+    except RetryableWebhookError as e:
+        LOGGER.error(f"[WEBHOOK_MAIN] WEBHOOK_FAILURE_CLASS=retryable error={str(e)}")
+        raise
     except Exception as e:
-        LOGGER.error(f"[WEBHOOK_MAIN] FAILED with error: {str(e)}")
+        LOGGER.error(f"[WEBHOOK_MAIN] WEBHOOK_FAILURE_CLASS=retryable error={str(e)}")
         raise

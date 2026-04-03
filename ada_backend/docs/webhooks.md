@@ -79,6 +79,24 @@ API user → POST /webhooks/trigger/{project_id}/envs/{env}
   → If dead-lettered: PATCH /internal/webhooks/projects/{project_id}/runs/{run_id}/fail → Run marked FAILED
 ```
 
+## Delivery ACK semantics (Layer B)
+
+Webhook stream workers use **outcome-based ACK**: ACK only when processing is terminal for that attempt.
+
+- Success -> ACK (`message_ack_success`)
+- Fatal/non-retryable failure -> ACK (`message_ack_fatal`)
+- Retryable failure -> no ACK (`message_retry_scheduled`) so the message stays pending for redelivery
+- If delivery attempts reach `MAX_DELIVERY_ATTEMPTS`, the message is dead-lettered and ACKed
+
+### Retry/fatal classification
+
+`webhook_scripts/webhook_main.py` emits a failure classification marker consumed by `WebhookWorker`:
+
+- `WEBHOOK_FAILURE_CLASS=retryable`: network errors and HTTP `429`/`5xx`
+- `WEBHOOK_FAILURE_CLASS=fatal`: deterministic client/data errors (for example malformed direct-trigger payload)
+
+The worker maps these markers to processing outcomes and applies ACK policy accordingly.
+
 ## Data Model
 
 - **`Webhook`** (`webhooks`): `organization_id`, `provider`, `external_client_id`. Indexed by `(provider, external_client_id)`.

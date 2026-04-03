@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 import httpx
 
-from ada_ingestion_system.worker.base_worker import BaseWorker, logger
+from ada_ingestion_system.worker.base_worker import BaseWorker, ProcessTaskOutcome, logger
 
 # Redis configuration
 WEBHOOK_STREAM_NAME = os.getenv("REDIS_WEBHOOK_STREAM", "ada_webhook_stream")
@@ -17,6 +17,12 @@ MAX_CONCURRENT_WEBHOOKS = int(os.getenv("MAX_CONCURRENT_WEBHOOKS", 2))
 
 class WebhookExecutionError(RuntimeError):
     """Raised when webhook script execution fails."""
+
+
+def _classify_script_failure(stderr_output: str) -> ProcessTaskOutcome:
+    if "WEBHOOK_FAILURE_CLASS=fatal" in stderr_output:
+        return ProcessTaskOutcome.FAIL_FATAL_ACK
+    return ProcessTaskOutcome.FAIL_RETRY
 
 
 class WebhookWorker(BaseWorker):
@@ -31,7 +37,7 @@ class WebhookWorker(BaseWorker):
         """Get required fields for webhook payload."""
         return ["webhook_id", "provider", "event_id", "organization_id", "payload"]
 
-    def process_task(self, payload: Dict[str, Any]) -> None:
+    def process_task(self, payload: Dict[str, Any]) -> ProcessTaskOutcome:
         """Process a single webhook event by executing the webhook script."""
         try:
             webhook_id = payload["webhook_id"]
@@ -55,7 +61,7 @@ class WebhookWorker(BaseWorker):
             script_path = ada_backend_path / "webhook_scripts" / "webhook_main.py"
             if not script_path.exists():
                 logger.error("script_not_found path=%s", str(script_path))
-                raise WebhookExecutionError(f"Webhook script not found: {script_path}")
+                return ProcessTaskOutcome.FAIL_FATAL_ACK
 
             # Prepare the Python command to run the script
             python_cmd = "python"  # Use the system Python runner
@@ -164,18 +170,31 @@ class WebhookWorker(BaseWorker):
                         logger.info("script_stderr output=%s", line.strip())
 
             if process.returncode != 0:
-                logger.error("script_failed return_code=%s", process.returncode)
-                raise WebhookExecutionError(f"Webhook script failed with return code {process.returncode}")
+                failure_output = "\n".join([stdout_buffer, stderr_buffer]).strip()
+                outcome = _classify_script_failure(failure_output)
+                logger.error(
+                    "script_failed return_code=%s outcome=%s",
+                    process.returncode,
+                    outcome.value,
+                )
+                return outcome
             else:
                 logger.info(
                     "webhook_processing_completed webhook_id=%s event_id=%s",
                     webhook_id,
                     event_id,
                 )
+                return ProcessTaskOutcome.SUCCESS_ACK
 
+        except (KeyError, TypeError, ValueError) as e:
+            logger.error("webhook_processing_fatal_payload_error error=%s", str(e), exc_info=True)
+            return ProcessTaskOutcome.FAIL_FATAL_ACK
+        except (WebhookExecutionError, httpx.HTTPError) as e:
+            logger.error("webhook_processing_error error=%s", str(e), exc_info=True)
+            return ProcessTaskOutcome.FAIL_RETRY
         except Exception as e:
             logger.error("webhook_processing_error error=%s", str(e), exc_info=True)
-            raise
+            return ProcessTaskOutcome.FAIL_RETRY
 
     def _on_dead_letter(self, message_id: str, fields: Dict[str, str], reason: str = "") -> None:
         """Mark the pre-created run as FAILED when a direct-trigger message is dead-lettered."""
@@ -205,7 +224,12 @@ class WebhookWorker(BaseWorker):
         try:
             response = httpx.patch(
                 f"{api_base_url}/internal/webhooks/projects/{project_id}/runs/{run_id}/fail",
-                json={"error": {"message": f"Webhook processing failed after repeated crashes: {reason}"}},
+                json={
+                    "error": {
+                        "message": f"Webhook processing failed after repeated crashes: {reason}",
+                        "type": "DeadLetter",
+                    }
+                },
                 headers={"X-Webhook-API-Key": webhook_api_key, "Content-Type": "application/json"},
                 timeout=10,
             )

@@ -4,6 +4,7 @@ import os
 import socket
 import threading
 import time
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict
 
@@ -49,6 +50,12 @@ _MAX_DELIVERY_ATTEMPTS = int(os.getenv("MAX_DELIVERY_ATTEMPTS", "3"))
 
 # Dead-letter stream suffix — appended to the main stream name.
 _DEADLETTER_SUFFIX = ":deadletter"
+
+
+class ProcessTaskOutcome(str, Enum):
+    SUCCESS_ACK = "success_ack"
+    FAIL_RETRY = "fail_retry"
+    FAIL_FATAL_ACK = "fail_fatal_ack"
 
 
 def _xgroup_create_if_not_exists(stream_name: str, group_name: str) -> None:
@@ -103,7 +110,7 @@ class BaseWorker:
         with self.lock:
             self.current_threads -= 1
 
-    def process_task(self, payload: Dict[str, Any]) -> None:
+    def process_task(self, payload: Dict[str, Any]) -> ProcessTaskOutcome:
         """Process a single task. Must be implemented by subclasses."""
         raise NotImplementedError("Subclasses must implement process_task")
 
@@ -198,6 +205,75 @@ class BaseWorker:
             else:
                 logger.error("xautoclaim_failed stream=%s error=%s", self.stream_name, str(e))
 
+    def _get_delivery_count(self, message_id: str) -> int:
+        try:
+            pending_entries = redis_client.xpending_range(
+                self.stream_name,
+                CONSUMER_GROUP,
+                message_id,
+                message_id,
+                count=1,
+            )
+            if not pending_entries:
+                return 1
+            return int(pending_entries[0].get("times_delivered", 1))
+        except Exception as e:
+            logger.error(
+                "xpending_range_failed stream=%s message_id=%s error=%s",
+                self.stream_name,
+                message_id,
+                str(e),
+            )
+            return 1
+
+    def _resolve_process_outcome(self, payload: Dict[str, Any], message_id: str, fields: Dict[str, str]) -> None:
+        retry_reason = "retry requested by worker task"
+        try:
+            result = self.process_task(payload)
+            outcome = result if isinstance(result, ProcessTaskOutcome) else ProcessTaskOutcome.SUCCESS_ACK
+        except Exception as e:
+            logger.error(
+                "worker_process_task_exception stream=%s message_id=%s error=%s",
+                self.stream_name,
+                message_id,
+                str(e),
+                exc_info=True,
+            )
+            outcome = ProcessTaskOutcome.FAIL_RETRY
+            retry_reason = f"uncaught process_task exception: {type(e).__name__}"
+
+        if outcome == ProcessTaskOutcome.SUCCESS_ACK:
+            try:
+                redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
+                logger.info("message_ack_success stream=%s message_id=%s", self.stream_name, message_id)
+            except Exception as e:
+                logger.error("xack_failed stream=%s message_id=%s error=%s", self.stream_name, message_id, str(e))
+            return
+
+        if outcome == ProcessTaskOutcome.FAIL_FATAL_ACK:
+            try:
+                redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
+                logger.info("message_ack_fatal stream=%s message_id=%s", self.stream_name, message_id)
+            except Exception as e:
+                logger.error("xack_failed stream=%s message_id=%s error=%s", self.stream_name, message_id, str(e))
+            return
+
+        delivery_count = self._get_delivery_count(message_id)
+        if delivery_count >= _MAX_DELIVERY_ATTEMPTS:
+            reason = f"exceeded max delivery attempts ({delivery_count}/{_MAX_DELIVERY_ATTEMPTS}); {retry_reason}"
+            self._dead_letter(message_id, fields, delivery_count, reason)
+            self._on_dead_letter(message_id, fields, reason)
+            return
+
+        logger.warning(
+            "message_retry_scheduled stream=%s message_id=%s delivery_count=%s max_attempts=%s reason=%s",
+            self.stream_name,
+            message_id,
+            delivery_count,
+            _MAX_DELIVERY_ATTEMPTS,
+            retry_reason,
+        )
+
     def _dispatch(self, message_id: str, fields: Dict[str, str], consumer_name: str) -> None:
         """Parse a raw stream entry and dispatch it to a worker thread."""
         raw = fields.get("data", "")
@@ -216,7 +292,7 @@ class BaseWorker:
         if self._reserve_slot():
             thread = threading.Thread(
                 target=self._process_and_ack,
-                args=(payload, message_id),
+                args=(payload, message_id, fields),
                 daemon=True,
             )
             thread.start()
@@ -226,15 +302,11 @@ class BaseWorker:
             # visible to XAUTOCLAIM on the next startup.
             self._log_queued_task(payload)
 
-    def _process_and_ack(self, payload: Dict[str, Any], message_id: str) -> None:
-        """Run process_task and acknowledge the message regardless of outcome."""
+    def _process_and_ack(self, payload: Dict[str, Any], message_id: str, fields: Dict[str, str]) -> None:
+        """Run process_task and ACK based on processing outcome."""
         try:
-            self.process_task(payload)
+            self._resolve_process_outcome(payload, message_id, fields)
         finally:
-            try:
-                redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
-            except Exception as e:
-                logger.error("xack_failed stream=%s message_id=%s error=%s", self.stream_name, message_id, str(e))
             self._decrement_thread_count()
 
     def run(self) -> None:
