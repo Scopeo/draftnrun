@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import update
 from sqlalchemy.orm import Session
@@ -19,18 +19,20 @@ def create_run(
     retry_group_id: UUID | None = None,
 ) -> db.Run:
     """Create a new run with status pending. Caller manages transaction."""
+    run_id = uuid4()
+    run_retry_group_id = retry_group_id or uuid4()
     kwargs: dict = {
+        "id": run_id,
         "project_id": project_id,
         "status": db.RunStatus.PENDING,
         "trigger": trigger,
         "webhook_id": webhook_id,
         "integration_trigger_id": integration_trigger_id,
         "attempt_number": attempt_number,
+        "retry_group_id": run_retry_group_id,
     }
     if event_id is not None:
         kwargs["event_id"] = event_id
-    if retry_group_id is not None:
-        kwargs["retry_group_id"] = retry_group_id
     run = db.Run(**kwargs)
     session.add(run)
     session.commit()

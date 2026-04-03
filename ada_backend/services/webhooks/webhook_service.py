@@ -158,12 +158,14 @@ async def process_direct_trigger_event(
         trigger=CallType.WEBHOOK,
         event_id=event_id,
     )
+    if run.retry_group_id is None:
+        raise WebhookServiceError("Run retry group id was not initialized")
     run_id = str(run.id)
     # Persist direct-trigger input before Redis handoff so payload is recoverable
     # even if webhook stream processing dies.
     save_run_input(
         session=session,
-        retry_group_id=run.id,
+        retry_group_id=run.retry_group_id,
         project_id=project_id,
         input_data={**payload, "env": env},
     )

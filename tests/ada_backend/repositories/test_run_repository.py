@@ -22,12 +22,12 @@ def test_run_retry_group_id_column_has_no_orm_default():
     assert db.Run.__table__.c.retry_group_id.default is None
 
 
-def test_create_run_only_sets_retry_group_id_when_provided(monkeypatch):
+def test_create_run_defaults_retry_group_id_to_distinct_group(monkeypatch):
     monkeypatch.setattr("ada_backend.repositories.run_repository.db.Run", _FakeRun)
     session = _FakeSession()
 
     run_without_retry_group = create_run(session=session, project_id="project-id")
     run_with_retry_group = create_run(session=session, project_id="project-id", retry_group_id="retry-group-id")
 
-    assert "retry_group_id" not in run_without_retry_group.kwargs
+    assert run_without_retry_group.kwargs["retry_group_id"] != run_without_retry_group.kwargs["id"]
     assert run_with_retry_group.kwargs["retry_group_id"] == "retry-group-id"

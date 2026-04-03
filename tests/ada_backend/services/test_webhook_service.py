@@ -15,11 +15,12 @@ def test_process_direct_trigger_event_persists_input_before_redis_handoff():
     session = MagicMock()
     project_id = uuid4()
     run_id = uuid4()
+    retry_group_id = uuid4()
     event_id = "evt-123"
     env = "production"
     payload = {"messages": [{"role": "user", "content": "hello"}]}
 
-    created_run = SimpleNamespace(id=run_id)
+    created_run = SimpleNamespace(id=run_id, retry_group_id=retry_group_id)
     with (
         patch("ada_backend.services.webhooks.webhook_service.check_and_set_webhook_event", return_value=True),
         patch("ada_backend.services.webhooks.webhook_service.create_run", return_value=created_run),
@@ -40,7 +41,7 @@ def test_process_direct_trigger_event_persists_input_before_redis_handoff():
     assert result.event_id == event_id
     save_input_mock.assert_called_once_with(
         session=session,
-        retry_group_id=run_id,
+        retry_group_id=retry_group_id,
         project_id=project_id,
         input_data={**payload, "env": env},
     )
@@ -50,11 +51,12 @@ def test_process_direct_trigger_event_marks_run_failed_when_queue_fails():
     session = MagicMock()
     project_id = uuid4()
     run_id = uuid4()
+    retry_group_id = uuid4()
     event_id = "evt-456"
     env = "production"
     payload = {"messages": []}
 
-    created_run = SimpleNamespace(id=run_id)
+    created_run = SimpleNamespace(id=run_id, retry_group_id=retry_group_id)
     with (
         patch("ada_backend.services.webhooks.webhook_service.check_and_set_webhook_event", return_value=True),
         patch("ada_backend.services.webhooks.webhook_service.create_run", return_value=created_run),
