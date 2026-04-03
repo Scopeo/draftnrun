@@ -117,6 +117,7 @@ class WebhookWorker(BaseWorker):
 
             stdout_buffer = ""
             stderr_buffer = ""
+            raw_stderr = ""
 
             # Stream output in real-time until process completes
             while process.poll() is None:
@@ -139,6 +140,7 @@ class WebhookWorker(BaseWorker):
                         try:
                             chunk = stream.read(1024).decode("utf-8", errors="replace")
                             if chunk:
+                                raw_stderr += chunk
                                 stderr_buffer += chunk
                                 while "\n" in stderr_buffer:
                                     line, stderr_buffer = stderr_buffer.split("\n", 1)
@@ -154,6 +156,7 @@ class WebhookWorker(BaseWorker):
                     stdout_buffer += remaining
                 if process.stderr:
                     remaining = process.stderr.read().decode("utf-8", errors="replace")
+                    raw_stderr += remaining
                     stderr_buffer += remaining
             except Exception:
                 pass
@@ -170,11 +173,13 @@ class WebhookWorker(BaseWorker):
                         logger.info("script_stderr output=%s", line.strip())
 
             if process.returncode != 0:
-                failure_output = "\n".join([stdout_buffer, stderr_buffer]).strip()
+                failure_output = "\n".join([stdout_buffer, raw_stderr])
                 outcome = _classify_script_failure(failure_output)
                 logger.error(
-                    "script_failed return_code=%s outcome=%s",
+                    "script_failed return_code=%s stderr=%s stdout=%s outcome=%s",
                     process.returncode,
+                    stderr_buffer.strip(),
+                    stdout_buffer.strip(),
                     outcome.value,
                 )
                 return outcome

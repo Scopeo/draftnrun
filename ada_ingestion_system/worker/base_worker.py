@@ -185,7 +185,7 @@ class BaseWorker:
                 consumer_name,
                 _PENDING_IDLE_THRESHOLD_MS,
                 start_id="0-0",
-                count=1,
+                count=100,
             )
             if messages:
                 # Filter out any messages we just dead-lettered
@@ -230,7 +230,11 @@ class BaseWorker:
         retry_reason = "retry requested by worker task"
         try:
             result = self.process_task(payload)
-            outcome = result if isinstance(result, ProcessTaskOutcome) else ProcessTaskOutcome.SUCCESS_ACK
+            if not isinstance(result, ProcessTaskOutcome):
+                raise TypeError(
+                    f"{type(self).__name__}.process_task must return a ProcessTaskOutcome, got {type(result).__name__}"
+                )
+            outcome = result
         except Exception as e:
             logger.error(
                 "worker_process_task_exception stream=%s message_id=%s error=%s",
@@ -319,12 +323,16 @@ class BaseWorker:
             CONSUMER_GROUP,
         )
 
-        # Recover any messages that were mid-flight when a previous instance crashed.
         self._reclaim_pending(consumer_name)
+        last_reclaim_at = time.monotonic()
 
         while True:
             try:
-                # Back-pressure: don't pull new work while at capacity.
+                now = time.monotonic()
+                if now - last_reclaim_at >= _PENDING_IDLE_THRESHOLD_MS / 1000:
+                    self._reclaim_pending(consumer_name)
+                    last_reclaim_at = now
+
                 if not self._can_process():
                     time.sleep(0.5)
                     continue
@@ -338,7 +346,6 @@ class BaseWorker:
                 )
 
                 if not results:
-                    # Timeout — loop to check capacity and try again.
                     continue
 
                 _stream, messages = results[0]
