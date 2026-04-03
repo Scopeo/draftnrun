@@ -1,4 +1,5 @@
-from unittest.mock import MagicMock, patch
+import json
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 from opentelemetry.sdk.trace.export import SpanExportResult
@@ -32,14 +33,22 @@ def _make_valid_span(**overrides):
     return span
 
 
-class TestValidateSpan:
-    def test_valid_span_returns_none(self):
+def _parse_error(span):
+    _, err = SQLSpanExporter._parse_span_or_error(span)
+    return err
+
+
+class TestParseSpanOrError:
+    def test_valid_span_returns_dict(self):
         span = _make_valid_span()
-        assert SQLSpanExporter._validate_span(span) is None
+        json_span, err = SQLSpanExporter._parse_span_or_error(span)
+        assert err is None
+        assert json_span is not None
+        assert json_span["context"]["span_id"] == "00000000deadbeef"
 
     def test_missing_context(self):
         span = _make_valid_span(context=None)
-        assert "context" in SQLSpanExporter._validate_span(span)
+        assert "context" in _parse_error(span)
 
     def test_zero_span_id(self):
         span = _make_valid_span(
@@ -50,7 +59,7 @@ class TestValidateSpan:
                 trace_flags=TraceFlags(TraceFlags.SAMPLED),
             )
         )
-        assert "context" in SQLSpanExporter._validate_span(span)
+        assert "context" in _parse_error(span)
 
     def test_zero_trace_id(self):
         span = _make_valid_span(
@@ -61,33 +70,33 @@ class TestValidateSpan:
                 trace_flags=TraceFlags(TraceFlags.SAMPLED),
             )
         )
-        assert "context" in SQLSpanExporter._validate_span(span)
+        assert "context" in _parse_error(span)
 
     def test_missing_start_time(self):
         span = _make_valid_span(start_time=None)
-        assert "start_time" in SQLSpanExporter._validate_span(span)
+        assert "start_time" in _parse_error(span)
 
     def test_missing_end_time(self):
         span = _make_valid_span(end_time=None)
-        assert "end_time" in SQLSpanExporter._validate_span(span)
+        assert "end_time" in _parse_error(span)
 
     def test_missing_status(self):
         span = _make_valid_span(status=None)
-        assert "status" in SQLSpanExporter._validate_span(span)
+        assert "status" in _parse_error(span)
 
     def test_missing_attributes(self):
         span = _make_valid_span(attributes=None)
-        assert "attributes" in SQLSpanExporter._validate_span(span)
+        assert "attributes" in _parse_error(span)
 
     def test_json_serialization_failure(self):
         span = _make_valid_span()
         span.to_json.side_effect = TypeError("not serializable")
-        assert "serialize" in SQLSpanExporter._validate_span(span)
+        assert "serialize" in _parse_error(span)
 
     def test_json_missing_context_keys(self):
         span = _make_valid_span()
         span.to_json.return_value = '{"context": {}, "attributes": {}}'
-        assert "context" in SQLSpanExporter._validate_span(span)
+        assert "context" in _parse_error(span)
 
 
 class TestExportWithSessionFiltersInvalidSpans:
@@ -116,7 +125,7 @@ class TestExportWithSessionFiltersInvalidSpans:
         result = exporter._export_with_session(session, [good, bad])
 
         assert result == SpanExportResult.SUCCESS
-        mock_export_span.assert_called_once_with(session, good)
+        mock_export_span.assert_called_once_with(session, good, json.loads(good.to_json()))
         session.commit.assert_called_once()
 
     @patch.object(SQLSpanExporter, "_export_span")
@@ -128,5 +137,8 @@ class TestExportWithSessionFiltersInvalidSpans:
         result = exporter._export_with_session(session, [span1, span2])
 
         assert result == SpanExportResult.SUCCESS
-        assert mock_export_span.call_count == 2
+        assert mock_export_span.call_args_list == [
+            call(session, span1, json.loads(span1.to_json())),
+            call(session, span2, json.loads(span2.to_json())),
+        ]
         session.commit.assert_called_once()

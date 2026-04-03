@@ -15,4 +15,5 @@ globs:
 - `requires_tool_name = True` for components that need a `tool_name` input (MCP tools, API tools).
 - Legacy system: some components still use `AgentPayload` pattern (`migrated = False`). New components MUST use the multi-port `NodeData` system (`migrated = True`).
 - Adding a new component: create class in `engine/components/`, register in `ada_backend/services/registry.py`, add DB seed data (Component, ComponentVersion, PortDefinition, ComponentParameterDefinition rows). Always set `migrated = True`, define Pydantic I/O schemas, define canonical ports.
+- `SQLSpanExporter` (`engine/trace/sql_exporter.py`): each span is parsed once (`_parse_span_or_error` → dict passed to `_export_span`); do not re-serialize the same span in the export path.
 - See `ada_backend/docs/engine.md` and `ada_backend/docs/payload-and-data-flow.md`.

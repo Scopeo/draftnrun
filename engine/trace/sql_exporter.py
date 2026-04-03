@@ -119,24 +119,23 @@ class SQLSpanExporter(SpanExporter):
         return not (provider is not None and org_llm_providers is not None and provider in org_llm_providers)
 
     @staticmethod
-    def _validate_span(span: ReadableSpan) -> str | None:
-        """Return an error message if the span is invalid, None if valid."""
+    def _parse_span_or_error(span: ReadableSpan) -> tuple[dict | None, str | None]:
         if span.context is None or not span.context.span_id or not span.context.trace_id:
-            return "missing or invalid span context"
+            return None, "missing or invalid span context"
         if span.start_time is None or span.end_time is None:
-            return "missing start_time or end_time"
+            return None, "missing start_time or end_time"
         if span.status is None:
-            return "missing status"
+            return None, "missing status"
         if span.attributes is None:
-            return "missing attributes"
+            return None, "missing attributes"
         try:
             json_span = json.loads(span.to_json())
         except (json.JSONDecodeError, TypeError, ValueError) as e:
-            return f"failed to serialize span to JSON: {e}"
+            return None, f"failed to serialize span to JSON: {e}"
         context = json_span.get("context")
         if not isinstance(context, dict) or "span_id" not in context or "trace_id" not in context:
-            return "serialized JSON missing context.span_id or context.trace_id"
-        return None
+            return None, "serialized JSON missing context.span_id or context.trace_id"
+        return json_span, None
 
     def export(self, spans: list[ReadableSpan]) -> SpanExportResult:
         LOGGER.info(f"Exporting {len(spans)} spans to SQL database")
@@ -150,29 +149,29 @@ class SQLSpanExporter(SpanExporter):
             session.close()
 
     def _export_with_session(self, session: Session, spans: list[ReadableSpan]) -> SpanExportResult:
-        valid_spans = []
+        valid_spans: list[tuple[ReadableSpan, dict]] = []
         for span in spans:
-            if error := self._validate_span(span):
+            json_span, error = self._parse_span_or_error(span)
+            if error:
                 LOGGER.warning("Skipping invalid span %s: %s", span.name, error)
             else:
-                valid_spans.append(span)
+                assert json_span is not None
+                valid_spans.append((span, json_span))
 
         if not valid_spans:
             if spans:
                 return SpanExportResult.FAILURE
             return SpanExportResult.SUCCESS
 
-        for span in valid_spans:
-            self._export_span(session, span)
+        for span, json_span in valid_spans:
+            self._export_span(session, span, json_span)
         session.commit()
         return SpanExportResult.SUCCESS
 
-    def _export_span(self, session: Session, span: ReadableSpan) -> None:
+    def _export_span(self, session: Session, span: ReadableSpan, json_span: dict) -> None:
         cumulative_error_count = int(span.status.status_code is StatusCode.ERROR)
         cumulative_llm_token_count_prompt = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT, 0))
         cumulative_llm_token_count_completion = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION, 0))
-
-        json_span = json.loads(span.to_json())
 
         if accumulation := (
             session.execute(

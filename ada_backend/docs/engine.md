@@ -145,3 +145,4 @@ Bridges unmigrated components (using `AgentPayload` in/out) with the new multi-p
 | Legacy compatibility | `engine/legacy_compatibility.py` |
 | Variable resolution | `ada_backend/services/variable_resolution_service.py` |
 | DB models (ports) | `ada_backend/database/models.py` — search for `PortMapping`, `PortDefinition` |
+| OTel span → SQL (`traces` DB) | `engine/trace/sql_exporter.py` — `SQLSpanExporter` parses each span once and passes the JSON dict into export |
