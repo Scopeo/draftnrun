@@ -9,6 +9,7 @@ from sqlalchemy.orm.session import Session
 from ada_backend.database.models import CallType, EnvType, RunStatus, Webhook, WebhookProvider
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories import run_repository
+from ada_backend.repositories.run_input_repository import save_run_input
 from ada_backend.repositories.webhook_repository import get_enabled_webhook_triggers
 from ada_backend.schemas.webhook_schema import (
     FilterExpression,
@@ -158,6 +159,14 @@ async def process_direct_trigger_event(
         event_id=event_id,
     )
     run_id = str(run.id)
+    # Persist direct-trigger input before Redis handoff so payload is recoverable
+    # even if webhook stream processing dies.
+    save_run_input(
+        session=session,
+        retry_group_id=run.id,
+        project_id=project_id,
+        input_data={**payload, "env": env},
+    )
 
     queued = push_webhook_event(
         webhook_id=project_id,

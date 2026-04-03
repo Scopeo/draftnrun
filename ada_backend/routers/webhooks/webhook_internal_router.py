@@ -88,7 +88,7 @@ async def _run_project_background(
 ) -> None:
     """
     Execute workflow for an existing run (created before 202 response).
-    Updates run status RUNNING → COMPLETED/FAILED.
+    Updates run status RUNNING -> COMPLETED/FAILED.
     """
     try:
         await run_with_tracking(

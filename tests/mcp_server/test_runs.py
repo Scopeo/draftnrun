@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from mcp_server.tools import runs
-from tests.mcp_server.conftest import FAKE_PROJECT_ID, FAKE_RUNNER_ID
+from tests.mcp_server.conftest import FAKE_PROJECT_ID, FAKE_RUN_ID, FAKE_RUNNER_ID
 
 
 class TestRunsSpecs:
@@ -64,3 +64,29 @@ async def test_run_rejects_payload_without_messages(fake_mcp, monkeypatch):
             graph_runner_id=FAKE_RUNNER_ID,
             payload={"name": "Ada"},
         )
+
+
+@pytest.mark.asyncio
+async def test_retry_run_rejects_missing_target(fake_mcp, monkeypatch):
+    monkeypatch.setattr(runs, "_get_auth", lambda: ("jwt", "uid-1"))
+    runs.register(fake_mcp)
+
+    with pytest.raises(ValueError, match="Either env or graph_runner_id must be provided"):
+        await fake_mcp.tools["retry_run"](project_id=FAKE_PROJECT_ID, run_id=FAKE_RUN_ID)
+
+
+@pytest.mark.asyncio
+async def test_retry_run_posts_body(fake_mcp, monkeypatch):
+    post_mock = AsyncMock(return_value={"run_id": "new-run", "status": "pending"})
+    monkeypatch.setattr(runs, "_get_auth", lambda: ("jwt", "uid-1"))
+    monkeypatch.setattr(runs, "api", type("API", (), {"post": post_mock})())
+    runs.register(fake_mcp)
+
+    await fake_mcp.tools["retry_run"](
+        project_id=FAKE_PROJECT_ID,
+        run_id=FAKE_RUN_ID,
+        env="draft",
+    )
+
+    assert post_mock.call_args.args[0] == f"/projects/{FAKE_PROJECT_ID}/runs/{FAKE_RUN_ID}/retry"
+    assert post_mock.call_args.kwargs["json"] == {"env": "draft"}

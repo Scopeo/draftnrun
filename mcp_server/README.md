@@ -85,7 +85,7 @@ All domain content lives in `docs.py` (single source of truth).
 | Agent Config | 3 | `configure_agent`, `add_tool_to_agent`, `remove_tool_from_agent` |
 | Graphs | 8 | `get_graph`, `get_draft_graph` (auto-resolves draft runner), `update_graph`, `update_component_parameters`, `save_graph_version`, `publish_to_production`, `promote_version_to_env`, `get_graph_history` |
 | Components | 2 | `list_components` (auto-filtered by release stage), `search_components` |
-| Runs | 4 | `run` (payload dict, async + polling), `list_runs`, `get_run`, `get_run_result` |
+| Runs | 5 | `run` (payload dict, async + polling), `list_runs`, `get_run`, `get_run_result`, `retry_run` |
 | API Keys | 6 | Project + org level keys |
 | Variables | 9 | Admin only — definitions, sets, secrets |
 | Knowledge | 9 | `create_source` (website/database), sources, documents, chunks |
@@ -95,7 +95,7 @@ All domain content lives in `docs.py` (single source of truth).
 | OAuth | 3 | List, check status, revoke |
 | **Docs** | **1** | **`get_guide(domain)` — fallback for domain docs** |
 
-`get_project_overview(project_id)` is the default orientation tool for any version-aware work. It now returns the editable draft runner, current production runner, production-only capability hints, warnings, and safe next steps.
+`get_project_overview(project_id)` is the default orientation tool for any version-aware work. It returns the editable draft runner, current production runner, production-only capability hints, warnings, and safe next steps.
 
 ### Proxy-tool factory (`tools/_factory.py`)
 

@@ -10,10 +10,12 @@ from ada_backend.routers.auth_router import UserRights, user_has_access_to_proje
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.run_schema import (
+    AsyncRunAcceptedSchema,
     RunCreateSchema,
     RunListPagination,
     RunListResponse,
     RunResponseSchema,
+    RunRetrySchema,
     RunUpdateStatusSchema,
 )
 from ada_backend.services.errors import (
@@ -23,7 +25,14 @@ from ada_backend.services.errors import (
     RunNotFound,
     RunResultNotFound,
 )
-from ada_backend.services.run_service import create_run, get_run, get_run_result, get_runs, update_run_status
+from ada_backend.services.run_service import (
+    create_run,
+    get_run,
+    get_run_result,
+    get_runs,
+    retry_run,
+    update_run_status,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -168,3 +177,39 @@ def update_run_status_endpoint(
     except Exception as e:
         LOGGER.exception("Failed to update run %s", run_id)
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post(
+    "/{project_id}/runs/{run_id}/retry",
+    response_model=AsyncRunAcceptedSchema,
+    status_code=202,
+)
+def retry_run_endpoint(
+    project_id: UUID,
+    run_id: UUID,
+    body: RunRetrySchema,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> AsyncRunAcceptedSchema:
+    try:
+        return retry_run(
+            session=session,
+            run_id=run_id,
+            project_id=project_id,
+            env=body.env.value if body.env else None,
+            graph_runner_id=body.graph_runner_id,
+        )
+    except RunNotFound as exc:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found for project {project_id}") from exc
+    except ValueError as exc:
+        LOGGER.warning("Invalid retry request for run %s in project %s: %s", run_id, project_id, exc)
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid retry request. Provide env or graph_runner_id and ensure run input exists.",
+        ) from exc
+    except Exception as exc:
+        LOGGER.error("Failed to retry run %s for project %s", run_id, project_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Unexpected error while retrying run") from exc

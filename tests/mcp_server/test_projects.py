@@ -118,7 +118,7 @@ async def test_update_project_rejects_empty_body(fake_mcp, monkeypatch):
 
     projects.register(mcp)
 
-    with pytest.raises(ValueError, match="name or description must be provided"):
+    with pytest.raises(ValueError, match="At least one field must be provided"):
         await mcp.tools["update_project"](FAKE_PROJECT_ID)
 
     patch_mock.assert_not_awaited()

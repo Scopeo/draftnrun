@@ -1,5 +1,6 @@
 from enum import StrEnum
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -59,6 +60,7 @@ class WebhookExecuteResult(BaseModel):
     trigger_id: str
     project_id: str
     success: bool
+    run_id: Optional[UUID] = None
     trace_id: Optional[str] = None
     error: Optional[str] = None
 
