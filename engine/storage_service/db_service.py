@@ -174,13 +174,13 @@ class DBService(CloseMixin, ABC):
         for i in range(0, len(id_list), batch_size):
             batch_num = i // batch_size + 1
             batch_ids = set(id_list[i : i + batch_size])
-            LOGGER.info(
+            LOGGER.debug(
                 f"Batch {batch_num}/{total_batches}: fetching rows for {len(batch_ids)} IDs (batch_size={batch_size})"
             )
             rows = fetch_rows_fn(batch_ids)
             if rows:
                 total_upsert_batches = (len(rows) + batch_size - 1) // batch_size
-                LOGGER.info(f"Batch {batch_num}: {len(rows)} rows to upsert in {total_upsert_batches} sub-batches")
+                LOGGER.debug(f"Batch {batch_num}: {len(rows)} rows to upsert in {total_upsert_batches} sub-batches")
                 for j in range(0, len(rows), batch_size):
                     upsert_batch = rows[j : j + batch_size]
                     self.upsert_rows(
