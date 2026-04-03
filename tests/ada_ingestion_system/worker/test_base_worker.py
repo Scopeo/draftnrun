@@ -1,6 +1,8 @@
 import threading
 from typing import Any, Dict
 
+import redis
+
 from ada_ingestion_system.worker import base_worker
 from ada_ingestion_system.worker.base_worker import BaseWorker, ProcessTaskOutcome
 
@@ -73,6 +75,7 @@ def test_fatal_acks_once(monkeypatch):
 def test_retry_under_threshold_does_not_ack(monkeypatch):
     redis = DummyRedis()
     monkeypatch.setattr(base_worker, "redis_client", redis)
+    monkeypatch.setattr(base_worker.time, "sleep", lambda _: None)
     worker = DummyWorker(outcome=ProcessTaskOutcome.FAIL_RETRY)
     monkeypatch.setattr(worker, "_get_delivery_count", lambda _: 1)
     monkeypatch.setattr(base_worker, "_MAX_DELIVERY_ATTEMPTS", 3)
@@ -100,6 +103,7 @@ def test_retry_at_threshold_dead_letters_and_calls_hook(monkeypatch):
 def test_exception_defaults_to_retry_without_ack(monkeypatch):
     redis = DummyRedis()
     monkeypatch.setattr(base_worker, "redis_client", redis)
+    monkeypatch.setattr(base_worker.time, "sleep", lambda _: None)
     worker = DummyWorker(should_raise=True)
     monkeypatch.setattr(worker, "_get_delivery_count", lambda _: 1)
     monkeypatch.setattr(base_worker, "_MAX_DELIVERY_ATTEMPTS", 3)
@@ -114,6 +118,7 @@ def test_none_return_triggers_retry_not_silent_ack(monkeypatch):
     """Returning None from process_task must not silently ACK the message."""
     redis = DummyRedis()
     monkeypatch.setattr(base_worker, "redis_client", redis)
+    monkeypatch.setattr(base_worker.time, "sleep", lambda _: None)
     worker = DummyWorker(return_raw=None)
     monkeypatch.setattr(worker, "_get_delivery_count", lambda _: 1)
     monkeypatch.setattr(base_worker, "_MAX_DELIVERY_ATTEMPTS", 3)
@@ -128,6 +133,7 @@ def test_non_outcome_return_triggers_retry(monkeypatch):
     """Returning an arbitrary value from process_task must trigger retry."""
     redis = DummyRedis()
     monkeypatch.setattr(base_worker, "redis_client", redis)
+    monkeypatch.setattr(base_worker.time, "sleep", lambda _: None)
     worker = DummyWorker(return_raw="not_an_outcome")
     monkeypatch.setattr(worker, "_get_delivery_count", lambda _: 1)
     monkeypatch.setattr(base_worker, "_MAX_DELIVERY_ATTEMPTS", 3)
@@ -136,6 +142,18 @@ def test_non_outcome_return_triggers_retry(monkeypatch):
 
     assert redis.acks == []
     assert worker.dead_letter_calls == []
+
+
+def test_get_delivery_count_returns_max_on_redis_error(monkeypatch):
+    class _FakeRedis:
+        def xpending_range(self, *_args, **_kwargs):
+            raise redis.exceptions.ConnectionError("connection lost")
+
+    monkeypatch.setattr(base_worker, "redis_client", _FakeRedis())
+    monkeypatch.setattr(base_worker, "_MAX_DELIVERY_ATTEMPTS", 5)
+    worker = DummyWorker()
+
+    assert worker._get_delivery_count("1-0") == 5
 
 
 class _BreakLoop(BaseException):

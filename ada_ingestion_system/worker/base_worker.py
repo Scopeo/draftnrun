@@ -51,6 +51,10 @@ _MAX_DELIVERY_ATTEMPTS = int(os.getenv("MAX_DELIVERY_ATTEMPTS", "3"))
 # Dead-letter stream suffix — appended to the main stream name.
 _DEADLETTER_SUFFIX = ":deadletter"
 
+# Exponential backoff for retries: delay = min(base * 2^(attempt-1), max).
+_RETRY_BASE_DELAY_S = float(os.getenv("RETRY_BASE_DELAY_S", "30"))
+_RETRY_MAX_DELAY_S = float(os.getenv("RETRY_MAX_DELAY_S", "60"))
+
 
 class ProcessTaskOutcome(str, Enum):
     SUCCESS_ACK = "success_ack"
@@ -224,7 +228,7 @@ class BaseWorker:
                 message_id,
                 str(e),
             )
-            return 1
+            return _MAX_DELIVERY_ATTEMPTS
 
     def _resolve_process_outcome(self, payload: Dict[str, Any], message_id: str, fields: Dict[str, str]) -> None:
         retry_reason = "retry requested by worker task"
@@ -269,14 +273,18 @@ class BaseWorker:
             self._on_dead_letter(message_id, fields, reason)
             return
 
+        delay = min(_RETRY_BASE_DELAY_S * (2 ** (delivery_count - 1)), _RETRY_MAX_DELAY_S)
         logger.warning(
-            "message_retry_scheduled stream=%s message_id=%s delivery_count=%s max_attempts=%s reason=%s",
+            "message_retry_scheduled stream=%s message_id=%s delivery_count=%s max_attempts=%s "
+            "backoff_seconds=%.1f reason=%s",
             self.stream_name,
             message_id,
             delivery_count,
             _MAX_DELIVERY_ATTEMPTS,
+            delay,
             retry_reason,
         )
+        time.sleep(delay)
 
     def _dispatch(self, message_id: str, fields: Dict[str, str], consumer_name: str) -> None:
         """Parse a raw stream entry and dispatch it to a worker thread."""
