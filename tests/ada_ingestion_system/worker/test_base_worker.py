@@ -1,10 +1,12 @@
+import json
 import threading
+from collections import deque
 from typing import Any, Dict
 
 import redis
 
 from ada_ingestion_system.worker import base_worker
-from ada_ingestion_system.worker.base_worker import BaseWorker, ProcessTaskOutcome
+from ada_ingestion_system.worker.base_worker import BaseWorker, ProcessTaskOutcome, _ScheduledRetry
 
 _UNSET = object()
 
@@ -21,6 +23,7 @@ class DummyWorker(BaseWorker):
         self.current_threads = 1
         self.lock = threading.Lock()
         self.worker_type = "dummy"
+        self._retry_queue: deque[_ScheduledRetry] = deque()
         self._outcome = outcome
         self._should_raise = should_raise
         self._return_raw = return_raw
@@ -47,9 +50,14 @@ class DummyWorker(BaseWorker):
 class DummyRedis:
     def __init__(self):
         self.acks = []
+        self.xclaim_calls = []
 
     def xack(self, stream_name, group_name, message_id):
         self.acks.append((stream_name, group_name, message_id))
+
+    def xclaim(self, name, groupname, consumername, min_idle_time, message_ids, **kwargs):
+        self.xclaim_calls.append((name, groupname, consumername, message_ids))
+        return list(message_ids)
 
 
 def test_success_acks_once(monkeypatch):
@@ -75,7 +83,6 @@ def test_fatal_acks_once(monkeypatch):
 def test_retry_under_threshold_does_not_ack(monkeypatch):
     redis = DummyRedis()
     monkeypatch.setattr(base_worker, "redis_client", redis)
-    monkeypatch.setattr(base_worker.time, "sleep", lambda _: None)
     worker = DummyWorker(outcome=ProcessTaskOutcome.FAIL_RETRY)
     monkeypatch.setattr(worker, "_get_delivery_count", lambda _: 1)
     monkeypatch.setattr(base_worker, "_MAX_DELIVERY_ATTEMPTS", 3)
@@ -84,6 +91,8 @@ def test_retry_under_threshold_does_not_ack(monkeypatch):
 
     assert redis.acks == []
     assert worker.dead_letter_calls == []
+    assert len(worker._retry_queue) == 1
+    assert worker._retry_queue[0].message_id == "1-0"
 
 
 def test_retry_at_threshold_dead_letters_and_calls_hook(monkeypatch):
@@ -103,7 +112,6 @@ def test_retry_at_threshold_dead_letters_and_calls_hook(monkeypatch):
 def test_exception_defaults_to_retry_without_ack(monkeypatch):
     redis = DummyRedis()
     monkeypatch.setattr(base_worker, "redis_client", redis)
-    monkeypatch.setattr(base_worker.time, "sleep", lambda _: None)
     worker = DummyWorker(should_raise=True)
     monkeypatch.setattr(worker, "_get_delivery_count", lambda _: 1)
     monkeypatch.setattr(base_worker, "_MAX_DELIVERY_ATTEMPTS", 3)
@@ -112,13 +120,13 @@ def test_exception_defaults_to_retry_without_ack(monkeypatch):
 
     assert redis.acks == []
     assert worker.dead_letter_calls == []
+    assert len(worker._retry_queue) == 1
 
 
 def test_none_return_triggers_retry_not_silent_ack(monkeypatch):
     """Returning None from process_task must not silently ACK the message."""
     redis = DummyRedis()
     monkeypatch.setattr(base_worker, "redis_client", redis)
-    monkeypatch.setattr(base_worker.time, "sleep", lambda _: None)
     worker = DummyWorker(return_raw=None)
     monkeypatch.setattr(worker, "_get_delivery_count", lambda _: 1)
     monkeypatch.setattr(base_worker, "_MAX_DELIVERY_ATTEMPTS", 3)
@@ -127,13 +135,13 @@ def test_none_return_triggers_retry_not_silent_ack(monkeypatch):
 
     assert redis.acks == []
     assert worker.dead_letter_calls == []
+    assert len(worker._retry_queue) == 1
 
 
 def test_non_outcome_return_triggers_retry(monkeypatch):
     """Returning an arbitrary value from process_task must trigger retry."""
     redis = DummyRedis()
     monkeypatch.setattr(base_worker, "redis_client", redis)
-    monkeypatch.setattr(base_worker.time, "sleep", lambda _: None)
     worker = DummyWorker(return_raw="not_an_outcome")
     monkeypatch.setattr(worker, "_get_delivery_count", lambda _: 1)
     monkeypatch.setattr(base_worker, "_MAX_DELIVERY_ATTEMPTS", 3)
@@ -142,6 +150,7 @@ def test_non_outcome_return_triggers_retry(monkeypatch):
 
     assert redis.acks == []
     assert worker.dead_letter_calls == []
+    assert len(worker._retry_queue) == 1
 
 
 def test_get_delivery_count_returns_max_on_redis_error(monkeypatch):
@@ -194,3 +203,127 @@ def test_run_calls_reclaim_pending_periodically(monkeypatch):
 
     assert len(reclaim_calls) == 2
     assert all(c == "test-consumer" for c in reclaim_calls)
+
+
+def test_dispatch_due_retries_fires_when_time_reached(monkeypatch):
+    """Due retries are dispatched; not-yet-due ones stay in the queue."""
+    redis_mock = DummyRedis()
+    monkeypatch.setattr(base_worker, "redis_client", redis_mock)
+    worker = DummyWorker(outcome=ProcessTaskOutcome.SUCCESS_ACK)
+    worker.current_threads = 0
+
+    now = 1000.0
+    monkeypatch.setattr(base_worker.time, "monotonic", lambda: now)
+
+    fields_due = {"data": '{"k":"due"}'}
+    fields_not_due = {"data": '{"k":"not_due"}'}
+    worker._retry_queue.append(_ScheduledRetry("due-1", fields_due, now - 1))
+    worker._retry_queue.append(_ScheduledRetry("not-due-1", fields_not_due, now + 30))
+
+    def sync_dispatch(message_id, fields, _consumer_name):
+        payload = json.loads(fields.get("data", "{}"))
+        worker._process_and_ack(payload, message_id, fields)
+
+    monkeypatch.setattr(worker, "_dispatch", sync_dispatch)
+
+    worker._dispatch_due_retries("test-consumer")
+
+    assert len(worker._retry_queue) == 1
+    assert worker._retry_queue[0].message_id == "not-due-1"
+    assert redis_mock.acks == [("stream", base_worker.CONSUMER_GROUP, "due-1")]
+
+
+def test_dispatch_due_retries_xclaim_increments_delivery_counter(monkeypatch):
+    """XCLAIM is called before re-dispatch so the PEL delivery counter advances."""
+    redis_mock = DummyRedis()
+    monkeypatch.setattr(base_worker, "redis_client", redis_mock)
+    worker = DummyWorker(outcome=ProcessTaskOutcome.SUCCESS_ACK)
+    worker.current_threads = 0
+
+    now = 1000.0
+    monkeypatch.setattr(base_worker.time, "monotonic", lambda: now)
+
+    fields = {"data": '{"k":"v"}'}
+    worker._retry_queue.append(_ScheduledRetry("msg-1", fields, now - 1))
+
+    monkeypatch.setattr(worker, "_dispatch", lambda mid, f, c: None)
+
+    worker._dispatch_due_retries("test-consumer")
+
+    assert len(redis_mock.xclaim_calls) == 1
+    assert redis_mock.xclaim_calls[0][3] == ["msg-1"]
+
+
+def test_dispatch_due_retries_skips_when_xclaim_returns_empty(monkeypatch):
+    """If XCLAIM returns empty (message already ACKed), the retry is dropped."""
+    redis_mock = DummyRedis()
+    redis_mock.xclaim = lambda *a, **kw: []
+    monkeypatch.setattr(base_worker, "redis_client", redis_mock)
+    worker = DummyWorker(outcome=ProcessTaskOutcome.SUCCESS_ACK)
+    worker.current_threads = 0
+
+    now = 1000.0
+    monkeypatch.setattr(base_worker.time, "monotonic", lambda: now)
+
+    fields = {"data": '{"k":"v"}'}
+    worker._retry_queue.append(_ScheduledRetry("msg-1", fields, now - 1))
+
+    dispatch_calls: list[str] = []
+    monkeypatch.setattr(worker, "_dispatch", lambda mid, f, c: dispatch_calls.append(mid))
+
+    worker._dispatch_due_retries("test-consumer")
+
+    assert dispatch_calls == []
+    assert len(worker._retry_queue) == 0
+
+
+def test_dispatch_due_retries_requeues_on_xclaim_failure(monkeypatch):
+    """If XCLAIM raises, the retry is re-queued with a fresh backoff."""
+    redis_mock = DummyRedis()
+
+    def failing_xclaim(*a, **kw):
+        raise redis.exceptions.ConnectionError("gone")
+
+    redis_mock.xclaim = failing_xclaim
+    monkeypatch.setattr(base_worker, "redis_client", redis_mock)
+    worker = DummyWorker(outcome=ProcessTaskOutcome.SUCCESS_ACK)
+    worker.current_threads = 0
+
+    now = 1000.0
+    monkeypatch.setattr(base_worker.time, "monotonic", lambda: now)
+
+    fields = {"data": '{"k":"v"}'}
+    worker._retry_queue.append(_ScheduledRetry("msg-1", fields, now - 1))
+
+    dispatch_calls: list[str] = []
+    monkeypatch.setattr(worker, "_dispatch", lambda mid, f, c: dispatch_calls.append(mid))
+
+    worker._dispatch_due_retries("test-consumer")
+
+    assert dispatch_calls == []
+    assert len(worker._retry_queue) == 1
+    requeued = worker._retry_queue[0]
+    assert requeued.message_id == "msg-1"
+    assert requeued.retry_after > now
+
+
+def test_dispatch_due_retries_preserves_entry_when_at_capacity(monkeypatch):
+    """A due retry must not be lost when the worker has no free slots."""
+    monkeypatch.setattr(base_worker, "redis_client", DummyRedis())
+    worker = DummyWorker(outcome=ProcessTaskOutcome.SUCCESS_ACK)
+    worker.current_threads = worker.max_concurrent
+
+    now = 1000.0
+    monkeypatch.setattr(base_worker.time, "monotonic", lambda: now)
+
+    fields = {"data": '{"k":"val"}'}
+    worker._retry_queue.append(_ScheduledRetry("msg-1", fields, now - 1))
+
+    dispatch_calls: list[str] = []
+    monkeypatch.setattr(worker, "_dispatch", lambda mid, f, c: dispatch_calls.append(mid))
+
+    worker._dispatch_due_retries("test-consumer")
+
+    assert dispatch_calls == []
+    assert len(worker._retry_queue) == 1
+    assert worker._retry_queue[0].message_id == "msg-1"

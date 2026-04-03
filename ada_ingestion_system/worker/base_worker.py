@@ -4,9 +4,10 @@ import os
 import socket
 import threading
 import time
+from collections import deque
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, NamedTuple
 
 import redis
 import sentry_sdk
@@ -56,6 +57,12 @@ _RETRY_BASE_DELAY_S = float(os.getenv("RETRY_BASE_DELAY_S", "30"))
 _RETRY_MAX_DELAY_S = float(os.getenv("RETRY_MAX_DELAY_S", "60"))
 
 
+class _ScheduledRetry(NamedTuple):
+    message_id: str
+    fields: Dict[str, str]
+    retry_after: float
+
+
 class ProcessTaskOutcome(str, Enum):
     SUCCESS_ACK = "success_ack"
     FAIL_RETRY = "fail_retry"
@@ -89,6 +96,7 @@ class BaseWorker:
         self.current_threads = 0
         self.lock = threading.Lock()
         self.worker_type = worker_type
+        self._retry_queue: deque[_ScheduledRetry] = deque()
 
         if settings.SENTRY_DSN_REDIS:
             sentry_sdk.set_tag("worker_type", worker_type)
@@ -284,7 +292,7 @@ class BaseWorker:
             delay,
             retry_reason,
         )
-        time.sleep(delay)
+        self._retry_queue.append(_ScheduledRetry(message_id, fields, time.monotonic() + delay))
 
     def _dispatch(self, message_id: str, fields: Dict[str, str], consumer_name: str) -> None:
         """Parse a raw stream entry and dispatch it to a worker thread."""
@@ -321,6 +329,48 @@ class BaseWorker:
         finally:
             self._decrement_thread_count()
 
+    def _dispatch_due_retries(self, consumer_name: str) -> None:
+        now = time.monotonic()
+        size = len(self._retry_queue)
+        for _ in range(size):
+            if not self._retry_queue:
+                break
+            entry = self._retry_queue[0]
+            if entry.retry_after > now:
+                self._retry_queue.rotate(-1)
+                continue
+            if not self._can_process():
+                break
+            self._retry_queue.popleft()
+            try:
+                claimed = redis_client.xclaim(
+                    self.stream_name,
+                    CONSUMER_GROUP,
+                    consumer_name,
+                    min_idle_time=0,
+                    message_ids=[entry.message_id],
+                    justid=True,
+                )
+            except Exception as e:
+                logger.error(
+                    "retry_xclaim_failed stream=%s message_id=%s error=%s",
+                    self.stream_name,
+                    entry.message_id,
+                    str(e),
+                )
+                self._retry_queue.append(
+                    _ScheduledRetry(entry.message_id, entry.fields, time.monotonic() + _RETRY_BASE_DELAY_S)
+                )
+                continue
+            if not claimed:
+                logger.info(
+                    "retry_message_no_longer_pending stream=%s message_id=%s",
+                    self.stream_name,
+                    entry.message_id,
+                )
+                continue
+            self._dispatch(entry.message_id, entry.fields, consumer_name)
+
     def run(self) -> None:
         """Main worker loop — crash-safe via Redis Streams consumer groups."""
         consumer_name = self._consumer_name()
@@ -336,6 +386,8 @@ class BaseWorker:
 
         while True:
             try:
+                self._dispatch_due_retries(consumer_name)
+
                 now = time.monotonic()
                 if now - last_reclaim_at >= _PENDING_IDLE_THRESHOLD_MS / 1000:
                     self._reclaim_pending(consumer_name)
