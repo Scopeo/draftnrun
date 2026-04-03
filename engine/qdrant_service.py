@@ -905,7 +905,7 @@ class QdrantService:
         collection_name: str,
         filter: Optional[dict] = None,
         with_payload: Union[bool, dict] = True,
-        batch_size: int = 500,
+        batch_size: int = 50,
     ) -> list[dict]:
         all_points: list[dict] = []
         offset = None
@@ -1143,7 +1143,7 @@ class QdrantService:
         fetch_rows: Callable[[list[str]], list[dict]],
         collection_name: str,
         query_filter_qdrant: Optional[dict] = None,
-        batch_size: int = 500,
+        batch_size: int = 50,
     ) -> bool:
         """Diff-based sync that fetches full rows only for chunks that need insert/update.
 

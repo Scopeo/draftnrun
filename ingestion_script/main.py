@@ -57,7 +57,7 @@ async def ingestion_main_async(
     source_type: SourceType,
     source_attributes: dict,
     source_id: Optional[UUID] = None,
-    batch_size: int = 500,
+    batch_size: int = 50,
 ):
     LOGGER.info(
         f"[INGESTION_MAIN] Starting ingestion - Source: '{source_name}', Type: {source_type}, "

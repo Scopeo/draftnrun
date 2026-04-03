@@ -160,7 +160,7 @@ class DBService(CloseMixin, ABC):
         fetch_rows_fn: Callable[[set[str]], list[dict]],
         table_name: str,
         schema_name: Optional[str],
-        batch_size: int,
+        batch_size: int = 50,
         id_column_names: Optional[list[str]] = None,
     ) -> None:
         """Fetch rows via callback and upsert them in batches.
@@ -201,7 +201,7 @@ class DBService(CloseMixin, ABC):
         append_mode: bool = True,
         sql_query_filter: Optional[str] = None,
         source_id: Optional[str] = None,
-        batch_size: int = 500,
+        batch_size: int = 50,
     ) -> None:
         """
         Update a table with incoming data identified by IDs and timestamps.
