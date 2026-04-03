@@ -163,7 +163,7 @@ def register(mcp: FastMCP) -> None:
         if description is not None:
             body["description"] = description
         if not body:
-            raise ValueError("name or description must be provided")
+            raise ValueError("At least one field must be provided")
         return await api.patch(f"/projects/{project_id}", jwt, json=body)
 
     @mcp.tool()
