@@ -10,7 +10,7 @@ from pydantic import BaseModel, ValidationError
 from tenacity import RetryError
 
 from engine import legacy_compatibility
-from engine.coercion_matrix import CoercionError
+from engine.coercion_matrix import CoercionError, get_coercion_matrix
 from engine.components.types import (
     AgentPayload,
     ChatMessage,
@@ -24,6 +24,27 @@ from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _coerce_inputs_for_model(data: dict[str, Any], model: Type[BaseModel]) -> dict[str, Any]:
+    """Coerce input values to match the Pydantic model's field types.
+
+    Uses the global CoercionMatrix so that the legacy tool-invocation path
+    benefits from the same coercion rules as the graph-runner path.
+    Failures are silently skipped — Pydantic validation will report them.
+    """
+    matrix = get_coercion_matrix()
+    for field_name, field_info in model.model_fields.items():
+        if field_name not in data:
+            continue
+        target_type = field_info.annotation
+        if target_type is None or not matrix.should_attempt_coercion(target_type):
+            continue
+        try:
+            data[field_name] = matrix.coerce(data[field_name], target_type)
+        except (CoercionError, Exception):
+            continue
+    return data
 
 
 class Component(ABC):
@@ -248,6 +269,8 @@ class Component(ABC):
                             data[input_port_name] = last_message.content or ""
                         elif isinstance(last_message, dict):
                             data[input_port_name] = last_message.get("content", "")
+
+                    _coerce_inputs_for_model(data, InputModel)
 
                     try:
                         validated_inputs = InputModel(**data)

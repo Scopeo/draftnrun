@@ -22,6 +22,7 @@ GRAPH_RUNTIME_TARGET_TYPES: frozenset[type] = frozenset({
     float,
     bool,
     dict,
+    list,
     list[str],
     list[dict],
     list[ChatMessage],
@@ -146,6 +147,12 @@ class CoercionMatrix:
         self._coercers[(list[dict], str)] = extract_string_from_dict_list
         self._coercers[(list[dict], list[ChatMessage])] = convert_dict_list_to_chatmessage_list
         self._coercers[(type(None), str)] = lambda x: ""
+
+        # String → dict / list (JSON parse)
+        self._coercers[(str, dict)] = lambda x: json.loads(x)
+        self._coercers[(str, Optional[dict])] = lambda x: json.loads(x)
+        self._coercers[(str, list)] = lambda x: json.loads(x)
+        self._coercers[(str, Optional[list])] = lambda x: json.loads(x)
 
         # Passthrough coercions (no-op)
         self._coercers[(list[ChatMessage], list[ChatMessage])] = lambda x: x
