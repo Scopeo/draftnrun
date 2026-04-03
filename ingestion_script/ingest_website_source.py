@@ -148,6 +148,7 @@ async def upload_website_source(
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
     update_existing: bool = False,
+    batch_size: int = 50,
 ) -> None:
     LOGGER.info(f"Starting to scrape URL: {url} using Firecrawl")
 
@@ -258,6 +259,7 @@ async def upload_website_source(
         append_mode=True,
         schema_name=storage_schema_name,
         source_id=str(source_id),
+        batch_size=batch_size,
     )
 
     await sync_chunks_to_qdrant(
@@ -267,6 +269,7 @@ async def upload_website_source(
         db_service,
         qdrant_service,
         source_id=str(source_id),
+        batch_size=batch_size,
     )
 
 
@@ -285,6 +288,7 @@ async def ingest_website_source(
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
     source_id: Optional[UUID] = None,
+    batch_size: int = 50,
 ) -> None:
     LOGGER.info(
         f"[INGESTION_SOURCE] Starting WEBSITE ingestion with Firecrawl - Source: '{source_name}', "
@@ -313,6 +317,7 @@ async def ingest_website_source(
             exclude_tags=exclude_tags,
             chunk_size=chunk_size or 1024,
             chunk_overlap=chunk_overlap or 0,
+            batch_size=batch_size,
         ),
         attributes=None,
         source_id=source_id,

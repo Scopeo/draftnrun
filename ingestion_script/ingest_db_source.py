@@ -210,6 +210,7 @@ async def upload_db_source(
     update_existing: bool = False,
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
+    batch_size: int = 50,
 ):
     resolved_timestamp_filter = resolve_sql_timestamp_filter(timestamp_filter)
 
@@ -283,6 +284,7 @@ async def upload_db_source(
         schema_name=storage_schema_name,
         source_id=source_id_str,
         sql_query_filter=combined_filter_sql_unified,
+        batch_size=batch_size,
     )
 
     await sync_chunks_to_qdrant(
@@ -297,6 +299,7 @@ async def upload_db_source(
         column_info=column_info,
         metadata_column_names=metadata_column_names,
         timestamp_column_name=timestamp_column_name,
+        batch_size=batch_size,
     )
 
 
@@ -319,6 +322,7 @@ async def ingestion_database(
     timestamp_filter: Optional[str] = None,
     source_attributes: Optional[SourceAttributes] = None,
     source_id: Optional[UUID] = None,
+    batch_size: int = 50,
 ) -> None:
     source_type = db.SourceType.DATABASE
     LOGGER.info("Start ingestion data from the database source...")
@@ -352,6 +356,7 @@ async def ingestion_database(
             chunk_overlap=chunk_overlap,
             query_filter=query_filter,
             timestamp_filter=timestamp_filter,
+            batch_size=batch_size,
         ),
         attributes=source_attributes,
         source_id=source_id,

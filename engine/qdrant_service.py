@@ -905,10 +905,8 @@ class QdrantService:
         collection_name: str,
         filter: Optional[dict] = None,
         with_payload: Union[bool, dict] = True,
-        batch_size: Optional[int] = None,
+        batch_size: int = 50,
     ) -> list[dict]:
-        if batch_size is None:
-            batch_size = settings.INGESTION_BATCH_SIZE
         all_points: list[dict] = []
         offset = None
         while True:
@@ -1145,7 +1143,7 @@ class QdrantService:
         fetch_rows: Callable[[list[str]], list[dict]],
         collection_name: str,
         query_filter_qdrant: Optional[dict] = None,
-        batch_size: Optional[int] = None,
+        batch_size: int = 50,
     ) -> bool:
         """Diff-based sync that fetches full rows only for chunks that need insert/update.
 
@@ -1153,8 +1151,6 @@ class QdrantService:
         Phase 2: delete stale chunks.
         Phase 3: fetch full rows via fetch_rows in batches and insert them.
         """
-        if batch_size is None:
-            batch_size = settings.INGESTION_BATCH_SIZE
         schema = self._get_schema(collection_name)
         chunk_id_field = schema.chunk_id_field
         timestamp_field = schema.last_edited_ts_field

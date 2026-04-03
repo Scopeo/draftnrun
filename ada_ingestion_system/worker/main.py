@@ -41,6 +41,7 @@ def _is_real_error(line: str) -> bool:
 STREAM_NAME = os.getenv("REDIS_INGESTION_STREAM", "ada_ingestion_stream")
 MAX_CONCURRENT_INGESTIONS = int(os.getenv("MAX_CONCURRENT_INGESTIONS", 2))
 SUBPROCESS_MEMORY_LIMIT_MB = int(os.getenv("SUBPROCESS_MEMORY_LIMIT_MB", "4096"))
+INGESTION_BATCH_SIZE = int(os.getenv("INGESTION_BATCH_SIZE", "50"))
 
 
 def _set_memory_limit() -> None:
@@ -171,6 +172,7 @@ class Worker(BaseWorker):
                     f"source_type='{source_type}', "
                     f"source_attributes={repr(source_attributes)}, "
                     + (f"source_id='{source_id}', " if source_id else "")
+                    + f"batch_size={INGESTION_BATCH_SIZE}, "
                     + ")"
                 ),
             ]
