@@ -51,44 +51,40 @@ class FileType(BaseModel):
 
 
 def _get_pdf_orientation_from_content(pdf_content) -> PDFType:
-    doc = fitz.open(stream=pdf_content, filetype="pdf")
-    landscape_pages = 0
-    portrait_pages = 0
+    with fitz.open(stream=pdf_content, filetype="pdf") as doc:
+        landscape_pages = 0
+        portrait_pages = 0
 
-    for page_num, page in enumerate(doc):
-        width, height = page.rect.width, page.rect.height
-        if width > height:
-            landscape_pages += 1
+        for page_num, page in enumerate(doc):
+            width, height = page.rect.width, page.rect.height
+            if width > height:
+                landscape_pages += 1
+            else:
+                portrait_pages += 1
+
+        total_pages = len(doc)
+        if landscape_pages > total_pages / 2:
+            return PDFType.landscape, total_pages
+        elif portrait_pages > total_pages / 2:
+            return PDFType.portrait, total_pages
         else:
-            portrait_pages += 1
-
-    total_pages = len(doc)
-    if landscape_pages > total_pages / 2:
-        return PDFType.landscape, total_pages
-    elif portrait_pages > total_pages / 2:
-        return PDFType.portrait, total_pages
-    else:
-        raise ValueError("PDF orientation is mixed or cannot be determined.")
+            raise ValueError("PDF orientation is mixed or cannot be determined.")
 
 
 def _pdf_to_images(pdf_content, zoom: float = 3.0):
-    """
-    Convert a PDF to a series of high-quality images and yield them as in-memory image objects.
-
-    Args:
-        pdf_path (str): Path to the input PDF file.
-        zoom (float): Zoom factor for image quality. Default is 3.0.
-    """
     pdf_document = fitz.Document(stream=pdf_content)
-    for page_number in range(len(pdf_document)):
-        page = pdf_document[page_number]
+    try:
+        for page_number in range(len(pdf_document)):
+            page = pdf_document[page_number]
 
-        matrix = fitz.Matrix(zoom, zoom)
-        pix = page.get_pixmap(matrix=matrix)
-        img_byte_arr = io.BytesIO(pix.tobytes("png"))
-        img_byte_arr.seek(0)
+            matrix = fitz.Matrix(zoom, zoom)
+            pix = page.get_pixmap(matrix=matrix)
+            img_byte_arr = io.BytesIO(pix.tobytes("png"))
+            img_byte_arr.seek(0)
 
-        yield img_byte_arr.getvalue()
+            yield img_byte_arr.getvalue()
+    finally:
+        pdf_document.close()
 
 
 async def _extract_text_from_pages_as_images(
