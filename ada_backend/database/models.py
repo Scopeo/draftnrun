@@ -1496,6 +1496,8 @@ class Run(Base):
     event_id = mapped_column(String, nullable=True, index=True)
     result_id = mapped_column(String, nullable=True)
     error = mapped_column(JSONB, nullable=True)
+    retry_group_id = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    attempt_number = mapped_column(Integer, nullable=False, server_default="1")
     started_at = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at = mapped_column(DateTime(timezone=True), nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -1504,9 +1506,31 @@ class Run(Base):
     project = relationship("Project", back_populates="runs")
     webhook = relationship("Webhook", back_populates="runs")
     integration_trigger = relationship("IntegrationTrigger", back_populates="runs")
+    __table_args__ = (
+        sa.UniqueConstraint("retry_group_id", "attempt_number", name="uq_runs_retry_group_id_attempt_number"),
+    )
 
     def __str__(self):
         return f"Run(id={self.id}, project_id={self.project_id}, status={self.status})"
+
+
+class RunInput(Base):
+    __tablename__ = "run_inputs"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    retry_group_id = mapped_column(UUID(as_uuid=True), nullable=False)
+    project_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    input_data = mapped_column(JSONB, nullable=False)
+    created_at = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        sa.UniqueConstraint("retry_group_id", name="uq_run_inputs_retry_group_id"),
+        sa.Index("ix_run_inputs_created_at", "created_at"),
+    )
 
 
 class ProjectEnvironmentBinding(Base):

@@ -229,8 +229,8 @@ as unavailable instead of designing around it from memory.
 
 ## Quick Orientation
 
-`get_project_overview(project_id)` returns the draft/production runners, recent runs, and safety \
-hints in one call.
+`get_project_overview(project_id)` returns the draft/production runners, recent runs, and safety hints \
+in one call.
 """
 
 _GRAPHS_DOC = """\
@@ -874,6 +874,12 @@ Response:
 3. `get_run_result(project_id, run_id)` → output data
 4. `list_traces(project_id, duration=30)` → find trace for debugging
 5. `get_trace_tree(trace_id)` → full span tree with timings
+
+## Retry a Failed Run
+
+Use `retry_run(project_id, run_id, env=... | graph_runner_id=...)` to enqueue a new
+attempt for a specific run. The backend reuses persisted `run_inputs` data for the
+retry group and returns a new pending `run_id`.
 
 ## Retrieve Run Input
 

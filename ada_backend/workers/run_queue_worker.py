@@ -6,6 +6,7 @@ from uuid import UUID
 from ada_backend.database.models import CallType, EnvType, GraphRunner, ResponseFormat, RunStatus
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories import run_repository
+from ada_backend.repositories.run_input_repository import save_run_input
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent
 from ada_backend.services.run_service import _upload_result_to_s3, update_run_status
 from ada_backend.services.tag_service import compose_tag_name
@@ -72,6 +73,9 @@ class RunQueueWorker(BaseQueueWorker):
                 if current != RunStatus.PENDING:
                     LOGGER.debug("Run %s already %s, skipping", run_id, current)
                     return
+
+                retry_group = run.retry_group_id or run.id
+                save_run_input(session, retry_group_id=retry_group, project_id=project_id, input_data=input_data)
 
                 now = datetime.now(timezone.utc)
                 update_run_status(

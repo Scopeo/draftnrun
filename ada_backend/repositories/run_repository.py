@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import update
 from sqlalchemy.orm import Session
@@ -14,17 +14,26 @@ def create_run(
     trigger: db.CallType = db.CallType.API,
     webhook_id: UUID | None = None,
     integration_trigger_id: UUID | None = None,
+    attempt_number: int = 1,
     event_id: str | None = None,
+    retry_group_id: UUID | None = None,
 ) -> db.Run:
     """Create a new run with status pending. Caller manages transaction."""
-    run = db.Run(
-        project_id=project_id,
-        status=db.RunStatus.PENDING,
-        trigger=trigger,
-        webhook_id=webhook_id,
-        integration_trigger_id=integration_trigger_id,
-        event_id=event_id,
-    )
+    run_id = uuid4()
+    run_retry_group_id = retry_group_id or uuid4()
+    kwargs: dict = {
+        "id": run_id,
+        "project_id": project_id,
+        "status": db.RunStatus.PENDING,
+        "trigger": trigger,
+        "webhook_id": webhook_id,
+        "integration_trigger_id": integration_trigger_id,
+        "attempt_number": attempt_number,
+        "retry_group_id": run_retry_group_id,
+    }
+    if event_id is not None:
+        kwargs["event_id"] = event_id
+    run = db.Run(**kwargs)
     session.add(run)
     session.commit()
     session.refresh(run)
@@ -33,6 +42,15 @@ def create_run(
 
 def get_run(session: Session, run_id: UUID) -> Optional[db.Run]:
     return session.query(db.Run).filter(db.Run.id == run_id).first()
+
+
+def get_latest_run_by_retry_group(session: Session, retry_group_id: UUID) -> Optional[db.Run]:
+    return (
+        session.query(db.Run)
+        .filter(db.Run.retry_group_id == retry_group_id)
+        .order_by(db.Run.attempt_number.desc(), db.Run.created_at.desc())
+        .first()
+    )
 
 
 def count_runs_by_project(session: Session, project_id: UUID) -> int:
@@ -68,11 +86,7 @@ def fail_run_if_pending(
     conditions = [db.Run.id == run_id, db.Run.status == db.RunStatus.PENDING]
     if project_id is not None:
         conditions.append(db.Run.project_id == project_id)
-    stmt = (
-        update(db.Run)
-        .where(*conditions)
-        .values(status=db.RunStatus.FAILED, error=error, finished_at=finished_at)
-    )
+    stmt = update(db.Run).where(*conditions).values(status=db.RunStatus.FAILED, error=error, finished_at=finished_at)
     result = session.execute(stmt)
     if result.rowcount == 0:
         return None

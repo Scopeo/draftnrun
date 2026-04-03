@@ -2,9 +2,9 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ada_backend.database.models import CallType, RunStatus
+from ada_backend.database.models import CallType, EnvType, RunStatus
 
 
 class RunCreateSchema(BaseModel):
@@ -32,6 +32,8 @@ class RunResponseSchema(BaseModel):
     trace_id: Optional[str] = None
     result_id: Optional[str] = None
     error: Optional[dict] = None
+    retry_group_id: Optional[UUID] = None
+    attempt_number: int = Field(default=1, ge=1)
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     created_at: datetime
@@ -61,3 +63,14 @@ class AsyncRunAcceptedSchema(BaseModel):
 
     run_id: UUID
     status: str = "pending"
+
+
+class RunRetrySchema(BaseModel):
+    env: Optional[EnvType] = None
+    graph_runner_id: Optional[UUID] = None
+
+    @model_validator(mode="after")
+    def validate_target(self):
+        if self.env is None and self.graph_runner_id is None:
+            raise ValueError("Either env or graph_runner_id must be provided")
+        return self

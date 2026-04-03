@@ -12,8 +12,9 @@ from ada_backend.database.setup_db import get_db_session
 from ada_backend.mixpanel_analytics import track_run_completed
 from ada_backend.repositories import run_repository
 from ada_backend.repositories.project_repository import get_project
+from ada_backend.repositories.run_input_repository import get_run_input
 from ada_backend.schemas.project_schema import ChatResponse
-from ada_backend.schemas.run_schema import RunResponseSchema
+from ada_backend.schemas.run_schema import AsyncRunAcceptedSchema, RunResponseSchema
 from ada_backend.services.errors import (
     InvalidRunStatusTransition,
     ProjectNotFound,
@@ -22,6 +23,7 @@ from ada_backend.services.errors import (
     RunResultNotFound,
 )
 from ada_backend.services.s3_files_service import get_s3_client_and_ensure_bucket
+from ada_backend.utils.redis_client import push_run_task
 from data_ingestion.boto3_client import get_content_from_file, upload_file_to_bucket
 from settings import settings
 
@@ -118,8 +120,11 @@ async def run_with_tracking(
                 finished_at=finished_at,
             )
         track_run_completed(
-            user_id=None, project_id=project_id,
-            status="completed", trigger=trigger.value, duration_ms=duration_ms,
+            user_id=None,
+            project_id=project_id,
+            status="completed",
+            trigger=trigger.value,
+            duration_ms=duration_ms,
         )
         return result
     except Exception as e:
@@ -141,11 +146,17 @@ async def run_with_tracking(
             LOGGER.exception("Failed to persist FAILED status: run_id=%s project_id=%s", run_id, project_id)
         LOGGER.exception(
             "Run failed: run_id=%s project_id=%s duration_ms=%s trace_id=%s",
-            run_id, project_id, duration_ms, trace_id,
+            run_id,
+            project_id,
+            duration_ms,
+            trace_id,
         )
         track_run_completed(
-            user_id=None, project_id=project_id,
-            status="failed", trigger=trigger.value, duration_ms=duration_ms,
+            user_id=None,
+            project_id=project_id,
+            status="failed",
+            trigger=trigger.value,
+            duration_ms=duration_ms,
         )
         raise
 
@@ -220,7 +231,9 @@ def create_run(
     trigger: CallType = CallType.API,
     webhook_id: UUID | None = None,
     integration_trigger_id: UUID | None = None,
+    attempt_number: int = 1,
     event_id: str | None = None,
+    retry_group_id: UUID | None = None,
 ) -> RunResponseSchema:
     project = get_project(session, project_id=project_id)
     if not project:
@@ -232,6 +245,8 @@ def create_run(
         webhook_id=webhook_id,
         integration_trigger_id=integration_trigger_id,
         event_id=event_id,
+        attempt_number=attempt_number,
+        retry_group_id=retry_group_id,
     )
     return RunResponseSchema.model_validate(run, from_attributes=True)
 
@@ -340,3 +355,57 @@ def update_run_status(
         finished_at=finished_at,
     )
     return RunResponseSchema.model_validate(updated, from_attributes=True)
+
+
+def retry_run(
+    session: Session,
+    run_id: UUID,
+    project_id: UUID,
+    env: str | None = None,
+    graph_runner_id: UUID | None = None,
+) -> AsyncRunAcceptedSchema:
+    if env is None and graph_runner_id is None:
+        raise ValueError("Either env or graph_runner_id must be provided")
+
+    run = run_repository.get_run(session, run_id)
+    if not run or run.project_id != project_id:
+        raise RunNotFound(run_id)
+
+    retry_group_id = run.retry_group_id or run.id
+    input_data = get_run_input(session, retry_group_id=retry_group_id)
+    if input_data is None:
+        raise ValueError("Run input not found for retry")
+
+    latest_attempt = run_repository.get_latest_run_by_retry_group(session, retry_group_id=retry_group_id)
+    next_attempt = (latest_attempt.attempt_number if latest_attempt is not None else run.attempt_number) + 1
+
+    retried_run = create_run(
+        session=session,
+        project_id=project_id,
+        trigger=run.trigger,
+        webhook_id=run.webhook_id,
+        integration_trigger_id=run.integration_trigger_id,
+        event_id=run.event_id,
+        retry_group_id=retry_group_id,
+        attempt_number=next_attempt,
+    )
+
+    pushed = push_run_task(
+        run_id=retried_run.id,
+        project_id=project_id,
+        env=env,
+        input_data=input_data,
+        trigger=run.trigger.value,
+        graph_runner_id=graph_runner_id,
+    )
+    if not pushed:
+        update_run_status(
+            session,
+            run_id=retried_run.id,
+            project_id=project_id,
+            status=RunStatus.FAILED,
+            error={"message": "Failed to enqueue run; Redis unavailable.", "type": "EnqueueError"},
+        )
+        raise ValueError("Retry run could not be enqueued")
+
+    return AsyncRunAcceptedSchema(run_id=retried_run.id, status="pending")

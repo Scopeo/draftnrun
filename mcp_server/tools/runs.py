@@ -6,7 +6,7 @@ polls for the result.  It does not expose file download helpers.
 
 import asyncio
 import time
-from typing import Annotated
+from typing import Annotated, Optional
 from uuid import UUID
 
 from fastmcp import FastMCP
@@ -74,6 +74,46 @@ def register(mcp: FastMCP) -> None:
             jwt,
             page=page,
             page_size=min(page_size, 100),
+        )
+
+    @mcp.tool()
+    async def retry_run(
+        project_id: Annotated[
+            UUID,
+            Field(description="The project ID (from list_projects or get_project_overview)."),
+        ],
+        run_id: Annotated[
+            UUID,
+            Field(description="The run ID to retry (from list_runs or get_run)."),
+        ],
+        env: Annotated[
+            Optional[str],
+            Field(description="Execution env for retry. Typically 'draft' or 'production'."),
+        ] = None,
+        graph_runner_id: Annotated[
+            Optional[UUID],
+            Field(description="Optional explicit graph runner to execute the retry against."),
+        ] = None,
+    ) -> dict:
+        """Retry a specific run using persisted input payload.
+
+        The backend creates a new run attempt in the same retry group and enqueues
+        it asynchronously. Provide either `env` or `graph_runner_id`.
+        """
+        if env is None and graph_runner_id is None:
+            raise ValueError("Either env or graph_runner_id must be provided")
+
+        jwt, _ = _get_auth()
+        body: dict = {}
+        if env is not None:
+            body["env"] = env
+        if graph_runner_id is not None:
+            body["graph_runner_id"] = str(graph_runner_id)
+
+        return await api.post(
+            f"/projects/{project_id}/runs/{run_id}/retry",
+            jwt,
+            json=body,
         )
 
     @mcp.tool()

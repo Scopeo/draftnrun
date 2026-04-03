@@ -44,6 +44,8 @@ Called by the webhook worker after consuming from the Redis stream:
 
 Authenticated via `X-Webhook-API-Key` (internal service key).
 
+`WebhookExecuteResult.run_id` is a UUID (nullable), serialized as a UUID string in JSON responses.
+
 ## Event Routing
 
 ### Provider webhooks (Aircall, Resend)
@@ -67,11 +69,13 @@ Provider → POST /webhooks/{provider}
 API user → POST /webhooks/trigger/{project_id}/envs/{env}
   → Dedup (Redis SET NX)
   → Create Run (PENDING) in DB ← run exists BEFORE Redis enqueue
+  → Persist direct-trigger input in `run_inputs` (keyed by `retry_group_id=run_id`) before Redis enqueue
   → XADD to Redis Stream (payload includes run_id)
   → Webhook Worker picks up
   → Subprocess calls POST /internal/webhooks/projects/{project_id}/envs/{env}/run?run_id=...
     → Reuses existing Run row
-    → Background: RUNNING → COMPLETED/FAILED
+    → API executes run as FastAPI background task (same behavior as main baseline)
+    → Worker still marks run FAILED via /fail on dead-letter before execution starts
   → If dead-lettered: PATCH /internal/webhooks/projects/{project_id}/runs/{run_id}/fail → Run marked FAILED
 ```
 

@@ -53,6 +53,11 @@ Complete endpoint reference for the Draft'n Run backend.
 | GET | `.../runs/{run_id}` | JWT(Member) | Get run |
 | GET | `.../runs/{run_id}/result` | JWT(Member) | Get run result |
 | PATCH | `.../runs/{run_id}` | JWT(Member) | Update run status |
+| POST | `.../runs/{run_id}/retry` | JWT(Member) | Retry a specific run (202) |
+
+### Run Retry
+
+Run input data is persisted in the `run_inputs` table (keyed by `retry_group_id` via a unique constraint) so async workflows can recover canonical input from Postgres instead of relying only on ephemeral Redis payloads. New runs always initialize a dedicated `retry_group_id` on first attempt (distinct from `run.id`), and retries reuse that same group id. `created_at` is non-null and indexed to support retention cleanup scans. The retry endpoint enqueues a new run attempt in the same retry group using this persisted input.
 
 ## WebSocket (`run_stream_router.py`)
 

@@ -66,9 +66,7 @@ def register(mcp: FastMCP) -> None:
         include_templates: Annotated[
             bool,
             Field(
-                description=(
-                    "Include template projects (may include cross-org templates)."
-                ),
+                description=("Include template projects (may include cross-org templates)."),
             ),
         ] = False,
     ) -> list[dict]:
@@ -148,9 +146,7 @@ def register(mcp: FastMCP) -> None:
         project_id: Annotated[
             UUID,
             Field(
-                description=(
-                    "The project to update (from list_projects or get_project_overview)."
-                ),
+                description=("The project to update (from list_projects or get_project_overview)."),
             ),
         ],
         name: Annotated[Optional[str], Field(description="New name.")] = None,
@@ -167,7 +163,7 @@ def register(mcp: FastMCP) -> None:
         if description is not None:
             body["description"] = description
         if not body:
-            raise ValueError("name or description must be provided")
+            raise ValueError("At least one field must be provided")
         return await api.patch(f"/projects/{project_id}", jwt, json=body)
 
     @mcp.tool()
@@ -175,9 +171,7 @@ def register(mcp: FastMCP) -> None:
         project_id: Annotated[
             UUID,
             Field(
-                description=(
-                    "The project ID (from list_projects or create_workflow/create_agent)."
-                ),
+                description=("The project ID (from list_projects or create_workflow/create_agent)."),
             ),
         ],
     ) -> dict:
@@ -245,13 +239,9 @@ def register(mcp: FastMCP) -> None:
                 f"Use production runner '{production_graph_runner_id}' only when reasoning about live behavior."
             )
         else:
-            safe_next_steps.append(
-                "Publish a version before configuring cron jobs, widgets, or event-trigger flows."
-            )
+            safe_next_steps.append("Publish a version before configuring cron jobs, widgets, or event-trigger flows.")
 
-        recent_runs = await api.get(
-            f"/projects/{project_id}/runs", jwt, page=1, page_size=5
-        )
+        recent_runs = await api.get(f"/projects/{project_id}/runs", jwt, page=1, page_size=5)
 
         return {
             "project": {
