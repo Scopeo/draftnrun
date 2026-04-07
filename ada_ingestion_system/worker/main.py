@@ -11,7 +11,7 @@ import requests
 
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, ResultType, TaskResultMetadata
-from ada_ingestion_system.worker.base_worker import BaseWorker, logger, redis_client
+from ada_ingestion_system.worker.base_worker import BaseWorker, ProcessTaskOutcome, logger, redis_client
 
 _LEVEL_RE = re.compile(r"\b(DEBUG|INFO|WARNING|ERROR|CRITICAL)\b")
 _LEVEL_MAP = {
@@ -67,7 +67,7 @@ class Worker(BaseWorker):
         """Get required fields for ingestion task payload."""
         return ["ingestion_id"]
 
-    def process_task(self, payload: Dict[str, Any]) -> None:
+    def process_task(self, payload: Dict[str, Any]) -> ProcessTaskOutcome:
         """Process a single ingestion task."""
         try:
             ingestion_id = payload["ingestion_id"]
@@ -125,7 +125,7 @@ class Worker(BaseWorker):
                         str(script_path),
                         str(alt_script_path),
                     )
-                    return
+                    return ProcessTaskOutcome.FAIL_FATAL_ACK
 
             # Prepare the Python command to run the script
             python_cmd = "python"  # Use the system Python runner
@@ -312,12 +312,13 @@ class Worker(BaseWorker):
                     ingestion_id=ingestion_id,
                     result_metadata=result_metadata,
                 )
+                return ProcessTaskOutcome.FAIL_RETRY
             else:
                 logger.info("task_completed ingestion_id=%s", ingestion_id)
+                return ProcessTaskOutcome.SUCCESS_ACK
 
         except Exception as e:
             logger.error("task_error error=%s", str(e), exc_info=True)
-            # Update task status to FAILED when worker encounters an exception
             try:
                 result_metadata = TaskResultMetadata(
                     message=str(e),
@@ -333,6 +334,7 @@ class Worker(BaseWorker):
                 )
             except Exception as update_error:
                 logger.error("failed_to_update_task_status error=%s", str(update_error))
+            return ProcessTaskOutcome.FAIL_RETRY
 
     def _parse_error_message(self, stderr_text: str) -> dict:
         """Parse error messages to provide a cleaner summary."""

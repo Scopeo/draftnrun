@@ -4,8 +4,10 @@ import os
 import socket
 import threading
 import time
+from collections import deque
+from enum import Enum
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, NamedTuple
 
 import redis
 import sentry_sdk
@@ -50,6 +52,22 @@ _MAX_DELIVERY_ATTEMPTS = int(os.getenv("MAX_DELIVERY_ATTEMPTS", "3"))
 # Dead-letter stream suffix — appended to the main stream name.
 _DEADLETTER_SUFFIX = ":deadletter"
 
+# Exponential backoff for retries: delay = min(base * 2^(attempt-1), max).
+_RETRY_BASE_DELAY_S = float(os.getenv("RETRY_BASE_DELAY_S", "30"))
+_RETRY_MAX_DELAY_S = float(os.getenv("RETRY_MAX_DELAY_S", "60"))
+
+
+class _ScheduledRetry(NamedTuple):
+    message_id: str
+    fields: Dict[str, str]
+    retry_after: float
+
+
+class ProcessTaskOutcome(str, Enum):
+    SUCCESS_ACK = "success_ack"
+    FAIL_RETRY = "fail_retry"
+    FAIL_FATAL_ACK = "fail_fatal_ack"
+
 
 def _xgroup_create_if_not_exists(stream_name: str, group_name: str) -> None:
     """Create a consumer group on the stream, creating the stream if absent."""
@@ -78,6 +96,7 @@ class BaseWorker:
         self.current_threads = 0
         self.lock = threading.Lock()
         self.worker_type = worker_type
+        self._retry_queue: deque[_ScheduledRetry] = deque()
 
         if settings.SENTRY_DSN_REDIS:
             sentry_sdk.set_tag("worker_type", worker_type)
@@ -103,7 +122,7 @@ class BaseWorker:
         with self.lock:
             self.current_threads -= 1
 
-    def process_task(self, payload: Dict[str, Any]) -> None:
+    def process_task(self, payload: Dict[str, Any]) -> ProcessTaskOutcome:
         """Process a single task. Must be implemented by subclasses."""
         raise NotImplementedError("Subclasses must implement process_task")
 
@@ -178,7 +197,7 @@ class BaseWorker:
                 consumer_name,
                 _PENDING_IDLE_THRESHOLD_MS,
                 start_id="0-0",
-                count=1,
+                count=100,
             )
             if messages:
                 # Filter out any messages we just dead-lettered
@@ -198,6 +217,83 @@ class BaseWorker:
             else:
                 logger.error("xautoclaim_failed stream=%s error=%s", self.stream_name, str(e))
 
+    def _get_delivery_count(self, message_id: str) -> int:
+        try:
+            pending_entries = redis_client.xpending_range(
+                self.stream_name,
+                CONSUMER_GROUP,
+                message_id,
+                message_id,
+                count=1,
+            )
+            if not pending_entries:
+                return 1
+            return int(pending_entries[0].get("times_delivered", 1))
+        except Exception as e:
+            logger.error(
+                "xpending_range_failed stream=%s message_id=%s error=%s",
+                self.stream_name,
+                message_id,
+                str(e),
+            )
+            return _MAX_DELIVERY_ATTEMPTS
+
+    def _resolve_process_outcome(self, payload: Dict[str, Any], message_id: str, fields: Dict[str, str]) -> None:
+        retry_reason = "retry requested by worker task"
+        try:
+            result = self.process_task(payload)
+            if not isinstance(result, ProcessTaskOutcome):
+                raise TypeError(
+                    f"{type(self).__name__}.process_task must return a ProcessTaskOutcome, got {type(result).__name__}"
+                )
+            outcome = result
+        except Exception as e:
+            logger.error(
+                "worker_process_task_exception stream=%s message_id=%s error=%s",
+                self.stream_name,
+                message_id,
+                str(e),
+                exc_info=True,
+            )
+            outcome = ProcessTaskOutcome.FAIL_RETRY
+            retry_reason = f"uncaught process_task exception: {type(e).__name__}"
+
+        if outcome == ProcessTaskOutcome.SUCCESS_ACK:
+            try:
+                redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
+                logger.info("message_ack_success stream=%s message_id=%s", self.stream_name, message_id)
+            except Exception as e:
+                logger.error("xack_failed stream=%s message_id=%s error=%s", self.stream_name, message_id, str(e))
+            return
+
+        if outcome == ProcessTaskOutcome.FAIL_FATAL_ACK:
+            try:
+                redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
+                logger.info("message_ack_fatal stream=%s message_id=%s", self.stream_name, message_id)
+            except Exception as e:
+                logger.error("xack_failed stream=%s message_id=%s error=%s", self.stream_name, message_id, str(e))
+            return
+
+        delivery_count = self._get_delivery_count(message_id)
+        if delivery_count >= _MAX_DELIVERY_ATTEMPTS:
+            reason = f"exceeded max delivery attempts ({delivery_count}/{_MAX_DELIVERY_ATTEMPTS}); {retry_reason}"
+            self._dead_letter(message_id, fields, delivery_count, reason)
+            self._on_dead_letter(message_id, fields, reason)
+            return
+
+        delay = min(_RETRY_BASE_DELAY_S * (2 ** (delivery_count - 1)), _RETRY_MAX_DELAY_S)
+        logger.warning(
+            "message_retry_scheduled stream=%s message_id=%s delivery_count=%s max_attempts=%s "
+            "backoff_seconds=%.1f reason=%s",
+            self.stream_name,
+            message_id,
+            delivery_count,
+            _MAX_DELIVERY_ATTEMPTS,
+            delay,
+            retry_reason,
+        )
+        self._retry_queue.append(_ScheduledRetry(message_id, fields, time.monotonic() + delay))
+
     def _dispatch(self, message_id: str, fields: Dict[str, str], consumer_name: str) -> None:
         """Parse a raw stream entry and dispatch it to a worker thread."""
         raw = fields.get("data", "")
@@ -216,7 +312,7 @@ class BaseWorker:
         if self._reserve_slot():
             thread = threading.Thread(
                 target=self._process_and_ack,
-                args=(payload, message_id),
+                args=(payload, message_id, fields),
                 daemon=True,
             )
             thread.start()
@@ -226,16 +322,54 @@ class BaseWorker:
             # visible to XAUTOCLAIM on the next startup.
             self._log_queued_task(payload)
 
-    def _process_and_ack(self, payload: Dict[str, Any], message_id: str) -> None:
-        """Run process_task and acknowledge the message regardless of outcome."""
+    def _process_and_ack(self, payload: Dict[str, Any], message_id: str, fields: Dict[str, str]) -> None:
+        """Run process_task and ACK based on processing outcome."""
         try:
-            self.process_task(payload)
+            self._resolve_process_outcome(payload, message_id, fields)
         finally:
-            try:
-                redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
-            except Exception as e:
-                logger.error("xack_failed stream=%s message_id=%s error=%s", self.stream_name, message_id, str(e))
             self._decrement_thread_count()
+
+    def _dispatch_due_retries(self, consumer_name: str) -> None:
+        now = time.monotonic()
+        size = len(self._retry_queue)
+        for _ in range(size):
+            if not self._retry_queue:
+                break
+            entry = self._retry_queue[0]
+            if entry.retry_after > now:
+                self._retry_queue.rotate(-1)
+                continue
+            if not self._can_process():
+                break
+            self._retry_queue.popleft()
+            try:
+                claimed = redis_client.xclaim(
+                    self.stream_name,
+                    CONSUMER_GROUP,
+                    consumer_name,
+                    min_idle_time=0,
+                    message_ids=[entry.message_id],
+                    justid=True,
+                )
+            except Exception as e:
+                logger.error(
+                    "retry_xclaim_failed stream=%s message_id=%s error=%s",
+                    self.stream_name,
+                    entry.message_id,
+                    str(e),
+                )
+                self._retry_queue.append(
+                    _ScheduledRetry(entry.message_id, entry.fields, time.monotonic() + _RETRY_BASE_DELAY_S)
+                )
+                continue
+            if not claimed:
+                logger.info(
+                    "retry_message_no_longer_pending stream=%s message_id=%s",
+                    self.stream_name,
+                    entry.message_id,
+                )
+                continue
+            self._dispatch(entry.message_id, entry.fields, consumer_name)
 
     def run(self) -> None:
         """Main worker loop — crash-safe via Redis Streams consumer groups."""
@@ -247,12 +381,18 @@ class BaseWorker:
             CONSUMER_GROUP,
         )
 
-        # Recover any messages that were mid-flight when a previous instance crashed.
         self._reclaim_pending(consumer_name)
+        last_reclaim_at = time.monotonic()
 
         while True:
             try:
-                # Back-pressure: don't pull new work while at capacity.
+                self._dispatch_due_retries(consumer_name)
+
+                now = time.monotonic()
+                if now - last_reclaim_at >= _PENDING_IDLE_THRESHOLD_MS / 1000:
+                    self._reclaim_pending(consumer_name)
+                    last_reclaim_at = now
+
                 if not self._can_process():
                     time.sleep(0.5)
                     continue
@@ -266,7 +406,6 @@ class BaseWorker:
                 )
 
                 if not results:
-                    # Timeout — loop to check capacity and try again.
                     continue
 
                 _stream, messages = results[0]
