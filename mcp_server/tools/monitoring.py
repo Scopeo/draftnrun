@@ -1,6 +1,7 @@
 """Monitoring, traces, and credit usage tools."""
 
-from typing import Annotated
+from datetime import datetime
+from typing import Annotated, Optional
 from uuid import UUID
 
 from fastmcp import FastMCP
@@ -56,27 +57,42 @@ def register(mcp: FastMCP) -> None:
     async def list_traces(
         project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
         duration: Annotated[
-            int,
-            Field(description="Number of days to include. Clamped to 1-90."),
+            Optional[int],
+            Field(description="Number of days to include (1-90). Ignored when start_time is provided."),
         ] = DEFAULT_DURATION_DAYS,
+        start_time: Annotated[
+            Optional[str],
+            Field(description="Start of date range filter (ISO 8601, e.g. '2025-06-01T00:00:00Z')."),
+        ] = None,
+        end_time: Annotated[
+            Optional[str],
+            Field(description="End of date range filter (ISO 8601, e.g. '2025-06-30T23:59:59Z')."),
+        ] = None,
         page: Annotated[int, Field(description="Page number (1-based).")] = 1,
         page_size: Annotated[int, Field(description="Results per page (max 100).")] = 50,
     ) -> dict:
-        """List execution traces for a project."""
+        """List execution traces for a project. Filter by duration (days lookback) or by explicit date range."""
         if page < 1:
             raise ValueError("page must be >= 1")
         if page_size < 1:
             raise ValueError("page_size must be >= 1")
-        duration = _normalize_duration(duration)
+
+        params: dict = {"page": page, "page_size": min(page_size, 100)}
+
+        if start_time is not None or end_time is not None:
+            if start_time is not None:
+                datetime.fromisoformat(start_time)
+                params["start_time"] = start_time
+            if end_time is not None:
+                datetime.fromisoformat(end_time)
+                params["end_time"] = end_time
+        elif duration is not None:
+            params["duration"] = _normalize_duration(duration)
+        else:
+            raise ValueError("Provide either 'duration' or at least one of 'start_time'/'end_time'.")
 
         jwt, _ = _get_auth()
-        return await api.get(
-            f"/projects/{project_id}/traces",
-            jwt,
-            duration=duration,
-            page=page,
-            page_size=min(page_size, 100),
-        )
+        return await api.get(f"/projects/{project_id}/traces", jwt, **params)
 
     @mcp.tool()
     async def get_org_charts(

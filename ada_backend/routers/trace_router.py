@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import Annotated, Optional
 from uuid import UUID
 
@@ -29,11 +30,11 @@ router = APIRouter()
 @router.get("/projects/{project_id}/traces", response_model=PaginatedRootTracesResponse, tags=["Metrics"])
 async def get_root_traces(
     project_id: UUID,
-    duration: int,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
+    duration: Optional[int] = Query(None, description="Lookback window in days (ignored when start_time is provided)"),
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
     page: int = Query(1, ge=1, description="Page number (1-based)"),
@@ -42,24 +43,33 @@ async def get_root_traces(
     search: Optional[str] = Query(
         None, min_length=1, max_length=500, description="Search traces by input message content"
     ),
+    start_time: Optional[datetime] = Query(None, description="Start of date range filter (ISO 8601)"),
+    end_time: Optional[datetime] = Query(None, description="End of date range filter (ISO 8601)"),
     session: Session = Depends(get_db),
 ) -> PaginatedRootTracesResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
+    if duration is None and start_time is None and end_time is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Either 'duration' or at least one of 'start_time'/'end_time' must be provided",
+        )
     project = get_project(session, project_id)
     organization_id = project.organization_id if project else None
     try:
         response = get_root_traces_by_project(
             user.id,
             project_id,
-            duration,
-            environment,
-            call_type,
-            page,
-            page_size,
-            graph_runner_id,
+            duration=duration,
+            environment=environment,
+            call_type=call_type,
+            page=page,
+            page_size=page_size,
+            graph_runner_id=graph_runner_id,
             organization_id=organization_id,
             search=search,
+            start_time=start_time,
+            end_time=end_time,
         )
         return response
     except ValueError as e:

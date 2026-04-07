@@ -1,6 +1,7 @@
 import json
 import logging
 from collections import defaultdict
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
@@ -189,7 +190,7 @@ def get_span_trace_service(user_id: UUID, trace_id: UUID) -> TraceSpan:
 def get_root_traces_by_project(
     user_id: UUID,
     project_id: UUID,
-    duration: int,
+    duration: Optional[int] = None,
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
     page: int = 1,
@@ -197,6 +198,8 @@ def get_root_traces_by_project(
     graph_runner_id: Optional[UUID] = None,
     organization_id: Optional[UUID] = None,
     search: Optional[str] = None,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
 ) -> PaginatedRootTracesResponse:
     if page_size <= 0:
         page_size = 20
@@ -205,16 +208,19 @@ def get_root_traces_by_project(
 
     rows, total_pages = query_root_trace_duration(
         project_id,
-        duration,
+        duration_days=duration,
         environment=environment,
         call_type=call_type,
         graph_runner_id=graph_runner_id,
         page=page,
         page_size=page_size,
         search=search,
+        start_time=start_time,
+        end_time=end_time,
     )
     track_monitoring_loaded(user_id, project_count=1, organization_id=organization_id)
-    LOGGER.info(f"Querying root spans for project {project_id} with duration {duration} days")
+    LOGGER.info("Querying root spans for project %s with duration=%s start_time=%s end_time=%s",
+                project_id, duration, start_time, end_time)
 
     traces = build_root_spans(rows)
     return PaginatedRootTracesResponse(

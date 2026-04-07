@@ -94,26 +94,42 @@ def query_trace_duration(
 
 def query_root_trace_duration(
     project_id: UUID,
-    duration_days: int,
+    duration_days: Optional[int] = None,
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
     graph_runner_id: Optional[UUID] = None,
     page: int = 1,
     page_size: int = 20,
     search: Optional[str] = None,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
 ) -> Tuple[List[dict], int]:
     """Query root traces with server-side pagination.
 
     Returns a tuple of (rows_as_dicts, total_pages).
+    Time filtering: explicit start_time/end_time take precedence over duration_days.
     """
-    start_time_offset_days = (datetime.now() - timedelta(days=duration_days)).isoformat()
+    if start_time is None and end_time is None and duration_days is None:
+        duration_days = 30
+
     offset = (page - 1) * page_size
 
     filters = f"""
         project_id = '{project_id}'
-        AND start_time > '{start_time_offset_days}'
         AND parent_id IS NULL
     """
+    params: dict = {}
+
+    if start_time is not None or end_time is not None:
+        if start_time is not None:
+            filters += "\n        AND start_time >= :filter_start_time"
+            params["filter_start_time"] = start_time.isoformat()
+        if end_time is not None:
+            filters += "\n        AND start_time <= :filter_end_time"
+            params["filter_end_time"] = end_time.isoformat()
+    elif duration_days is not None:
+        start_time_offset_days = (datetime.now() - timedelta(days=duration_days)).isoformat()
+        filters += f"\n        AND start_time > '{start_time_offset_days}'"
     if environment is not None:
         filters += f"\n        AND environment = '{environment.value}'"
     if call_type is not None:
@@ -121,7 +137,6 @@ def query_root_trace_duration(
     if graph_runner_id is not None:
         filters += f"\n        AND graph_runner_id = '{graph_runner_id}'"
 
-    params = {}
     if search is not None:
         filters += """
         AND EXISTS (

@@ -111,3 +111,68 @@ def test_search_traces_by_keyword():
                 Span.trace_rowid.in_([str(trace1_id), str(trace2_id), str(trace3_id)])
             ).delete(synchronize_session=False)
             session.commit()
+
+
+def test_filter_traces_by_date_range():
+    now = datetime.now()
+    project_id = uuid4()
+
+    trace1_id, span1_id = uuid4(), uuid4()
+    trace2_id, span2_id = uuid4(), uuid4()
+    trace3_id, span3_id = uuid4(), uuid4()
+
+    with get_db_session() as session:
+        span1 = _create_root_span(project_id, trace1_id, span1_id, now - timedelta(hours=1))
+        span2 = _create_root_span(project_id, trace2_id, span2_id, now - timedelta(hours=5))
+        span3 = _create_root_span(project_id, trace3_id, span3_id, now - timedelta(hours=10))
+        session.add_all([span1, span2, span3])
+        session.commit()
+
+        msg1 = _create_span_message(span1_id, json.dumps([{"messages": [{"role": "user", "content": "a"}]}]))
+        msg2 = _create_span_message(span2_id, json.dumps([{"messages": [{"role": "user", "content": "b"}]}]))
+        msg3 = _create_span_message(span3_id, json.dumps([{"messages": [{"role": "user", "content": "c"}]}]))
+        session.add_all([msg1, msg2, msg3])
+        session.commit()
+
+        try:
+            rows, _ = query_root_trace_duration(
+                project_id,
+                start_time=now - timedelta(hours=6),
+                end_time=now,
+            )
+            assert len(rows) == 2
+            trace_ids = {row["trace_rowid"] for row in rows}
+            assert str(trace1_id) in trace_ids
+            assert str(trace2_id) in trace_ids
+
+            rows_start_only, _ = query_root_trace_duration(
+                project_id,
+                start_time=now - timedelta(hours=2),
+            )
+            assert len(rows_start_only) == 1
+            assert rows_start_only[0]["trace_rowid"] == str(trace1_id)
+
+            rows_end_only, _ = query_root_trace_duration(
+                project_id,
+                end_time=now - timedelta(hours=4),
+            )
+            assert len(rows_end_only) == 2
+            trace_ids_end = {row["trace_rowid"] for row in rows_end_only}
+            assert str(trace2_id) in trace_ids_end
+            assert str(trace3_id) in trace_ids_end
+
+            rows_range_takes_precedence, _ = query_root_trace_duration(
+                project_id,
+                duration_days=1,
+                start_time=now - timedelta(hours=2),
+                end_time=now,
+            )
+            assert len(rows_range_takes_precedence) == 1
+            assert rows_range_takes_precedence[0]["trace_rowid"] == str(trace1_id)
+
+        finally:
+            span_ids = [str(span1_id), str(span2_id), str(span3_id)]
+            trace_ids_cleanup = [str(trace1_id), str(trace2_id), str(trace3_id)]
+            session.query(SpanMessage).filter(SpanMessage.span_id.in_(span_ids)).delete(synchronize_session=False)
+            session.query(Span).filter(Span.trace_rowid.in_(trace_ids_cleanup)).delete(synchronize_session=False)
+            session.commit()
