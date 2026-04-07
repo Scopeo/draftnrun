@@ -42,6 +42,7 @@ class DummyWorker(BaseWorker):
 
     def _dead_letter(self, message_id: str, fields: Dict[str, str], delivery_count: int, reason: str) -> None:
         self.dead_letter_calls.append((message_id, fields, delivery_count, reason))
+        super()._dead_letter(message_id, fields, delivery_count, reason)
 
     def _on_dead_letter(self, message_id: str, fields: Dict[str, str], reason: str = "") -> None:
         self.dead_letter_hook_calls.append((message_id, fields, reason))
@@ -51,6 +52,9 @@ class DummyRedis:
     def __init__(self):
         self.acks = []
         self.xclaim_calls = []
+
+    def xadd(self, name, fields, **kwargs):
+        pass
 
     def xack(self, stream_name, group_name, message_id):
         self.acks.append((stream_name, group_name, message_id))
@@ -107,6 +111,7 @@ def test_retry_at_threshold_dead_letters_and_calls_hook(monkeypatch):
 
     assert worker.dead_letter_calls
     assert worker.dead_letter_hook_calls
+    assert ("stream", base_worker.CONSUMER_GROUP, "1-0") in redis.acks
 
 
 def test_exception_defaults_to_retry_without_ack(monkeypatch):
