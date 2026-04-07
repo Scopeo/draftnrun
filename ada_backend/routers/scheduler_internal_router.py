@@ -31,10 +31,11 @@ async def _run_endpoint_polling_background(
 ) -> None:
     succeeded = True
     error_msg: str | None = None
+    summary: dict | None = None
     with get_db_session() as db:
         update_cron_run(session=db, run_id=cron_run_id, status=CronStatus.RUNNING)
         try:
-            await run_endpoint_polling(
+            summary = await run_endpoint_polling(
                 cron_id=cron_id,
                 payload=payload,
                 ada_url=settings.ADA_URL,
@@ -57,6 +58,7 @@ async def _run_endpoint_polling_background(
             status=CronStatus.COMPLETED if succeeded else CronStatus.ERROR,
             finished_at=datetime.now(timezone.utc),
             error=error_msg,
+            result=summary,
         )
 
 

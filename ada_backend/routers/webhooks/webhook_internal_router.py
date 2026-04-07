@@ -141,6 +141,7 @@ async def _execute_cron_run(
             update_cron_run(session=session, run_id=cron_run_id, status=CronStatus.RUNNING)
         except Exception as e:
             LOGGER.error(f"Failed to set CronRun {cron_run_id} to RUNNING: {e}", exc_info=True)
+            raise
 
     succeeded, error_msg = await _execute_run(run_id, project_id, env, input_data, trigger)
 
