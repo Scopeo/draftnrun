@@ -53,6 +53,8 @@ class CategorizationError(Exception):
 class LLMProviderError(Exception):
     """Raised when an LLM provider (OpenAI, Mistral, Anthropic, custom) returns an API error."""
 
+    _RETRIABLE_STATUS_CODES = {429}
+
     def __init__(self, provider_message: str, status_code: int | None = None, provider_name: str | None = None):
         self.provider_message = provider_message
         self.status_code = status_code
@@ -63,3 +65,11 @@ class LLMProviderError(Exception):
         else:
             message = f"{label} error: {provider_message}"
         super().__init__(message)
+
+    @property
+    def is_retriable(self) -> bool:
+        return self.status_code in self._RETRIABLE_STATUS_CODES
+
+    @property
+    def http_status(self) -> int:
+        return 429 if self.is_retriable else 502
