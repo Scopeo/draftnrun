@@ -113,7 +113,9 @@ document content, or file outputs.
 ## Important Constraints
 
 - `list_runs` caps `page_size` at 100
-- `get_org_charts`, `get_org_kpis`, and `list_traces` clamp `duration` to 1–90 days. `list_traces` also accepts `start_time`/`end_time` (ISO 8601) for precise date range filtering; when provided, `duration` is ignored
+- `get_org_charts`, `get_org_kpis`, and `list_traces` clamp `duration` to 1–90 days. \
+`list_traces` also accepts `start_time`/`end_time` (ISO 8601) for precise date range \
+filtering; when provided, `duration` is ignored
 - Batch deletions: `delete_datasets`, `delete_entries`, `delete_judges` accept lists of IDs
 - Graph updates send the full graph structure — always `get_graph` first, modify, then `update_graph`
 - Secrets values are write-only; `list_secrets` returns masked values
@@ -878,7 +880,8 @@ Call `get_run_result(project_id, run_id)` to retrieve the final output.
 1. `list_runs(project_id)` → find the run
 2. `get_run(project_id, run_id)` → status and metadata
 3. `get_run_result(project_id, run_id)` → output data
-4. `list_traces(project_id, duration=30)` or `list_traces(project_id, start_time="...", end_time="...")` → find trace for debugging
+4. `list_traces(project_id, duration=30)` or \
+`list_traces(project_id, start_time="...", end_time="...")` → find trace for debugging
 5. `get_trace_tree(trace_id)` → full span tree with timings
 
 ## Retry a Failed Run
@@ -1704,7 +1707,9 @@ read/revoke operations only; the actual connect flow happens in the web UI.
 
 ## Monitoring
 
-- `list_traces(project_id, duration=30)` → recent traces (duration in days, 1–90). Also accepts `start_time`/`end_time` (ISO 8601) for date range filtering
+- `list_traces(project_id, duration=30)` → recent traces (duration in days, 1–90). \
+Also accepts `start_time`/`end_time` (ISO 8601) for precise date range filtering; \
+when provided, `duration` is ignored
 - `get_trace_tree(trace_id)` → full span tree with timings (`trace_id` is an OTel hex string, e.g. `0x6d4e...`)
 - `get_org_charts(duration_days)` → usage charts (1–90 days)
 - `get_org_kpis(duration_days)` → key metrics

@@ -58,7 +58,7 @@ def register(mcp: FastMCP) -> None:
         project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
         duration: Annotated[
             Optional[int],
-            Field(description="Number of days to include (1-90). Ignored when start_time is provided."),
+            Field(description="Number of days to include (1-90). Ignored when start_time or end_time is provided."),
         ] = DEFAULT_DURATION_DAYS,
         start_time: Annotated[
             Optional[str],
