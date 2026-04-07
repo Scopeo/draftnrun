@@ -99,8 +99,12 @@ def _assign_missing_ids(graph_data: dict) -> dict:
 
 
 _KNOWN_GRAPH_KEYS = {
-    "component_instances", "edges", "port_mappings", "relationships",
-    "playground_input_schema", "playground_field_types",
+    "component_instances",
+    "edges",
+    "port_mappings",
+    "relationships",
+    "playground_input_schema",
+    "playground_field_types",
 }
 
 _LIKELY_TYPOS: dict[str, str] = {
@@ -126,8 +130,7 @@ def _warn_unknown_graph_keys(graph_data: dict) -> list[str]:
         suggestion = _LIKELY_TYPOS.get(key)
         if suggestion:
             warnings.append(
-                f"Unknown graph key '{key}' — did you mean '{suggestion}'? "
-                f"The key was ignored by the backend."
+                f"Unknown graph key '{key}' — did you mean '{suggestion}'? The key was ignored by the backend."
             )
         else:
             warnings.append(
@@ -143,8 +146,7 @@ def _warn_unknown_graph_keys(graph_data: dict) -> list[str]:
 def _validate_component_instances(graph_data: dict) -> None:
     if not isinstance(graph_data, dict):
         raise ToolError(
-            f"graph_data must be a dict, got {type(graph_data).__name__}. "
-            "Pass the full graph object from get_graph."
+            f"graph_data must be a dict, got {type(graph_data).__name__}. Pass the full graph object from get_graph."
         )
     instances = graph_data.get("component_instances", [])
     if not isinstance(instances, list):
@@ -166,6 +168,39 @@ def _validate_component_instances(graph_data: dict) -> None:
                 "Use list_components or search_components to find the correct ID, "
                 "or start from get_graph to preserve existing values."
             )
+
+
+def _convert_field_expressions_to_write_format(instances: list[dict]) -> None:
+    """Convert read-format field_expressions into write-format input_port_instances.
+
+    GET returns expressions in a top-level ``field_expressions`` list per instance,
+    but PUT only processes ``input_port_instances``.  Without this conversion,
+    complex expressions (e.g. json_build) whose ``value`` field is a lossy
+    placeholder get silently corrupted on round-trip.
+    """
+    for inst in instances:
+        field_expr_list = inst.pop("field_expressions", None)
+        if not field_expr_list:
+            continue
+
+        input_port_instances = inst.setdefault("input_port_instances", [])
+        existing_input_port_instance_names = {
+            input_port_instance["name"]
+            for input_port_instance in input_port_instances
+            if "name" in input_port_instance
+        }
+
+        for field_expr in field_expr_list:
+            field_name = field_expr.get("field_name")
+            expression_json = field_expr.get("expression_json")
+            if not field_name or not expression_json:
+                continue
+            if field_name in existing_input_port_instance_names:
+                continue
+            input_port_instances.append({
+                "name": field_name,
+                "field_expression": {"expression_json": expression_json},
+            })
 
 
 _OAUTH_KEYWORDS = ("access_token", "oauth", "integration", "credentials")
@@ -205,9 +240,7 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def publish_to_production(
-        project_id: Annotated[
-            UUID, Field(description="The project ID (from list_projects or get_project_overview).")
-        ],
+        project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
         graph_runner_id: Annotated[
             UUID, Field(description="The editable draft runner ID (from get_project_overview).")
         ],
@@ -226,9 +259,7 @@ def register(mcp: FastMCP) -> None:
         (env='draft', untagged).
         """
         jwt, _ = _get_auth()
-        return await api.post(
-            f"/projects/{project_id}/graph/{graph_runner_id}/deploy", jwt
-        )
+        return await api.post(f"/projects/{project_id}/graph/{graph_runner_id}/deploy", jwt)
 
     @mcp.tool()
     async def get_draft_graph(
@@ -262,9 +293,7 @@ def register(mcp: FastMCP) -> None:
             )
 
         runner_id = draft.get("graph_runner_id") or draft.get("id")
-        graph = await api.get(
-            f"/projects/{project_id}/graph/{runner_id}", jwt, trim=False
-        )
+        graph = await api.get(f"/projects/{project_id}/graph/{runner_id}", jwt, trim=False)
         return {
             "graph_runner_id": runner_id,
             "graph": graph,
@@ -272,9 +301,7 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def update_graph(
-        project_id: Annotated[
-            UUID, Field(description="The project ID (from list_projects or get_project_overview).")
-        ],
+        project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
         graph_runner_id: Annotated[
             UUID,
             Field(description="The graph runner version ID — must be a draft (from get_project_overview)."),
@@ -333,15 +360,10 @@ def register(mcp: FastMCP) -> None:
         try:
             graph_data = _assign_missing_ids(graph_data)
         except (TypeError, AttributeError) as exc:
-            raise ToolError(
-                f"Malformed graph_data: {exc}. "
-                "Pass the full graph object from get_graph."
-            ) from exc
+            raise ToolError(f"Malformed graph_data: {exc}. Pass the full graph object from get_graph.") from exc
         warnings = _warn_unknown_graph_keys(graph_data)
         try:
-            result = await api.put(
-                f"/projects/{project_id}/graph/{graph_runner_id}", jwt, json=graph_data
-            )
+            result = await api.put(f"/projects/{project_id}/graph/{graph_runner_id}", jwt, json=graph_data)
         except ToolError as exc:
             raise ToolError(_enrich_graph_update_error(str(exc))) from exc
         if warnings:
@@ -353,9 +375,7 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def update_component_parameters(
-        project_id: Annotated[
-            UUID, Field(description="The project ID (from list_projects or get_project_overview).")
-        ],
+        project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
         graph_runner_id: Annotated[
             UUID,
             Field(description="The graph runner version ID — must be a draft (from get_project_overview)."),
@@ -369,7 +389,7 @@ def register(mcp: FastMCP) -> None:
         ],
         parameters: Annotated[
             dict,
-            Field(description='Dict of parameter names to new values. Only provided keys are updated.'),
+            Field(description="Dict of parameter names to new values. Only provided keys are updated."),
         ],
     ) -> dict:
         """Update specific parameters on a single component instance within a graph.
@@ -392,9 +412,7 @@ def register(mcp: FastMCP) -> None:
         """
         jwt, _ = _get_auth()
 
-        graph = await api.get(
-            f"/projects/{project_id}/graph/{graph_runner_id}", jwt, trim=False
-        )
+        graph = await api.get(f"/projects/{project_id}/graph/{graph_runner_id}", jwt, trim=False)
 
         instances = graph.get("component_instances", [])
         target = None
@@ -426,6 +444,8 @@ def register(mcp: FastMCP) -> None:
                 f"Available parameters: {available}"
             )
 
+        _convert_field_expressions_to_write_format(instances)
+
         graph_data = {
             "component_instances": instances,
             "edges": graph.get("edges", []),
@@ -437,9 +457,7 @@ def register(mcp: FastMCP) -> None:
         if graph.get("playground_field_types") is not None:
             graph_data["playground_field_types"] = graph["playground_field_types"]
         try:
-            await api.put(
-                f"/projects/{project_id}/graph/{graph_runner_id}", jwt, json=graph_data
-            )
+            await api.put(f"/projects/{project_id}/graph/{graph_runner_id}", jwt, json=graph_data)
         except ToolError as exc:
             raise ToolError(_enrich_graph_update_error(str(exc))) from exc
 

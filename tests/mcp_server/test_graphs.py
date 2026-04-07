@@ -5,7 +5,12 @@ import pytest
 
 from mcp_server.client import ToolError
 from mcp_server.tools import graphs
-from mcp_server.tools.graphs import _assign_missing_ids, _validate_component_instances, _warn_unknown_graph_keys
+from mcp_server.tools.graphs import (
+    _assign_missing_ids,
+    _convert_field_expressions_to_write_format,
+    _validate_component_instances,
+    _warn_unknown_graph_keys,
+)
 from tests.mcp_server.conftest import FAKE_PROJECT_ID, FAKE_RUNNER_ID
 
 
@@ -233,3 +238,142 @@ async def test_get_draft_graph_skips_tagged_drafts(monkeypatch, fake_mcp):
 def test_promote_version_to_env_registered(fake_mcp):
     graphs.register(fake_mcp)
     assert "promote_version_to_env" in fake_mcp.tools
+
+
+# --- _convert_field_expressions_to_write_format ---
+
+
+def test_convert_field_expressions_moves_to_input_port_instances():
+    json_build_expr = {
+        "type": "json_build",
+        "template": {"Authorization": "Bearer __REF_0__"},
+        "refs": {"__REF_0__": {"type": "var", "name": "hubspot_token"}},
+    }
+    instances = [
+        {
+            "id": "inst-1",
+            "parameters": [],
+            "field_expressions": [
+                {"field_name": "headers", "expression_json": json_build_expr},
+            ],
+            "input_port_instances": [],
+        }
+    ]
+
+    _convert_field_expressions_to_write_format(instances)
+
+    assert "field_expressions" not in instances[0]
+    ipis = instances[0]["input_port_instances"]
+    assert len(ipis) == 1
+    assert ipis[0]["name"] == "headers"
+    assert ipis[0]["field_expression"]["expression_json"] == json_build_expr
+
+
+def test_convert_field_expressions_skips_when_ipi_already_exists():
+    expr_json = {"type": "literal", "value": "hello"}
+    instances = [
+        {
+            "id": "inst-1",
+            "field_expressions": [
+                {"field_name": "headers", "expression_json": expr_json},
+            ],
+            "input_port_instances": [
+                {"name": "headers", "field_expression": {"expression_json": {"type": "literal", "value": "existing"}}},
+            ],
+        }
+    ]
+
+    _convert_field_expressions_to_write_format(instances)
+
+    assert len(instances[0]["input_port_instances"]) == 1
+    assert instances[0]["input_port_instances"][0]["field_expression"]["expression_json"]["value"] == "existing"
+
+
+def test_convert_field_expressions_no_op_when_empty():
+    instances = [{"id": "inst-1", "parameters": []}]
+    _convert_field_expressions_to_write_format(instances)
+    assert "input_port_instances" not in instances[0]
+
+
+def test_convert_field_expressions_handles_multiple_expressions():
+    instances = [
+        {
+            "id": "inst-1",
+            "field_expressions": [
+                {"field_name": "headers", "expression_json": {"type": "var", "name": "token"}},
+                {"field_name": "body", "expression_json": {"type": "literal", "value": "test"}},
+            ],
+        }
+    ]
+
+    _convert_field_expressions_to_write_format(instances)
+
+    ipis = instances[0]["input_port_instances"]
+    assert len(ipis) == 2
+    names = {ipi["name"] for ipi in ipis}
+    assert names == {"headers", "body"}
+
+
+# --- update_component_parameters field expression round-trip ---
+
+
+FAKE_INSTANCE_ID = "00000000-0000-4000-8000-111111111111"
+
+
+@pytest.mark.asyncio
+async def test_update_component_parameters_preserves_json_build_expressions(monkeypatch, fake_mcp):
+    """Regression: update_component_parameters must convert field_expressions
+    to input_port_instances so complex expressions (json_build) survive the
+    read-modify-write round-trip (DRA-1191)."""
+    json_build_expr = {
+        "type": "json_build",
+        "template": {"Authorization": "Bearer __REF_0__"},
+        "refs": {"__REF_0__": {"type": "var", "name": "hubspot_token"}},
+    }
+
+    graph_response = {
+        "component_instances": [
+            {
+                "id": FAKE_INSTANCE_ID,
+                "name": "Get hubspot contact",
+                "parameters": [
+                    {"name": "headers", "value": "[JSON_BUILD]", "kind": "input"},
+                    {"name": "initial_prompt", "value": "Hello", "kind": "textarea"},
+                ],
+                "field_expressions": [
+                    {"field_name": "headers", "expression_json": json_build_expr},
+                ],
+                "input_port_instances": [],
+            }
+        ],
+        "edges": [],
+        "port_mappings": [],
+        "relationships": [],
+    }
+
+    put_payload = {}
+
+    async def mock_get(path, token, *, trim=True, **params):
+        return graph_response
+
+    async def mock_put(path, token, *, json=None, **kwargs):
+        put_payload.update(json)
+        return {"status": "ok"}
+
+    monkeypatch.setattr(graphs, "_get_auth", lambda: ("jwt-token", "user-123"))
+    monkeypatch.setattr(graphs.api, "get", mock_get)
+    monkeypatch.setattr(graphs.api, "put", mock_put)
+
+    graphs.register(fake_mcp)
+    await fake_mcp.tools["update_component_parameters"](
+        UUID(FAKE_PROJECT_ID),
+        UUID(FAKE_RUNNER_ID),
+        UUID(FAKE_INSTANCE_ID),
+        {"initial_prompt": "Updated prompt"},
+    )
+
+    sent_instance = put_payload["component_instances"][0]
+    assert "field_expressions" not in sent_instance
+    ipis = sent_instance["input_port_instances"]
+    headers_ipi = next(ipi for ipi in ipis if ipi["name"] == "headers")
+    assert headers_ipi["field_expression"]["expression_json"] == json_build_expr
