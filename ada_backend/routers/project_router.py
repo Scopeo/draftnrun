@@ -81,9 +81,7 @@ def get_projects_by_organization_endpoint(
     include_templates: Optional[bool] = False,
 ):
     try:
-        return get_projects_by_organization_with_details_service(
-            session, organization_id, type, include_templates
-        )
+        return get_projects_by_organization_with_details_service(session, organization_id, type, include_templates)
     except ValueError as e:
         LOGGER.error(
             f"Failed to list workflows for organization {organization_id} user_id={auth.user_id}: {str(e)}",
@@ -263,7 +261,10 @@ async def run_env_agent_endpoint(
     except LLMProviderError as e:
         LOGGER.warning("LLM provider error for project %s env %s: %s", project_id, env, e.provider_message)
         label = e.provider_name or "LLM provider"
-        raise HTTPException(status_code=502, detail=f"{label} error: {e.provider_message}") from e
+        raise HTTPException(
+            status_code=e.http_status,
+            detail=f"{label} error: {e.provider_message}",
+        ) from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id} in environment {env}: {str(e)}", exc_info=True
@@ -360,9 +361,7 @@ async def chat(
         with get_db_session() as session:
             project_env_binding = get_project_env_binding(session, project_id, graph_runner_id)
             if not project_env_binding:
-                LOGGER.error(
-                    "Graph runner %s is not bound to project %s", graph_runner_id, project_id
-                )
+                LOGGER.error("Graph runner %s is not bound to project %s", graph_runner_id, project_id)
                 raise HTTPException(
                     status_code=404,
                     detail=f"Graph runner {graph_runner_id} is not bound to project {project_id}",
@@ -426,10 +425,15 @@ async def chat(
     except LLMProviderError as e:
         LOGGER.warning(
             "LLM provider error for project %s graph_runner %s: %s",
-            project_id, graph_runner_id, e.provider_message,
+            project_id,
+            graph_runner_id,
+            e.provider_message,
         )
         label = e.provider_name or "LLM provider"
-        raise HTTPException(status_code=502, detail=f"{label} error: {e.provider_message}") from e
+        raise HTTPException(
+            status_code=e.http_status,
+            detail=f"{label} error: {e.provider_message}",
+        ) from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
@@ -599,7 +603,10 @@ async def chat_env(
     except LLMProviderError as e:
         LOGGER.warning("LLM provider error for project %s env %s: %s", project_id, env, e.provider_message)
         label = e.provider_name or "LLM provider"
-        raise HTTPException(status_code=502, detail=f"{label} error: {e.provider_message}") from e
+        raise HTTPException(
+            status_code=e.http_status,
+            detail=f"{label} error: {e.provider_message}",
+        ) from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id} in environment {env}: {str(e)}", exc_info=True
