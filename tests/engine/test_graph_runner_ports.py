@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Type, get_args, get_origin
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import networkx as nx
@@ -8,12 +8,10 @@ from pydantic import BaseModel
 
 from engine.components.component import Component
 from engine.components.static_responder import StaticResponder
-from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.graph_runner.port_management import get_component_port_type
-from engine.legacy_compatibility import get_unmigrated_output_type
 from engine.trace.trace_manager import TraceManager
-from tests.mocks.dummy_agent import DummyAgent
 
 # ============================================================================
 # SHARED MOCK COMPONENTS - Inherit from Agent for consistency
@@ -88,30 +86,6 @@ class MockListInputAgent(Component):
 
     async def _run_without_io_trace(self, inputs, ctx):
         return self.Outputs(output="processed")
-
-
-class MockUnmigratedIntOutput:
-    """Mock unmigrated component that outputs int values."""
-
-    migrated = False
-
-    def get_outputs_schema(self) -> Type[BaseModel]:
-        class Outputs(BaseModel):
-            output: int
-
-        return Outputs
-
-
-class MockUnmigratedListInput:
-    """Mock unmigrated component that expects list[ChatMessage] input."""
-
-    migrated = False
-
-    def get_inputs_schema(self) -> Type[BaseModel]:
-        class Inputs(BaseModel):
-            messages: list[ChatMessage]
-
-        return Inputs
 
 
 class MockUnknownComponent:
@@ -202,53 +176,5 @@ class TestTypeDiscovery:
         output_type = get_component_port_type(migrated_agent, "output", is_input=False)
         assert output_type == Any  # EchoAgent output is Any
 
-    def test_unmigrated_component_type_discovery(self):
-        """Test type discovery for unmigrated components."""
-        tm = TraceManager(project_name="test")
-        g = nx.DiGraph()
-        g.add_nodes_from(["A"])
-
-        # Create an unmigrated component (DummyAgent doesn't have migrated=True)
-        unmigrated_agent = DummyAgent(trace_manager=tm, prefix="X")
-        runnables = {"A": unmigrated_agent}
-
-        GraphRunner(graph=g, runnables=runnables, start_nodes=["A"], trace_manager=tm)
-
-        # Test output type discovery (should use pattern lookup)
-        output_type = get_component_port_type(unmigrated_agent, "messages", is_input=False)
-        assert output_type == list[ChatMessage]  # DummyAgent should match AgentPayload pattern
-
-        # Test input type discovery (should use schema methods if available)
-        input_type = get_component_port_type(unmigrated_agent, "input", is_input=True)
-        assert input_type == Any  # DummyAgent has schema methods, so use them
-
-    def test_pattern_lookup_for_known_components(self):
-        """Test that pattern lookup works for known unmigrated components."""
-        tm = TraceManager(project_name="test")
-        g = nx.DiGraph()
-        g.add_nodes_from(["A"])
-
-        # Test with DummyAgent (should match AgentPayload pattern)
-        dummy_agent = DummyAgent(trace_manager=tm, prefix="X")
-        runnables = {"A": dummy_agent}
-
-        GraphRunner(graph=g, runnables=runnables, start_nodes=["A"], trace_manager=tm)
-
-        # Test AgentPayload pattern fields
-        messages_type = get_unmigrated_output_type(dummy_agent, "messages")
-        assert get_origin(messages_type) is list
-        assert get_args(messages_type) == (ChatMessage,)
-
-        artifacts_type = get_unmigrated_output_type(dummy_agent, "artifacts")
-        assert artifacts_type is dict
-
-        error_type = get_unmigrated_output_type(dummy_agent, "error")
-        assert set(get_args(error_type)) == {str, type(None)}
-
-        is_final_type = get_unmigrated_output_type(dummy_agent, "is_final")
-        assert set(get_args(is_final_type)) == {bool, type(None)}
-
-        # Test unknown field
-        assert get_unmigrated_output_type(dummy_agent, "unknown_field") is None
 
 
