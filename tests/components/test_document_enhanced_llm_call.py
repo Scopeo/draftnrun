@@ -1,3 +1,4 @@
+import copy
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -40,16 +41,12 @@ def mock_document_search(sample_chunks):
 @pytest.fixture
 def mock_synthesizer():
     synth = MagicMock()
-    synth.get_response = AsyncMock(
-        return_value=MagicMock(response="Synthesized answer", is_successful=True)
-    )
+    synth.get_response = AsyncMock(return_value=MagicMock(response="Synthesized answer", is_successful=True))
     return synth
 
 
 @pytest.fixture
 def component(mock_trace_manager, mock_document_search, mock_synthesizer):
-    import copy
-
     tool_description = copy.deepcopy(DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION)
     return DocumentEnhancedLLMCallAgent(
         trace_manager=mock_trace_manager,
