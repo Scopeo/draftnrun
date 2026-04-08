@@ -235,7 +235,6 @@ class TestCalculateGraphHashIdentical:
 
         assert hash1 == hash2
 
-
     def test_same_graph_with_field_expressions_produces_same_hash(self):
         """Graphs with identical field expressions should produce the same hash."""
         instance_id = uuid.uuid4()
@@ -422,7 +421,6 @@ class TestCalculateGraphHashOrderSensitivity:
         hash2 = _calculate_graph_hash(graph2)
 
         assert hash1 != hash2
-
 
     def test_parameter_order_affects_hash(self):
         """Parameters in different orders should produce different hashes (order matters)."""
@@ -845,8 +843,6 @@ class TestCalculateGraphHashDifferent:
         hash2 = _calculate_graph_hash(graph2)
 
         assert hash1 != hash2
-
-
 
     def test_different_field_expressions_produce_different_hashes(self):
         """Graphs with different field expressions should produce different hashes."""

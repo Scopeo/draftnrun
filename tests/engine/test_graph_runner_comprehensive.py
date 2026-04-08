@@ -53,16 +53,6 @@ class TestGraphRunnerBuildTimeValidation:
             "B": DummyAgent(tm, "B"),
         }
 
-        valid_mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
-
         # Should build successfully
         gr = GraphRunner(
             graph=g,
@@ -85,23 +75,6 @@ class TestGraphRunnerBuildTimeValidation:
             "B": DummyAgent(tm, "B"),
             "C": DummyAgent(tm, "C"),
         }
-
-        valid_mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "B",
-                "source_port_name": "output",
-                "target_instance_id": "C",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-        ]
 
         # Should build successfully
         gr = GraphRunner(
@@ -129,37 +102,6 @@ class TestGraphRunnerBuildTimeValidation:
             "D": DummyAgent(tm, "D"),
         }
 
-        valid_mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "C",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "B",
-                "source_port_name": "output",
-                "target_instance_id": "D",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "C",
-                "source_port_name": "output",
-                "target_instance_id": "D",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-        ]
-
         # Should build successfully
         gr = GraphRunner(
             graph=g,
@@ -182,23 +124,6 @@ class TestGraphRunnerBuildTimeValidation:
             "B": DummyAgent(tm, "B"),
             "C": DummyAgent(tm, "C"),
         }
-
-        valid_mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "C",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "B",
-                "source_port_name": "output",
-                "target_instance_id": "C",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-        ]
 
         # Should build successfully
         gr = GraphRunner(
@@ -236,16 +161,6 @@ class TestGraphRunnerBuildTimeValidation:
             "A": DummyAgent(tm, "A"),
         }
 
-        valid_mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "A",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
-
         # Should fail due to DAG enforcement (self-loops forbidden)
         with pytest.raises(ValueError, match="Graph contains cycles"):
             GraphRunner(
@@ -254,8 +169,6 @@ class TestGraphRunnerBuildTimeValidation:
                 start_nodes=["A"],
                 trace_manager=tm,
             )
-
-
 
 
 class TestGraphRunnerEdgeCases:
@@ -297,30 +210,6 @@ class TestGraphRunnerEdgeCases:
             "C": DummyAgent(tm, "C"),
         }
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "B",
-                "source_port_name": "output",
-                "target_instance_id": "C",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "C",
-                "source_port_name": "output",
-                "target_instance_id": "A",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-        ]
-
         # Should fail due to DAG enforcement (cycles forbidden)
         with pytest.raises(ValueError, match="Graph contains cycles"):
             GraphRunner(
@@ -347,37 +236,6 @@ class TestGraphRunnerEdgeCases:
             "D": DummyAgent(tm, "D"),
         }
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "C",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "B",
-                "source_port_name": "output",
-                "target_instance_id": "D",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "C",
-                "source_port_name": "output",
-                "target_instance_id": "D",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-        ]
-
         # Should build successfully
         gr = GraphRunner(
             graph=g,
@@ -399,16 +257,6 @@ class TestGraphRunnerEdgeCases:
             "A": DummyAgent(tm, "A"),
             "B": DummyAgent(tm, "B"),
         }
-
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-        ]
 
         # Should build successfully
         gr = GraphRunner(
@@ -432,23 +280,6 @@ class TestGraphRunnerEdgeCases:
             "B": DummyAgent(tm, "B"),
         }
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "B",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-        ]
-
         # Should fail due to DAG enforcement (self-loops forbidden)
         with pytest.raises(ValueError, match="Graph contains cycles"):
             GraphRunner(
@@ -457,8 +288,6 @@ class TestGraphRunnerEdgeCases:
                 start_nodes=["A"],
                 trace_manager=tm,
             )
-
-
 
 
 class TestGraphRunnerComprehensiveScenarios:
@@ -521,30 +350,6 @@ class TestGraphRunnerComprehensiveScenarios:
             "synthesizer": MockSynthesizer(),
             "output": MockOutput(),
         }
-
-        mappings = [
-            {
-                "source_instance_id": "input",
-                "source_port_name": "messages",
-                "target_instance_id": "rag",
-                "target_port_name": "query_text",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "rag",
-                "source_port_name": "output",
-                "target_instance_id": "synthesizer",
-                "target_port_name": "content",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "synthesizer",
-                "source_port_name": "output",
-                "target_instance_id": "output",
-                "target_port_name": "output",
-                "dispatch_strategy": "direct",
-            },
-        ]
 
         # Should build successfully
         gr = GraphRunner(
@@ -627,37 +432,6 @@ class TestGraphRunnerComprehensiveScenarios:
             "output": MockOutput(),
         }
 
-        mappings = [
-            {
-                "source_instance_id": "input",
-                "source_port_name": "messages",
-                "target_instance_id": "researcher",
-                "target_port_name": "query",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "researcher",
-                "source_port_name": "research",
-                "target_instance_id": "analyst",
-                "target_port_name": "research",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "analyst",
-                "source_port_name": "analysis",
-                "target_instance_id": "writer",
-                "target_port_name": "analysis",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "writer",
-                "source_port_name": "output",
-                "target_instance_id": "output",
-                "target_port_name": "output",
-                "dispatch_strategy": "direct",
-            },
-        ]
-
         # Should build successfully
         gr = GraphRunner(
             graph=g,
@@ -727,44 +501,6 @@ class TestGraphRunnerComprehensiveScenarios:
             "merger": MockMerger(),
             "output": MockOutput(),
         }
-
-        mappings = [
-            {
-                "source_instance_id": "input",
-                "source_port_name": "messages",
-                "target_instance_id": "processor1",
-                "target_port_name": "query",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "input",
-                "source_port_name": "messages",
-                "target_instance_id": "processor2",
-                "target_port_name": "query",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "processor1",
-                "source_port_name": "result",
-                "target_instance_id": "merger",
-                "target_port_name": "result1",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "processor2",
-                "source_port_name": "result",
-                "target_instance_id": "merger",
-                "target_port_name": "result2",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "merger",
-                "source_port_name": "output",
-                "target_instance_id": "output",
-                "target_port_name": "output",
-                "dispatch_strategy": "direct",
-            },
-        ]
 
         # Should build successfully
         gr = GraphRunner(

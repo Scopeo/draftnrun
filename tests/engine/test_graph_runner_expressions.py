@@ -13,6 +13,7 @@ from engine.field_expressions.serializer import from_json as expr_from_json
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_manager import TraceManager
+
 # Deterministic migrated components for robust, predictable tests
 
 
@@ -276,16 +277,6 @@ class TestGraphRunnerExpressions:
             }
         ]
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
-
         gr = GraphRunner(
             graph=g,
             runnables=runnables,
@@ -308,15 +299,6 @@ class TestGraphRunnerExpressions:
         g.add_nodes_from(["A", "B"])
         g.add_edge("A", "B")
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
         expressions = [
             {
                 "target_instance_id": "B",
@@ -364,15 +346,6 @@ class TestGraphRunnerExpressions:
             }
         ]
         # Provide mapping as well; non-ref expression overrides mapping value
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
 
         gr = GraphRunner(
             graph=g,
@@ -702,15 +675,6 @@ class TestGraphRunnerComplexFormulas:
         g.add_nodes_from(["A", "B"])
         g.add_edge("A", "B")
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
         expressions = [
             {
                 "target_instance_id": "B",

@@ -1515,7 +1515,8 @@ no partial success and no dry-run mode.
 Safest approach:
 
 - always start from a `get_graph(...)` response and modify incrementally
-- the MCP layer warns about likely key typos before sending to the backend, but structural validation still happens server-side
+- the MCP layer warns about likely key typos before sending to the backend, but structural validation
+  still happens server-side
 
 ## OAuth Connections Cannot Be Assigned Programmatically
 

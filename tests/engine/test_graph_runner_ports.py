@@ -1,4 +1,3 @@
-import asyncio
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -7,7 +6,6 @@ import pytest
 from pydantic import BaseModel
 
 from engine.components.component import Component
-from engine.components.static_responder import StaticResponder
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.graph_runner.port_management import get_component_port_type
@@ -152,7 +150,6 @@ class EchoAgent(Component):
         return EchoAgent.Outputs(output=f"got:{inputs.input}")
 
 
-
 class TestTypeDiscovery:
     """Test the new two-tier type discovery system."""
 
@@ -175,6 +172,3 @@ class TestTypeDiscovery:
         # Test output type discovery
         output_type = get_component_port_type(migrated_agent, "output", is_input=False)
         assert output_type == Any  # EchoAgent output is Any
-
-
-
