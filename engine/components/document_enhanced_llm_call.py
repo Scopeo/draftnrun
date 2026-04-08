@@ -43,10 +43,6 @@ DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
-def build_context_from_documents_content(documents_content: list[DocumentContent]) -> str:
-    return "\n".join([f"# Document {doc.document_name}: {doc.content_document}" for doc in documents_content])
-
-
 def nested_tree():
     """Python function to create a nested dictionary structure.
     When trying to call for instance tree['foo']['bar'], it will create the 'foo' and 'bar' keys
