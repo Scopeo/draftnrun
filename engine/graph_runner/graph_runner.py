@@ -14,15 +14,9 @@ from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.errors import FieldExpressionError
 from engine.field_expressions.traversal import select_nodes
 from engine.graph_runner.field_expression_management import evaluate_expression
-from engine.graph_runner.port_management import (
-    apply_function_call_strategy,
-    get_source_type_for_mapping,
-    get_target_field_type,
-    synthesize_default_mappings,
-    validate_port_mappings,
-)
+from engine.graph_runner.port_management import get_target_field_type
 from engine.graph_runner.runnable import Runnable
-from engine.graph_runner.types import PortMapping, Task, TaskState
+from engine.graph_runner.types import Task, TaskState
 from engine.trace.serializer import serialize_to_json
 from engine.trace.span_context import get_tracing_span
 from engine.trace.trace_manager import TraceManager
@@ -45,7 +39,6 @@ class GraphRunner:
         start_nodes: list[str],
         trace_manager: TraceManager,
         *,
-        port_mappings: list[dict[str, Any]] | None = None,
         expressions: list[ExpressionSpec] | None = None,
         coercion_matrix: CoercionMatrix | None = None,
         variables: dict[str, Any] | None = None,
@@ -58,25 +51,7 @@ class GraphRunner:
         self.start_nodes = start_nodes
         self.run_context: dict[str, Any] = {}
         self.variables: dict[str, Any] = variables or {}
-        # Initialize coercion matrix - use provided one or create default
         self.coercion_matrix = coercion_matrix or create_default_coercion_matrix()
-
-        # Convert raw mapping dicts into structured PortMapping objects.
-        self.port_mappings: list[PortMapping] = [
-            PortMapping(
-                source_instance_id=str(pm["source_instance_id"]),
-                source_port_name=pm["source_port_name"],
-                target_instance_id=str(pm["target_instance_id"]),
-                target_port_name=pm["target_port_name"],
-                dispatch_strategy=pm.get("dispatch_strategy", "direct"),
-            )
-            for pm in port_mappings or []
-        ]
-
-        # Build a quick lookup index for mappings by their target node ID.
-        self._mappings_by_target: dict[str, list[PortMapping]] = {}
-        for pm in self.port_mappings:
-            self._mappings_by_target.setdefault(pm.target_instance_id, []).append(pm)
 
         # Build lookup index for expressions by (target, field)
         self.expressions: list[GraphRunner.ExpressionSpec] = expressions or []
@@ -87,12 +62,8 @@ class GraphRunner:
         self.tasks: dict[str, Task] = {}
         self._input_node_id = "__input__"
         self._add_virtual_input_node()
-        # Synthesize explicit default mappings for single-predecessor nodes without mappings
-        self._synthesize_default_mappings()
-        # Augment graph topology with dependencies from port mappings (including synthesized) and expressions
         self._augment_graph_with_dependencies()
         self._validate_graph()
-        validate_port_mappings(self.port_mappings, self.runnables)
         self._validate_expressions()
 
     def _initialize_execution(self, input_data: dict[str, Any]) -> None:
@@ -248,15 +219,10 @@ class GraphRunner:
             self.graph.add_edge(src, dst)
 
     def _augment_graph_with_dependencies(self) -> None:
-        """Augment the graph with edges derived from port mappings and expressions, then validate DAG.
+        """Augment the graph with edges derived from expressions, then validate DAG.
 
-        - For each port mapping, ensure an edge source -> target exists.
-        - For each expression with ref nodes, add edges ref.instance -> target.
-        - Forbid self-loops; raise on cycles.
+        For each expression with ref nodes, add edges ref.instance -> target.
         """
-        for pm in self.port_mappings:
-            self._add_dependency_edge_if_needed(pm.source_instance_id, pm.target_instance_id)
-
         for (target, _field), expr_ast in self._expressions_by_target_ast.items():
             ref_nodes: Iterator[RefNode] = select_nodes(expr_ast, lambda n: isinstance(n, RefNode))
             for src in {ref_node.instance for ref_node in ref_nodes}:
@@ -312,146 +278,29 @@ class GraphRunner:
         LOGGER.debug(f"Set {node_id}.{field_name} from {log_prefix}: {evaluated_value}")
 
     def _gather_inputs(self, node_id: str) -> dict[str, Any]:
-        """Assembles the input data for a node based on explicit mappings,
-        keeping start-node passthrough. Default mapping synthesis happens during
-        initialization so mappings should be explicit here.
+        """Assemble input data for a node by evaluating all field expressions.
+
+        Start nodes with no real predecessors receive the initial input data as base.
+        All field expressions are then evaluated and set uniformly.
         """
         input_data: dict[str, Any] = {}
-        port_mappings_for_target = self._mappings_by_target.get(node_id, [])
         predecessors = list(self.graph.predecessors(node_id))
         is_start_node = self._input_node_id in predecessors
+        real_predecessors = [p for p in predecessors if p != self._input_node_id]
 
-        if not port_mappings_for_target:
-            # If node is start and has no other deps, pass through initial input
-            real_predecessors = [p for p in predecessors if p != self._input_node_id]
-            if is_start_node and not real_predecessors:
-                input_task_result = self.tasks[self._input_node_id].result
-                input_data = input_task_result.data if input_task_result else {}
-            else:
-                input_data = {}
+        if is_start_node and not real_predecessors:
+            input_task_result = self.tasks[self._input_node_id].result
+            input_data = dict(input_task_result.data) if input_task_result else {}
 
-        direct_port_mappings = [
-            port_mapping for port_mapping in port_mappings_for_target if port_mapping.dispatch_strategy == "direct"
-        ]
-        for port_mapping in direct_port_mappings:
-            if (
-                port_mapping.source_instance_id in self.tasks
-                and self.tasks[port_mapping.source_instance_id].state == TaskState.COMPLETED
-            ):
-                task_result = self.tasks[port_mapping.source_instance_id].result
-                if task_result and port_mapping.source_port_name in task_result.data:
-                    source_value = task_result.data[port_mapping.source_port_name]
-
-                    # Check if target component is unmigrated (doesn't have migrated attribute)
-                    target_component = self.runnables.get(node_id)
-                    is_unmigrated = bool(target_component) and not hasattr(target_component, "migrated")
-
-                    if is_unmigrated:
-                        # For unmigrated components, pass the entire output structure
-                        # instead of trying to extract individual fields
-                        input_data = task_result.data
-                    else:
-                        # For migrated components, use coercion system
-                        value_to_coerce = source_value
-                        # TODO: Pure refs with keys create coupling between port mappings and expressions.
-                        # Decouple after system is stable/harmonized
-                        pure_ref_expr = self._expressions_by_target_ast.get((node_id, port_mapping.target_port_name))
-                        if isinstance(pure_ref_expr, RefNode) and pure_ref_expr.key:
-                            if not isinstance(source_value, dict):
-                                raise ValueError(
-                                    f"Key extraction '::{pure_ref_expr.key}' cannot be used on "
-                                    f"{port_mapping.source_instance_id}.{port_mapping.source_port_name}: "
-                                    f"port value is not a dict, got {type(source_value)}"
-                                )
-                            if pure_ref_expr.key not in source_value:
-                                raise ValueError(
-                                    f"Key '{pure_ref_expr.key}' not found in dict from "
-                                    f"{port_mapping.source_instance_id}.{port_mapping.source_port_name}"
-                                )
-                            value_to_coerce = source_value[pure_ref_expr.key]
-                            LOGGER.debug(
-                                f"Extracted key '{pure_ref_expr.key}' from {port_mapping.source_instance_id}."
-                                f"{port_mapping.source_port_name}"
-                            )
-
-                        target_type = (
-                            get_target_field_type(target_component, port_mapping.target_port_name)
-                            if target_component
-                            else str
-                        )
-
-                        source_type = get_source_type_for_mapping(port_mapping, value_to_coerce, self.runnables)
-                        LOGGER.debug(
-                            f"Coercing {port_mapping.source_instance_id}.{port_mapping.source_port_name} "
-                            f"({source_type}) → {port_mapping.target_instance_id}.{port_mapping.target_port_name} "
-                            f"({target_type})"
-                        )
-                        coerced_value = self.coercion_matrix.coerce(value_to_coerce, target_type, source_type)
-                        input_data[port_mapping.target_port_name] = coerced_value
-                else:
-                    LOGGER.warning(
-                        f"Source port '{port_mapping.source_port_name}' not found in output of "
-                        f"node '{port_mapping.source_instance_id}' for mapping to "
-                        f"'{node_id}.{port_mapping.target_port_name}'."
-                    )
-
-        function_call_port_mappings = [
-            port_mapping
-            for port_mapping in port_mappings_for_target
-            if port_mapping.dispatch_strategy == "function_call"
-        ]
-        if function_call_port_mappings:
-            structured_values = apply_function_call_strategy(node_id, function_call_port_mappings)
-            input_data.update(structured_values)
-
-        # Handle field expressions for inputs (non-ref expressions like concat/literal)
-        # Apply regardless of whether explicit port mappings exist; non-ref expressions override mapped values.
-        # NOTE: ConcatNodes that contain RefNodes pass the `not isinstance(expr_ast, RefNode)` filter
-        # below. Their graph dependencies are correctly handled by `_augment_graph_with_dependencies`,
-        # which uses `select_nodes` to find all RefNodes inside any expression type.
-        if self._expressions_by_target_ast:
-            non_ref_expressions: list[tuple[str, ExpressionNode]] = [
+        target_component = self.runnables.get(node_id)
+        if target_component and self._expressions_by_target_ast:
+            node_expressions = [
                 (field_name, expr_ast)
                 for (target_id, field_name), expr_ast in self._expressions_by_target_ast.items()
-                if target_id == node_id and not isinstance(expr_ast, RefNode)
+                if target_id == node_id
             ]
-
-            target_component = self.runnables[node_id]
-            for field_name, expression_ast in non_ref_expressions:
-                LOGGER.debug(f"Evaluating non-ref expression for {node_id}.{field_name}")
-                self._eval_expression_and_set_input(
-                    node_id, field_name, expression_ast, target_component, input_data, log_prefix="expression"
-                )
-
-            # Pure refs that have no value yet (e.g. no port mapping because output port def doesn't exist,
-            # e.g. start node ctx): evaluate the ref from task result data/ctx.
-            pure_ref_expressions: list[tuple[str, ExpressionNode]] = [
-                (field_name, expr_ast)
-                for (target_id, field_name), expr_ast in self._expressions_by_target_ast.items()
-                if target_id == node_id and isinstance(expr_ast, RefNode) and field_name not in input_data
-            ]
-            for field_name, expression_ast in pure_ref_expressions:
-                ref_node = expression_ast
-                LOGGER.debug(
-                    "Evaluating pure ref (no port mapping value): %s.%s -> %s.%s",
-                    ref_node.instance,
-                    ref_node.port,
-                    node_id,
-                    field_name,
-                )
-                try:
-                    self._eval_expression_and_set_input(
-                        node_id, field_name, expression_ast, target_component, input_data, log_prefix="pure ref"
-                    )
-                except FieldExpressionError as e:
-                    LOGGER.warning(
-                        "Pure ref evaluation failed for %s.%s -> %s.%s: %s",
-                        ref_node.instance,
-                        ref_node.port,
-                        node_id,
-                        field_name,
-                        e,
-                    )
+            for field_name, expr_ast in node_expressions:
+                self._eval_expression_and_set_input(node_id, field_name, expr_ast, target_component, input_data)
 
         return input_data
 
@@ -508,30 +357,6 @@ class GraphRunner:
                     f"Formula targets non-existent field '{field_name}' on component '{target_instance_id}'. "
                     f"Available input fields: {input_fields}"
                 )
-
-    def _synthesize_default_mappings(self) -> None:
-        """Create explicit direct port mappings for nodes with exactly one real predecessor
-        when no mappings are provided. Uses canonical ports from runnables.
-
-        - Skips start nodes that only depend on the virtual input node (passthrough).
-        - Raises an error if a node has multiple real predecessors and no mappings.
-        """
-        new_mappings = synthesize_default_mappings(
-            self.graph,
-            self.runnables,
-            self._input_node_id,
-            self.port_mappings,
-            self._expressions_by_target_ast,
-        )
-
-        if not new_mappings:
-            return
-
-        # Extend mappings and rebuild the index for consistency
-        self.port_mappings.extend(new_mappings)
-        self._mappings_by_target = {}
-        for pm in self.port_mappings:
-            self._mappings_by_target.setdefault(pm.target_instance_id, []).append(pm)
 
     def _halt_downstream_execution(self, source_node_id: str) -> None:
         """Mark source node and all its downstream nodes as halted without execution.

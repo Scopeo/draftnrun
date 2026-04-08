@@ -47,14 +47,3 @@ class Task:
             raise ValueError("Cannot complete a non-ready task")
         self.state = TaskState.COMPLETED
         self.result = result
-
-
-@dataclass
-class PortMapping:
-    """A structured representation of a connection between two nodes' ports."""
-
-    source_instance_id: str
-    source_port_name: str
-    target_instance_id: str
-    target_port_name: str
-    dispatch_strategy: str = "direct"
