@@ -1,27 +1,26 @@
 # Graph Execution Engine
 
-The engine executes workflow graphs (DAGs) of components. Each component is a typed processing unit with Pydantic I/O schemas, connected via port mappings and field expressions.
+The engine executes workflow graphs (DAGs) of components. Each component is a typed processing unit with Pydantic I/O schemas, connected via field expressions.
 
 ## GraphRunner
 
 **File**: `engine/graph_runner/graph_runner.py`
 
-The `GraphRunner` takes a `networkx.DiGraph`, a dict of `Runnable` instances keyed by instance ID, and optional port mappings, expressions, and variables.
+The `GraphRunner` takes a `networkx.DiGraph`, a dict of `Runnable` instances keyed by instance ID, and optional expressions and variables.
 
 ### Initialization
 
-1. Converts raw mappings into `PortMapping` dataclasses, builds `_mappings_by_target` index
-2. Adds a virtual `__input__` node with edges to all start nodes
-3. Auto-generates default mappings for single-predecessor nodes (`_synthesize_default_mappings`)
-4. Augments graph edges from port mapping and expression dependencies (`_augment_graph_with_dependencies`)
-5. Validates the graph is acyclic and all mappings/expressions are valid
+1. Adds a virtual `__input__` node with edges to all start nodes
+2. Builds `_expressions_by_node` index: per-target-node list of `(field_name, expression_ast)` from raw expression dicts
+3. Augments graph edges from expression ref dependencies (`_augment_graph_with_dependencies`)
+4. Validates the graph is acyclic and all expressions are valid
 
 ### Execution Loop (`_run_without_io_trace`)
 
 1. **Initialize**: Create `Task` objects for every node with `pending_deps = in_degree(node)`. Complete the virtual `__input__` with initial data.
 2. **Main loop**: Find next `READY` task (pending_deps == 0)
 3. For each ready node:
-   - `_gather_inputs()` — assemble input dict from port mappings + field expressions
+   - `_gather_inputs()` — assemble input dict from field expressions; start nodes with no real predecessors are seeded with the initial input data
    - Wrap into `NodeData(data=..., ctx=run_context)`
    - Call `runnable.run(input_packet)`
    - Normalize output to `NodeData`
@@ -71,7 +70,7 @@ When removing a component from the product, delete the runtime class, registry e
 
 ## Port System
 
-Four layers spanning database (backend) and runtime (engine):
+Three layers spanning database (backend) and runtime (engine):
 
 ### Layer 1: PortDefinition (catalogue)
 
@@ -85,17 +84,9 @@ Uses joined-table polymorphism:
 - **`InputPortInstance`**: adds `field_expression_id` FK — links a configured value (FieldExpression) to an input port
 - **`OutputPortInstance`**: materializes dynamic output ports (e.g. from `drives_output_schema`)
 
-### Layer 3: PortMapping (wiring between instances)
+### Layer 3: FieldExpression (wiring and transforms)
 
-**Table**: `port_mappings` — connects a source output to a target input within a graph.
-
-Two mutually exclusive source FKs: `source_port_definition_id` (catalogue) or `source_output_port_instance_id` (dynamic).
-
-Engine flattens to: `PortMapping(source_instance_id, source_port_name, target_instance_id, target_port_name, dispatch_strategy)`
-
-### Layer 4: FieldExpression (transforms)
-
-**Table**: `field_expressions` — JSONB AST stored in `expression_json`.
+**Table**: `field_expressions` — JSONB AST stored in `expression_json`. This is the sole wiring mechanism between components; there is no separate port_mappings table.
 
 See [payload-and-data-flow.md](payload-and-data-flow.md) for the AST format.
 
@@ -129,9 +120,8 @@ Merge order: **defaults → set_ids[0] → set_ids[1] → ...**
 **File**: `engine/legacy_compatibility.py` (marked for deletion after migration)
 
 Bridges unmigrated components (using `AgentPayload` in/out) with the new multi-port `NodeData` system. Key indicators:
-- `Component.migrated = False` — checked in `run()`, `_gather_inputs()`, `validate_port_mappings()`
+- `Component.migrated = False` — checked in `run()` and `_gather_inputs()`
 - Unmigrated components don't use coercion and receive the entire `task_result.data` dict
-- Port mapping validation is lenient when unmigrated components are involved
 
 ## SQL Local Storage Lifecycle
 
@@ -150,7 +140,7 @@ In ingestion workers, `ingestion_script.ingest_db_source.upload_db_source()` sho
 | GraphRunner | `engine/graph_runner/graph_runner.py` |
 | Runnable Protocol | `engine/graph_runner/runnable.py` |
 | Component ABC | `engine/components/component.py` |
-| Task / PortMapping (engine) | `engine/graph_runner/types.py` |
+| Task (engine) | `engine/graph_runner/types.py` |
 | NodeData / ExecutionDirective | `engine/components/types.py` |
 | Port management | `engine/graph_runner/port_management.py` |
 | Field expression AST | `engine/field_expressions/ast.py` |
@@ -158,5 +148,5 @@ In ingestion workers, `ingestion_script.ingest_db_source.upload_db_source()` sho
 | Coercion matrix | `engine/coercion_matrix.py` |
 | Legacy compatibility | `engine/legacy_compatibility.py` |
 | Variable resolution | `ada_backend/services/variable_resolution_service.py` |
-| DB models (ports) | `ada_backend/database/models.py` — search for `PortMapping`, `PortDefinition` |
+| DB models (ports) | `ada_backend/database/models.py` — search for `PortDefinition`, `PortInstance` |
 | OTel span → SQL (`traces` DB) | `engine/trace/sql_exporter.py` — `SQLSpanExporter` parses each span once and passes the JSON dict into export |

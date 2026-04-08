@@ -28,7 +28,7 @@ SHA-256 hashed (salted with `BACKEND_SECRET_KEY`), prefix `taylor_`, scoped to p
 
 ### Graph Execution
 
-DAG of ComponentInstances connected via PortMappings. Data flows through FieldExpressions (JSON AST). See `ada_backend/docs/engine.md`.
+DAG of ComponentInstances connected via FieldExpressions (JSON AST). See `ada_backend/docs/engine.md`.
 
 ### Environments
 
