@@ -17,6 +17,7 @@ from engine.components.graph_runner_block import (
     GraphRunnerBlockOutputs,
 )
 from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, NodeData
+from engine.field_expressions.serializer import from_json as expr_from_json
 from engine.graph_runner.graph_runner import GraphRunner
 from tests.mocks.dummy_agent import DummyAgent
 
@@ -56,14 +57,25 @@ def simple_graph_runner(mock_trace_manager):
         "agent3": agent3,
     }
 
-    # Start nodes (only agent1)
-    start_nodes = ["agent1"]
+    expressions = [
+        {
+            "target_instance_id": "agent2",
+            "field_name": "messages",
+            "expression_ast": expr_from_json({"type": "ref", "instance": "agent1", "port": "output"}),
+        },
+        {
+            "target_instance_id": "agent3",
+            "field_name": "messages",
+            "expression_ast": expr_from_json({"type": "ref", "instance": "agent2", "port": "output"}),
+        },
+    ]
 
     return GraphRunner(
         graph=graph,
         runnables=runnables,
-        start_nodes=start_nodes,
+        start_nodes=["agent1"],
         trace_manager=mock_trace_manager,
+        expressions=expressions,
     )
 
 
@@ -93,18 +105,29 @@ def nested_graph_runner(mock_trace_manager, simple_graph_runner):
     # Create runnables dict
     runnables = {
         "pre_agent": pre_agent,
-        "wrapped_graph": graph_runner_block,  # Using GraphRunnerBlock as a runnable
+        "wrapped_graph": graph_runner_block,
         "post_agent": post_agent,
     }
 
-    # Start nodes (only pre_agent)
-    start_nodes = ["pre_agent"]
+    expressions = [
+        {
+            "target_instance_id": "wrapped_graph",
+            "field_name": "messages",
+            "expression_ast": expr_from_json({"type": "ref", "instance": "pre_agent", "port": "output"}),
+        },
+        {
+            "target_instance_id": "post_agent",
+            "field_name": "messages",
+            "expression_ast": expr_from_json({"type": "ref", "instance": "wrapped_graph", "port": "output"}),
+        },
+    ]
 
     return GraphRunner(
         graph=graph,
         runnables=runnables,
-        start_nodes=start_nodes,
+        start_nodes=["pre_agent"],
         trace_manager=mock_trace_manager,
+        expressions=expressions,
     )
 
 

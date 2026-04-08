@@ -4,13 +4,32 @@ This agent simply adds a prefix to input messages, useful for testing graph flow
 """
 
 import uuid
+from typing import Optional
+
+from pydantic import BaseModel
 
 from engine.components.component import Component
-from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
 
 
 class DummyAgent(Component):
-    """A reusable dummy agent for testing that adds a prefix to the input message"""
+    """A reusable dummy agent for testing that adds a prefix to the input message."""
+
+    migrated = True
+
+    class Inputs(BaseModel):
+        messages: Optional[list[ChatMessage]] = None
+
+    class Outputs(BaseModel):
+        output: str
+
+    @classmethod
+    def get_inputs_schema(cls):
+        return cls.Inputs
+
+    @classmethod
+    def get_outputs_schema(cls):
+        return cls.Outputs
 
     def __init__(self, trace_manager, prefix: str, agent_id: str = None):
         if agent_id is None:
@@ -33,16 +52,9 @@ class DummyAgent(Component):
         )
         self.prefix = prefix
 
-    async def _run_without_io_trace(self, *inputs: AgentPayload, **kwargs) -> AgentPayload:
-        input_payload = inputs[0] if inputs else AgentPayload(messages=[])
-
-        # Get the last message content or use default
-        if input_payload.messages:
-            last_content = input_payload.messages[-1].content or ""
+    async def _run_without_io_trace(self, inputs: Inputs, ctx: dict) -> Outputs:
+        if inputs.messages:
+            last_content = inputs.messages[-1].content or ""
         else:
             last_content = "empty input"
-
-        # Add prefix
-        new_content = f"[{self.prefix}] {last_content}"
-
-        return AgentPayload(messages=[ChatMessage(role="assistant", content=new_content)])
+        return DummyAgent.Outputs(output=f"[{self.prefix}] {last_content}")

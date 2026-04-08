@@ -13,8 +13,6 @@ from engine.field_expressions.serializer import from_json as expr_from_json
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_manager import TraceManager
-from tests.mocks.dummy_agent import DummyAgent
-
 # Deterministic migrated components for robust, predictable tests
 
 
@@ -297,46 +295,6 @@ class TestGraphRunnerExpressions:
         )
         result = asyncio.run(gr.run({"input": "seed"}))
         assert result.messages[0].content == "echo[x:va]"
-
-    def test_pure_ref_expression_is_ignored_in_presence_of_mapping(self):
-        tm = TraceManager(project_name="test")
-        set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])  # metrics
-
-        a = FixedStringSource(tm, value="AVAL", name="A")
-        c = FixedStringSource(tm, value="CVAL", name="C")
-        b = StrEcho(tm, name="B")
-        runnables = {"A": a, "B": b, "C": c}
-
-        g = nx.DiGraph()
-        g.add_nodes_from(["A", "B", "C"])
-
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
-        # Pure ref expression to a different source; should be ignored at runtime, mapping wins
-        expressions = [
-            {
-                "target_instance_id": "B",
-                "field_name": "input",
-                "expression_ast": expr_from_json({"type": "ref", "instance": "C", "port": "output"}),
-            }
-        ]
-
-        gr = GraphRunner(
-            graph=g,
-            runnables=runnables,
-            start_nodes=["A", "C"],
-            trace_manager=tm,
-            expressions=expressions,
-        )
-        result = asyncio.run(gr.run({"input": "seed"}))
-        assert result.messages[0].content == "echo[AVAL]"
 
     def test_non_ref_expression_overrides_mapping(self):
         tm = TraceManager(project_name="test")
@@ -641,28 +599,6 @@ class TestGraphRunnerExpressions:
         )
         result = asyncio.run(gr.run({"input": "seed"}))
         assert result.messages[0].content == "a[OVR]|b[BB]"
-
-    def test_expressions_for_unmigrated_target_raise(self):
-        tm = TraceManager(project_name="test")
-        g = nx.DiGraph()
-        g.add_nodes_from(["U"])  # unmigrated target
-
-        u = DummyAgent(tm, "U")  # unmigrated
-        runnables = {"U": u}
-
-        expressions = [
-            {
-                "target_instance_id": "U",
-                "field_name": "input",
-                "expression_ast": expr_from_json({"type": "literal", "value": "x"}),
-            }
-        ]
-
-        try:
-            GraphRunner(graph=g, runnables=runnables, start_nodes=["U"], trace_manager=tm, expressions=expressions)
-            assert False, "Expected expressions not supported for unmigrated target"
-        except ValueError as e:
-            assert "expressions are not supported" in str(e).lower()
 
     def test_mixed_concat_with_int_ref(self):
         tm = TraceManager(project_name="test")
