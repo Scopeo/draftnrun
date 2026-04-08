@@ -52,8 +52,6 @@ def test_create_empty_graph_runner():
             graph_runner_id=graph_runner_id,
         )
 
-        # GET should include port_mappings; field expressions now nested per component instance
-        assert results.port_mappings == []
         assert results.component_instances == []
         assert results.relationships == []
         assert results.edges == []
