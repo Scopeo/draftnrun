@@ -53,11 +53,13 @@ class GraphRunner:
         self.variables: dict[str, Any] = variables or {}
         self.coercion_matrix = coercion_matrix or create_default_coercion_matrix()
 
-        # Build lookup index for expressions by (target, field)
         self.expressions: list[GraphRunner.ExpressionSpec] = expressions or []
         self._expressions_by_target_ast: dict[tuple[str, str], ExpressionNode] = {
             (expr["target_instance_id"], expr["field_name"]): expr["expression_ast"] for expr in self.expressions
         }
+        self._expressions_by_node: dict[str, list[tuple[str, ExpressionNode]]] = {}
+        for (target_id, field_name), expr_ast in self._expressions_by_target_ast.items():
+            self._expressions_by_node.setdefault(target_id, []).append((field_name, expr_ast))
 
         self.tasks: dict[str, Task] = {}
         self._input_node_id = "__input__"
@@ -293,14 +295,8 @@ class GraphRunner:
             input_data = dict(input_task_result.data) if input_task_result else {}
 
         target_component = self.runnables.get(node_id)
-        if target_component and self._expressions_by_target_ast:
-            node_expressions = [
-                (field_name, expr_ast)
-                for (target_id, field_name), expr_ast in self._expressions_by_target_ast.items()
-                if target_id == node_id
-            ]
-            for field_name, expr_ast in node_expressions:
-                self._eval_expression_and_set_input(node_id, field_name, expr_ast, target_component, input_data)
+        for field_name, expr_ast in self._expressions_by_node.get(node_id, []):
+            self._eval_expression_and_set_input(node_id, field_name, expr_ast, target_component, input_data)
 
         return input_data
 
