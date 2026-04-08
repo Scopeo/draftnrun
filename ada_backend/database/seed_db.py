@@ -41,7 +41,6 @@ from ada_backend.database.seed.seed_remote_mcp_tool import seed_remote_mcp_tool_
 from ada_backend.database.seed.seed_retriever_tool import seed_retriever_tool_components
 from ada_backend.database.seed.seed_router import seed_router_components
 from ada_backend.database.seed.seed_scorer import seed_scorer_components, seed_scorer_parameter_groups
-from ada_backend.database.seed.seed_smart_rag import seed_smart_rag_components
 from ada_backend.database.seed.seed_sql_tool import seed_sql_tool_components
 from ada_backend.database.seed.seed_start import seed_start_components
 from ada_backend.database.seed.seed_static_responder import seed_static_responder_components
@@ -105,9 +104,6 @@ def seed_db(session: Session):
         session.commit()
 
         seed_react_sql_components(session)
-        session.commit()
-
-        seed_smart_rag_components(session)
         session.commit()
 
         seed_web_search_components(session)

@@ -65,6 +65,10 @@ The concrete base class implementing `Runnable`. Key attributes:
 
 **`_run_without_io_trace(inputs: BaseModel, ctx: dict) -> BaseModel`** is the abstract method subclasses implement.
 
+### Component Catalog Lifecycle
+
+When removing a component from the product, delete the runtime class, registry entry, seed data, default tool description, and any wrapper components that only exist to call it in the same change. Leaving only part of the catalog wiring in place can keep a dead component instantiable through backend seeds or MCP graph validation even after it disappears from the front-end.
+
 ## Port System
 
 Four layers spanning database (backend) and runtime (engine):

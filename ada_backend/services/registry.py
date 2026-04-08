@@ -37,8 +37,6 @@ from ada_backend.services.entity_factory import (
 from engine.components.ai_agent import AIAgent
 from engine.components.categorizer import Categorizer
 from engine.components.chunk_processor import ChunkProcessor
-from engine.components.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
-from engine.components.document_react_loader import DocumentReactLoaderAgent
 from engine.components.docx_generation_tool import DOCXGenerationTool
 from engine.components.filter import Filter
 from engine.components.graph_runner_block import GraphRunnerBlock
@@ -50,7 +48,6 @@ from engine.components.ocr_call import OCRCall
 from engine.components.pdf_generation_tool import PDFGenerationTool
 from engine.components.rag.chunk_selection import RelevantChunkSelector
 from engine.components.rag.cohere_reranker import CohereReranker
-from engine.components.rag.document_search import DocumentSearch
 from engine.components.rag.formatter import Formatter
 from engine.components.rag.hybrid_rag import HybridRAG
 from engine.components.rag.rag import RAG
@@ -289,14 +286,6 @@ def create_factory_registry() -> FactoryRegistry:
             entity_class=SnowflakeService,
         ),
     )
-    registry.register(
-        component_version_id=COMPONENT_VERSION_UUIDS["document_search"],
-        factory=EntityFactory(
-            entity_class=DocumentSearch,
-            parameter_processors=[trace_manager_processor],
-        ),
-    )
-
     # Register agents
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["base_ai_agent"],
@@ -503,21 +492,6 @@ def create_factory_registry() -> FactoryRegistry:
             entity_class=RunSQLQueryTool,
             parameter_processors=[
                 db_service_processor,
-            ],
-        ),
-    )
-    registry.register(
-        component_version_id=COMPONENT_VERSION_UUIDS["document_enhanced_llm_call"],
-        factory=AgentFactory(
-            entity_class=DocumentEnhancedLLMCallAgent,
-        ),
-    )
-    registry.register(
-        component_version_id=COMPONENT_VERSION_UUIDS["document_react_loader_agent"],
-        factory=AgentFactory(
-            entity_class=DocumentReactLoaderAgent,
-            parameter_processors=[
-                completion_service_processor,
             ],
         ),
     )

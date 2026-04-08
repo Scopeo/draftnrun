@@ -6,7 +6,6 @@ from ada_backend.database import models as db
 from ada_backend.database.component_definition_seeding import upsert_tool_descriptions
 from ada_backend.database.utils import DEFAULT_TOOL_DESCRIPTION
 from engine.components.ai_agent import get_dummy_ai_agent_description
-from engine.components.document_enhanced_llm_call import DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION
 from engine.components.docx_generation_tool import DEFAULT_DOCX_GENERATION_TOOL_DESCRIPTION
 from engine.components.filter import DEFAULT_FILTER_TOOL_DESCRIPTION
 from engine.components.inputs_outputs.start import DEFAULT_START_TOOL_DESCRIPTION
@@ -40,7 +39,6 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_run_sql_query_tool_description": UUID("949c27b4-5403-42b0-bad6-1c71a7a4e5d1"),
     "default_tool_description": UUID("15e1198f-850a-4f66-91d7-34286de52795"),
     "default_web_search_openai_tool_description": UUID("b6d6d281-6c75-4d1b-a750-40b53deea3f5"),
-    "default_document_enhanced_llm_agent": UUID("d01978d9-c785-4492-9e71-7af0aa8c05f7"),
     "default_input_tool_description": UUID("5be22376-7d08-486b-a004-b495bae58f77"),
     "default_filter_tool_description": UUID("6cf33487-8e19-597c-b115-c5a6cbf69a88"),
     "gmail_sender_tool_description": UUID("c1d3aca1-5187-40c6-a350-e3b28b15c802"),
@@ -92,10 +90,6 @@ def seed_tool_description(session: Session):
     default_web_search_openai_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["default_web_search_openai_tool_description"],
         **DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION.model_dump(),
-    )
-    default_document_enhanced_llm_agent = db.ToolDescription(
-        id=TOOL_DESCRIPTION_UUIDS["default_document_enhanced_llm_agent"],
-        **DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION.model_dump(),
     )
     default_start_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["default_input_tool_description"], **DEFAULT_START_TOOL_DESCRIPTION.model_dump()
@@ -186,7 +180,6 @@ def seed_tool_description(session: Session):
             default_run_sql_query_tool_description,
             default_tool_description,
             default_web_search_openai_tool_description,
-            default_document_enhanced_llm_agent,
             default_start_tool_description,
             default_filter_tool_description,
             gmail_sender_tool_description,
