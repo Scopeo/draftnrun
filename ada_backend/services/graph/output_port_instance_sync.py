@@ -8,7 +8,7 @@ from ada_backend.repositories.output_port_instance_repository import (
     create_output_port_instance,
     delete_output_port_instances_for_component_instance,
 )
-from ada_backend.repositories.port_mapping_repository import is_drives_output_schema_port
+from ada_backend.repositories.port_definition_repository import is_drives_output_schema_port
 
 LOGGER = logging.getLogger(__name__)
 

@@ -42,7 +42,7 @@ from ada_backend.repositories.input_port_instance_repository import (
     update_input_port_instance,
 )
 from ada_backend.repositories.output_port_instance_repository import get_output_port_instance_by_name
-from ada_backend.repositories.port_mapping_repository import (
+from ada_backend.repositories.port_definition_repository import (
     get_input_port_definition_id,
     get_output_port_definition_id,
     get_port_definition_by_id,
