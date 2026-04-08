@@ -128,9 +128,7 @@ async def build_graph_runner(
         unreachable_node_ids = all_node_ids - reachable_node_ids
 
         if unreachable_node_ids:
-            unreachable_names = [
-                node.name for node in component_nodes if str(node.id) in unreachable_node_ids
-            ]
+            unreachable_names = [node.name for node in component_nodes if str(node.id) in unreachable_node_ids]
             LOGGER.warning(
                 "Skipping %d block(s) not triggered by a start block: %s",
                 len(unreachable_node_ids),
@@ -139,9 +137,9 @@ async def build_graph_runner(
 
         reachable_component_nodes = [node for node in component_nodes if str(node.id) in reachable_node_ids]
         reachable_edges = [
-            edge for edge in edges
-            if str(edge.source_node_id) in reachable_node_ids
-            and str(edge.target_node_id) in reachable_node_ids
+            edge
+            for edge in edges
+            if str(edge.source_node_id) in reachable_node_ids and str(edge.target_node_id) in reachable_node_ids
         ]
         start_nodes = [str(node_id) for node_id in trigger_node_ids]
     else:
@@ -313,9 +311,7 @@ async def run_agent(
                 today.month,
             )
             if current_usage >= organization_limit.limit:
-                raise OrganizationLimitExceededError(
-                    organization_id, organization_limit.limit, current_usage
-                )
+                raise OrganizationLimitExceededError(organization_id, organization_limit.limit, current_usage)
         # TODO : Add again the monitoring for frequently asked questions after parallelization of agent run
         # db_service = SQLLocalService(engine_url="sqlite:///ada_backend/database/monitor.db", dialect="sqlite")
         # asyncio.create_task(monitor_questions(db_service, project_id, input_data))

@@ -67,6 +67,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "router": UUID("8c9d0e1f-2a3b-4c5d-6e7f-8a9b0c1d2e3f"),
     "categorizer": UUID("1962862d-bbd5-4bc5-bb4a-d267feadc6f8"),
     "outlook_sender": UUID("62979492-b4ef-4cfe-96f1-67a960a1e8d4"),
+    "scorer": UUID("f1a2b3c4-d5e6-7890-abcd-ef1234567891"),
 }
 COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "synthesizer": UUID("6f790dd1-06f6-4489-a655-1a618763a114"),
@@ -120,6 +121,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "router": UUID("9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a"),
     "categorizer": UUID("c4a1e2f3-5d6b-4c7a-8e9f-1a2b3c4d5e6f"),
     "outlook_sender": UUID("6e3b9e9b-ab98-4189-88b7-41b8bf2aa07c"),
+    "scorer": UUID("f1a2b3c4-d5e6-7890-abcd-ef1234567892"),
 }
 
 DEFAULT_MODEL_WEB_SEARCH = "openai:gpt-5-mini"

@@ -14,6 +14,7 @@ from engine.components.llm_call import DEFAULT_LLM_CALL_TOOL_DESCRIPTION
 from engine.components.pdf_generation_tool import DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION
 from engine.components.rag.rag import format_rag_tool_description
 from engine.components.rag.retriever import RETRIEVER_TOOL_DESCRIPTION
+from engine.components.scorer import DEFAULT_SCORER_TOOL_DESCRIPTION
 from engine.components.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_DESCRIPTION
 from engine.components.sql.run_sql_query_tool import DEFAULT_RUN_SQL_QUERY_TOOL_DESCRIPTION
 from engine.components.sql.sql_tool import DEFAULT_SQL_TOOL_DESCRIPTION
@@ -58,6 +59,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "hubspot_neverdrop_mcp_tool_description": UUID("a1e7f624-6c98-4546-b769-3607819ebad2"),
     "outlook_sender_tool_description": UUID("31344b0e-4949-42b6-98a8-6b1dcec98f3c"),
     "default_sql_tool_description": UUID("7a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d"),
+    "scorer_tool_description": UUID("8f9d4c3e-7a2b-4e1d-9c8f-5b6a3d2e1f0b"),
 }
 
 
@@ -164,6 +166,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["default_sql_tool_description"],
         **DEFAULT_SQL_TOOL_DESCRIPTION.model_dump(),
     )
+    scorer_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["scorer_tool_description"],
+        **DEFAULT_SCORER_TOOL_DESCRIPTION.model_dump(),
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -194,5 +200,6 @@ def seed_tool_description(session: Session):
             hubspot_neverdrop_mcp_tool_description,
             outlook_sender_tool_description,
             default_sql_tool_description,
+            scorer_tool_description,
         ],
     )
