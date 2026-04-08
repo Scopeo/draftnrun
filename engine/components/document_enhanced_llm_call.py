@@ -10,7 +10,6 @@ from engine.components.rag.document_search import DocumentSearch
 from engine.components.synthesizer import Synthesizer
 from engine.components.types import (
     ComponentAttributes,
-    DocumentContent,
     ToolDescription,
 )
 from engine.trace.trace_manager import TraceManager
