@@ -152,19 +152,19 @@ def build_openai_responses_kwargs(
     """
     Return kwargs for OpenAI Responses API, adding verbosity/reasoning only for GPT-5 models.
 
-    Note: For GPT-5 models (except 5.1 and 5.2), when reasoning is None, it defaults to "minimal".
+    Models in supports_reasoning_none accept reasoning="none"; other GPT-5 models fall back to "minimal".
     """
-    gpt5_1_or_5_2 = ["gpt-5.1", "gpt-5.2"]
+    supports_reasoning_none = ["gpt-5.1", "gpt-5.2", "gpt-5.4"]
     kwargs = dict(base_kwargs)
     model_name_lower = (model_name or "").lower()
     is_gpt5 = "gpt-5" in model_name_lower
     if is_gpt5:
         if verbosity is not None:
             kwargs["text"] = {"verbosity": verbosity}
-        is_gpt5_1_or_5_2 = any(model in model_name_lower for model in gpt5_1_or_5_2)
+        has_reasoning_none = any(model in model_name_lower for model in supports_reasoning_none)
         if reasoning is not None:
             if reasoning.lower() == "none":
-                if is_gpt5_1_or_5_2:
+                if has_reasoning_none:
                     kwargs["reasoning"] = {"effort": "none"}
                 else:
                     kwargs["reasoning"] = {"effort": "minimal"}
