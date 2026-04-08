@@ -1,15 +1,14 @@
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, Type
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
+from pydantic import BaseModel, Field
 
 from engine.components.component import Component
 from engine.components.rag.document_search import DocumentSearch
 from engine.components.synthesizer import Synthesizer
 from engine.components.types import (
-    AgentPayload,
-    ChatMessage,
     ComponentAttributes,
     DocumentContent,
     ToolDescription,
@@ -90,12 +89,46 @@ def build_ascii_tree(paths: list[str]) -> str:
     return "\n".join(format_tree(root))
 
 
+class DocumentEnhancedLLMCallInputs(BaseModel):
+    query_text: Optional[str] = Field(
+        default=None,
+        description="A full-length, well-formed search query preserving all key elements from the user's input.",
+        json_schema_extra={"is_tool_input": True},
+    )
+    document_names: Optional[list[str]] = Field(
+        default=None,
+        description="A list of file names that the tool can load in the context to answer the query.",
+        json_schema_extra={"is_tool_input": True},
+    )
+    model_config = {"extra": "allow"}
+
+
+class DocumentEnhancedLLMCallOutputs(BaseModel):
+    output: str = Field(description="The LLM response based on document content")
+    is_final: bool = Field(default=True)
+    artifacts: dict[str, Any] = Field(default_factory=dict)
+
+
 class DocumentEnhancedLLMCallAgent(Component):
+    """
+    Document-capable RAG component that loads specific named documents and uses them
+    as context to answer a query via a Synthesizer.
+    """
+
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.CHAIN.value
-    """
-    This is an Document capable RAG that takes an file name
-    and returns a response that is based on the OCR content of the file as a context.
-    """
+    migrated = True
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return DocumentEnhancedLLMCallInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return DocumentEnhancedLLMCallOutputs
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "query_text", "output": "output"}
 
     def __init__(
         self,
@@ -109,14 +142,13 @@ class DocumentEnhancedLLMCallAgent(Component):
             trace_manager=trace_manager,
             component_attributes=component_attributes,
             tool_description=tool_description,
-            synthesizer=synthesizer,
         )
         self._synthesizer = synthesizer
         self._document_search = document_search
         self.tree_of_documents = build_ascii_tree(self._document_search.get_documents_names())
         self._update_description_tool(self._document_search)
 
-    def _update_description_tool(self, document_search: DocumentSearch) -> ToolDescription:
+    def _update_description_tool(self, document_search: DocumentSearch) -> None:
         self.tool_description.tool_properties["document_names"]["items"]["enum"] = (
             document_search.get_documents_names()
         )
@@ -128,14 +160,12 @@ class DocumentEnhancedLLMCallAgent(Component):
 
     async def _run_without_io_trace(
         self,
-        *inputs: AgentPayload,
-        query_text: Optional[str] = None,
-        document_names: Optional[list[str]] = None,
-        ctx: Optional[dict] = None,
-    ) -> AgentPayload:
-        agent_input = inputs[0]
-        content = query_text or agent_input.last_message.content
-        # TODO : improve with fuzzy matching on document name?
+        inputs: DocumentEnhancedLLMCallInputs,
+        ctx: dict,
+    ) -> DocumentEnhancedLLMCallOutputs:
+        content = inputs.query_text
+        document_names = inputs.document_names
+        # TODO: improve with fuzzy matching on document name?
         if content is None:
             raise ValueError("No content provided for the DocumentEnhancedLLMcall tool.")
         if document_names is None:
@@ -145,6 +175,7 @@ class DocumentEnhancedLLMCallAgent(Component):
         response = await self._synthesizer.get_response(
             chunks=documents_chunks,
             query_str=content,
+            optional_contexts={},
         )
 
         for i, document_content in enumerate(documents_chunks):
@@ -153,8 +184,8 @@ class DocumentEnhancedLLMCallAgent(Component):
                 f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": document_content.document_name,
             })
 
-        return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=response.response)],
+        return DocumentEnhancedLLMCallOutputs(
+            output=response.response,
             is_final=response.is_successful,
             artifacts={"documents": [doc.model_dump() for doc in documents_chunks]},
         )
