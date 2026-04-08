@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from engine.components.component import Component
 from engine.components.inputs_outputs.start import Start
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
+from engine.field_expressions.errors import FieldExpressionError
 from engine.field_expressions.serializer import from_json as expr_from_json
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.trace.span_context import set_tracing_span
@@ -582,21 +583,17 @@ class TestGraphRunnerExpressions:
         g.add_nodes_from(["A", "JOIN"])
         g.add_edge("A", "JOIN")
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "JOIN",
-                "target_port_name": "a",
-                "dispatch_strategy": "direct",
-            }
-        ]
         expressions = [
+            {
+                "target_instance_id": "JOIN",
+                "field_name": "a",
+                "expression_ast": expr_from_json({"type": "ref", "instance": "A", "port": "output"}),
+            },
             {
                 "target_instance_id": "JOIN",
                 "field_name": "b",
                 "expression_ast": expr_from_json({"type": "literal", "value": "X"}),
-            }
+            },
         ]
 
         gr = GraphRunner(
@@ -622,29 +619,17 @@ class TestGraphRunnerExpressions:
         g.add_nodes_from(["A", "B", "JOIN"])
         g.add_edges_from([("A", "JOIN"), ("B", "JOIN")])
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "JOIN",
-                "target_port_name": "a",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "B",
-                "source_port_name": "output",
-                "target_instance_id": "JOIN",
-                "target_port_name": "b",
-                "dispatch_strategy": "direct",
-            },
-        ]
-        # Override 'a' via expression
         expressions = [
             {
                 "target_instance_id": "JOIN",
                 "field_name": "a",
                 "expression_ast": expr_from_json({"type": "literal", "value": "OVR"}),
-            }
+            },
+            {
+                "target_instance_id": "JOIN",
+                "field_name": "b",
+                "expression_ast": expr_from_json({"type": "ref", "instance": "B", "port": "output"}),
+            },
         ]
 
         gr = GraphRunner(
@@ -728,38 +713,17 @@ class TestGraphRunnerComplexFormulas:
         g.add_nodes_from(["A", "B", "C", "D"])
         g.add_edges_from([("A", "B"), ("A", "C"), ("B", "D"), ("C", "D")])
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "C",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "B",
-                "source_port_name": "output",
-                "target_instance_id": "D",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "C",
-                "source_port_name": "output",
-                "target_instance_id": "D",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-        ]
-
         expressions = [
+            {
+                "target_instance_id": "B",
+                "field_name": "input",
+                "expression_ast": expr_from_json({"type": "ref", "instance": "A", "port": "output"}),
+            },
+            {
+                "target_instance_id": "C",
+                "field_name": "input",
+                "expression_ast": expr_from_json({"type": "ref", "instance": "A", "port": "output"}),
+            },
             {
                 "target_instance_id": "D",
                 "field_name": "input",
@@ -773,13 +737,13 @@ class TestGraphRunnerComplexFormulas:
                         {"type": "literal", "value": "]"},
                     ],
                 }),
-            }
+            },
         ]
 
-        return tm, g, runnables, mappings, expressions
+        return tm, g, runnables, expressions
 
     def test_diamond_graph_execution(self):
-        tm, g, runnables, mappings, expressions = self._build_diamond_graph()
+        tm, g, runnables, expressions = self._build_diamond_graph()
         gr = GraphRunner(
             graph=g,
             runnables=runnables,
@@ -882,15 +846,6 @@ class TestGraphRunnerComplexFormulas:
         g.add_nodes_from(["A", "B"])
         g.add_edge("A", "B")
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
         expressions = [
             {
                 "target_instance_id": "B",
@@ -911,7 +866,7 @@ class TestGraphRunnerComplexFormulas:
             trace_manager=tm,
             expressions=expressions,
         )
-        with pytest.raises(ValueError, match="not found in dict"):
+        with pytest.raises(FieldExpressionError, match="not found in dict"):
             asyncio.run(gr.run({"input": "seed"}))
 
     def test_key_extraction_non_dict_raises(self):
@@ -926,15 +881,6 @@ class TestGraphRunnerComplexFormulas:
         g.add_nodes_from(["A", "B"])
         g.add_edge("A", "B")
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
         expressions = [
             {
                 "target_instance_id": "B",
@@ -955,7 +901,7 @@ class TestGraphRunnerComplexFormulas:
             trace_manager=tm,
             expressions=expressions,
         )
-        with pytest.raises(ValueError, match="not a dict"):
+        with pytest.raises(FieldExpressionError, match="not a dict"):
             asyncio.run(gr.run({"input": "seed"}))
 
 
