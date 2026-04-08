@@ -76,8 +76,8 @@ def register(mcp: FastMCP) -> None:
         """Search the component catalog by name or description.
 
         Returns a compact summary of matching components including port
-        definitions (input/output port names needed for edges, port_mappings,
-        and field expressions in `update_graph`).
+        definitions (input/output port names needed for edges and field expressions
+        in `update_graph`).
         """
         query = query.strip()
         if not query:

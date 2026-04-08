@@ -249,13 +249,12 @@ the browser tab before making API edits.** You can optionally pass `last_edited_
 previous `update_graph` response) to detect conflicts — the backend returns 409 if the graph \
 was modified since that timestamp.
 
-A graph is a DAG with four top-level collections:
+A graph is a DAG with three top-level collections:
 
 ```json
 {
   "component_instances": [...],   // nodes
   "edges": [...],                 // execution flow (A runs before B)
-  "port_mappings": [...],         // explicit non-canonical data flow
   "relationships": [...],         // parent-child nesting (agent → tools)
   "playground_input_schema": {},  // Start node payload defaults
   "playground_field_types": {}    // playground field UI classification
@@ -324,8 +323,8 @@ Always create an edge between sequential nodes — the engine uses topological s
 
 ### Auto-canonical wiring — edges are enough
 
-When you create an edge, the backend auto-generates a `PortMapping` **and** a visible \
-RefNode field expression for each canonical input that has no user-provided expression. \
+When you create an edge, the backend auto-generates a visible RefNode field expression \
+for each canonical input that has no user-provided expression. \
 This uses the `is_canonical` flag on port definitions: \
 `source.canonical_output → target.canonical_input`. The auto-generated expression \
 (e.g. `@{{<source_uuid>.output}}`) is saved on the target's `input_port_instances` and \
@@ -391,13 +390,6 @@ static instructions with dynamic data from other nodes:
 The user's message flows through `messages` via the edge (or a custom expression). The \
 agent combines both to produce its response.
 
-### When to provide explicit port mappings
-
-Provide explicit `port_mappings` when you need non-canonical wiring (for example mapping \
-`output` to `mail_subject` instead of the canonical `mail_body`).
-
-Important quirk: pure `port_mappings`-only edits are risky because current graph change detection \
-excludes `port_mappings`. See `docs://known-quirks`.
 
 ## Tool Port Configurations
 
@@ -582,7 +574,6 @@ the formats are different and the backend expects the write format.
       "order": 0
     }
   ],
-  "port_mappings": [],
   "relationships": []
 }
 ```
@@ -1489,21 +1480,6 @@ Safest approach:
 - After `update_graph` succeeds, call `get_graph` to verify the save persisted
 - If the graph appears reset, the UI likely overwrote it — close the tab and retry
 
-## Graph Update Hash Excludes `port_mappings`
-
-Current graph change detection hashes the graph while excluding `port_mappings`.
-
-Consequence:
-
-- a pure `port_mappings`-only edit can be treated as unchanged and skipped
-
-Safest workaround:
-
-- edit from the latest `get_graph(...)` payload
-- prefer canonical edge wiring or field expressions when possible
-- if you must rely on explicit `port_mappings`, validate carefully and be aware that save-time change \
-detection is imperfect
-
 ## Relationship Deletion Path Is Not Explicit
 
 `update_graph_service` clearly upserts provided relationships, but there is no explicit relationship \
@@ -1539,8 +1515,7 @@ no partial success and no dry-run mode.
 Safest approach:
 
 - always start from a `get_graph(...)` response and modify incrementally
-- the MCP layer now warns about likely key typos (e.g. `ports_mappings` instead of `port_mappings`) \
-before sending to the backend, but structural validation still happens server-side
+- the MCP layer warns about likely key typos before sending to the backend, but structural validation still happens server-side
 
 ## OAuth Connections Cannot Be Assigned Programmatically
 
@@ -1570,11 +1545,8 @@ Workaround:
 
 ## Unknown Top-Level Keys In `update_graph` Are Silently Ignored
 
-The backend accepts and ignores unknown keys in the graph payload. A common mistake is \
-`ports_mappings` instead of `port_mappings` — the typo is accepted (200 OK) but the port \
-mappings are silently dropped.
-
-The MCP layer now warns about known typos, but less obvious unknown keys will still pass \
+The backend accepts and ignores unknown keys in the graph payload. \
+The MCP layer warns about known typos, but less obvious unknown keys will still pass \
 through silently.
 
 ## Organization Selection Must Be Sequential
