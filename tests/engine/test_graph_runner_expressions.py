@@ -293,7 +293,6 @@ class TestGraphRunnerExpressions:
             start_nodes=["A"],
             trace_manager=tm,
             expressions=expressions,
-            port_mappings=mappings,
         )
         result = asyncio.run(gr.run({"input": "seed"}))
         assert result.messages[0].content == "echo[x:va]"
@@ -333,7 +332,6 @@ class TestGraphRunnerExpressions:
             runnables=runnables,
             start_nodes=["A", "C"],
             trace_manager=tm,
-            port_mappings=mappings,
             expressions=expressions,
         )
         result = asyncio.run(gr.run({"input": "seed"}))
@@ -373,7 +371,6 @@ class TestGraphRunnerExpressions:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=mappings,
             expressions=expressions,
         )
         result = asyncio.run(gr.run({"input": "seed"}))
@@ -424,7 +421,6 @@ class TestGraphRunnerExpressions:
             start_nodes=["A", "C"],
             trace_manager=tm,
             expressions=expressions,
-            port_mappings=mappings,
         )
         result = asyncio.run(gr.run({"input": "seed"}))
         assert result.messages[0].content == "echo[upper[AA] lower[CC]]"
@@ -608,7 +604,6 @@ class TestGraphRunnerExpressions:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=mappings,
             expressions=expressions,
         )
         result = asyncio.run(gr.run({"input": "seed"}))
@@ -657,7 +652,6 @@ class TestGraphRunnerExpressions:
             runnables=runnables,
             start_nodes=["A", "B"],
             trace_manager=tm,
-            port_mappings=mappings,
             expressions=expressions,
         )
         result = asyncio.run(gr.run({"input": "seed"}))
@@ -791,7 +785,6 @@ class TestGraphRunnerComplexFormulas:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=mappings,
             expressions=expressions,
         )
         result = asyncio.run(gr.run({"input": "seed"}))
@@ -836,7 +829,6 @@ class TestGraphRunnerComplexFormulas:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=mappings,
             expressions=expressions,
         )
         result = asyncio.run(gr.run({"input": "seed"}))
@@ -917,7 +909,6 @@ class TestGraphRunnerComplexFormulas:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=mappings,
             expressions=expressions,
         )
         with pytest.raises(ValueError, match="not found in dict"):
@@ -962,7 +953,6 @@ class TestGraphRunnerComplexFormulas:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=mappings,
             expressions=expressions,
         )
         with pytest.raises(ValueError, match="not a dict"):

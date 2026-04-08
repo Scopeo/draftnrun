@@ -298,7 +298,7 @@ def test_build_time_validation():
     ]
 
     try:
-        GraphRunner(graph=g, runnables=runnables, start_nodes=["A"], trace_manager=tm, port_mappings=valid_mappings)
+        GraphRunner(graph=g, runnables=runnables, start_nodes=["A"], trace_manager=tm)
         print("✅ Valid port mapping passed validation")
     except Exception as e:
         print(f"❌ Valid port mapping failed validation: {e}")

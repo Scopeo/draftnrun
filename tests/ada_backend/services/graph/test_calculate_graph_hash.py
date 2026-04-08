@@ -82,8 +82,8 @@ class TestCalculateGraphHashIdentical:
 
     def test_empty_graphs_produce_same_hash(self):
         """Empty graphs should produce the same hash."""
-        graph1 = GraphUpdateSchema(component_instances=[], relationships=[], edges=[], port_mappings=[])
-        graph2 = GraphUpdateSchema(component_instances=[], relationships=[], edges=[], port_mappings=[])
+        graph1 = GraphUpdateSchema(component_instances=[], relationships=[], edges=[])
+        graph2 = GraphUpdateSchema(component_instances=[], relationships=[], edges=[])
 
         hash1 = _calculate_graph_hash(graph1)
         hash2 = _calculate_graph_hash(graph2)
@@ -298,20 +298,16 @@ class TestCalculateGraphHashIdentical:
         )
         relationship = create_relationship(parent_id=instance1_id, child_id=instance2_id, parameter_name="input")
         edge = create_edge(edge_id=edge_id, origin=instance1_id, destination=instance2_id, order=0)
-        port_mapping = create_port_mapping(source_id=instance1_id, target_id=instance2_id)
-
         graph1 = GraphUpdateSchema(
             component_instances=[instance1, instance2],
             relationships=[relationship],
             edges=[edge],
-            port_mappings=[port_mapping],
         )
 
         graph2 = GraphUpdateSchema(
             component_instances=[instance1, instance2],
             relationships=[relationship],
             edges=[edge],
-            port_mappings=[port_mapping],
         )
 
         hash1 = _calculate_graph_hash(graph1)
@@ -1089,14 +1085,12 @@ class TestCalculateGraphHashEdgeCases:
             component_instances=[instance],
             relationships=[],
             edges=[],
-            port_mappings=[],
         )
 
         graph2 = GraphUpdateSchema(
             component_instances=[instance],
             relationships=[],
             edges=[],
-            port_mappings=[],
         )
 
         hash1 = _calculate_graph_hash(graph1)

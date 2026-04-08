@@ -69,7 +69,6 @@ class TestGraphRunnerBuildTimeValidation:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=valid_mappings,
         )
         assert gr is not None
 
@@ -110,7 +109,6 @@ class TestGraphRunnerBuildTimeValidation:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=valid_mappings,
         )
         assert gr is not None
 
@@ -168,7 +166,6 @@ class TestGraphRunnerBuildTimeValidation:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=valid_mappings,
         )
         assert gr is not None
 
@@ -209,7 +206,6 @@ class TestGraphRunnerBuildTimeValidation:
             runnables=runnables,
             start_nodes=["A", "B"],
             trace_manager=tm,
-            port_mappings=valid_mappings,
         )
         assert gr is not None
 
@@ -257,7 +253,6 @@ class TestGraphRunnerBuildTimeValidation:
                 runnables=runnables,
                 start_nodes=["A"],
                 trace_manager=tm,
-                port_mappings=valid_mappings,
             )
 
 
@@ -333,7 +328,6 @@ class TestGraphRunnerEdgeCases:
                 runnables=runnables,
                 start_nodes=["A"],
                 trace_manager=tm,
-                port_mappings=mappings,
             )
 
     def test_graph_with_parallel_paths(self):
@@ -390,7 +384,6 @@ class TestGraphRunnerEdgeCases:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=mappings,
         )
         assert gr is not None
 
@@ -423,7 +416,6 @@ class TestGraphRunnerEdgeCases:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=mappings,
         )
         assert gr is not None
 
@@ -464,7 +456,6 @@ class TestGraphRunnerEdgeCases:
                 runnables=runnables,
                 start_nodes=["A"],
                 trace_manager=tm,
-                port_mappings=mappings,
             )
 
 
@@ -561,7 +552,6 @@ class TestGraphRunnerComprehensiveScenarios:
             runnables=runnables,
             start_nodes=["input"],
             trace_manager=tm,
-            port_mappings=mappings,
         )
         assert gr is not None
 
@@ -674,7 +664,6 @@ class TestGraphRunnerComprehensiveScenarios:
             runnables=runnables,
             start_nodes=["input"],
             trace_manager=tm,
-            port_mappings=mappings,
         )
         assert gr is not None
 
@@ -783,7 +772,6 @@ class TestGraphRunnerComprehensiveScenarios:
             runnables=runnables,
             start_nodes=["input"],
             trace_manager=tm,
-            port_mappings=mappings,
         )
         assert gr is not None
 
