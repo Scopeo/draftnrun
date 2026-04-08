@@ -738,7 +738,7 @@ to `add_tool_to_agent()` — do NOT hard-code names from memory; they change ove
 
 ## Available Component Types (indicative — always verify with search_components)
 
-**AI**: AI Agent, AI (LLM Call), Categorizer
+**AI**: AI Agent, AI (LLM Call), Categorizer, Scorer
 
 **Workflow Logic**: Start, Filter, If/Else, Router, Project Reference, \
 Chunk Processor, Static Responder, Table Lookup
@@ -806,6 +806,7 @@ and `output_ports` for each matching component, with a `canonical: true` flag on
 | Start (v2) | `messages`, + dynamic from `payload_schema` | — | Dynamic ports match `payload_schema` keys |
 | AI Agent | `output` | `messages` (auto-wired, editable) | Use `initial_prompt` for context injection |
 | AI (LLM Call) | `output` | `messages` (auto-wired, editable) | |
+| Scorer | `output`, `score`, `reason` | `input`, `criteria` | Optional input: `additional_context` |
 | PDF Generation | `output_message`, `artifacts` | `markdown_content` | `@{{uuid.artifacts::pdf_filename}}` |
 | Gmail Sender | `status` | `mail_body`, `mail_subject`, `recipients` | |
 | Slack Sender | `status` | `message`, `channel` | |
