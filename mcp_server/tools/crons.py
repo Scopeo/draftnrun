@@ -68,7 +68,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="delete_cron",
-        description="Delete a cron job. Requires developer role.",
+        description="Destructive. Delete a cron job. Requires developer role.",
         method="delete",
         path=_ITEM,
         scope="role",

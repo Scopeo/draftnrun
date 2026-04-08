@@ -33,7 +33,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="revoke_project_api_key",
-        description="Revoke a specific API key for a project.",
+        description="Destructive. Revoke a specific API key for a project.",
         method="delete",
         path="/auth/api-key",
         query_params=(_PROJECT_ID,),
@@ -60,7 +60,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="revoke_org_api_key",
-        description="Revoke an API key for the active organization.",
+        description="Destructive. Revoke an API key for the active organization.",
         method="delete",
         path="/auth/org-api-key",
         scope="org",

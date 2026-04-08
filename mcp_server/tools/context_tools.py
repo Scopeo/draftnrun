@@ -4,7 +4,7 @@ These tools manage the user's active organization session and provide
 access to org membership data via direct Supabase queries.
 """
 
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastmcp import FastMCP
@@ -128,14 +128,12 @@ def register(mcp: FastMCP) -> None:
     async def invite_org_member(
         organization_id: Annotated[UUID, Field(description="Target organization ID (from list_my_organizations).")],
         email: Annotated[str, Field(description="Email address of the person to invite.")],
-        role: Annotated[str, Field(description="Role to assign (member, developer, admin).")] = "member",
+        role: Annotated[
+            Literal["member", "developer", "admin"],
+            Field(description="Role to assign."),
+        ] = "member",
     ) -> dict:
         """Invite a user to an organization by email. Requires admin role."""
-        _ALLOWED_INVITE_ROLES = {"member", "developer", "admin"}
-        if role not in _ALLOWED_INVITE_ROLES:
-            raise ValueError(
-                f"Invalid role '{role}'. Allowed roles: {sorted(_ALLOWED_INVITE_ROLES)}"
-            )
         jwt, user_id = _get_auth()
         org_id_str = str(organization_id)
         await _require_target_org_role(

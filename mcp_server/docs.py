@@ -6,8 +6,10 @@ The `get_guide` tool provides the same content for clients that don't support re
 """
 
 import uuid as _uuid
+from typing import Annotated
 
 from fastmcp import FastMCP
+from pydantic import Field
 
 # Doc example UUIDs: never hand-write hex; generate with \
 # `uv run python -c "import uuid; print(uuid.uuid4())"`.
@@ -867,6 +869,9 @@ Response:
 `ResponseFormat.S3_KEY`.
 - There is currently no MCP tool to download file bytes from those keys.
 - Large run results may be returned as `_truncated` / `partial_data` by the MCP client.
+- If `run()` completes but the result fetch fails (network error), it returns \
+`{"status": "completed", "run_id": "...", "hint": "..."}` instead of the result. \
+Call `get_run_result(project_id, run_id)` to retrieve the final output.
 
 ## Inspect a Run
 
@@ -1767,14 +1772,16 @@ def register(mcp: FastMCP) -> None:
         fn.__name__ = domain.replace("-", "_")
         mcp.resource(f"docs://{domain}", name=domain, description=description)(fn)
 
-    @mcp.tool()
-    async def get_guide(domain: str) -> str:
-        """Fetch detailed documentation for a domain.
+    available_domains = ", ".join(sorted(DOMAINS.keys()))
 
-        Available domains: getting-started, agent-config, graphs, versioning,
-        components, execution, playground, variables, knowledge,
-        file-management, integrations, known-quirks, qa, admin.
-        """
+    @mcp.tool()
+    async def get_guide(
+        domain: Annotated[
+            str,
+            Field(description=f"The documentation domain to fetch. Available: {available_domains}."),
+        ],
+    ) -> str:
+        """Fetch detailed documentation for a domain."""
         if domain not in DOMAINS:
             available = ", ".join(sorted(DOMAINS.keys()))
             raise ValueError(f"Unknown domain '{domain}'. Available: {available}")

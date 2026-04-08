@@ -140,6 +140,34 @@ def _warn_unknown_graph_keys(graph_data: dict) -> list[str]:
     return warnings
 
 
+def _validate_component_instances(graph_data: dict) -> None:
+    if not isinstance(graph_data, dict):
+        raise ToolError(
+            f"graph_data must be a dict, got {type(graph_data).__name__}. "
+            "Pass the full graph object from get_graph."
+        )
+    instances = graph_data.get("component_instances", [])
+    if not isinstance(instances, list):
+        raise ToolError(
+            f"component_instances must be a list, got {type(instances).__name__}. "
+            "Pass the full graph object from get_graph."
+        )
+    for inst in instances:
+        if not isinstance(inst, dict):
+            raise ToolError(
+                f"Each component_instance must be a dict, got {type(inst).__name__}: {inst!r:.100}. "
+                "Pass the full graph object from get_graph."
+            )
+        if not inst.get("component_version_id"):
+            name = inst.get("name") or inst.get("id") or "unknown"
+            raise ToolError(
+                f"Component '{name}' is missing 'component_version_id'. "
+                "Each component_instance must include component_version_id from the catalog. "
+                "Use list_components or search_components to find the correct ID, "
+                "or start from get_graph to preserve existing values."
+            )
+
+
 _OAUTH_KEYWORDS = ("access_token", "oauth", "integration", "credentials")
 
 
@@ -156,6 +184,12 @@ def _enrich_graph_update_error(message: str) -> str:
             "(MCP cannot initiate OAuth flows), "
             "3) retry update_graph once the connection is active. "
             "See docs://integrations for details."
+        )
+    if "not found in component definitions" in lower or ("parameter" in lower and "not found" in lower):
+        return (
+            f"{message} | The graph references a parameter that doesn't exist on the component's "
+            "current version. This usually means a component was updated or the parameter name is wrong. "
+            "Next step: call get_graph() to see the current component parameters, then rebuild your payload."
         )
     if "not found" in lower or "does not exist" in lower:
         return (
@@ -295,7 +329,14 @@ def register(mcp: FastMCP) -> None:
           do NOT copy `field_expressions` from `get_graph` into `update_graph`.
         """
         jwt, _ = _get_auth()
-        graph_data = _assign_missing_ids(graph_data)
+        _validate_component_instances(graph_data)
+        try:
+            graph_data = _assign_missing_ids(graph_data)
+        except (TypeError, AttributeError) as exc:
+            raise ToolError(
+                f"Malformed graph_data: {exc}. "
+                "Pass the full graph object from get_graph."
+            ) from exc
         warnings = _warn_unknown_graph_keys(graph_data)
         try:
             result = await api.put(

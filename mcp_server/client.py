@@ -71,11 +71,15 @@ def _make_headers(token: str) -> dict[str, str]:
 
 
 def _extract_error_detail(response: httpx.Response) -> str:
-    """Best-effort extraction of the backend's error detail from an HTTP error response."""
+    """Best-effort extraction of the backend's error detail from an HTTP error response.
+
+    Always returns a stripped string (empty if no meaningful detail found).
+    """
     try:
         body = response.json()
         if isinstance(body, dict):
-            return body.get("detail", "")
+            detail = body.get("detail", "")
+            return detail.strip() if isinstance(detail, str) else str(detail).strip()
     except (json.JSONDecodeError, ValueError):
         pass
     text = response.text[:300].strip()
@@ -86,16 +90,22 @@ async def _handle_response(response: httpx.Response, *, trim: bool = True) -> An
     if response.status_code == 204:
         return {"status": "ok"}
 
+    try:
+        req = response.request
+        request_context = f" [{req.method} {req.url.path}]"
+    except RuntimeError:
+        request_context = ""
+
     if response.status_code == 401:
         raise ToolError(
-            "Authentication failed. Your session may have expired — reconnect to refresh. "
+            f"Authentication failed{request_context}. Your session may have expired — reconnect to refresh. "
             "Next step: check your MCP client's server status, then call get_current_context() "
             "to verify your session."
         )
 
     if response.status_code == 403:
         detail = _extract_error_detail(response)
-        base = "Permission denied."
+        base = f"Permission denied{request_context}."
         hint = (
             " Next step: call get_current_context() to check your role, "
             "then see docs://getting-started for the role hierarchy."
@@ -107,14 +117,34 @@ async def _handle_response(response: httpx.Response, *, trim: bool = True) -> An
     if response.status_code == 404:
         detail = _extract_error_detail(response)
         raise ToolError(
-            f"Resource not found.{f' {detail}' if detail else ''} "
+            f"Resource not found{request_context}.{f' {detail}' if detail else ''} "
             "Next step: verify the ID came from a list_*/get_* call in this session — "
             "never reuse IDs across projects or orgs."
         )
 
     if response.status_code == 429:
         retry_after = response.headers.get("Retry-After", "unknown")
-        raise ToolError(f"Rate limited by backend. Retry after {retry_after}s.")
+        raise ToolError(f"Rate limited by backend{request_context}. Retry after {retry_after}s.")
+
+    if response.status_code == 500:
+        detail = _extract_error_detail(response)
+        raise ToolError(
+            f"The backend hit an unexpected error{request_context}. "
+            "This is not caused by your input — retry the call. "
+            f"If it persists, the issue is server-side.{f' Detail: {detail}' if detail else ''}"
+        )
+
+    if response.status_code == 502:
+        raise ToolError(
+            f"The backend is temporarily unreachable (gateway error){request_context}. "
+            "Retry in a few seconds."
+        )
+
+    if response.status_code == 503:
+        raise ToolError(
+            f"The backend is temporarily unavailable{request_context}. "
+            "Retry in a few seconds."
+        )
 
     if response.status_code >= 400:
         detail = ""
@@ -123,7 +153,11 @@ async def _handle_response(response: httpx.Response, *, trim: bool = True) -> An
             detail = body.get("detail", str(body)) if isinstance(body, dict) else str(body)
         except (json.JSONDecodeError, ValueError):
             detail = response.text[:500]
-        raise ToolError(f"Backend error {response.status_code}: {detail}")
+        if isinstance(detail, str):
+            detail = detail.strip()
+        if not detail:
+            detail = f"No error detail returned by the server (HTTP {response.status_code})"
+        raise ToolError(f"Backend error {response.status_code}{request_context}: {detail}")
 
     try:
         data = response.json()

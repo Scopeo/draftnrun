@@ -2,6 +2,7 @@ import httpx
 import pytest
 
 from mcp_server.auth import supabase_client
+from mcp_server.client import ToolError
 
 FAKE_JWT = "fake-jwt-token"
 FAKE_USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
@@ -95,7 +96,7 @@ async def test_list_user_organizations_memberships_fail(monkeypatch):
     })
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: client)
 
-    with pytest.raises(ValueError, match="Failed to fetch your organization memberships"):
+    with pytest.raises(ToolError, match="Failed to fetch your organization memberships"):
         await supabase_client.list_user_organizations(FAKE_JWT, FAKE_USER_ID)
 
 
@@ -153,7 +154,7 @@ async def test_list_user_organizations_orgs_fetch_fail(monkeypatch):
     })
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: client)
 
-    with pytest.raises(ValueError, match="Failed to fetch organization details"):
+    with pytest.raises(ToolError, match="Failed to fetch organization details"):
         await supabase_client.list_user_organizations(FAKE_JWT, FAKE_USER_ID)
 
 
@@ -185,7 +186,7 @@ async def test_get_org_members_failure(monkeypatch):
     })
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: client)
 
-    with pytest.raises(ValueError, match="Failed to fetch organization members"):
+    with pytest.raises(ToolError, match="Failed to fetch organization members"):
         await supabase_client.get_org_members(FAKE_JWT, FAKE_ORG_ID)
 
 
@@ -304,16 +305,14 @@ async def test_invite_member_happy_path(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_invite_member_failure_returns_error(monkeypatch):
+async def test_invite_member_failure_raises(monkeypatch):
     client = FakeAsyncClient({
         "invite-member": FakeResponse(422, text="Invalid email"),
     })
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: client)
 
-    result = await supabase_client.invite_member(FAKE_JWT, FAKE_ORG_ID, "bad", "member")
-
-    assert "error" in result
-    assert "422" in result["error"]
+    with pytest.raises(ToolError, match="422"):
+        await supabase_client.invite_member(FAKE_JWT, FAKE_ORG_ID, "bad", "member")
 
 
 # ---------------------------------------------------------------------------
