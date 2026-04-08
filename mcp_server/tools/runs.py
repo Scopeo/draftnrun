@@ -5,16 +5,20 @@ polls for the result.  It does not expose file download helpers.
 """
 
 import asyncio
+import logging
 import time
 from typing import Annotated, Optional
 from uuid import UUID
 
+import httpx
 from fastmcp import FastMCP
 from pydantic import Field
 
 from mcp_server.client import api
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
 from mcp_server.tools.context_tools import _get_auth
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_POLL_INTERVAL = 2
 MAX_POLL_INTERVAL = 10
@@ -162,7 +166,10 @@ def register(mcp: FastMCP) -> None:
         if not isinstance(timeout, int) or timeout <= 0:
             raise ValueError("timeout must be a positive integer")
         if "messages" not in payload:
-            raise ValueError("payload must contain a 'messages' key")
+            raise ValueError(
+                "payload must contain a 'messages' key. "
+                'Example: {"messages": [{"role": "user", "content": "Hello"}]}'
+            )
 
         jwt, _ = _get_auth()
         response = await api.post(
@@ -187,11 +194,27 @@ def register(mcp: FastMCP) -> None:
 
             await asyncio.sleep(min(interval, remaining))
 
-            run_status = await api.get(f"/projects/{project_id}/runs/{run_id}", jwt)
+            try:
+                run_status = await api.get(f"/projects/{project_id}/runs/{run_id}", jwt)
+            except httpx.HTTPError as exc:
+                logger.warning("Transient error polling run %s: %s", run_id, exc)
+                interval = min(interval + 1, MAX_POLL_INTERVAL)
+                continue
+
             status = run_status.get("status", "")
 
             if status == "completed":
-                return await api.get(f"/projects/{project_id}/runs/{run_id}/result", jwt)
+                try:
+                    return await api.get(f"/projects/{project_id}/runs/{run_id}/result", jwt)
+                except httpx.HTTPError:
+                    return {
+                        "status": "completed",
+                        "run_id": run_id,
+                        "hint": (
+                            f"Run completed but result fetch failed. "
+                            f"Use get_run_result('{project_id}', '{run_id}')."
+                        ),
+                    }
             if status == "failed":
                 return {
                     "status": "failed",

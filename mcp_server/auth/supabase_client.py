@@ -10,6 +10,7 @@ from uuid import UUID
 
 import httpx
 
+from mcp_server.client import ToolError
 from mcp_server.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ async def list_user_organizations(jwt: str, user_id: str) -> list[dict[str, Any]
             params={"select": "org_id,role", "user_id": f"eq.{user_id}"},
         )
         if memberships_resp.status_code != 200:
-            raise ValueError(
+            raise ToolError(
                 f"Failed to fetch your organization memberships (HTTP {memberships_resp.status_code}). "
                 f"Your session may have expired — reconnect to refresh."
             )
@@ -77,7 +78,7 @@ async def list_user_organizations(jwt: str, user_id: str) -> list[dict[str, Any]
             params={"select": "id,name", "id": f"in.({org_id_filter})"},
         )
         if orgs_resp.status_code != 200:
-            raise ValueError(
+            raise ToolError(
                 f"Failed to fetch organization details (HTTP {orgs_resp.status_code}). "
                 f"Your session may have expired — reconnect to refresh."
             )
@@ -101,7 +102,7 @@ async def get_org_members(jwt: str, org_id: str) -> list[dict[str, Any]]:
             json={"organization_id": org_id},
         )
         if resp.status_code != 200:
-            raise ValueError(
+            raise ToolError(
                 f"Failed to fetch organization members (HTTP {resp.status_code}). "
                 f"Check your permissions or reconnect."
             )
@@ -155,5 +156,5 @@ async def invite_member(jwt: str, org_id: str, email: str, role: str) -> dict[st
             json={"organization_id": org_id, "email": email, "role": role},
         )
         if resp.status_code != 200:
-            return {"error": f"Invite failed ({resp.status_code}): {resp.text[:200]}"}
+            raise ToolError(f"Invite failed ({resp.status_code}): {resp.text[:200]}")
         return resp.json()

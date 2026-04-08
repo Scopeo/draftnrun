@@ -7,7 +7,7 @@ have important limitations; see `docs://file-management`.
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 from uuid import UUID
 
 from fastmcp import FastMCP
@@ -17,8 +17,6 @@ from mcp_server.client import api
 from mcp_server.context import require_role
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
 from mcp_server.tools.context_tools import _get_auth
-
-_VALID_SOURCE_TYPES = ("website", "database")
 
 _WEBSITE_REQUIRED = ("url",)
 _DATABASE_REQUIRED = ("source_db_url", "source_table_name", "id_column_name", "text_column_names")
@@ -168,7 +166,10 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def create_source(
-        source_type: Annotated[str, Field(description='One of "website" or "database".')],
+        source_type: Annotated[
+            Literal["website", "database"],
+            Field(description="Source type. For 'local' or 'google_drive', use the web UI."),
+        ],
         config: Annotated[
             dict,
             Field(
@@ -189,18 +190,9 @@ def register(mcp: FastMCP) -> None:
     ) -> dict:
         """Create a new knowledge source and trigger its first ingestion.
 
-        Supported source types via MCP: ``website``, ``database``.
-        (``local`` and ``google_drive`` require the web UI.)
-
         The backend creates the source record, provisions infrastructure
         (DB table, Qdrant collection), and starts ingestion automatically.
         """
-        if source_type not in _VALID_SOURCE_TYPES:
-            raise ValueError(
-                f"source_type must be one of {_VALID_SOURCE_TYPES}. "
-                f"Got '{source_type}'. For 'local' or 'google_drive', use the web UI."
-            )
-
         validator = _CONFIG_VALIDATORS[source_type]
         source_attributes = validator(config)
 

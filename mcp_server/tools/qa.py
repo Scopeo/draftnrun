@@ -60,7 +60,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="delete_datasets",
-        description="Delete one or more QA datasets.",
+        description="Destructive. Delete one or more QA datasets.",
         method="delete",
         path=_DS,
         path_params=(_P_PROJECT,),
@@ -127,7 +127,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="delete_entries",
-        description="Delete entries from a QA dataset.",
+        description="Destructive. Delete entries from a QA dataset.",
         method="delete",
         path=_ENTRIES,
         path_params=(_P_PROJECT, _P_DATASET),
@@ -224,7 +224,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="delete_judges",
-        description="Delete one or more LLM judges.",
+        description="Destructive. Delete one or more LLM judges.",
         method="delete",
         path=_JUDGES,
         path_params=(_P_PROJECT,),

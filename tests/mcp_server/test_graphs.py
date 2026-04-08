@@ -5,7 +5,7 @@ import pytest
 
 from mcp_server.client import ToolError
 from mcp_server.tools import graphs
-from mcp_server.tools.graphs import _assign_missing_ids, _warn_unknown_graph_keys
+from mcp_server.tools.graphs import _assign_missing_ids, _validate_component_instances, _warn_unknown_graph_keys
 from tests.mcp_server.conftest import FAKE_PROJECT_ID, FAKE_RUNNER_ID
 
 
@@ -66,6 +66,30 @@ def test_no_op_when_all_ids_present():
 def test_no_op_when_no_instances():
     assert _assign_missing_ids({}) == {}
     assert _assign_missing_ids({"component_instances": []}) == {"component_instances": []}
+
+
+# --- _validate_component_instances ---
+
+
+def test_validate_component_instances_raises_on_missing_version_id():
+    graph_data = {
+        "component_instances": [
+            {"id": "abc", "name": "Start", "component_version_id": "v1"},
+            {"id": "def", "name": "AI Agent"},
+        ],
+    }
+    with pytest.raises(ToolError, match="AI Agent.*missing.*component_version_id"):
+        _validate_component_instances(graph_data)
+
+
+def test_validate_component_instances_passes_with_valid_data():
+    graph_data = {
+        "component_instances": [
+            {"id": "abc", "name": "Start", "component_version_id": "v1"},
+            {"id": "def", "name": "AI Agent", "component_version_id": "v2"},
+        ],
+    }
+    _validate_component_instances(graph_data)
 
 
 # --- _warn_unknown_graph_keys ---

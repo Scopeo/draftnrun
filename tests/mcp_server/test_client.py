@@ -68,3 +68,54 @@ async def test_handle_404_includes_backend_detail():
 
     with pytest.raises(ToolError, match="Project abc-123 not found"):
         await _handle_response(response)
+
+
+@pytest.mark.asyncio
+async def test_handle_500_returns_actionable_message():
+    body = json.dumps({"detail": "Internal Server Error"})
+    response = httpx.Response(500, text=body, headers={"content-type": "application/json"})
+
+    with pytest.raises(ToolError, match="unexpected error.*not caused by your input"):
+        await _handle_response(response)
+
+
+@pytest.mark.asyncio
+async def test_handle_502_returns_gateway_message():
+    response = httpx.Response(502, text="Bad Gateway")
+
+    with pytest.raises(ToolError, match="temporarily unreachable"):
+        await _handle_response(response)
+
+
+@pytest.mark.asyncio
+async def test_handle_503_returns_unavailable_message():
+    response = httpx.Response(503, text="Service Unavailable")
+
+    with pytest.raises(ToolError, match="temporarily unavailable"):
+        await _handle_response(response)
+
+
+@pytest.mark.asyncio
+async def test_handle_error_includes_request_path():
+    request = httpx.Request("PUT", "http://example.com/projects/123/graph/456")
+    response = httpx.Response(500, text="crash", request=request)
+
+    with pytest.raises(ToolError, match=r"\[PUT /projects/123/graph/456\]"):
+        await _handle_response(response)
+
+
+@pytest.mark.asyncio
+async def test_handle_generic_4xx_with_blank_detail():
+    response = httpx.Response(422, text="")
+
+    with pytest.raises(ToolError, match="No error detail returned"):
+        await _handle_response(response)
+
+
+@pytest.mark.asyncio
+async def test_handle_generic_4xx_with_whitespace_only_detail():
+    body = json.dumps({"detail": "  \n  "})
+    response = httpx.Response(422, text=body, headers={"content-type": "application/json"})
+
+    with pytest.raises(ToolError, match="No error detail returned"):
+        await _handle_response(response)

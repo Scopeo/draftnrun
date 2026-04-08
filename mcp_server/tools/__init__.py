@@ -1,4 +1,8 @@
+import logging
+
 from fastmcp import FastMCP
+
+logger = logging.getLogger(__name__)
 
 
 def register_all_tools(mcp: FastMCP) -> None:
@@ -39,4 +43,5 @@ def register_all_tools(mcp: FastMCP) -> None:
         try:
             module.register(mcp)
         except Exception as exc:
+            logger.exception("Failed to register MCP tool module '%s'", module.__name__)
             raise RuntimeError(f"Failed to register MCP tool module '{module.__name__}': {exc}") from exc

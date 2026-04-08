@@ -39,7 +39,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="delete_variable_definition",
-        description="Delete a variable definition. Requires admin role.",
+        description="Destructive. Delete a variable definition. Requires admin role.",
         method="delete",
         path="/org/{org_id}/variable-definitions/{name}",
         scope="role",
@@ -68,7 +68,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="delete_variable_set",
-        description="Delete a variable set. Requires admin role.",
+        description="Destructive. Delete a variable set. Requires admin role.",
         method="delete",
         path="/org/{org_id}/variable-sets/{set_id}",
         scope="role",
@@ -100,7 +100,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="delete_secret",
-        description="Delete a secret. Requires admin role.",
+        description="Destructive. Delete a secret. Requires admin role.",
         method="delete",
         path="/org/{org_id}/secrets/{key}",
         scope="role",

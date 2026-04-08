@@ -1,7 +1,6 @@
 """Project management tools."""
 
-import logging
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 from uuid import UUID
 
 from fastmcp import FastMCP
@@ -13,12 +12,13 @@ from mcp_server.tools._defaults import generate_entity_defaults
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
 from mcp_server.tools.context_tools import _get_auth
 
-logger = logging.getLogger(__name__)
-
 PROXY_SPECS: list[ToolSpec] = [
     ToolSpec(
         name="get_project",
-        description="Get details of a specific project by ID.",
+        description=(
+            "Get details of a specific project by ID. "
+            "Prefer get_project_overview for a richer view with draft/production versions and recent runs."
+        ),
         method="get",
         path="/projects/{project_id}",
         path_params=(
@@ -62,7 +62,10 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def list_projects(
-        project_type: Annotated[str, Field(description="Filter by type (WORKFLOW or AGENT).")] = "WORKFLOW",
+        project_type: Annotated[
+            Literal["WORKFLOW", "AGENT"],
+            Field(description="Filter by type."),
+        ] = "WORKFLOW",
         include_templates: Annotated[
             bool,
             Field(
@@ -77,12 +80,6 @@ def register(mcp: FastMCP) -> None:
         Templates org).  Filter results by ``organization_id`` if you only
         want projects belonging to the active org.
         """
-        _VALID_PROJECT_TYPES = {"WORKFLOW", "AGENT"}
-        normalized = project_type.strip().upper()
-        if normalized not in _VALID_PROJECT_TYPES:
-            raise ValueError(f"project_type must be one of {sorted(_VALID_PROJECT_TYPES)}, got '{project_type}'")
-        project_type = normalized
-
         jwt, user_id = _get_auth()
         org = await require_org_context(user_id)
         return await api.get(
@@ -127,19 +124,6 @@ def register(mcp: FastMCP) -> None:
                 "icon_color": defaults["icon_color"],
             },
         )
-
-    @mcp.tool()
-    async def create_project(
-        name: Annotated[str, Field(description="Project name.")],
-        description: Annotated[str, Field(description="Optional description.")] = "",
-    ) -> dict:
-        """Deprecated: use ``create_workflow`` instead.
-
-        Creates a new workflow project. This tool is a compatibility shim
-        that forwards to ``create_workflow``.
-        """
-        logger.warning("create_project is deprecated — use create_workflow instead")
-        return await create_workflow(name=name, description=description)
 
     @mcp.tool()
     async def update_project(

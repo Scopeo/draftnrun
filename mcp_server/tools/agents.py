@@ -15,7 +15,10 @@ from mcp_server.tools.context_tools import _get_auth
 PROXY_SPECS: list[ToolSpec] = [
     ToolSpec(
         name="list_agents",
-        description="List all agents in the active organization.",
+        description=(
+            "List all agents in the active organization. "
+            "Each entry includes the agent_id needed for get_agent and configure_agent."
+        ),
         method="get",
         path="/org/{org_id}/agents",
         scope="org",
@@ -23,7 +26,10 @@ PROXY_SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="get_agent",
-        description="Get details of a specific agent version.",
+        description=(
+            "Get details of a specific agent version. "
+            "Returns model_parameters, tools, and system_prompt. Use configure_agent to modify."
+        ),
         method="get",
         path="/agents/{agent_id}/versions/{graph_runner_id}",
         path_params=(
