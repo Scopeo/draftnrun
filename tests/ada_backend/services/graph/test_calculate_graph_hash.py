@@ -12,7 +12,6 @@ from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionUpdateSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema
-from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 from ada_backend.services.graph.update_graph_service import _calculate_graph_hash
 
 
@@ -75,28 +74,6 @@ def create_relationship(
         child_component_instance_id=child_id,
         parameter_name=parameter_name,
         order=order,
-    )
-
-
-def create_port_mapping(
-    source_id: UUID = None,
-    target_id: UUID = None,
-    source_port: str = "output",
-    target_port: str = "input",
-    dispatch_strategy: str = "direct",
-) -> PortMappingSchema:
-    """Helper to create a PortMappingSchema with defaults."""
-    if source_id is None:
-        source_id = uuid.uuid4()
-    if target_id is None:
-        target_id = uuid.uuid4()
-
-    return PortMappingSchema(
-        source_instance_id=source_id,
-        source_port_name=source_port,
-        target_instance_id=target_id,
-        target_port_name=target_port,
-        dispatch_strategy=dispatch_strategy,
     )
 
 
