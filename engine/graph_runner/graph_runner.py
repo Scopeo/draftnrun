@@ -282,15 +282,15 @@ class GraphRunner:
     def _gather_inputs(self, node_id: str) -> dict[str, Any]:
         """Assemble input data for a node by evaluating all field expressions.
 
-        Start nodes with no real predecessors receive the initial input data as base.
+        Graph entrypoint nodes (no real predecessors) receive the initial input data as base.
         All field expressions are then evaluated and set uniformly.
         """
         input_data: dict[str, Any] = {}
         predecessors = list(self.graph.predecessors(node_id))
-        is_start_node = self._input_node_id in predecessors
+        is_graph_entrypoint = self._input_node_id in predecessors
         real_predecessors = [p for p in predecessors if p != self._input_node_id]
 
-        if is_start_node and not real_predecessors:
+        if is_graph_entrypoint and not real_predecessors:
             input_task_result = self.tasks[self._input_node_id].result
             input_data = dict(input_task_result.data) if input_task_result else {}
 
