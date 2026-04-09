@@ -317,7 +317,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=Scorer,
             parameter_processors=[
-                completion_service_processor,
+                llm_params_processor,
                 llm_capability_resolver_processor,
             ],
         ),
