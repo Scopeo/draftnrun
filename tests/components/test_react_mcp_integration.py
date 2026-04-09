@@ -106,6 +106,8 @@ def test_react_agent_expands_mcp_tools(
 
     mock_llm_service.function_call_async = AsyncMock(return_value=build_mock_tool_calls())
 
+    monkeypatch.setattr("engine.components.ai_agent.CompletionService", MagicMock(return_value=mock_llm_service))
+
     react_agent = AIAgent(
         temperature=1.0,
         llm_api_key=None,

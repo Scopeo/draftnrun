@@ -65,7 +65,8 @@ def agent_input():
 
 
 @pytest.fixture
-def react_agent(mock_agent, mock_trace_manager, mock_tool_description, mock_llm_service):
+def react_agent(mock_agent, mock_trace_manager, mock_tool_description, mock_llm_service, monkeypatch):
+    monkeypatch.setattr("engine.components.ai_agent.CompletionService", MagicMock(return_value=mock_llm_service))
     return AIAgent(
         temperature=1.0,
         llm_api_key=None,
@@ -178,7 +179,7 @@ def test_run_with_tool_calls_no_shortcut(
     assert output.last_message.content == "Final response"
     assert output.is_final
     # Verify that function_call_async was called twice (once for tool calls, once for final response)
-    assert react_agent._completion_service.function_call_async.call_count == 2
+    assert mock_llm_service.function_call_async.call_count == 2
 
 
 @patch("engine.prometheus_metric.get_tracing_span")
@@ -253,13 +254,15 @@ def test_react_agent_without_tools(mock_trace_manager, mock_tool_description, mo
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
 def test_date_in_system_prompt_enabled(
-    agent_calls_mock, get_span_mock, mock_trace_manager, mock_tool_description, mock_llm_service, agent_input
+    agent_calls_mock, get_span_mock, mock_trace_manager, mock_tool_description, mock_llm_service, agent_input,
+    monkeypatch,
 ):
     """Test that date is included in system prompt when date_in_system_prompt is enabled."""
     get_span_mock.return_value.project_id = "1234"
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
 
+    monkeypatch.setattr("engine.components.ai_agent.CompletionService", MagicMock(return_value=mock_llm_service))
     react_agent = AIAgent(
         temperature=1.0,
         llm_api_key=None,
@@ -287,13 +290,15 @@ def test_date_in_system_prompt_enabled(
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
 def test_date_in_system_prompt_disabled(
-    agent_calls_mock, get_span_mock, mock_trace_manager, mock_tool_description, mock_llm_service, agent_input
+    agent_calls_mock, get_span_mock, mock_trace_manager, mock_tool_description, mock_llm_service, agent_input,
+    monkeypatch,
 ):
     """Test that date is not included in system prompt when date_in_system_prompt is disabled."""
     get_span_mock.return_value.project_id = "1234"
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
 
+    monkeypatch.setattr("engine.components.ai_agent.CompletionService", MagicMock(return_value=mock_llm_service))
     react_agent = AIAgent(
         temperature=1.0,
         llm_api_key=None,
@@ -318,20 +323,37 @@ def test_date_in_system_prompt_disabled(
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
 def test_structured_output_in_function_call_async(
-    agent_calls_mock, get_span_mock, mock_trace_manager, mock_tool_description, agent_input
+    agent_calls_mock, get_span_mock, mock_trace_manager, mock_tool_description, agent_input, monkeypatch
 ):
     """Test structured output functionality in function_call_async method."""
     get_span_mock.return_value.project_id = "1234"
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
 
-    # Create structured output tool
     output_tool_properties = {
         "answer": {"type": "string", "description": "The final answer"},
         "is_final": {"type": "boolean", "description": "Whether this is the final response"},
     }
 
-    # Create ReActAgent with structured output
+    mock_cs = MagicMock(spec=CompletionService)
+    mock_cs._model_name = "test_model"
+    mock_cs._model_id = None
+    monkeypatch.setattr("engine.components.ai_agent.CompletionService", MagicMock(return_value=mock_cs))
+
+    def _make_response(content, tool_calls=None):
+        tc = tool_calls or []
+        tc_dicts = [
+            {"id": t.id, "function": {"name": t.function.name, "arguments": t.function.arguments}, "type": t.type}
+            for t in tc
+        ] if tc else []
+        msg = SimpleNamespace(
+            role="assistant",
+            content=content,
+            tool_calls=tc,
+            model_dump=lambda _c=content, _td=tc_dicts: {"role": "assistant", "content": _c, "tool_calls": _td},
+        )
+        return SimpleNamespace(choices=[SimpleNamespace(message=msg)])
+
     react_agent = AIAgent(
         temperature=1.0,
         llm_api_key=None,
@@ -339,7 +361,7 @@ def test_structured_output_in_function_call_async(
         component_attributes=ComponentAttributes(component_instance_name="Test Structured Output"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
-        max_iterations=2,  # Allow for 2 iterations: tool call + structured output
+        max_iterations=2,
     )
 
     # Test 1: Verify structured output tool is constructed correctly
@@ -348,24 +370,15 @@ def test_structured_output_in_function_call_async(
     assert output_tool.name == "chat_formatting_output_tool"
     assert output_tool.tool_properties == output_tool_properties
 
-    # Test 2: Structured output tool called directly
-    with patch("openai.AsyncOpenAI") as mock_openai_client:
-        mock_client = MagicMock()
-        mock_openai_client.return_value = mock_client
-
-        mock_parse_response = MagicMock()
-        mock_parse_response.output_text = json.dumps({"answer": "Final answer", "is_final": True})
-        mock_parse_response.usage = MagicMock(output_tokens=10, input_tokens=5, total_tokens=15)
-        mock_client.responses.parse = AsyncMock(return_value=mock_parse_response)
-
-        output = react_agent.run_sync(agent_input, output_format=output_tool_properties)
-        assert output.last_message.content == json.dumps({"answer": "Final answer", "is_final": True})
-        assert output.is_final
-
-        mock_client.responses.parse.assert_called_once()
+    # Test 2: Structured output without agent tools
+    content_2 = json.dumps({"answer": "Final answer", "is_final": True})
+    mock_cs.function_call_async = AsyncMock(return_value=_make_response(content_2))
+    output = react_agent.run_sync(agent_input, output_format=output_tool_properties)
+    assert output.last_message.content == content_2
+    assert output.is_final
+    mock_cs.function_call_async.assert_called_once()
 
     # Test 3: Full iteration flow - regular tool call -> structured output call
-    # First, add a mock agent tool to the agent
     mock_agent_tool = MagicMock()
     mock_agent_tool.tool_description.name = "test_tool"
     mock_agent_tool.tool_description.description = "Test tool description"
@@ -377,11 +390,10 @@ def test_structured_output_in_function_call_async(
     mock_agent_tool.run = AsyncMock(
         return_value=AgentPayload(
             messages=[ChatMessage(role="assistant", content="Tool executed successfully")],
-            is_final=False,  # Tool is not final, so agent continues iteration
+            is_final=False,
         )
     )
 
-    # Create an agent instance that includes the tool from the start
     react_agent_with_tool = AIAgent(
         temperature=1.0,
         llm_api_key=None,
@@ -393,57 +405,38 @@ def test_structured_output_in_function_call_async(
         agent_tools=[mock_agent_tool],
     )
 
-    with patch("openai.AsyncOpenAI") as mock_openai_client:
-        mock_client = MagicMock()
-        mock_openai_client.return_value = mock_client
+    tool_call_obj = SimpleNamespace(
+        id="3",
+        function=SimpleNamespace(name="test_tool", arguments=json.dumps({"test_property": "test_value"})),
+        type="function",
+    )
+    content_3 = json.dumps({"answer": "Final structured answer", "is_final": True})
+    mock_cs.function_call_async = AsyncMock(
+        side_effect=[_make_response(content=None, tool_calls=[tool_call_obj]), _make_response(content_3)]
+    )
 
-        # First call: Regular tool call (using Responses API format)
-        mock_response_regular = MagicMock()
-        mock_response_regular.id = "resp_3"
-        mock_response_regular.usage = MagicMock(input_tokens=5, output_tokens=10, total_tokens=15)
-
-        mock_function_call_item = MagicMock()
-        mock_function_call_item.type = "function_call"
-        mock_function_call_item.call_id = "3"
-        mock_function_call_item.name = "test_tool"
-        mock_function_call_item.arguments = json.dumps({"test_property": "test_value"})
-
-        mock_response_regular.output = [mock_function_call_item]
-
-        mock_client.responses.create = AsyncMock(return_value=mock_response_regular)
-
-        # Second call: Structured output via responses.parse (at max iterations with tool_choice="none")
-        mock_parse_response = MagicMock()
-        mock_parse_response.output_text = json.dumps({"answer": "Final structured answer", "is_final": True})
-        mock_parse_response.usage = MagicMock(output_tokens=10, input_tokens=5, total_tokens=15)
-        mock_client.responses.parse = AsyncMock(return_value=mock_parse_response)
-
-        # Mock the _process_tool_calls method to return the correct format for the first call
-        with patch.object(react_agent_with_tool, "_process_tool_calls") as mock_process:
-            mock_process.return_value = (
+    with patch.object(react_agent_with_tool, "_process_tool_calls") as mock_process:
+        mock_process.return_value = (
+            {
+                "3": AgentPayload(
+                    messages=[ChatMessage(role="assistant", content="Tool executed successfully")], is_final=False
+                )
+            },
+            [
                 {
-                    "3": AgentPayload(
-                        messages=[ChatMessage(role="assistant", content="Tool executed successfully")], is_final=False
-                    )
-                },
-                [
-                    {
-                        "id": "3",
-                        "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "test_value"})},
-                        "type": "function",
-                    }
-                ],
-            )
+                    "id": "3",
+                    "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "test_value"})},
+                    "type": "function",
+                }
+            ],
+        )
 
-            output = react_agent_with_tool.run_sync(agent_input, output_format=output_tool_properties)
-            assert output.last_message.content == json.dumps({"answer": "Final structured answer", "is_final": True})
-            assert output.is_final
-            # First iteration: responses.create with tool_choice="auto"
-            # Second iteration at max: responses.parse with tool_choice="none" for constrained output
-            assert mock_client.responses.create.call_count == 1
-            assert mock_client.responses.parse.call_count == 1
+        output = react_agent_with_tool.run_sync(agent_input, output_format=output_tool_properties)
+        assert output.last_message.content == content_3
+        assert output.is_final
+        assert mock_cs.function_call_async.call_count == 2
 
-    # Test 4: Max iterations reached - tool_choice should be "none" and constrained_complete should be called
+    # Test 4: Max iterations reached - tool_choice should be "none" and structured output forced
     react_agent_max_iter = AIAgent(
         temperature=1.0,
         llm_api_key=None,
@@ -451,71 +444,40 @@ def test_structured_output_in_function_call_async(
         component_attributes=ComponentAttributes(component_instance_name="Test Max Iterations"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
-        max_iterations=2,  # Allows iteration 0 (tool call) and iteration 1 (forced constrained output)
+        max_iterations=2,
         agent_tools=[mock_agent_tool],
     )
 
-    with patch("openai.AsyncOpenAI") as mock_openai_client:
-        mock_client = MagicMock()
-        mock_openai_client.return_value = mock_client
+    tool_call_obj_4 = SimpleNamespace(
+        id="5",
+        function=SimpleNamespace(name="test_tool", arguments=json.dumps({"test_property": "test_value"})),
+        type="function",
+    )
+    content_4 = json.dumps({"answer": "Max iterations reached answer", "is_final": True})
+    mock_cs.function_call_async = AsyncMock(
+        side_effect=[_make_response(content=None, tool_calls=[tool_call_obj_4]), _make_response(content_4)]
+    )
 
-        # First call: Regular tool call (iteration 0) using Responses API
-        mock_response_regular = MagicMock()
-        mock_response_regular.id = "resp_5"
-        mock_response_regular.usage = MagicMock(input_tokens=5, output_tokens=10, total_tokens=15)
-
-        # Create function_call output item
-        mock_function_call_item = MagicMock()
-        mock_function_call_item.type = "function_call"
-        mock_function_call_item.call_id = "5"
-        mock_function_call_item.name = "test_tool"
-        mock_function_call_item.arguments = json.dumps({"test_property": "test_value"})
-
-        mock_response_regular.output = [mock_function_call_item]
-
-        # Second call: Max iterations reached, should call constrained_complete (iteration 1)
-        # This should trigger tool_choice="none" and call the backup method
-
-        # Mock the responses.parse method for the constrained_complete call
-        mock_parse_response = MagicMock()
-        mock_parse_response.output_text = json.dumps({"answer": "Max iterations reached answer", "is_final": True})
-        mock_parse_response.usage = MagicMock(output_tokens=10, input_tokens=5, total_tokens=15)
-        mock_client.responses.parse = AsyncMock(return_value=mock_parse_response)
-
-        # Mock the responses in sequence: first call returns tool, second call triggers constrained_complete
-        mock_client.responses.create = AsyncMock(return_value=mock_response_regular)
-
-        # Mock the _process_tool_calls method to return the correct format for the first call
-        with patch.object(react_agent_max_iter, "_process_tool_calls") as mock_process:
-            mock_process.return_value = (
+    with patch.object(react_agent_max_iter, "_process_tool_calls") as mock_process:
+        mock_process.return_value = (
+            {
+                "5": AgentPayload(
+                    messages=[ChatMessage(role="assistant", content="Tool executed successfully")], is_final=False
+                )
+            },
+            [
                 {
-                    "5": AgentPayload(
-                        messages=[ChatMessage(role="assistant", content="Tool executed successfully")], is_final=False
-                    )
-                },
-                [
-                    {
-                        "id": "5",
-                        "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "test_value"})},
-                        "type": "function",
-                    }
-                ],
-            )
+                    "id": "5",
+                    "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "test_value"})},
+                    "type": "function",
+                }
+            ],
+        )
 
-            output = react_agent_max_iter.run_sync(agent_input, output_format=output_tool_properties)
-            # Should return the structured output from the constrained_complete method
-            assert output.last_message.content == json.dumps({
-                "answer": "Max iterations reached answer",
-                "is_final": True,
-            })
-            assert output.is_final
-
-            # Verify that the constrained_complete method was called (via responses.parse)
-            mock_client.responses.parse.assert_called_once()
-
-            # With max_iterations=2: iteration 0 uses responses.create (tool_choice="auto")
-            # Iteration 1 uses responses.parse (tool_choice="none" for forced constrained output)
-            assert mock_client.responses.create.call_count == 1
+        output = react_agent_max_iter.run_sync(agent_input, output_format=output_tool_properties)
+        assert output.last_message.content == content_4
+        assert output.is_final
+        assert mock_cs.function_call_async.call_count == 2
 
 
 def test_react_agent_with_null_output_format(mock_trace_manager, mock_tool_description, mock_llm_service):
@@ -566,12 +528,14 @@ def test_react_agent_with_none_output_format(mock_trace_manager, mock_tool_descr
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
 def test_context_passed_to_tools(
-    agent_calls_mock, get_span_mock, mock_trace_manager, mock_tool_description, mock_llm_service
+    agent_calls_mock, get_span_mock, mock_trace_manager, mock_tool_description, mock_llm_service, monkeypatch,
 ):
     """Test that context is properly passed to tools when running the agent with non-empty context."""
     get_span_mock.return_value.project_id = "1234"
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
+
+    monkeypatch.setattr("engine.components.ai_agent.CompletionService", MagicMock(return_value=mock_llm_service))
 
     # Create a mock tool that we can inspect
     mock_tool = MagicMock()

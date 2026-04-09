@@ -588,6 +588,8 @@ def build_model_id_resolver_processor(
     """Injects a callable that resolves model_name to UUID for tracing."""
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        params.pop("completion_model", None)
+
         if target_name not in constructor_params:
             return params
 
