@@ -29,14 +29,6 @@ def _parse_log_level(line: str, default: int = logging.ERROR) -> int:
     return _LEVEL_MAP[m.group(1)] if m else default
 
 
-def _is_real_error(line: str) -> bool:
-    """Return True if *line* is an actual error (not just an INFO/DEBUG log on stderr)."""
-    m = _LEVEL_RE.search(line)
-    if m is None:
-        return True  # no recognised level → treat as error (e.g. traceback, warning)
-    return _LEVEL_MAP[m.group(1)] >= logging.WARNING
-
-
 # Redis configuration
 STREAM_NAME = os.getenv("REDIS_INGESTION_STREAM", "ada_ingestion_stream")
 MAX_CONCURRENT_INGESTIONS = int(os.getenv("MAX_CONCURRENT_INGESTIONS", 2))
@@ -185,8 +177,6 @@ class Worker(BaseWorker):
                 safe_cmd[2] = safe_cmd[2].replace(repr(source_attributes), "***SANITIZED_SOURCE_ATTRIBUTES***")
                 # Also sanitize any access tokens that might appear directly
                 if "access_token" in safe_cmd[2]:
-                    import re
-
                     safe_cmd[2] = re.sub(r"'access_token': '[^']*'", "'access_token': '***REDACTED***'", safe_cmd[2])
                     safe_cmd[2] = re.sub(r'"access_token": "[^"]*"', '"access_token": "***REDACTED***"', safe_cmd[2])
             logger.info("executing_command cmd=%s", " ".join(safe_cmd))
@@ -216,7 +206,7 @@ class Worker(BaseWorker):
 
             stdout_buffer = ""
             stderr_buffer = ""
-            stderr_lines = []
+            raw_stderr_lines: list[str] = []
 
             # Stream output in real-time until process completes
             while process.poll() is None:
@@ -245,8 +235,7 @@ class Worker(BaseWorker):
                                 while "\n" in stderr_buffer:
                                     line, stderr_buffer = stderr_buffer.split("\n", 1)
                                     if line.strip():
-                                        if _is_real_error(line):
-                                            stderr_lines.append(line.strip())
+                                        raw_stderr_lines.append(line.strip())
                                         logger.log(_parse_log_level(line), "script_live_error output=%s", line.strip())
                         except Exception:
                             pass
@@ -271,23 +260,25 @@ class Worker(BaseWorker):
             if stderr_buffer.strip():
                 for line in stderr_buffer.strip().split("\n"):
                     if line.strip():
-                        if _is_real_error(line):
-                            stderr_lines.append(line.strip())
+                        raw_stderr_lines.append(line.strip())
                         logger.log(_parse_log_level(line), "script_final_error output=%s", line.strip())
-
-            error_summary = {}
-            if stderr_lines:
-                stderr_text = "\n".join(stderr_lines)
-                error_summary = self._parse_error_message(stderr_text)
-                logger.error(
-                    "script_error_summary error_type=%s error_message=%s possible_solution=%s",
-                    error_summary.get("error_type"),
-                    error_summary.get("error_message"),
-                    error_summary.get("possible_solution"),
-                )
 
             if process.returncode != 0:
                 logger.error("script_failed return_code=%s", process.returncode)
+
+                error_summary = {}
+                if raw_stderr_lines:
+                    stderr_text = "\n".join(raw_stderr_lines)
+                    error_summary = self._parse_error_message(stderr_text)
+                    if error_summary.get("error_type"):
+                        logger.error(
+                            "script_error_summary error_type=%s error_message=%s possible_solution=%s",
+                            error_summary["error_type"],
+                            error_summary.get("error_message"),
+                            error_summary.get("possible_solution"),
+                        )
+                    else:
+                        logger.error("script_stderr_tail lines=%s", raw_stderr_lines[-10:])
 
                 error_type = error_summary.get("error_type")
                 error_msg = error_summary.get("error_message")
@@ -336,56 +327,71 @@ class Worker(BaseWorker):
                 logger.error("failed_to_update_task_status error=%s", str(update_error))
             return ProcessTaskOutcome.FAIL_RETRY
 
+    _EXCEPTION_LINE_RE = re.compile(
+        r"^(?:\S+\.)*(\w*(?:Error|Exception|Interrupt|Exit))\s*:\s*(.+)",
+    )
+    _WARNING_LINE_RE = re.compile(
+        r"^(?:\S+\.)*(\w*Warning)\s*:\s*(.+)",
+    )
+
     def _parse_error_message(self, stderr_text: str) -> dict:
         """Parse error messages to provide a cleaner summary."""
-        result = {
-            "error_type": "Unknown Error",
-            "error_message": "An unknown error occurred",
+        result: dict[str, str | None] = {
+            "error_type": None,
+            "error_message": None,
             "possible_solution": None,
         }
 
-        # Look for common errors
         if "FERNET_KEY is not set" in stderr_text:
             result["error_type"] = "Environment Error"
             result["error_message"] = "FERNET_KEY is not set in the environment"
             result["possible_solution"] = "Set FERNET_KEY environment variable"
+            return result
 
-        elif "Missing key inputs argument!" in stderr_text:
+        if "Missing key inputs argument!" in stderr_text:
             result["error_type"] = "Google AI API Error"
             result["error_message"] = "Missing Google AI API credentials"
             result["possible_solution"] = "Set GOOGLE_API_KEY environment variable"
+            return result
 
-        elif "pyarrow" in stderr_text and "incompatible version" in stderr_text:
-            # This is just a warning, not an error
-            pass
+        if "pyarrow" in stderr_text and "incompatible version" in stderr_text:
+            result["error_type"] = "pyarrow_incompatible"
+            result["error_message"] = f"PyArrow version conflict: {stderr_text.strip()[:200]}"
+            return result
 
-        elif "SSL" in stderr_text and "WRONG_VERSION_NUMBER" in stderr_text:
+        if "SSL" in stderr_text and "WRONG_VERSION_NUMBER" in stderr_text:
             result["error_type"] = "SSL Connection Error"
             result["error_message"] = "SSL connection failed to localhost"
             result["possible_solution"] = "Set API_BASE_URL environment variable to http://localhost:8000"
+            return result
 
-        elif "MemoryError" in stderr_text or "Cannot allocate memory" in stderr_text:
+        if "MemoryError" in stderr_text or "Cannot allocate memory" in stderr_text:
             result["error_type"] = "Out of Memory"
             result["error_message"] = "Subprocess exceeded memory limit"
             result["possible_solution"] = "Reduce source size or increase SUBPROCESS_MEMORY_LIMIT_MB"
+            return result
 
-        elif "ModuleNotFoundError" in stderr_text:
-            module_match = "No module named" in stderr_text
-            if module_match:
-                result["error_type"] = "Module Not Found Error"
-                result["error_message"] = "Required module not found"
-                result["possible_solution"] = "Install missing dependencies with 'poetry add [package]'"
+        if "ModuleNotFoundError" in stderr_text and "No module named" in stderr_text:
+            result["error_type"] = "Module Not Found Error"
+            result["error_message"] = "Required module not found"
+            result["possible_solution"] = "Install missing dependencies with 'poetry add [package]'"
+            return result
 
-        else:
-            # Extract the actual error message from Python traceback
-            traceback_lines = stderr_text.strip().split("\n")
-            error_lines = [line for line in traceback_lines if "Error:" in line or "ValueError:" in line]
+        traceback_lines = stderr_text.strip().split("\n")
 
-            if error_lines:
-                error_line = error_lines[-1]  # Get the last error message
-                result["error_type"] = error_line.split(":", 1)[0].strip()
-                if len(error_line.split(":", 1)) > 1:
-                    result["error_message"] = error_line.split(":", 1)[1].strip()
+        for pattern in (self._EXCEPTION_LINE_RE, self._WARNING_LINE_RE):
+            for line in reversed(traceback_lines):
+                message = pattern.match(line.strip())
+                if message:
+                    result["error_type"] = message.group(1)
+                    result["error_message"] = message.group(2).strip()
+                    return result
+
+        last_meaningful = [line.strip() for line in traceback_lines if line.strip()]
+        if last_meaningful:
+            tail = last_meaningful[-1][:300]
+            result["error_type"] = "Subprocess Error"
+            result["error_message"] = tail
 
         return result
 
