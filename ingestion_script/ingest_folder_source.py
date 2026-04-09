@@ -290,7 +290,6 @@ async def _ingest_folder_source(
         source_name=source_name,
         source_type=source_type,
         status=db.TaskStatus.FAILED,
-        source_id=source_id,
     )
     if settings.USE_LLM_FOR_PDF_PARSING:
         try:
@@ -401,7 +400,12 @@ async def _ingest_folder_source(
         try:
             if len(files_info) == 0:
                 LOGGER.warning(f"No files found to ingest in source '{source_name}' - marking as completed")
-                LOGGER.info(f"[EMPTY_FOLDER] About to update task status to COMPLETED for task {task_id}")
+                LOGGER.info("[EMPTY_FOLDER] Calling create_source for empty folder")
+                create_source(
+                    organization_id=organization_id,
+                    source_data=source_data,
+                )
+                LOGGER.info("[EMPTY_FOLDER] Empty source created successfully")
                 ingestion_task_completed = IngestionTaskUpdate(
                     id=task_id,
                     source_id=source_id,
@@ -409,22 +413,11 @@ async def _ingest_folder_source(
                     source_type=source_type,
                     status=db.TaskStatus.COMPLETED,
                 )
-                LOGGER.info(
-                    "[EMPTY_FOLDER] Calling update_ingestion_task with status: "
-                    f"{ingestion_task_completed.status}"
-                )
                 update_ingestion_task(
                     organization_id=organization_id,
                     ingestion_task=ingestion_task_completed,
                 )
-                LOGGER.info("[EMPTY_FOLDER] Task status update completed")
-                LOGGER.info("[EMPTY_FOLDER] About to create empty source in database")
-                LOGGER.info("[EMPTY_FOLDER] Calling create_source for empty folder")
-                create_source(
-                    organization_id=organization_id,
-                    source_data=source_data,
-                )
-                LOGGER.info("[EMPTY_FOLDER] Empty source created successfully - returning")
+                LOGGER.info("[EMPTY_FOLDER] Task status updated - returning")
                 return
 
             file_chunks_dfs = []
