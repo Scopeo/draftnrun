@@ -86,12 +86,6 @@ class MockListInputAgent(Component):
         return self.Outputs(output="processed")
 
 
-class MockUnknownComponent:
-    """Mock component with no schema methods (for unknown type testing)."""
-
-    pass
-
-
 @pytest.fixture(autouse=True)
 def patch_prometheus_metrics():
     """Patch prometheus metrics used by @track_calls to avoid None params in tests."""

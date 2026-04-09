@@ -57,4 +57,4 @@ class DummyAgent(Component):
             last_content = inputs.messages[-1].content or ""
         else:
             last_content = "empty input"
-        return DummyAgent.Outputs(output=f"[{self.prefix}] {last_content}")
+        return self.Outputs(output=f"[{self.prefix}] {last_content}")

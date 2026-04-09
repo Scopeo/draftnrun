@@ -249,7 +249,7 @@ the browser tab before making API edits.** You can optionally pass `last_edited_
 previous `update_graph` response) to detect conflicts — the backend returns 409 if the graph \
 was modified since that timestamp.
 
-A graph is a DAG with three top-level collections:
+A graph is a DAG with three top-level arrays and two top-level maps:
 
 ```json
 {
@@ -347,12 +347,6 @@ user edits are never overwritten.
 
 `input_port_instances` are still the right tool for **non-canonical** wiring (concat \
 expressions, key extraction, cross-references to non-adjacent nodes, etc.).
-
-### Field expressions override port mappings
-
-When both an auto-mapped port mapping and a field expression target the same input port, \
-the field expression wins. At runtime, `synthesize_default_mappings` skips creating a \
-default port mapping when a field expression already targets the canonical input field.
 
 ### Canonical inputs are editable
 

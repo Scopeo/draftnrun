@@ -120,7 +120,7 @@ Merge order: **defaults → set_ids[0] → set_ids[1] → ...**
 **File**: `engine/legacy_compatibility.py` (marked for deletion after migration)
 
 Bridges unmigrated components (using `AgentPayload` in/out) with the new multi-port `NodeData` system. Key indicators:
-- `Component.migrated = False` — checked in `run()` and `_gather_inputs()`
+- `Component.migrated = False` — checked in `run()` and `_validate_expressions()`
 - Unmigrated components don't use coercion and receive the entire `task_result.data` dict
 
 ## SQL Local Storage Lifecycle

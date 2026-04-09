@@ -10,6 +10,7 @@ Revises: a1b2c3d4e5f9
 Create Date: 2026-04-08
 """
 
+import json
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -66,8 +67,8 @@ def upgrade() -> None:
         if not source_port_name:
             continue
 
-        expr_json = (
-            '{"type": "ref", "instance": "' + str(source_instance_id) + '", "port": "' + source_port_name + '"}'
+        expr_json = json.dumps(
+            {"type": "ref", "instance": str(source_instance_id), "port": source_port_name}
         )
 
         fe_id = connection.execute(
