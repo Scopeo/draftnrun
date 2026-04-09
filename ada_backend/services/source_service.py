@@ -150,25 +150,30 @@ def delete_source_service(
                 default_collection_schema=QdrantCollectionSchema(**source.qdrant_schema),
             )
 
-            LOGGER.info(
-                f"Deleting chunks for source {source_id} from Qdrant collection {source.qdrant_collection_name}"
-            )
-
-            source_id_filter = {"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(source_id)}}]}
-            success = qdrant_service.delete_points(
-                collection_name=source.qdrant_collection_name,
-                filter=source_id_filter,
-            )
-            if success:
+            if not qdrant_service.collection_exists(source.qdrant_collection_name):
                 LOGGER.info(
-                    f"Successfully deleted chunks for source {source_id} "
-                    f"from Qdrant collection {source.qdrant_collection_name}"
+                    f"Qdrant collection {source.qdrant_collection_name} does not exist, skipping chunk deletion"
                 )
             else:
-                LOGGER.warning(
-                    f"Failed to delete chunks for source {source_id} "
-                    f"from Qdrant collection {source.qdrant_collection_name}"
+                LOGGER.info(
+                    f"Deleting chunks for source {source_id} from Qdrant collection "
+                    f"{source.qdrant_collection_name}"
                 )
+                source_id_filter = {"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(source_id)}}]}
+                success = qdrant_service.delete_points(
+                    collection_name=source.qdrant_collection_name,
+                    filter=source_id_filter,
+                )
+                if success:
+                    LOGGER.info(
+                        f"Successfully deleted chunks for source {source_id} "
+                        f"from Qdrant collection {source.qdrant_collection_name}"
+                    )
+                else:
+                    LOGGER.warning(
+                        f"Failed to delete chunks for source {source_id} "
+                        f"from Qdrant collection {source.qdrant_collection_name}"
+                    )
 
         if source.database_table_name:
             db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)

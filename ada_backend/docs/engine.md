@@ -166,3 +166,31 @@ also add it to `SENTRY_TAG_FIELDS` so the propagation remains centralized and en
 | Variable resolution | `ada_backend/services/variable_resolution_service.py` |
 | DB models (ports) | `ada_backend/database/models.py` — search for `PortDefinition`, `PortInstance` |
 | OTel span → SQL (`traces` DB) | `engine/trace/sql_exporter.py` — `SQLSpanExporter` parses each span once and passes the JSON dict into export |
+| Qdrant service | `engine/qdrant_service.py` |
+
+## Hybrid Search
+
+The Retriever component supports three search modes via the `search_mode` parameter (`SearchMode` enum in `engine/qdrant_service.py`):
+
+- **`semantic`** (default) — Dense vector search only (OpenAI embeddings). Uses `/points/query` with `using="dense"`.
+- **`keyword`** — Sparse BM25 word-based search only. Uses Qdrant's server-side BM25 inference (`model: "Qdrant/bm25"`).
+- **`hybrid`** — Combines dense + sparse search with Reciprocal Rank Fusion (RRF). Uses the `/points/query` endpoint with two `prefetch` sub-queries fused via `{"fusion": "rrf"}`.
+
+All collections are hybrid: named dense vector `"dense"` + sparse vector `"sparse"` (IDF modifier). Existing dense-only collections are migrated via Alembic revision `b2c3d4e5f6a0`.
+
+### Versioning
+
+Existing component versions (RAG v3 `0.2.0`, Retriever `0.0.1`, Retriever Tool `0.0.1`) do not expose `search_mode` — they default to `semantic` for backward compatibility. New versions (RAG v4 `0.3.0` in `seed_rag_v4.py`, Retriever v2 `0.0.2`, Retriever Tool v2 `0.0.2`) add `search_mode` as a user-configurable parameter (default `semantic`).
+
+### Ingestion
+
+Each upserted point carries both a dense embedding and a BM25 document inference object:
+
+```json
+{
+    "vector": {
+        "dense": [0.1, 0.2, ...],
+        "sparse": {"text": "chunk content", "model": "Qdrant/bm25"}
+    }
+}
+```

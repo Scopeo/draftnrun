@@ -939,6 +939,7 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
             ParameterToValidate(argument="default_penalty_rate", type=float, optional=True),
             ParameterToValidate(argument="max_retrieved_chunks_after_penalty", type=int, optional=True),
             ParameterToValidate(argument="metadata_date_key", type=str, optional=True),
+            ParameterToValidate(argument="search_mode", type=str, optional=True),
         ]
         validated_params = _pop_and_validate_parameters(list_of_params_to_pop, params)
         retriever = Retriever(

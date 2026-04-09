@@ -2,9 +2,11 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+import pytest
+
 from engine.components.types import SourceChunk
 from engine.llm_services.llm_service import EmbeddingService
-from engine.qdrant_service import FieldSchema, QdrantCollectionSchema, QdrantService
+from engine.qdrant_service import BM25_MODEL, FieldSchema, QdrantCollectionSchema, QdrantService, SearchMode
 from tests.mocks.trace_manager import MockTraceManager
 
 
@@ -754,7 +756,10 @@ def test_insert_points_in_collection():
                 "file_id": "file_1",
                 "url": "https://test1.com",
             },
-            "vector": vector_1,
+            "vector": {
+                "dense": vector_1,
+                "sparse": {"text": "test content 1", "model": BM25_MODEL},
+            },
         },
         {
             "id": qdrant_service.get_uuid("2"),
@@ -764,7 +769,10 @@ def test_insert_points_in_collection():
                 "file_id": "file_2",
                 "url": "https://test2.com",
             },
-            "vector": vector_2,
+            "vector": {
+                "dense": vector_2,
+                "sparse": {"text": "test content 2", "model": BM25_MODEL},
+            },
         },
     ]
 
@@ -880,3 +888,222 @@ def test_apply_date_penalty_to_chunks():
     # Chunk without date should have default penalty
     no_date_idx = list(vector_ids).index("id3")
     assert scores[no_date_idx] == 0.1
+
+
+def _make_qdrant_service_with_mock_http() -> tuple[QdrantService, AsyncMock]:
+    mock_embedding_service = MagicMock(spec=EmbeddingService)
+    mock_embedding_service.embedding_size = 3072
+    schema = QdrantCollectionSchema(
+        chunk_id_field="chunk_id",
+        content_field="content",
+        file_id_field="file_id",
+        url_id_field="url",
+    )
+    service = QdrantService(
+        qdrant_api_key="test-key",
+        qdrant_cluster_url="http://localhost:6333",
+        default_schema=schema,
+        embedding_service=mock_embedding_service,
+    )
+    mock_send = AsyncMock()
+    service._send_request_async = mock_send
+    return service, mock_send
+
+
+class TestIsHybridCollection:
+    @pytest.mark.asyncio
+    async def test_hybrid_collection_detected(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        mock_send.return_value = {
+            "result": {
+                "config": {
+                    "params": {
+                        "vectors": {"dense": {"size": 3072, "distance": "Cosine"}},
+                        "sparse_vectors": {"sparse": {"modifier": "idf"}},
+                    }
+                }
+            }
+        }
+        assert await service.is_hybrid_collection_async("test") is True
+
+    @pytest.mark.asyncio
+    async def test_dense_only_collection_detected(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        mock_send.return_value = {
+            "result": {
+                "config": {
+                    "params": {
+                        "vectors": {"size": 3072, "distance": "Cosine"},
+                        "sparse_vectors": {},
+                    }
+                }
+            }
+        }
+        assert await service.is_hybrid_collection_async("test") is False
+
+    @pytest.mark.asyncio
+    async def test_missing_sparse_vectors_key(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        mock_send.return_value = {
+            "result": {"config": {"params": {"vectors": {"size": 3072, "distance": "Cosine"}}}}
+        }
+        assert await service.is_hybrid_collection_async("test") is False
+
+
+class TestCreateCollectionHybrid:
+    @pytest.mark.asyncio
+    async def test_always_creates_hybrid_collection(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        mock_send.side_effect = [
+            {"result": {"exists": False}},
+            {"result": True},
+        ]
+        service._create_indexes_from_schema = AsyncMock()
+        result = await service.create_collection_async("test_col")
+        assert result is True
+        create_call = mock_send.call_args_list[1]
+        payload = create_call.kwargs["payload"]
+        assert "dense" in payload["vectors"]
+        assert "sparse" in payload["sparse_vectors"]
+
+
+class TestAddChunksHybrid:
+    @pytest.mark.asyncio
+    async def test_always_sends_named_vectors(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        service._build_vectors_async = AsyncMock(return_value=[[0.1, 0.2, 0.3]])
+        service.insert_points_in_collection_async = AsyncMock(return_value=True)
+
+        chunks = [{"chunk_id": "1", "content": "hello world", "file_id": "f1", "url": "http://x"}]
+        await service.add_chunks_async(chunks, "test_col")
+
+        inserted_points = service.insert_points_in_collection_async.call_args.kwargs["points"]
+        vector = inserted_points[0]["vector"]
+        assert "dense" in vector
+        assert "sparse" in vector
+        assert vector["sparse"]["model"] == BM25_MODEL
+        assert vector["sparse"]["text"] == "hello world"
+
+
+class TestSearchRouting:
+    @pytest.mark.asyncio
+    async def test_hybrid_mode_calls_hybrid_search(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        service._build_vectors_async = AsyncMock(return_value=[[0.1, 0.2]])
+        service._search_hybrid_async = AsyncMock(return_value=[("id1", 0.9, {"content": "c1"})])
+        service.get_chunk_data_by_id_async = AsyncMock(return_value=[
+            {"payload": {"chunk_id": "1", "content": "c1", "file_id": "f1", "url": "u1"}}
+        ])
+
+        result = await service.retrieve_similar_chunks_async(
+            query_text="test", collection_name="col", search_mode=SearchMode.HYBRID
+        )
+        service._search_hybrid_async.assert_called_once()
+        assert len(result) == 1
+
+    @pytest.mark.asyncio
+    async def test_semantic_mode_calls_dense_named(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        service._build_vectors_async = AsyncMock(return_value=[[0.1, 0.2]])
+        service._search_dense_named_async = AsyncMock(return_value=[("id1", 0.9, {"content": "c1"})])
+        service.get_chunk_data_by_id_async = AsyncMock(return_value=[
+            {"payload": {"chunk_id": "1", "content": "c1", "file_id": "f1", "url": "u1"}}
+        ])
+
+        await service.retrieve_similar_chunks_async(
+            query_text="test", collection_name="col", search_mode=SearchMode.SEMANTIC
+        )
+        service._search_dense_named_async.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_keyword_mode_calls_sparse_search(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        service._search_sparse_async = AsyncMock(return_value=[("id1", 5.0, {"content": "c1"})])
+        service.get_chunk_data_by_id_async = AsyncMock(return_value=[
+            {"payload": {"chunk_id": "1", "content": "c1", "file_id": "f1", "url": "u1"}}
+        ])
+
+        await service.retrieve_similar_chunks_async(
+            query_text="test", collection_name="col", search_mode=SearchMode.KEYWORD
+        )
+        service._search_sparse_async.assert_called_once()
+
+
+class TestQueryPointsAsync:
+    @pytest.mark.asyncio
+    async def test_parses_query_response_format(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        mock_send.return_value = {
+            "result": {
+                "points": [
+                    {"id": "id1", "score": 0.95, "payload": {"content": "c1"}},
+                    {"id": "id2", "score": 0.80, "payload": {"content": "c2"}},
+                ]
+            }
+        }
+        results = await service._query_points_async("col", {"query": [0.1], "limit": 2})
+        assert len(results) == 2
+        assert results[0] == ("id1", 0.95, {"content": "c1"})
+
+    @pytest.mark.asyncio
+    async def test_hybrid_search_sends_prefetch_and_fusion(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        mock_send.return_value = {"result": {"points": []}}
+
+        await service._search_hybrid_async(
+            query_text="test query",
+            query_vector=[0.1, 0.2],
+            collection_name="col",
+            limit=5,
+        )
+        call_payload = mock_send.call_args.kwargs["payload"]
+        assert len(call_payload["prefetch"]) == 2
+        assert call_payload["prefetch"][0]["using"] == "sparse"
+        assert call_payload["prefetch"][1]["using"] == "dense"
+        assert call_payload["query"] == {"fusion": "rrf"}
+
+    @pytest.mark.asyncio
+    async def test_hybrid_search_propagates_filter_to_both_prefetches(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        mock_send.return_value = {"result": {"points": []}}
+        test_filter = {"must": [{"key": "source_id", "match": {"value": "src-1"}}]}
+
+        await service._search_hybrid_async(
+            query_text="test query",
+            query_vector=[0.1, 0.2],
+            collection_name="col",
+            filter=test_filter,
+            limit=5,
+        )
+        call_payload = mock_send.call_args.kwargs["payload"]
+        assert call_payload["prefetch"][0]["filter"] == test_filter
+        assert call_payload["prefetch"][1]["filter"] == test_filter
+
+    @pytest.mark.asyncio
+    async def test_hybrid_search_omits_filter_when_none(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        mock_send.return_value = {"result": {"points": []}}
+
+        await service._search_hybrid_async(
+            query_text="test query",
+            query_vector=[0.1, 0.2],
+            collection_name="col",
+            limit=5,
+        )
+        call_payload = mock_send.call_args.kwargs["payload"]
+        assert "filter" not in call_payload["prefetch"][0]
+        assert "filter" not in call_payload["prefetch"][1]
+
+    @pytest.mark.asyncio
+    async def test_sparse_search_sends_bm25_document(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        mock_send.return_value = {"result": {"points": []}}
+
+        await service._search_sparse_async(
+            query_text="test query",
+            collection_name="col",
+            limit=5,
+        )
+        call_payload = mock_send.call_args.kwargs["payload"]
+        assert call_payload["query"] == {"text": "test query", "model": BM25_MODEL}
+        assert call_payload["using"] == "sparse"

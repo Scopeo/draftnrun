@@ -5,7 +5,7 @@ import pytest
 from engine.components.rag.retriever import Retriever, RetrieverInputs
 from engine.components.types import SourceChunk
 from engine.llm_services.llm_service import EmbeddingService
-from engine.qdrant_service import QdrantService
+from engine.qdrant_service import QdrantService, SearchMode
 from tests.mocks.trace_manager import MockTraceManager
 
 TEST_MAX_RETRIEVED_CHUNKS = 2
@@ -61,6 +61,7 @@ async def test_get_chunks_(retriever, mock_qdrant_service):
         metadata_date_key=[],
         max_retrieved_chunks_after_penalty=None,
         source_schemas=None,
+        search_mode=SearchMode.SEMANTIC,
     )
 
 
@@ -92,3 +93,49 @@ def test_retriever_inputs_accepts_string_filters_after_preprocessing():
     _coerce_inputs_for_model(data2, RetrieverInputs)
     inputs2 = RetrieverInputs(**data2)
     assert inputs2.filters == {"must": [{"key": "date", "range": {"gte": "2024-01-01"}}]}
+
+
+class TestRetrieverSearchMode:
+    def test_default_search_mode_is_semantic(self, mock_trace_manager, mock_qdrant_service):
+        retriever = Retriever(
+            trace_manager=mock_trace_manager,
+            collection_name="test_collection",
+            qdrant_service=mock_qdrant_service,
+            max_retrieved_chunks=TEST_MAX_RETRIEVED_CHUNKS,
+        )
+        assert retriever.search_mode == SearchMode.SEMANTIC
+
+    @pytest.mark.parametrize("mode", ["semantic", "keyword", "hybrid"])
+    def test_search_mode_from_string(self, mock_trace_manager, mock_qdrant_service, mode):
+        retriever = Retriever(
+            trace_manager=mock_trace_manager,
+            collection_name="test_collection",
+            qdrant_service=mock_qdrant_service,
+            max_retrieved_chunks=TEST_MAX_RETRIEVED_CHUNKS,
+            search_mode=mode,
+        )
+        assert retriever.search_mode == SearchMode(mode)
+
+    @pytest.mark.asyncio
+    async def test_search_mode_passed_to_qdrant_service(self, mock_trace_manager, mock_qdrant_service):
+        mock_qdrant_service.retrieve_similar_chunks_async.return_value = []
+        retriever = Retriever(
+            trace_manager=mock_trace_manager,
+            collection_name="test_collection",
+            qdrant_service=mock_qdrant_service,
+            max_retrieved_chunks=TEST_MAX_RETRIEVED_CHUNKS,
+            search_mode="semantic",
+        )
+        await retriever.get_chunks(query_text="test")
+        call_kwargs = mock_qdrant_service.retrieve_similar_chunks_async.call_args.kwargs
+        assert call_kwargs["search_mode"] == SearchMode.SEMANTIC
+
+    def test_invalid_search_mode_raises(self, mock_trace_manager, mock_qdrant_service):
+        with pytest.raises(ValueError):
+            Retriever(
+                trace_manager=mock_trace_manager,
+                collection_name="test_collection",
+                qdrant_service=mock_qdrant_service,
+                max_retrieved_chunks=TEST_MAX_RETRIEVED_CHUNKS,
+                search_mode="invalid_mode",
+            )
