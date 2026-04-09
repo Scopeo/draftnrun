@@ -368,7 +368,14 @@ def test_invalid_reference_uuid_returns_error():
                     "is_start_node": True,
                     "component_id": COMPONENT_ID,
                     "component_version_id": COMPONENT_VERSION_ID,
-                    "parameters": [{"value": "openai:gpt-5-mini", "name": "completion_model", "display_order": None, "kind": "input"}],
+                    "parameters": [
+                        {
+                            "value": "openai:gpt-5-mini",
+                            "name": "completion_model",
+                            "display_order": None,
+                            "kind": "input",
+                        }
+                    ],
                     "tool_description": {
                         "name": "Test Tool",
                         "description": "d",
@@ -406,7 +413,12 @@ def test_invalid_reference_uuid_returns_error():
                             "kind": ParameterKind.INPUT,
                             "display_order": None,
                         },
-                        {"value": "openai:gpt-5-mini", "name": "completion_model", "display_order": None, "kind": "input"},
+                        {
+                            "value": "openai:gpt-5-mini",
+                            "name": "completion_model",
+                            "display_order": None,
+                            "kind": "input",
+                        },
                     ],
                 },
             ],
@@ -608,7 +620,14 @@ def test_invalid_reference_unknown_port_returns_error():
                     "is_start_node": True,
                     "component_id": COMPONENT_ID,
                     "component_version_id": COMPONENT_VERSION_ID,
-                    "parameters": [{"value": "openai:gpt-5-mini", "name": "completion_model", "display_order": None, "kind": "input"}],
+                    "parameters": [
+                        {
+                            "value": "openai:gpt-5-mini",
+                            "name": "completion_model",
+                            "display_order": None,
+                            "kind": "input",
+                        }
+                    ],
                     "tool_description": {
                         "name": "Test Tool",
                         "description": "d",
@@ -646,7 +665,12 @@ def test_invalid_reference_unknown_port_returns_error():
                             "kind": ParameterKind.INPUT,
                             "display_order": None,
                         },
-                        {"value": "openai:gpt-5-mini", "name": "completion_model", "display_order": None, "kind": "input"},
+                        {
+                            "value": "openai:gpt-5-mini",
+                            "name": "completion_model",
+                            "display_order": None,
+                            "kind": "input",
+                        },
                     ],
                 },
             ],
