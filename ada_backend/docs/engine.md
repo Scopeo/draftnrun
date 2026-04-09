@@ -67,7 +67,7 @@ The concrete base class implementing `Runnable`. Key attributes:
 
 ### Component Catalog Lifecycle
 
-When removing a component from the product, delete the runtime class, registry entry, seed data, default tool description, and any wrapper components that only exist to call it in the same change. Leaving only part of the catalog wiring in place can keep a dead component instantiable through backend seeds or MCP graph validation even after it disappears from the front-end.
+When removing a component from the product, delete the runtime class, registry entry, seed data, existing DB catalog rows (with a migration), default tool description, and wrapper components that only exist to call it. Leaving only part of the catalog wiring in place can keep a dead component instantiable through backend seeds or MCP graph validation even after it disappears from the front-end.
 
 ## Port System
 
