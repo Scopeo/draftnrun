@@ -412,20 +412,6 @@ result: the tool name, description, and JSON Schema properties the AI will see a
 Use `tool_description_override` on the component instance to customize the tool description \
 text shown to the AI.
 
-## Port Mapping (data flow)
-
-```json
-{
-  "source_instance_id": "node-uuid-A",
-  "source_port_name": "output",
-  "target_instance_id": "node-uuid-B",
-  "target_port_name": "messages",
-  "dispatch_strategy": "direct"
-}
-```
-
-Distinct from edges — edges say "run B after A", port mappings say "send A's output to B's input".
-
 ## Relationship (nesting)
 
 ```json
@@ -589,10 +575,8 @@ pass it as a `kind="parameter"` with the value JSON-encoded as a string.
 
 Two ways to wire data into a node's input ports:
 
-1. **`kind="input"` parameters** — string values parsed into field expressions. Simple refs \
-like `@{{uuid.port}}` can also create save-time port mappings for validation.
-2. **`input_port_instances`** — JSON expression objects stored directly. No automatic save-time \
-port mapping validation.
+1. **`kind="input"` parameters** — string values parsed into field expressions.
+2. **`input_port_instances`** — JSON expression objects stored directly.
 
 Use `kind="input"` for most literal values and simple references between type-compatible ports.
 
@@ -602,7 +586,7 @@ Use `input_port_instances` when:
 - you need explicit expression JSON
 - you are using key-extraction refs like `@{{uuid.port::key}}`
 
-Reason: key-extraction refs are a backend special case. `kind="input"` skips automatic port mapping \
+Reason: key-extraction refs are a backend special case — `kind="input"` skips field expression \
 creation for `::key` refs to avoid false type-coercion errors.
 
 **Priority rule**: if a field name is present in both `input_port_instances` and a `kind="input"` \
@@ -803,7 +787,7 @@ and `output_ports` for each matching component, with a `canonical: true` flag on
 | Code Execution | `output` | `python_code` | |
 
 Port names marked as canonical are auto-wired by the backend when an edge is created — see \
-`docs://graphs` for the canonical port mapping table.
+`docs://graphs` for the canonical wiring table.
 """
 
 EXECUTION = """\
@@ -1715,7 +1699,7 @@ DOMAINS: dict[str, str] = {
 DOMAIN_DESCRIPTIONS: dict[str, str] = {
     "getting-started": "First steps, RBAC, role hierarchy, constraints",
     "agent-config": "Configure agents: model, tools, system prompt",
-    "graphs": "Graph structure, edges, port mappings, field expressions",
+    "graphs": "Graph structure, edges, field expressions",
     "versioning": "Draft vs production, graph runners, save vs publish",
     "components": "Component catalog, parameter/port types",
     "execution": "Running agents, payloads, inspecting runs",
