@@ -11,10 +11,13 @@ Create Date: 2026-04-08
 """
 
 import json
+import logging
 from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+
+LOGGER = logging.getLogger(__name__)
 
 revision: str = "g6h7i8j9k0l1"
 down_revision: Union[str, None] = "a1b2c3d4e5f9"
@@ -43,6 +46,7 @@ def upgrade() -> None:
             SELECT
                 pm.source_instance_id,
                 pm.target_instance_id,
+                tpd.id    AS target_port_definition_id,
                 tpd.name  AS target_port_name,
                 COALESCE(spd.name, sopi.name) AS source_port_name
             FROM port_mappings pm
@@ -63,13 +67,19 @@ def upgrade() -> None:
         """)
     ).fetchall()
 
-    for source_instance_id, target_instance_id, target_port_name, source_port_name in rows:
+    for source_instance_id, target_instance_id, target_port_definition_id, target_port_name, source_port_name in rows:
         if not source_port_name:
+            LOGGER.warning(
+                "Skipping port_mapping backfill: source port name could not be resolved "
+                "(source_instance_id=%s, target_instance_id=%s, target_port=%s). "
+                "The mapping is orphaned and will be lost when port_mappings is dropped.",
+                source_instance_id,
+                target_instance_id,
+                target_port_name,
+            )
             continue
 
-        expr_json = json.dumps(
-            {"type": "ref", "instance": str(source_instance_id), "port": source_port_name}
-        )
+        expr_json = json.dumps({"type": "ref", "instance": str(source_instance_id), "port": source_port_name})
 
         fe_id = connection.execute(
             sa.text(
@@ -97,11 +107,15 @@ def upgrade() -> None:
         else:
             pi_id = connection.execute(
                 sa.text(
-                    "INSERT INTO port_instances (id, component_instance_id, name, type) "
-                    "VALUES (gen_random_uuid(), :tid, :pname, 'INPUT') "
+                    "INSERT INTO port_instances (id, component_instance_id, name, port_definition_id, type) "
+                    "VALUES (gen_random_uuid(), :tid, :pname, :pdid, 'INPUT') "
                     "RETURNING id"
                 ),
-                {"tid": str(target_instance_id), "pname": target_port_name},
+                {
+                    "tid": str(target_instance_id),
+                    "pname": target_port_name,
+                    "pdid": str(target_port_definition_id),
+                },
             ).scalar()
             connection.execute(
                 sa.text("INSERT INTO input_port_instances (id, field_expression_id) VALUES (:pid, :fid)"),
