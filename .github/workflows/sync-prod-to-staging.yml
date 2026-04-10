@@ -99,47 +99,104 @@ jobs:
           username: ec2-user
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          command_timeout: 15m
+          command_timeout: 30m
           script: |
             set -e
             NS="ada-staging"
             STATE_FILE="/tmp/ada-sync-status-${{ github.run_id }}.txt"
-            JOB_NAME="qdrant-sync-${{ github.run_id }}"
 
             if [ -f "$STATE_FILE" ] && [ "$(cat "$STATE_FILE")" != "SYNCED" ]; then
               echo "⏭️ Skipping Qdrant sync - DB sync was not performed (status: $(cat "$STATE_FILE"))"
               exit 0
             fi
 
-            IMAGE=$(kubectl get deployment/ada-api -n ${NS} -o jsonpath='{.spec.template.spec.containers[0].image}')
-            echo "🔍 Running Qdrant sync as Kubernetes Job using image: ${IMAGE}"
+            SOURCE_URL="${{ secrets.PROD_QDRANT_CLUSTER_URL }}"
+            SOURCE_KEY="${{ secrets.PROD_QDRANT_API_KEY }}"
+            TARGET_URL="${{ secrets.STAGING_QDRANT_CLUSTER_URL }}"
+            TARGET_KEY="${{ secrets.STAGING_QDRANT_API_KEY }}"
 
-            kubectl create job ${JOB_NAME} -n ${NS} \
-              --image=${IMAGE} \
-              -- bash -c "\
-                export PATH=/app/.venv/bin:\$PATH && \
-                export PYTHONPATH=/app && \
-                cd /app && \
-                ./scripts/copy_data/sync_data.sh \
-                  --source-db-url '${{ secrets.PROD_DB_URL }}' \
-                  --source-qdrant-url '${{ secrets.PROD_QDRANT_CLUSTER_URL }}' \
-                  --source-qdrant-key '${{ secrets.PROD_QDRANT_API_KEY }}' \
-                  --target-qdrant-url '${{ secrets.STAGING_QDRANT_CLUSTER_URL }}' \
-                  --target-qdrant-key '${{ secrets.STAGING_QDRANT_API_KEY }}' \
-                  --only-qdrant \
-              "
+            SOURCE_GRPC=$(echo "$SOURCE_URL" | sed -E 's/:[0-9]+$//')":6334"
+            TARGET_GRPC=$(echo "$TARGET_URL" | sed -E 's/:[0-9]+$//')":6334"
 
-            echo "⏳ Waiting for Qdrant sync job to complete..."
-            if kubectl wait --for=condition=complete job/${JOB_NAME} -n ${NS} --timeout=15m 2>/dev/null; then
-              echo "📋 Job logs:"
-              kubectl logs job/${JOB_NAME} -n ${NS}
-              echo "✅ Qdrant sync completed successfully"
-              kubectl delete job ${JOB_NAME} -n ${NS}
-            else
-              echo "❌ Qdrant sync job failed"
-              echo "📋 Job logs:"
-              kubectl logs job/${JOB_NAME} -n ${NS} || true
-              kubectl delete job ${JOB_NAME} -n ${NS} || true
+            COLLECTIONS=$(curl -sf -H "api-key: ${SOURCE_KEY}" "${SOURCE_URL}/collections" | jq -r '.result.collections[].name')
+            if [ -z "$COLLECTIONS" ]; then
+              echo "No collections found in source, nothing to migrate"
+              exit 0
+            fi
+            TOTAL=$(echo "$COLLECTIONS" | wc -l | tr -d ' ')
+            echo "🔍 Migrating ${TOTAL} collections via qdrant-migration (gRPC)"
+
+            FAIL_COUNT=0
+            IDX=0
+            for COLLECTION in $COLLECTIONS; do
+              IDX=$((IDX + 1))
+              HASH=$(echo -n "$COLLECTION" | md5sum | head -c 8)
+              JOB_NAME="qm-${HASH}-${{ github.run_id }}"
+
+              echo "[${IDX}/${TOTAL}] ${COLLECTION}"
+              kubectl delete job "${JOB_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
+
+              kubectl apply -n "${NS}" -f - <<EOF
+            apiVersion: batch/v1
+            kind: Job
+            metadata:
+              name: ${JOB_NAME}
+            spec:
+              backoffLimit: 0
+              activeDeadlineSeconds: 600
+              template:
+                spec:
+                  restartPolicy: Never
+                  containers:
+                  - name: migrate
+                    image: registry.cloud.qdrant.io/library/qdrant-migration
+                    args:
+                    - "qdrant"
+                    - "--source.url=${SOURCE_GRPC}"
+                    - "--source.api-key=${SOURCE_KEY}"
+                    - "--source.collection=${COLLECTION}"
+                    - "--target.url=${TARGET_GRPC}"
+                    - "--target.api-key=${TARGET_KEY}"
+                    - "--target.collection=${COLLECTION}"
+                    - "--migration.batch-size=512"
+                    - "--migration.restart"
+            EOF
+
+              ELAPSED=0
+              JOB_RESULT=""
+              while [ $ELAPSED -lt 600 ]; do
+                SUCCEEDED=$(kubectl get job "${JOB_NAME}" -n "${NS}" -o jsonpath='{.status.succeeded}' 2>/dev/null || echo "")
+                JOB_FAILED=$(kubectl get job "${JOB_NAME}" -n "${NS}" -o jsonpath='{.status.failed}' 2>/dev/null || echo "")
+                if [ "$SUCCEEDED" = "1" ]; then
+                  JOB_RESULT="ok"
+                  break
+                fi
+                if [ -n "$JOB_FAILED" ] && [ "$JOB_FAILED" != "0" ]; then
+                  JOB_RESULT="failed"
+                  break
+                fi
+                sleep 5
+                ELAPSED=$((ELAPSED + 5))
+              done
+
+              if [ "$JOB_RESULT" = "ok" ]; then
+                echo "  ✅ Done"
+              elif [ "$JOB_RESULT" = "failed" ]; then
+                echo "  ❌ Failed"
+                kubectl logs "job/${JOB_NAME}" -n "${NS}" --tail=20 2>/dev/null || true
+                FAIL_COUNT=$((FAIL_COUNT + 1))
+              else
+                echo "  ⏰ Timed out"
+                FAIL_COUNT=$((FAIL_COUNT + 1))
+              fi
+
+              kubectl delete job "${JOB_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
+            done
+
+            echo ""
+            echo "Qdrant migration: $((TOTAL - FAIL_COUNT))/${TOTAL} succeeded"
+            if [ $FAIL_COUNT -gt 0 ]; then
+              echo "❌ ${FAIL_COUNT} collection(s) failed"
               exit 1
             fi
 
