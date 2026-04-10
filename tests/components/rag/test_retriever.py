@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from engine.components.rag.retriever import Retriever
+from engine.components.rag.retriever import Retriever, RetrieverInputs
 from engine.components.types import SourceChunk
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantService
@@ -62,3 +62,33 @@ async def test_get_chunks_(retriever, mock_qdrant_service):
         max_retrieved_chunks_after_penalty=None,
         source_schemas=None,
     )
+
+
+@pytest.mark.asyncio
+async def test_run_with_string_filters(retriever, mock_qdrant_service):
+    """Regression: LLM or LiteralNode may pass filters as JSON string '{}' instead of dict."""
+    mock_qdrant_service.retrieve_similar_chunks_async.return_value = [
+        SourceChunk(content="chunk1", name="1", document_name="1", url="url1", metadata={"key": "value"}),
+    ]
+
+    result = await retriever.run(query="test query", filters="{}")
+
+    assert result.messages
+    mock_qdrant_service.retrieve_similar_chunks_async.assert_called_once()
+    call_kwargs = mock_qdrant_service.retrieve_similar_chunks_async.call_args.kwargs
+    assert call_kwargs["filter"] is None or isinstance(call_kwargs["filter"], dict)
+
+
+def test_retriever_inputs_accepts_string_filters_after_preprocessing():
+    """Regression: RetrieverInputs should accept dict filters after component preprocessing."""
+    from engine.components.component import _coerce_inputs_for_model
+
+    data = {"query": "test", "filters": "{}"}
+    _coerce_inputs_for_model(data, RetrieverInputs)
+    inputs = RetrieverInputs(**data)
+    assert inputs.filters == {}
+
+    data2 = {"query": "test", "filters": '{"must": [{"key": "date", "range": {"gte": "2024-01-01"}}]}'}
+    _coerce_inputs_for_model(data2, RetrieverInputs)
+    inputs2 = RetrieverInputs(**data2)
+    assert inputs2.filters == {"must": [{"key": "date", "range": {"gte": "2024-01-01"}}]}

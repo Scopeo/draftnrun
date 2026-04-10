@@ -10,8 +10,10 @@ from datetime import date
 from typing import Optional
 
 import pytest
+from pydantic import BaseModel
 
 from engine.coercion_matrix import CoercionError, CoercionMatrix, coerce_value, get_coercion_matrix
+from engine.components.component import _coerce_inputs_for_model
 from engine.components.types import AgentPayload, ChatMessage, SourceChunk
 
 
@@ -628,3 +630,63 @@ def test_arbitrary_dict_to_chat_messages():
     assert isinstance(result[0], ChatMessage)
     assert result[0].role == "user"
     assert result[0].content == "hello"
+
+
+def test_string_to_dict_coercion():
+    """Regression: JSON string '{}' must be coerced to dict when target is dict."""
+    coercion_matrix = get_coercion_matrix()
+
+    assert coercion_matrix.coerce("{}", dict) == {}
+    assert coercion_matrix.coerce('{"key": "value"}', dict) == {"key": "value"}
+    assert coercion_matrix.coerce('{"must": []}', dict) == {"must": []}
+
+    assert coercion_matrix.coerce("{}", Optional[dict]) == {}
+    assert coercion_matrix.coerce('{"a": 1}', Optional[dict]) == {"a": 1}
+
+    with pytest.raises(CoercionError):
+        coercion_matrix.coerce("not json", dict)
+
+    assert coercion_matrix.can_coerce(str, dict) is True
+    assert coercion_matrix.can_coerce(str, Optional[dict]) is True
+
+
+class _SampleInputs(BaseModel):
+    query: str
+    filters: Optional[dict] = None
+    tags: Optional[list] = None
+    count: int = 0
+
+
+def test_preprocess_inputs_parses_json_string_for_dict_field():
+    """Regression: LiteralNode / LLM may deliver '{}' for dict-typed fields."""
+    data = {"query": "hello", "filters": "{}"}
+    _coerce_inputs_for_model(data, _SampleInputs)
+    assert data["filters"] == {}
+
+    data2 = {"query": "hello", "filters": '{"must": []}'}
+    _coerce_inputs_for_model(data2, _SampleInputs)
+    assert data2["filters"] == {"must": []}
+
+
+def test_preprocess_inputs_parses_json_string_for_list_field():
+    data = {"query": "hello", "tags": '["a", "b"]'}
+    _coerce_inputs_for_model(data, _SampleInputs)
+    assert data["tags"] == ["a", "b"]
+
+
+def test_preprocess_inputs_leaves_non_json_strings_alone():
+    data = {"query": "hello", "filters": "not json"}
+    _coerce_inputs_for_model(data, _SampleInputs)
+    assert data["filters"] == "not json"
+
+
+def test_preprocess_inputs_does_not_touch_str_fields():
+    data = {"query": '{"looks": "like json"}', "count": 5}
+    _coerce_inputs_for_model(data, _SampleInputs)
+    assert data["query"] == '{"looks": "like json"}'
+
+
+def test_preprocess_inputs_does_not_touch_already_correct_types():
+    data = {"query": "hello", "filters": {"must": []}}
+    _coerce_inputs_for_model(data, _SampleInputs)
+    assert data["filters"] == {"must": []}
