@@ -22,6 +22,16 @@ class GoogleCalendarClient:
             raise ValueError("access_token is required")
         creds = Credentials(token=access_token)
         self._service = build("calendar", "v3", credentials=creds)
+        self._user_email: str | None = None
+
+    async def get_user_email(self) -> str:
+        if self._user_email is None:
+            def _call():
+                cal = self._service.calendarList().get(calendarId="primary").execute()
+                return cal["id"]
+
+            self._user_email = await asyncio.to_thread(_call)
+        return self._user_email
 
     async def list_calendars(self) -> list[dict[str, Any]]:
         def _call():

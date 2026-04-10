@@ -1,15 +1,18 @@
 """
-Unit tests for GoogleCalendarMCPTool wrapper.
+Unit tests for GoogleCalendarMCPTool wrapper and server logic.
 
 These tests validate the wrapper layer (tool descriptions, env injection,
-missing-token guard) without hitting the real Google Calendar API.
+missing-token guard) and the MCP tool surface without hitting the real
+Google Calendar API.
 """
 
 import subprocess
 import sys
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from engine.components.tools.google_calendar_mcp import server as gcal_server
 from engine.components.tools.google_calendar_mcp_tool import (
     _DEFAULT_TOOLS,
     GoogleCalendarMCPTool,
@@ -90,3 +93,17 @@ class TestGoogleCalendarMCPToolRunGuard:
         inputs = MCPToolInputs(tool_name="calendar_list_calendars", tool_arguments={})
         with pytest.raises(ValueError, match="OAuth connection"):
             await tool._run_without_io_trace(inputs, ctx={})
+
+
+class TestCalendarGetMyEmail:
+    @pytest.mark.asyncio
+    async def test_returns_user_email(self):
+        mock_client = AsyncMock()
+        mock_client.get_user_email = AsyncMock(return_value="owner@example.com")
+        with patch.object(gcal_server, "_client", mock_client, create=True):
+            result = await gcal_server.calendar_get_my_email()
+        assert result == {"email": "owner@example.com"}
+
+    @pytest.mark.asyncio
+    async def test_get_my_email_in_default_tools(self):
+        assert "calendar_get_my_email" in _DEFAULT_TOOLS

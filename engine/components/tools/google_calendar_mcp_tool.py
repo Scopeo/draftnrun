@@ -15,6 +15,7 @@ _DEFAULT_TOOLS = {
     "calendar_list_calendars",
     "calendar_list_events",
     "calendar_get_event",
+    "calendar_get_my_email",
     "calendar_create_event",
     "calendar_update_event",
     "calendar_delete_event",
