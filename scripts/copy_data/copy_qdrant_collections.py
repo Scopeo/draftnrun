@@ -136,19 +136,49 @@ def delete_snapshot(
     wait=wait_exponential(multiplier=1, min=2, max=10),
     retry=retry_if_exception_type((requests.exceptions.ConnectionError, requests.exceptions.Timeout)),
 )
+def delete_collection(base_url: str, api_key: str, collection_name: str) -> bool:
+    """Delete a collection from Qdrant. Returns True if deleted, False if it didn't exist."""
+    url = f"{base_url}/collections/{collection_name}"
+    headers = {"api-key": api_key}
+    response = requests.delete(url, headers=headers, timeout=60)
+    if response.status_code == 404:
+        return False
+    response.raise_for_status()
+    return True
+
+
+def verify_collection_exists(base_url: str, api_key: str, collection_name: str) -> bool:
+    """Check that a collection exists and has vectors in the target cluster."""
+    url = f"{base_url}/collections/{collection_name}"
+    headers = {"api-key": api_key}
+    response = requests.get(url, headers=headers, timeout=60)
+    if response.status_code == 404:
+        return False
+    response.raise_for_status()
+    return True
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((requests.exceptions.ConnectionError, requests.exceptions.Timeout)),
+)
 def upload_snapshot(
     base_url: str,
     api_key: str,
     collection_name: str,
     snapshot_path: Path,
 ) -> None:
-    """Upload and restore a snapshot file to a collection."""
+    """Upload and restore a snapshot file to a collection (PUT method per Qdrant REST API)."""
     url = f"{base_url}/collections/{collection_name}/snapshots/upload?priority=snapshot"
     headers = {"api-key": api_key}
 
     with snapshot_path.open("rb") as f:
         files = {"snapshot": (snapshot_path.name, f, "application/octet-stream")}
-        response = requests.post(url, headers=headers, files=files, timeout=600)
+        response = requests.put(url, headers=headers, files=files, timeout=600)
+        if not response.ok:
+            body = response.text[:500] if response.text else "(empty body)"
+            print(f"  Upload failed ({response.status_code}): {body}", file=sys.stderr)
         response.raise_for_status()
 
 
@@ -275,9 +305,21 @@ def main():
                     except Exception as e:
                         print(f"  Warning: Failed to delete snapshot from source (non-critical): {e}")
 
+            print("  Deleting collection in target before restore...")
+            if delete_collection(target_url, target_key, collection_name):
+                print(f"  Deleted existing collection {collection_name} from target")
+            else:
+                print(f"  Collection {collection_name} did not exist in target (clean create)")
+
             print("  Uploading and restoring in target...")
             upload_snapshot(target_url, target_key, collection_name, snapshot_path)
-            print(f"  ✓ Collection {collection_name} copied successfully")
+
+            if verify_collection_exists(target_url, target_key, collection_name):
+                print(f"  ✓ Collection {collection_name} copied and verified")
+            else:
+                print(f"  ✗ Collection {collection_name} uploaded but verification failed!", file=sys.stderr)
+                error_count += 1
+                continue
 
             success_count += 1
 
@@ -293,6 +335,26 @@ def main():
             print(f"  ✗ Failed to copy collection {collection_name}: {e}", file=sys.stderr)
             error_count += 1
             continue
+        finally:
+            if snapshot_path.exists():
+                snapshot_path.unlink()
+
+    existing_target_collections = get_collections_from_qdrant(target_url, target_key)
+    stale_collections = existing_target_collections - collections
+    if stale_collections:
+        print(
+            f"\n===> Cleaning up {len(stale_collections)} \
+            stale collections from target: {', '.join(sorted(stale_collections))}\
+            "
+        )
+        for collection_name in sorted(stale_collections):
+            try:
+                delete_collection(target_url, target_key, collection_name)
+                print(f"  ✓ Deleted stale collection: {collection_name}")
+            except Exception as e:
+                print(f"  ✗ Failed to delete stale collection {collection_name}: {e}", file=sys.stderr)
+    else:
+        print("\n===> No stale collections to clean up in target")
 
     print(f"\n===> Copy completed: {success_count} successful, {error_count} failed")
 
