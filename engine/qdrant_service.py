@@ -1159,7 +1159,12 @@ class QdrantService:
             collection_name=collection_name,
             filter=query_filter_qdrant,
         )
+        LOGGER.info(
+            f"Qdrant sync diff: {len(incoming_ids_with_timestamp)} incoming, "
+            f"{collection_count} existing in Qdrant (filter={query_filter_qdrant})"
+        )
         if collection_count == 0:
+            LOGGER.info("Qdrant collection empty for filter — uploading all chunks")
             ids_to_upsert = set(incoming_ids_with_timestamp.keys())
         else:
             fields = [chunk_id_field] + ([timestamp_field] if timestamp_field else [])
@@ -1189,6 +1194,11 @@ class QdrantService:
                         existing_ids_with_timestamp[chunk_id],
                     )
                 }
+            LOGGER.info(
+                f"Qdrant sync diff result: {len(ids_to_add)} to add, "
+                f"{len(ids_to_update)} to update, {len(ids_to_delete)} to delete, "
+                f"{len(common_ids) - len(ids_to_update)} unchanged"
+            )
 
             ids_to_delete = ids_to_delete | ids_to_update
             ids_to_upsert = ids_to_add | ids_to_update

@@ -45,6 +45,7 @@ DOCUMENT_TITLE_COLUMN_NAME = "document_title"
 ORDER_COLUMN_NAME = "order"
 URL_COLUMN_NAME = "url"
 SOURCE_ID_COLUMN_NAME = "source_id"
+SYNC_ID_COLUMN_NAME = "sync_id"
 METADATA_COLUMN_NAME = "metadata"  # JSONB column for source-specific metadata
 
 DEFAULT_EMBEDDING_MODEL = "openai:text-embedding-3-large"
@@ -60,6 +61,7 @@ UNIFIED_TABLE_COLUMNS = [
     CHUNK_COLUMN_NAME,
     TIMESTAMP_COLUMN_NAME,
     METADATA_COLUMN_NAME,
+    SYNC_ID_COLUMN_NAME,
 ]
 
 # Unified table definition for all source types
@@ -75,6 +77,7 @@ UNIFIED_TABLE_DEFINITION = DBDefinition(
         DBColumn(name=CHUNK_COLUMN_NAME, type="VARCHAR"),
         DBColumn(name=TIMESTAMP_COLUMN_NAME, type="VARCHAR"),
         DBColumn(name=METADATA_COLUMN_NAME, type="JSONB"),
+        DBColumn(name=SYNC_ID_COLUMN_NAME, type="VARCHAR", is_nullable=True),
         DBColumn(name=CREATED_AT_COLUMN, type="TIMESTAMP_TZ", default="CURRENT_TIMESTAMP"),
         DBColumn(name=UPDATED_AT_COLUMN, type="TIMESTAMP_TZ", default="CURRENT_TIMESTAMP"),
     ]

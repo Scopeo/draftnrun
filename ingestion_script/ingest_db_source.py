@@ -23,6 +23,7 @@ from ingestion_script.utils import (
     METADATA_COLUMN_NAME,
     ORDER_COLUMN_NAME,
     SOURCE_ID_COLUMN_NAME,
+    SYNC_ID_COLUMN_NAME,
     UNIFIED_QDRANT_SCHEMA,
     UNIFIED_TABLE_DEFINITION,
     URL_COLUMN_NAME,
@@ -33,15 +34,6 @@ from ingestion_script.utils import (
 )
 
 LOGGER = logging.getLogger(__name__)
-
-
-def build_file_id(table_name: str, row_id) -> str:
-    return f"{table_name}_{row_id}"
-
-
-def extract_row_id_from_file_id(file_id: str, table_name: str) -> str:
-    prefix = f"{table_name}_"
-    return file_id[len(prefix) :]
 
 
 def _serialize_value(value):
@@ -109,17 +101,14 @@ def get_db_source_ids(
         schema_name=source_schema_name,
         sql_query_filter=sql_query_filter,
     )
-    # TODO: Have a sync_id column in the source table and use it to track the sync progress
     return {
-        build_file_id(table_name, row[id_column_name]): _serialize_value(row.get(timestamp_column_name))
-        if timestamp_column_name
-        else None
+        str(row[id_column_name]): _serialize_value(row.get(timestamp_column_name)) if timestamp_column_name else None
         for row in id_timestamp_data
     }
 
 
 def fetch_db_source_chunks(
-    file_ids: set[str],
+    sync_ids: set[str],
     sql_local_service: SQLLocalService,
     table_name: str,
     id_column_name: str,
@@ -132,11 +121,10 @@ def fetch_db_source_chunks(
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
 ) -> list[dict]:
-    if not file_ids:
+    if not sync_ids:
         return []
 
-    raw_row_ids = [extract_row_id_from_file_id(file_id, table_name) for file_id in file_ids]
-    id_filter = f"{id_column_name} IN ({','.join(repr(str(raw_id)) for raw_id in raw_row_ids)})"
+    id_filter = f"{id_column_name} IN ({','.join(repr(str(sync_id)) for sync_id in sync_ids)})"
 
     source_rows = sql_local_service.get_table_rows(
         table_name=table_name,
@@ -149,9 +137,10 @@ def fetch_db_source_chunks(
 
     for source_row in source_rows:
         row_id = source_row[id_column_name]
+        sync_id = str(row_id)
         combined_text = " ".join(str(source_row.get(col) or "") for col in text_column_names)
         chunks = splitter.split_text(combined_text)
-        file_id = build_file_id(table_name, row_id)
+        file_id = f"{table_name}_{row_id}"
         timestamp_value = source_row.get(timestamp_column_name) if timestamp_column_name else None
 
         for chunk_index, chunk_text in enumerate(chunks, start=1):
@@ -177,6 +166,7 @@ def fetch_db_source_chunks(
                 CHUNK_ID_COLUMN_NAME: chunk_id,
                 CHUNK_COLUMN_NAME: chunk_text,
                 FILE_ID_COLUMN_NAME: file_id,
+                SYNC_ID_COLUMN_NAME: sync_id,
                 ORDER_COLUMN_NAME: chunk_index - 1,
                 DOCUMENT_TITLE_COLUMN_NAME: file_id,
                 TIMESTAMP_COLUMN_NAME: _serialize_value(timestamp_value),
@@ -278,7 +268,7 @@ async def upload_db_source(
             ),
             table_name=storage_table_name,
             table_definition=db_definition,
-            id_column_name=FILE_ID_COLUMN_NAME,
+            id_column_name=SYNC_ID_COLUMN_NAME,
             timestamp_column_name=TIMESTAMP_COLUMN_NAME,
             append_mode=update_existing,
             schema_name=storage_schema_name,
