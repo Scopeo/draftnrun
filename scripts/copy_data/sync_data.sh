@@ -72,7 +72,7 @@ sync_databases() {
   if [ "$FORCE_SYNC" != "1" ]; then
     if check_dump_ttl "$BACKEND_DUMP_PATH" "ada_backend"; then
       echo "===> Cache valid based on ada_backend dump, nothing to do"
-      return 1
+      return 0
     fi
   else
     echo "===> FORCE_SYNC enabled, skipping TTL check and forcing full sync"
@@ -119,5 +119,5 @@ sync_databases() {
   return 0
 }
 
-sync_databases || true
+sync_databases
 
