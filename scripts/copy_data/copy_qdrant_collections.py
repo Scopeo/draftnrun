@@ -343,7 +343,9 @@ def main():
     stale_collections = existing_target_collections - collections
     if stale_collections:
         print(
-            f"\n===> Cleaning up {len(stale_collections)} stale collections from target: {', '.join(sorted(stale_collections))}"
+            f"\n===> Cleaning up {len(stale_collections)} \
+            stale collections from target: {', '.join(sorted(stale_collections))}\
+            "
         )
         for collection_name in sorted(stale_collections):
             try:
