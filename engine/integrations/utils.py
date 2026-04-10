@@ -47,10 +47,17 @@ def needs_new_token(integration_secret: db.SecretIntegration) -> bool:
     return False
 
 
-def get_gmail_sender_service(access_token: str):
+def get_google_service(api_name: str, version: str, access_token: str):
     creds = Credentials(token=access_token)
-    service = build("gmail", "v1", credentials=creds)
-    return service
+    return build(api_name, version, credentials=creds)
+
+
+def get_gmail_sender_service(access_token: str):
+    return get_google_service("gmail", "v1", access_token)
+
+
+def get_google_calendar_service(access_token: str):
+    return get_google_service("calendar", "v3", access_token)
 
 
 def get_google_user_email(access_token: str) -> str:

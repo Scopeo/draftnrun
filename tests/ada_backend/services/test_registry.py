@@ -1,10 +1,13 @@
 import pytest
 
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
+from ada_backend.services.entity_factory import OAuthComponentFactory
 from ada_backend.services.registry import FACTORY_REGISTRY
 from engine.components.synthesizer import Synthesizer
+from engine.components.tools.google_calendar_mcp_tool import GoogleCalendarMCPTool
 from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import ComponentAttributes, ToolDescription
+from engine.integrations.providers import OAuthProvider
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_context import set_trace_manager
 from tests.mocks.trace_manager import MockTraceManager
@@ -54,3 +57,13 @@ async def test_remote_mcp_factory_calls_async_constructor(monkeypatch):
 
     assert result["constructed_with"]["server_url"] == "https://mcp.example.com/sse"
     assert "tool_description" not in result["constructed_with"]
+
+
+def test_google_calendar_mcp_tool_registered():
+    """Verify the Google Calendar MCP component is registered with the correct factory."""
+    factory = FACTORY_REGISTRY.get(component_version_id=COMPONENT_VERSION_UUIDS["google_calendar_mcp_tool"])
+    assert factory is not None
+    assert isinstance(factory, OAuthComponentFactory)
+    assert factory.entity_class is GoogleCalendarMCPTool
+    assert factory.provider_config_key == OAuthProvider.GOOGLE_CALENDAR
+    assert factory.constructor_method == "from_access_token"
