@@ -290,7 +290,6 @@ async def _ingest_folder_source(
         source_name=source_name,
         source_type=source_type,
         status=db.TaskStatus.FAILED,
-        source_id=source_id,
     )
     if settings.USE_LLM_FOR_PDF_PARSING:
         try:
@@ -347,248 +346,249 @@ async def _ingest_folder_source(
         raise ValueError("INGESTION_DB_URL is not set")
     create_db_if_not_exists(settings.INGESTION_DB_URL)
     db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
-    qdrant_service = QdrantService.from_defaults(
-        embedding_service=embedding_service,
-        default_collection_schema=UNIFIED_QDRANT_SCHEMA,
-    )
-
-    LOGGER.info("Starting ingestion process")
-    files_info = folder_manager.list_all_files_info()
-    if save_supabase:
-        files_info = sync_files_to_supabase(
-            organization_id=organization_id,
-            source_name=source_name,
-            get_file_content_func=folder_manager.get_file_content,
-            list_of_documents=files_info,
-        )
     try:
-        document_chunk_mapping = document_chunking_mapping(
-            vision_ingestion_service=vision_completion_service,
-            llm_service=fallback_vision_llm_service,
-            get_file_content_func=folder_manager.get_file_content,
-            chunk_size=chunk_size,
-            document_reading_mode=document_reading_mode,
-            overlapping_size=chunk_overlap,
-            llamaparse_api_key=llamaparse_api_key,
-            mistral_ocr_api_key=mistral_ocr_api_key,
+        qdrant_service = QdrantService.from_defaults(
+            embedding_service=embedding_service,
+            default_collection_schema=UNIFIED_QDRANT_SCHEMA,
         )
-    except Exception as e:
-        error_msg = f"Failed to chunk documents: {str(e)}, PDF reading mode: {document_reading_mode}"
-        LOGGER.error(error_msg)
-        ingestion_task.result_metadata = TaskResultMetadata(
-            message=error_msg,
-            type=ResultType.ERROR,
-        )
-        update_ingestion_task(
-            organization_id=organization_id,
-            ingestion_task=ingestion_task,
-        )
-        return
 
-    document_summary_func = None
-    add_summary_in_chunks_func = None
-    # TODO: add summary in chunks when we have a full functinality of gemini
-    # if add_doc_description_to_chunks:
-    #     document_summary_func = partial(
-    #         get_summary_from_document,
-    #         llm_google_service=GOOGLE_COMPLETION_SERVICE,
-    #         get_file_content_func=folder_manager.get_file_content,
-    #     )
-    #     add_summary_in_chunks_func = add_summary_in_chunks
-    db_service.create_schema(db_table_schema)
-    LOGGER.info(f"Found {len(files_info)} files to ingest")
-    try:
-        if len(files_info) == 0:
-            LOGGER.warning(f"No files found to ingest in source '{source_name}' - marking as completed")
-            LOGGER.info(f"[EMPTY_FOLDER] About to update task status to COMPLETED for task {task_id}")
-            # Update task status to COMPLETED for empty folders
-            ingestion_task_completed = IngestionTaskUpdate(
+        LOGGER.info("Starting ingestion process")
+        files_info = folder_manager.list_all_files_info()
+        if save_supabase:
+            files_info = sync_files_to_supabase(
+                organization_id=organization_id,
+                source_name=source_name,
+                get_file_content_func=folder_manager.get_file_content,
+                list_of_documents=files_info,
+            )
+        try:
+            document_chunk_mapping = document_chunking_mapping(
+                vision_ingestion_service=vision_completion_service,
+                llm_service=fallback_vision_llm_service,
+                get_file_content_func=folder_manager.get_file_content,
+                chunk_size=chunk_size,
+                document_reading_mode=document_reading_mode,
+                overlapping_size=chunk_overlap,
+                llamaparse_api_key=llamaparse_api_key,
+                mistral_ocr_api_key=mistral_ocr_api_key,
+            )
+        except Exception as e:
+            error_msg = f"Failed to chunk documents: {str(e)}, PDF reading mode: {document_reading_mode}"
+            LOGGER.error(error_msg)
+            ingestion_task.result_metadata = TaskResultMetadata(
+                message=error_msg,
+                type=ResultType.ERROR,
+            )
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=ingestion_task,
+            )
+            return
+
+        document_summary_func = None
+        add_summary_in_chunks_func = None
+        # TODO: add summary in chunks when we have a full functinality of gemini
+        # if add_doc_description_to_chunks:
+        #     document_summary_func = partial(
+        #         get_summary_from_document,
+        #         llm_google_service=GOOGLE_COMPLETION_SERVICE,
+        #         get_file_content_func=folder_manager.get_file_content,
+        #     )
+        #     add_summary_in_chunks_func = add_summary_in_chunks
+        db_service.create_schema(db_table_schema)
+        LOGGER.info(f"Found {len(files_info)} files to ingest")
+        try:
+            if len(files_info) == 0:
+                LOGGER.warning(f"No files found to ingest in source '{source_name}' - marking as completed")
+                LOGGER.info("[EMPTY_FOLDER] Calling create_source for empty folder")
+                create_source(
+                    organization_id=organization_id,
+                    source_data=source_data,
+                )
+                LOGGER.info("[EMPTY_FOLDER] Empty source created successfully")
+                ingestion_task_completed = IngestionTaskUpdate(
+                    id=task_id,
+                    source_id=source_id,
+                    source_name=source_name,
+                    source_type=source_type,
+                    status=db.TaskStatus.COMPLETED,
+                )
+                update_ingestion_task(
+                    organization_id=organization_id,
+                    ingestion_task=ingestion_task_completed,
+                )
+                LOGGER.info("[EMPTY_FOLDER] Task status updated - returning")
+                return
+
+            file_chunks_dfs = []
+            failed_files = []
+            successful_files = []
+
+            for document in files_info:
+                try:
+                    chunks_df = await get_chunks_dataframe_from_doc(
+                        document,
+                        document_chunk_mapping,
+                        llm_service=fallback_vision_llm_service,
+                        add_doc_description_to_chunks=add_doc_description_to_chunks,
+                        documents_summary_func=document_summary_func,
+                        add_summary_in_chunks_func=add_summary_in_chunks_func,
+                        default_chunk_size=chunk_size,
+                    )
+
+                    if chunks_df.empty:
+                        LOGGER.warning(f"No chunks created for {document.file_name} - skipping")
+                        continue
+
+                    file_chunks_dfs.append(chunks_df)
+                    successful_files.append({"file_name": document.file_name, "chunks_count": len(chunks_df)})
+                    LOGGER.info(f"Created {len(chunks_df)} chunks for {document.file_name}")
+                except Exception as e:
+                    error_msg = f"Failed to process {document.file_name}: {str(e)}"
+                    LOGGER.error(error_msg)
+                    failed_files.append({"file_name": document.file_name, "reason": str(e)})
+                    continue
+
+            if not file_chunks_dfs:
+                LOGGER.warning("No chunks created from any file - marking task as FAILED")
+                if failed_files:
+                    error_messages = []
+                    for f in failed_files:
+                        file_name = f["file_name"]
+                        reason = f["reason"]
+                        error_messages.append(f"{file_name}: {reason}")
+                    error_msg = " | ".join(error_messages)
+                else:
+                    error_msg = f"Unable to process files, PDF reading mode: {document_reading_mode}"
+
+                ingestion_task_failed = IngestionTaskUpdate(
+                    id=task_id,
+                    source_id=None,
+                    source_name=source_name,
+                    source_type=source_type,
+                    status=db.TaskStatus.FAILED,
+                    result_metadata=TaskResultMetadata(
+                        message=error_msg,
+                        type=ResultType.ERROR,
+                    ),
+                )
+                update_ingestion_task(
+                    organization_id=organization_id,
+                    ingestion_task=ingestion_task_failed,
+                )
+                LOGGER.error("[NO_CHUNKS] Task marked as FAILED - no source created")
+                return
+
+            all_chunks_df = pd.concat(file_chunks_dfs, ignore_index=True)
+
+            initial_count = len(all_chunks_df)
+            all_chunks_df = all_chunks_df[
+                all_chunks_df["content"].notna() & (all_chunks_df["content"].str.strip() != "")
+            ]
+            filtered_count = initial_count - len(all_chunks_df)
+            if filtered_count > 0:
+                LOGGER.info(f"Filtered out {filtered_count} chunks with empty content")
+
+            if all_chunks_df.empty:
+                LOGGER.warning("No valid chunks remaining after filtering - nothing to sync")
+                return
+
+            if "document_title" in all_chunks_df.columns:
+                all_chunks_df["document_title"] = all_chunks_df["document_title"].apply(sanitize_for_json)
+            if "metadata" in all_chunks_df.columns:
+                all_chunks_df["metadata"] = all_chunks_df["metadata"].apply(sanitize_for_json)
+            if "url" in all_chunks_df.columns:
+                all_chunks_df["url"] = all_chunks_df["url"].apply(sanitize_for_json)
+
+            all_chunks_df_for_db = transform_chunks_df_for_unified_table(all_chunks_df, source_id)
+            all_rows = all_chunks_df_for_db.to_dict(orient="records")
+            rows_by_id = {row[CHUNK_ID_COLUMN_NAME]: row for row in all_rows}
+            ids_with_ts = {row[CHUNK_ID_COLUMN_NAME]: row.get(TIMESTAMP_COLUMN_NAME) for row in all_rows}
+
+            LOGGER.info(f"Syncing {len(all_rows)} total chunks to db table {db_table_name}")
+            db_service.update_table(
+                incoming_ids_with_timestamp=ids_with_ts,
+                fetch_rows_fn=lambda ids: [rows_by_id[id_] for id_ in ids if id_ in rows_by_id],
+                table_name=db_table_name,
+                table_definition=UNIFIED_TABLE_DEFINITION,
+                id_column_name=CHUNK_ID_COLUMN_NAME,
+                timestamp_column_name=TIMESTAMP_COLUMN_NAME,
+                append_mode=True,
+                schema_name=db_table_schema,
+                source_id=str(source_id),
+                batch_size=batch_size,
+            )
+
+            await sync_chunks_to_qdrant(
+                table_schema=db_table_schema,
+                table_name=db_table_name,
+                collection_name=qdrant_collection_name,
+                db_service=db_service,
+                qdrant_service=qdrant_service,
+                source_id=str(source_id),
+                batch_size=batch_size,
+            )
+        except Exception as e:
+            error_msg = f"Failed to ingest folder source: {str(e)}, PDF reading mode: {document_reading_mode}"
+            LOGGER.error(error_msg)
+            ingestion_task.status = db.TaskStatus.FAILED
+            ingestion_task.result_metadata = TaskResultMetadata(
+                message=error_msg,
+                type=ResultType.ERROR,
+            )
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=ingestion_task,
+            )
+            raise
+
+        LOGGER.info(f"Creating source {source_name} for organization {organization_id} in database")
+        create_source(
+            organization_id=organization_id,
+            source_data=source_data,
+        )
+
+        if failed_files:
+            error_messages = []
+            for f in failed_files:
+                file_name = f["file_name"]
+                reason = f["reason"]
+                error_messages.append(f"{file_name}: {reason}")
+            failed_files_errors_str = " | ".join(error_messages)
+            ingestion_task = IngestionTaskUpdate(
+                id=task_id,
+                source_id=source_id,
+                source_name=source_name,
+                source_type=source_type,
+                status=db.TaskStatus.COMPLETED,
+                result_metadata=TaskResultMetadata(
+                    message=(
+                        f"Partially completed: {len(successful_files)} succeeded, "
+                        f"{len(failed_files)} failed. "
+                        f"PDF reading mode: {document_reading_mode}. "
+                        f"Failed files: {failed_files_errors_str}"
+                    ),
+                    type=ResultType.PARTIAL_SUCCESS,
+                ),
+            )
+        else:
+            ingestion_task = IngestionTaskUpdate(
                 id=task_id,
                 source_id=source_id,
                 source_name=source_name,
                 source_type=source_type,
                 status=db.TaskStatus.COMPLETED,
             )
-            LOGGER.info(f"[EMPTY_FOLDER] Calling update_ingestion_task with status: {ingestion_task_completed.status}")
-            update_ingestion_task(
-                organization_id=organization_id,
-                ingestion_task=ingestion_task_completed,
-            )
-            LOGGER.info("[EMPTY_FOLDER] Task status update completed")
-            # Still create the empty source in the database for consistency
-            LOGGER.info("[EMPTY_FOLDER] About to create empty source in database")
-            LOGGER.info("[EMPTY_FOLDER] Calling create_source for empty folder")
-            create_source(
-                organization_id=organization_id,
-                source_data=source_data,
-            )
-            LOGGER.info("[EMPTY_FOLDER] Empty source created successfully - returning")
-            return
 
-        file_chunks_dfs = []
-        failed_files = []
-        successful_files = []
-
-        for document in files_info:
-            try:
-                chunks_df = await get_chunks_dataframe_from_doc(
-                    document,
-                    document_chunk_mapping,
-                    llm_service=fallback_vision_llm_service,
-                    add_doc_description_to_chunks=add_doc_description_to_chunks,
-                    documents_summary_func=document_summary_func,
-                    add_summary_in_chunks_func=add_summary_in_chunks_func,
-                    default_chunk_size=chunk_size,
-                )
-
-                if chunks_df.empty:
-                    LOGGER.warning(f"No chunks created for {document.file_name} - skipping")
-                    continue
-
-                file_chunks_dfs.append(chunks_df)
-                successful_files.append({"file_name": document.file_name, "chunks_count": len(chunks_df)})
-                LOGGER.info(f"Created {len(chunks_df)} chunks for {document.file_name}")
-            except Exception as e:
-                error_msg = f"Failed to process {document.file_name}: {str(e)}"
-                LOGGER.error(error_msg)
-                failed_files.append({"file_name": document.file_name, "reason": str(e)})
-                continue
-
-        if not file_chunks_dfs:
-            LOGGER.warning("No chunks created from any file - marking task as FAILED")
-            if failed_files:
-                error_messages = []
-                for f in failed_files:
-                    file_name = f["file_name"]
-                    reason = f["reason"]
-                    error_messages.append(f"{file_name}: {reason}")
-                error_msg = " | ".join(error_messages)
-            else:
-                error_msg = f"Unable to process files, PDF reading mode: {document_reading_mode}"
-
-            ingestion_task_failed = IngestionTaskUpdate(
-                id=task_id,
-                source_id=None,
-                source_name=source_name,
-                source_type=source_type,
-                status=db.TaskStatus.FAILED,
-                result_metadata=TaskResultMetadata(
-                    message=error_msg,
-                    type=ResultType.ERROR,
-                ),
-            )
-            update_ingestion_task(
-                organization_id=organization_id,
-                ingestion_task=ingestion_task_failed,
-            )
-            LOGGER.error("[NO_CHUNKS] Task marked as FAILED - no source created")
-            return
-
-        all_chunks_df = pd.concat(file_chunks_dfs, ignore_index=True)
-
-        initial_count = len(all_chunks_df)
-        all_chunks_df = all_chunks_df[all_chunks_df["content"].notna() & (all_chunks_df["content"].str.strip() != "")]
-        filtered_count = initial_count - len(all_chunks_df)
-        if filtered_count > 0:
-            LOGGER.info(f"Filtered out {filtered_count} chunks with empty content")
-
-        if all_chunks_df.empty:
-            LOGGER.warning("No valid chunks remaining after filtering - nothing to sync")
-            return
-
-        if "document_title" in all_chunks_df.columns:
-            all_chunks_df["document_title"] = all_chunks_df["document_title"].apply(sanitize_for_json)
-        if "metadata" in all_chunks_df.columns:
-            all_chunks_df["metadata"] = all_chunks_df["metadata"].apply(sanitize_for_json)
-        if "url" in all_chunks_df.columns:
-            all_chunks_df["url"] = all_chunks_df["url"].apply(sanitize_for_json)
-
-        all_chunks_df_for_db = transform_chunks_df_for_unified_table(all_chunks_df, source_id)
-        all_rows = all_chunks_df_for_db.to_dict(orient="records")
-        rows_by_id = {row[CHUNK_ID_COLUMN_NAME]: row for row in all_rows}
-        ids_with_ts = {row[CHUNK_ID_COLUMN_NAME]: row.get(TIMESTAMP_COLUMN_NAME) for row in all_rows}
-
-        LOGGER.info(f"Syncing {len(all_rows)} total chunks to db table {db_table_name}")
-        db_service.update_table(
-            incoming_ids_with_timestamp=ids_with_ts,
-            fetch_rows_fn=lambda ids: [rows_by_id[id_] for id_ in ids if id_ in rows_by_id],
-            table_name=db_table_name,
-            table_definition=UNIFIED_TABLE_DEFINITION,
-            id_column_name=CHUNK_ID_COLUMN_NAME,
-            timestamp_column_name=TIMESTAMP_COLUMN_NAME,
-            append_mode=True,
-            schema_name=db_table_schema,
-            source_id=str(source_id),
-            batch_size=batch_size,
-        )
-
-        await sync_chunks_to_qdrant(
-            table_schema=db_table_schema,
-            table_name=db_table_name,
-            collection_name=qdrant_collection_name,
-            db_service=db_service,
-            qdrant_service=qdrant_service,
-            source_id=str(source_id),
-            batch_size=batch_size,
-        )
-    except Exception as e:
-        error_msg = f"Failed to ingest folder source: {str(e)}, PDF reading mode: {document_reading_mode}"
-        LOGGER.error(error_msg)
-        ingestion_task.status = db.TaskStatus.FAILED
-        ingestion_task.result_metadata = TaskResultMetadata(
-            message=error_msg,
-            type=ResultType.ERROR,
-        )
+        LOGGER.info(f" Update status {str(source_id)} source for organization {organization_id} in database")
         update_ingestion_task(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
         )
-        raise  # Re-raise the exception to ensure subprocess exits with non-zero code
 
-    # Create the source in the database before updating task status
-    LOGGER.info(f"Creating source {source_name} for organization {organization_id} in database")
-    create_source(
-        organization_id=organization_id,
-        source_data=source_data,
-    )
-
-    if failed_files:
-        error_messages = []
-        for f in failed_files:
-            file_name = f["file_name"]
-            reason = f["reason"]
-            error_messages.append(f"{file_name}: {reason}")
-        failed_files_errors_str = " | ".join(error_messages)
-        ingestion_task = IngestionTaskUpdate(
-            id=task_id,
-            source_id=source_id,
-            source_name=source_name,
-            source_type=source_type,
-            status=db.TaskStatus.COMPLETED,
-            result_metadata=TaskResultMetadata(
-                message=(
-                    f"Partially completed: {len(successful_files)} succeeded, {len(failed_files)} failed. "
-                    f"PDF reading mode: {document_reading_mode}. "
-                    f"Failed files: {failed_files_errors_str}"
-                ),
-                type=ResultType.PARTIAL_SUCCESS,
-            ),
+        LOGGER.info(
+            f"Successfully ingested {len(files_info)} files to {str(source_id)} source "
+            f"for organization {organization_id}"
         )
-    else:
-        ingestion_task = IngestionTaskUpdate(
-            id=task_id,
-            source_id=source_id,
-            source_name=source_name,
-            source_type=source_type,
-            status=db.TaskStatus.COMPLETED,
-        )
-
-    LOGGER.info(f" Update status {str(source_id)} source for organization {organization_id} in database")
-    update_ingestion_task(
-        organization_id=organization_id,
-        ingestion_task=ingestion_task,
-    )
-
-    LOGGER.info(
-        f"Successfully ingested {len(files_info)} files to {str(source_id)} source for organization {organization_id}"
-    )
+    finally:
+        await db_service.close()

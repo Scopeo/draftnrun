@@ -379,6 +379,8 @@ async def upload_source(
             ingestion_task=ingestion_task,
         )
         return
+    finally:
+        await db_service.close()
 
     source_data = DataSourceSchema(
         id=result_source_id,
