@@ -66,12 +66,24 @@ async def calendar_get_event(
 
 
 @mcp.tool(
+    name="calendar_get_my_email",
+    description="Return the email address of the authenticated calendar owner.",
+)
+async def calendar_get_my_email() -> dict[str, str]:
+    email = await _client.get_user_email()
+    return {"email": email}
+
+
+@mcp.tool(
     name="calendar_create_event",
     description=(
         "Create a new event on a Google Calendar. "
         "Provide start and end as RFC3339 datetime strings with timezone offset "
         "(e.g. '2026-03-20T10:00:00+01:00') or as date strings for all-day events. "
-        "To add a Google Meet link, include conferenceData with a createRequest."
+        "To add a Google Meet link, include conferenceData with a createRequest. "
+        "When adding attendees, don't forget to also add the calendar owner if they "
+        "should participate in the meeting, otherwise they won't appear as an attendee. "
+        "Use calendar_get_my_email to get the owner's email if needed."
     ),
 )
 async def calendar_create_event(
