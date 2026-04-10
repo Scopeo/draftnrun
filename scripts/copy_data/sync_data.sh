@@ -5,6 +5,11 @@ set -e
 # Only runs dump + restore (and optional Qdrant sync) if cache is expired (24h)
 # TTL source of truth: ada_backend.latest.dump
 #
+# Modes:
+#   --skip-qdrant   Sync DBs only, skip Qdrant
+#   --only-qdrant   Sync Qdrant only, skip DBs and TTL check
+#   (default)       Sync both DBs and Qdrant
+#
 # Usage:
 #   ./sync_data.sh \\
 #     --source-db-url              postgres://... \\
@@ -15,7 +20,7 @@ set -e
 #     [--source-qdrant-key         xxx ] \\
 #     [--target-qdrant-url         https://... ] \\
 #     [--target-qdrant-key         xxx ] \\
-#     [--force-sync]
+#     [--force-sync] [--skip-qdrant] [--only-qdrant]
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/db_utils.sh"
@@ -31,7 +36,9 @@ Usage: ./sync_data.sh \\
   [--source-qdrant-key         xxx] \\
   [--target-qdrant-url         https://...] \\
   [--target-qdrant-key         xxx] \\
-  [--force-sync]
+  [--force-sync] \\
+  [--skip-qdrant] \\
+  [--only-qdrant]
 EOF
 }
 
@@ -45,6 +52,8 @@ SOURCE_QDRANT_API_KEY=""
 TARGET_QDRANT_CLUSTER_URL=""
 TARGET_QDRANT_API_KEY=""
 FORCE_SYNC="${FORCE_SYNC:-0}"
+SKIP_QDRANT=0
+ONLY_QDRANT=0
 
 # Parse flags
 while [ $# -gt 0 ]; do
@@ -67,6 +76,10 @@ while [ $# -gt 0 ]; do
       TARGET_QDRANT_API_KEY="$2"; shift 2 ;;
     --force-sync)
       FORCE_SYNC=1; shift 1 ;;
+    --skip-qdrant)
+      SKIP_QDRANT=1; shift 1 ;;
+    --only-qdrant)
+      ONLY_QDRANT=1; shift 1 ;;
     -h|--help)
       print_usage; exit 0 ;;
     *)
@@ -76,72 +89,89 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Validate required DB flags
-if [ -z "$SOURCE_DB_URL" ] || [ -z "$SOURCE_INGESTION_DB_URL" ] || \
-   [ -z "$TARGET_DB_URL" ] || [ -z "$TARGET_INGESTION_DB_URL" ]; then
-  echo "ERROR: Missing required database URLs." >&2
-  print_usage
+if [ "$SKIP_QDRANT" = "1" ] && [ "$ONLY_QDRANT" = "1" ]; then
+  echo "ERROR: --skip-qdrant and --only-qdrant are mutually exclusive." >&2
   exit 1
 fi
 
-echo "===> Checking if sync is needed (TTL 24h, based on ada_backend dump only)"
-
-# Single TTL source of truth: ada_backend.latest.dump
-# FORCE_SYNC=1 (or --force-sync) will skip TTL and force a full sync (DBs + Qdrant)
-if [ "$FORCE_SYNC" != "1" ]; then
-  if check_dump_ttl "$BACKEND_DUMP_PATH" "ada_backend"; then
-    echo "===> Cache valid based on ada_backend dump, nothing to do"
-    exit 0
+# Validate required flags based on mode
+if [ "$ONLY_QDRANT" = "1" ]; then
+  if [ -z "$SOURCE_QDRANT_CLUSTER_URL" ] || [ -z "$SOURCE_QDRANT_API_KEY" ] || \
+     [ -z "$TARGET_QDRANT_CLUSTER_URL" ] || [ -z "$TARGET_QDRANT_API_KEY" ] || \
+     [ -z "$SOURCE_DB_URL" ]; then
+    echo "ERROR: --only-qdrant requires all Qdrant flags and --source-db-url." >&2
+    print_usage
+    exit 1
   fi
 else
-  echo "===> FORCE_SYNC enabled, skipping TTL check and forcing full sync"
+  if [ -z "$SOURCE_DB_URL" ] || [ -z "$SOURCE_INGESTION_DB_URL" ] || \
+     [ -z "$TARGET_DB_URL" ] || [ -z "$TARGET_INGESTION_DB_URL" ]; then
+    echo "ERROR: Missing required database URLs." >&2
+    print_usage
+    exit 1
+  fi
 fi
 
-echo "===> Cache expired or missing (based on ada_backend) or forced, starting sync process"
+sync_databases() {
+  echo "===> Checking if sync is needed (TTL 24h, based on ada_backend dump only)"
 
-# Ensure PostgreSQL tools are installed
-ensure_pg_tools
-
-# Sync ada_backend: dump, drop/create, and restore
-echo "===> Dumping ada_backend from source"
-pg_dump -Fc "$SOURCE_DB_URL" -f "$BACKEND_DUMP_PATH"
-drop_and_create_db "$TARGET_DB_URL" "ada_backend"
-echo "===> Restoring ada_backend"
-pg_restore -d "$TARGET_DB_URL" --no-owner --no-privileges --single-transaction --verbose -Fc "$BACKEND_DUMP_PATH"
-
-# Deactivate all cron jobs in staging database
-echo "===> Deactivating all cron jobs in staging database"
-DEACTIVATED_COUNT=$(psql "$TARGET_DB_URL" -t -A -c "
-  WITH updated AS (
-    UPDATE scheduler.cron_jobs 
-    SET is_enabled = false 
-    WHERE is_enabled = true 
-    RETURNING id
-  )
-  SELECT COUNT(*) FROM updated;
-" 2>/dev/null | tr -d ' ' || echo "0")
-if [ "$DEACTIVATED_COUNT" != "0" ] && [ "$DEACTIVATED_COUNT" != "" ]; then
-  echo "===> Deactivated $DEACTIVATED_COUNT cron job(s) in staging database"
-else
-  # Check if schema exists to provide better error message
-  SCHEMA_EXISTS=$(psql "$TARGET_DB_URL" -t -A -c "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = 'scheduler');" 2>/dev/null | tr -d ' ' || echo "f")
-  if [ "$SCHEMA_EXISTS" = "t" ]; then
-    echo "===> No enabled cron jobs found to deactivate"
+  if [ "$FORCE_SYNC" != "1" ]; then
+    if check_dump_ttl "$BACKEND_DUMP_PATH" "ada_backend"; then
+      echo "===> Cache valid based on ada_backend dump, nothing to do"
+      return 1
+    fi
   else
-    echo "===> Scheduler schema not found, skipping cron job deactivation"
+    echo "===> FORCE_SYNC enabled, skipping TTL check and forcing full sync"
   fi
-fi
 
-# Sync ada_ingestion: dump, drop/create, and restore
-echo "===> Dumping ada_ingestion from source"
-pg_dump -Fc "$SOURCE_INGESTION_DB_URL" -f "$INGESTION_DUMP_PATH"
-drop_and_create_db "$TARGET_INGESTION_DB_URL" "ada_ingestion"
-echo "===> Restoring ada_ingestion"
-pg_restore -d "$TARGET_INGESTION_DB_URL" --no-owner --no-privileges --single-transaction --verbose -Fc "$INGESTION_DUMP_PATH"
+  echo "===> Cache expired or missing (based on ada_backend) or forced, starting sync process"
 
-# Sync Qdrant collections (if configured)
-if [ -n "$SOURCE_QDRANT_CLUSTER_URL" ] && [ -n "$SOURCE_QDRANT_API_KEY" ] && \
-   [ -n "$TARGET_QDRANT_CLUSTER_URL" ] && [ -n "$TARGET_QDRANT_API_KEY" ]; then
+  ensure_pg_tools
+
+  echo "===> Dumping ada_backend from source"
+  pg_dump -Fc "$SOURCE_DB_URL" -f "$BACKEND_DUMP_PATH"
+  drop_and_create_db "$TARGET_DB_URL" "ada_backend"
+  echo "===> Restoring ada_backend"
+  pg_restore -d "$TARGET_DB_URL" --no-owner --no-privileges --single-transaction --verbose -Fc "$BACKEND_DUMP_PATH"
+
+  echo "===> Deactivating all cron jobs in staging database"
+  DEACTIVATED_COUNT=$(psql "$TARGET_DB_URL" -t -A -c "
+    WITH updated AS (
+      UPDATE scheduler.cron_jobs 
+      SET is_enabled = false 
+      WHERE is_enabled = true 
+      RETURNING id
+    )
+    SELECT COUNT(*) FROM updated;
+  " 2>/dev/null | tr -d ' ' || echo "0")
+  if [ "$DEACTIVATED_COUNT" != "0" ] && [ "$DEACTIVATED_COUNT" != "" ]; then
+    echo "===> Deactivated $DEACTIVATED_COUNT cron job(s) in staging database"
+  else
+    SCHEMA_EXISTS=$(psql "$TARGET_DB_URL" -t -A -c "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = 'scheduler');" 2>/dev/null | tr -d ' ' || echo "f")
+    if [ "$SCHEMA_EXISTS" = "t" ]; then
+      echo "===> No enabled cron jobs found to deactivate"
+    else
+      echo "===> Scheduler schema not found, skipping cron job deactivation"
+    fi
+  fi
+
+  echo "===> Dumping ada_ingestion from source"
+  pg_dump -Fc "$SOURCE_INGESTION_DB_URL" -f "$INGESTION_DUMP_PATH"
+  drop_and_create_db "$TARGET_INGESTION_DB_URL" "ada_ingestion"
+  echo "===> Restoring ada_ingestion"
+  pg_restore -d "$TARGET_INGESTION_DB_URL" --no-owner --no-privileges --single-transaction --verbose -Fc "$INGESTION_DUMP_PATH"
+
+  echo "===> Database sync completed"
+  return 0
+}
+
+sync_qdrant() {
+  if [ -z "$SOURCE_QDRANT_CLUSTER_URL" ] || [ -z "$SOURCE_QDRANT_API_KEY" ] || \
+     [ -z "$TARGET_QDRANT_CLUSTER_URL" ] || [ -z "$TARGET_QDRANT_API_KEY" ]; then
+    echo "===> Qdrant flags not fully set, skipping Qdrant sync"
+    return 0
+  fi
+
   echo "===> Syncing Qdrant collections"
   python scripts/copy_data/copy_qdrant_collections.py \
     --source-url="$SOURCE_QDRANT_CLUSTER_URL" \
@@ -149,9 +179,17 @@ if [ -n "$SOURCE_QDRANT_CLUSTER_URL" ] && [ -n "$SOURCE_QDRANT_API_KEY" ] && \
     --target-url="$TARGET_QDRANT_CLUSTER_URL" \
     --target-key="$TARGET_QDRANT_API_KEY" \
     --source-db-url="$SOURCE_DB_URL"
-else
-  echo "===> Qdrant flags not fully set, skipping Qdrant sync"
-fi
+  echo "===> Qdrant sync completed"
+  return 0
+}
 
-echo "===> Sync completed"
+if [ "$ONLY_QDRANT" = "1" ]; then
+  sync_qdrant
+elif [ "$SKIP_QDRANT" = "1" ]; then
+  sync_databases || true
+else
+  if sync_databases; then
+    sync_qdrant
+  fi
+fi
 
