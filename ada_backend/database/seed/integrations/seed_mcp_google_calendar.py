@@ -26,7 +26,7 @@ from engine.integrations.providers import OAuthProvider
 def seed_mcp_google_calendar_components(session: Session):
     google_calendar_mcp_tool_component = Component(
         id=COMPONENT_UUIDS["google_calendar_mcp_tool"],
-        name="Google Calendar MCP Tool",
+        name="Google Calendar",
         is_agent=False,
         function_callable=True,
         can_use_function_calling=False,
