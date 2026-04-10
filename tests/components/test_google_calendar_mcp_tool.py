@@ -5,6 +5,9 @@ These tests validate the wrapper layer (tool descriptions, env injection,
 missing-token guard) without hitting the real Google Calendar API.
 """
 
+import subprocess
+import sys
+
 import pytest
 
 from engine.components.tools.google_calendar_mcp_tool import (
@@ -46,6 +49,31 @@ class TestGoogleCalendarMCPToolConstruction:
         tool = await _make_tool()
         assert "-m" in tool.args
         assert "engine.components.tools.google_calendar_mcp.server" in tool.args
+
+
+class TestGoogleCalendarMCPServerSubprocess:
+    def test_server_module_importable_without_backend_env(self):
+        """Regression: the stdio subprocess must not transitively import ada_backend,
+        which would crash on missing FERNET_KEY / ADA_DB_URL."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import engine.components.tools.google_calendar_mcp.server; "
+                    "import sys; "
+                    "backend_modules = [m for m in sys.modules if m.startswith('ada_backend')]; "
+                    "assert not backend_modules, f'ada_backend leaked into subprocess: {backend_modules}'"
+                ),
+            ],
+            env={"PATH": "/usr/bin:/bin", "HOME": "/tmp"},
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"Server module failed to import in minimal env:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        )
 
 
 class TestGoogleCalendarMCPToolRunGuard:

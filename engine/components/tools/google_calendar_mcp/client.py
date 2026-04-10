@@ -3,19 +3,25 @@ Thin async client for the Google Calendar API.
 
 Uses the Google API Python client under the hood, but wraps calls in
 asyncio.to_thread so the FastMCP server stays non-blocking.
+
+This module is imported by the MCP stdio subprocess (server.py), so it must NOT
+import anything from ada_backend/ — the subprocess runs with a minimal
+environment and ada_backend.database.models would crash on missing FERNET_KEY.
 """
 
 import asyncio
 from typing import Any
 
-from engine.integrations.utils import get_google_calendar_service
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 
 
 class GoogleCalendarClient:
     def __init__(self, access_token: str) -> None:
         if not access_token:
             raise ValueError("access_token is required")
-        self._service = get_google_calendar_service(access_token)
+        creds = Credentials(token=access_token)
+        self._service = build("calendar", "v3", credentials=creds)
 
     async def list_calendars(self) -> list[dict[str, Any]]:
         def _call():
