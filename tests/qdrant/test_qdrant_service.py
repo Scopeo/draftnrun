@@ -950,38 +950,6 @@ class TestIsHybridCollection:
         assert await service.is_hybrid_collection_async("test") is False
 
 
-class TestHasNamedDenseVector:
-    @pytest.mark.asyncio
-    async def test_named_dense_detected(self):
-        service, mock_send = _make_qdrant_service_with_mock_http()
-        mock_send.return_value = {
-            "result": {
-                "config": {
-                    "params": {
-                        "vectors": {"dense": {"size": 3072, "distance": "Cosine"}},
-                        "sparse_vectors": {"sparse": {"modifier": "idf"}},
-                    }
-                }
-            }
-        }
-        assert await service._has_named_dense_vector("test") is True
-
-    @pytest.mark.asyncio
-    async def test_unnamed_dense_detected(self):
-        service, mock_send = _make_qdrant_service_with_mock_http()
-        mock_send.return_value = {
-            "result": {
-                "config": {
-                    "params": {
-                        "vectors": {"size": 3072, "distance": "Cosine"},
-                        "sparse_vectors": {"sparse": {"modifier": "idf"}},
-                    }
-                }
-            }
-        }
-        assert await service._has_named_dense_vector("test") is False
-
-
 class TestCreateCollectionHybrid:
     @pytest.mark.asyncio
     async def test_always_creates_hybrid_collection(self):
@@ -1078,10 +1046,9 @@ class TestQueryPointsAsync:
         assert results[0] == ("id1", 0.95, {"content": "c1"})
 
     @pytest.mark.asyncio
-    async def test_hybrid_search_sends_prefetch_and_fusion_named_dense(self):
+    async def test_hybrid_search_sends_prefetch_and_fusion(self):
         service, mock_send = _make_qdrant_service_with_mock_http()
         mock_send.return_value = {"result": {"points": []}}
-        service._has_named_dense_vector = AsyncMock(return_value=True)
 
         await service._search_hybrid_async(
             query_text="test query",
@@ -1096,27 +1063,9 @@ class TestQueryPointsAsync:
         assert call_payload["query"] == {"fusion": "rrf"}
 
     @pytest.mark.asyncio
-    async def test_hybrid_search_sends_prefetch_without_using_for_unnamed_dense(self):
-        service, mock_send = _make_qdrant_service_with_mock_http()
-        mock_send.return_value = {"result": {"points": []}}
-        service._has_named_dense_vector = AsyncMock(return_value=False)
-
-        await service._search_hybrid_async(
-            query_text="test query",
-            query_vector=[0.1, 0.2],
-            collection_name="col",
-            limit=5,
-        )
-        call_payload = mock_send.call_args.kwargs["payload"]
-        assert len(call_payload["prefetch"]) == 2
-        assert call_payload["prefetch"][0]["using"] == "sparse"
-        assert "using" not in call_payload["prefetch"][1]
-
-    @pytest.mark.asyncio
     async def test_hybrid_search_propagates_filter_to_both_prefetches(self):
         service, mock_send = _make_qdrant_service_with_mock_http()
         mock_send.return_value = {"result": {"points": []}}
-        service._has_named_dense_vector = AsyncMock(return_value=True)
         test_filter = {"must": [{"key": "source_id", "match": {"value": "src-1"}}]}
 
         await service._search_hybrid_async(
@@ -1134,7 +1083,6 @@ class TestQueryPointsAsync:
     async def test_hybrid_search_omits_filter_when_none(self):
         service, mock_send = _make_qdrant_service_with_mock_http()
         mock_send.return_value = {"result": {"points": []}}
-        service._has_named_dense_vector = AsyncMock(return_value=True)
 
         await service._search_hybrid_async(
             query_text="test query",
