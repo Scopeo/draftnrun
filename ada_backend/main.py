@@ -42,6 +42,7 @@ from ada_backend.routers.quality_assurance_router import router as quality_assur
 from ada_backend.routers.run_router import router as run_router
 from ada_backend.routers.run_stream_router import router as run_stream_router
 from ada_backend.routers.s3_files_router import router as s3_files_router
+from ada_backend.routers.scheduler_internal_router import router as scheduler_internal_router
 from ada_backend.routers.source_router import router as source_router
 from ada_backend.routers.template_router import router as template_router
 from ada_backend.routers.trace_router import router as trace_router
@@ -270,6 +271,7 @@ app.include_router(widget_router)
 app.include_router(provider_webhooks_router)
 app.include_router(webhook_internal_router)
 app.include_router(webhook_trigger_router)
+app.include_router(scheduler_internal_router)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)

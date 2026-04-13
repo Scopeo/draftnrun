@@ -125,6 +125,7 @@ class CallType(StrEnum):
     SANDBOX = "sandbox"
     QA = "qa"
     WEBHOOK = "webhook"
+    CRON = "cron"
 
 
 class ResponseFormat(StrEnum):
@@ -210,9 +211,10 @@ class CronEntrypoint(StrEnum):
 
 
 class CronStatus(StrEnum):
+    QUEUED = "queued"      # dispatched (202 accepted), not yet executing
+    RUNNING = "running"    # background task is actively executing
     COMPLETED = "completed"
     ERROR = "error"
-    RUNNING = "running"
 
 
 class RunStatus(StrEnum):

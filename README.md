@@ -327,6 +327,9 @@ uv run python -c "from ada_backend.services.api_key_service import _generate_api
 
 # Generate webhook API key (for webhook internal endpoints)
 uv run python -c "from ada_backend.services.api_key_service import _generate_api_key, _hash_key; key = _generate_api_key(); print('WEBHOOK_API_KEY =', key); print('WEBHOOK_API_KEY_HASHED =', _hash_key(key))"
+
+# Generate scheduler API key (for scheduler internal endpoints)
+uv run python -c "from ada_backend.services.api_key_service import _generate_api_key, _hash_key; key = _generate_api_key(); print('SCHEDULER_API_KEY =', key); print('SCHEDULER_API_KEY_HASHED =', _hash_key(key))"
 ```
 
 ```env
@@ -334,6 +337,8 @@ INGESTION_API_KEY=xxxx
 INGESTION_API_KEY_HASHED=xxxx
 WEBHOOK_API_KEY=xxxx
 WEBHOOK_API_KEY_HASHED=xxxx
+SCHEDULER_API_KEY=xxxx
+SCHEDULER_API_KEY_HASHED=xxxx
 ```
 
 ## Optional configurations

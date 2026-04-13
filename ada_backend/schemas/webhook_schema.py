@@ -47,6 +47,13 @@ class FilterExpression(BaseModel):
     conditions: List[FilterCondition]
 
 
+class RunProjectBody(BaseModel):
+    """Request body for POST /internal/webhooks/projects/{project_id}/envs/{env}/run."""
+
+    input_data: Dict[str, Any]
+    cron_run_id: Optional[UUID] = None
+
+
 class WebhookExecuteBody(BaseModel):
     """Request body for POST /internal/webhooks/{webhook_id}/execute."""
 

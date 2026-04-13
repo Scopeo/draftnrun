@@ -8,6 +8,7 @@ from uuid import uuid4
 import pytest
 
 from ada_backend.database.models import DataSource, EndpointPollingHistory, EnvType, Project
+from ada_backend.services.cron.endpoint_polling_service import run_endpoint_polling
 from ada_backend.services.cron.entries.agent_inference import (
     AgentInferenceExecutionPayload,
     AgentInferenceUserPayload,
@@ -17,7 +18,6 @@ from ada_backend.services.cron.entries.endpoint_polling import (
     EndpointPollingUserPayload,
     _extract_ids_and_filter_values_from_response,
     _extract_ids_from_response,
-    execute,
     validate_execution,
     validate_registration,
 )
@@ -551,16 +551,17 @@ class TestExecute:
     @pytest.fixture
     def mock_httpx_client(self, sample_endpoint_response):
         """Mock httpx client for API calls."""
-        with patch("ada_backend.services.cron.entries.endpoint_polling.httpx") as mock_httpx:
-            mock_response = Mock()
-            mock_response.json.return_value = sample_endpoint_response
-            mock_response.raise_for_status = Mock()
+        with patch("ada_backend.services.cron.endpoint_polling_service.httpx") as mock_httpx:
+            mock_get_response = Mock()
+            mock_get_response.json.return_value = sample_endpoint_response
+            mock_get_response.raise_for_status = Mock()
 
-            async def mock_get(*args, **kwargs):
-                return mock_response
+            mock_post_response = Mock()
+            mock_post_response.raise_for_status = Mock()
 
             mock_client = AsyncMock()
-            mock_client.get = mock_get
+            mock_client.get = AsyncMock(return_value=mock_get_response)
+            mock_client.post = AsyncMock(return_value=mock_post_response)
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
 
@@ -573,17 +574,11 @@ class TestExecute:
         self, mock_db_session, mock_source, mock_httpx_client, sample_agent_inference_execution_payload
     ):
         """Test basic execution without filter fields."""
-        mock_workflow_result = Mock()
-        mock_workflow_result.message = "Workflow completed"
-        mock_workflow_result.trace_id = uuid4()
-
         with (
-            patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
-            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
-            patch("ada_backend.services.cron.entries.endpoint_polling.run_env_agent") as mock_run_agent,
+            patch("ada_backend.services.cron.endpoint_polling_service.get_tracked_values_history") as mock_get_history,
+            patch("ada_backend.services.cron.endpoint_polling_service.create_tracked_values_bulk") as mock_create_bulk,
         ):
             mock_get_history.return_value = []
-            mock_run_agent.return_value = mock_workflow_result
 
             payload = EndpointPollingExecutionPayload(
                 endpoint_url="https://api.example.com/items",
@@ -594,7 +589,12 @@ class TestExecute:
                 workflow_input=sample_agent_inference_execution_payload,
             )
 
-            result = await execute(payload, db=mock_db_session, cron_id=uuid4())
+            result = await run_endpoint_polling(
+                cron_id=uuid4(),
+                payload=payload,
+                ada_url="https://test.example.com",
+                scheduler_api_key="test-key",
+            )
 
             assert "new_values" in result
             assert "total_polled_values" in result
@@ -606,17 +606,11 @@ class TestExecute:
         self, mock_db_session, mock_source, mock_httpx_client, sample_agent_inference_execution_payload
     ):
         """Test execution with filter fields."""
-        mock_workflow_result = Mock()
-        mock_workflow_result.message = "Workflow completed"
-        mock_workflow_result.trace_id = uuid4()
-
         with (
-            patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
-            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
-            patch("ada_backend.services.cron.entries.endpoint_polling.run_env_agent") as mock_run_agent,
+            patch("ada_backend.services.cron.endpoint_polling_service.get_tracked_values_history") as mock_get_history,
+            patch("ada_backend.services.cron.endpoint_polling_service.create_tracked_values_bulk") as mock_create_bulk,
         ):
             mock_get_history.return_value = []
-            mock_run_agent.return_value = mock_workflow_result
 
             payload = EndpointPollingExecutionPayload(
                 endpoint_url="https://api.example.com/items",
@@ -627,7 +621,12 @@ class TestExecute:
                 workflow_input=sample_agent_inference_execution_payload,
             )
 
-            result = await execute(payload, db=mock_db_session, cron_id=uuid4())
+            result = await run_endpoint_polling(
+                cron_id=uuid4(),
+                payload=payload,
+                ada_url="https://test.example.com",
+                scheduler_api_key="test-key",
+            )
 
             assert "new_values" in result
             # Verify that create_tracked_values_bulk was called with successful values
@@ -644,9 +643,6 @@ class TestExecute:
             Mock(spec=EndpointPollingHistory, tracked_value="2"),
             Mock(spec=EndpointPollingHistory, tracked_value="3"),
         ]
-        mock_workflow_result = Mock()
-        mock_workflow_result.message = "Workflow completed"
-        mock_workflow_result.trace_id = uuid4()
 
         # Create a custom response with a new item that matches filters but isn't in history
         custom_response = {
@@ -660,26 +656,25 @@ class TestExecute:
         }
 
         with (
-            patch("ada_backend.services.cron.entries.endpoint_polling.httpx") as mock_httpx,
-            patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
-            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
-            patch("ada_backend.services.cron.entries.endpoint_polling.run_env_agent") as mock_run_agent,
+            patch("ada_backend.services.cron.endpoint_polling_service.httpx") as mock_httpx,
+            patch("ada_backend.services.cron.endpoint_polling_service.get_tracked_values_history") as mock_get_history,
+            patch("ada_backend.services.cron.endpoint_polling_service.create_tracked_values_bulk") as mock_create_bulk,
         ):
-            mock_response = Mock()
-            mock_response.json.return_value = custom_response
-            mock_response.raise_for_status = Mock()
+            mock_get_response = Mock()
+            mock_get_response.json.return_value = custom_response
+            mock_get_response.raise_for_status = Mock()
 
-            async def mock_get(*args, **kwargs):
-                return mock_response
+            mock_post_response = Mock()
+            mock_post_response.raise_for_status = Mock()
 
             mock_client = AsyncMock()
-            mock_client.get = mock_get
+            mock_client.get = AsyncMock(return_value=mock_get_response)
+            mock_client.post = AsyncMock(return_value=mock_post_response)
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_httpx.AsyncClient.return_value = mock_client
 
             mock_get_history.return_value = mock_history
-            mock_run_agent.return_value = mock_workflow_result
 
             payload = EndpointPollingExecutionPayload(
                 endpoint_url="https://api.example.com/items",
@@ -690,7 +685,12 @@ class TestExecute:
                 workflow_input=sample_agent_inference_execution_payload,
             )
 
-            result = await execute(payload, db=mock_db_session, cron_id=uuid4())
+            result = await run_endpoint_polling(
+                cron_id=uuid4(),
+                payload=payload,
+                ada_url="https://test.example.com",
+                scheduler_api_key="test-key",
+            )
 
             assert "new_values" in result
             # Should have found "5" as a new value matching the filters
@@ -703,17 +703,11 @@ class TestExecute:
         self, mock_db_session, mock_source, mock_httpx_client, sample_agent_inference_execution_payload
     ):
         """Test execution with missing database."""
-        mock_workflow_result = Mock()
-        mock_workflow_result.message = "Workflow completed"
-        mock_workflow_result.trace_id = uuid4()
-
         with (
-            patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
-            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
-            patch("ada_backend.services.cron.entries.endpoint_polling.run_env_agent") as mock_run_agent,
+            patch("ada_backend.services.cron.endpoint_polling_service.get_tracked_values_history") as mock_get_history,
+            patch("ada_backend.services.cron.endpoint_polling_service.create_tracked_values_bulk") as mock_create_bulk,
         ):
             mock_get_history.return_value = []
-            mock_run_agent.return_value = mock_workflow_result
 
             payload = EndpointPollingExecutionPayload(
                 endpoint_url="https://api.example.com/items",
@@ -725,7 +719,12 @@ class TestExecute:
             )
 
             # Should not raise
-            result = await execute(payload, db=mock_db_session, cron_id=uuid4())
+            result = await run_endpoint_polling(
+                cron_id=uuid4(),
+                payload=payload,
+                ada_url="https://test.example.com",
+                scheduler_api_key="test-key",
+            )
             assert "new_values" in result
             # Verify that create_tracked_values_bulk was called with successful values
             assert mock_create_bulk.called
@@ -735,17 +734,11 @@ class TestExecute:
         self, mock_db_session, mock_source, mock_httpx_client, sample_agent_inference_execution_payload
     ):
         """Test execution with empty history database."""
-        mock_workflow_result = Mock()
-        mock_workflow_result.message = "Workflow completed"
-        mock_workflow_result.trace_id = uuid4()
-
         with (
-            patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
-            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
-            patch("ada_backend.services.cron.entries.endpoint_polling.run_env_agent") as mock_run_agent,
+            patch("ada_backend.services.cron.endpoint_polling_service.get_tracked_values_history") as mock_get_history,
+            patch("ada_backend.services.cron.endpoint_polling_service.create_tracked_values_bulk") as mock_create_bulk,
         ):
             mock_get_history.return_value = []
-            mock_run_agent.return_value = mock_workflow_result
 
             payload = EndpointPollingExecutionPayload(
                 endpoint_url="https://api.example.com/items",
@@ -756,7 +749,12 @@ class TestExecute:
                 workflow_input=sample_agent_inference_execution_payload,
             )
 
-            result = await execute(payload, db=mock_db_session, cron_id=uuid4())
+            result = await run_endpoint_polling(
+                cron_id=uuid4(),
+                payload=payload,
+                ada_url="https://test.example.com",
+                scheduler_api_key="test-key",
+            )
 
             assert result["total_stored_ids"] == 0
             # All endpoint IDs (1, 2, 3, 4) should be new
@@ -770,27 +768,25 @@ class TestExecute:
         self, mock_db_session, mock_source, mock_httpx_client, sample_agent_inference_execution_payload
     ):
         """Test that failed workflows are not added to history, allowing retry on next polling."""
-        mock_workflow_result = Mock()
-        mock_workflow_result.message = "Workflow completed"
-        mock_workflow_result.trace_id = uuid4()
-
         with (
-            patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
-            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
-            patch("ada_backend.services.cron.entries.endpoint_polling.run_env_agent") as mock_run_agent,
+            patch("ada_backend.services.cron.endpoint_polling_service.get_tracked_values_history") as mock_get_history,
+            patch("ada_backend.services.cron.endpoint_polling_service.create_tracked_values_bulk") as mock_create_bulk,
         ):
             mock_get_history.return_value = []
-            # Make run_env_agent raise an exception for the first call, succeed for the second
+
+            # Make the POST raise for the first workflow call, succeed for the rest
             call_count = 0
 
-            async def mock_run_agent_side_effect(*args, **kwargs):
+            async def mock_post_side_effect(*args, **kwargs):
                 nonlocal call_count
                 call_count += 1
                 if call_count == 1:
                     raise Exception("Workflow failed")
-                return mock_workflow_result
+                mock_resp = Mock()
+                mock_resp.raise_for_status = Mock()
+                return mock_resp
 
-            mock_run_agent.side_effect = mock_run_agent_side_effect
+            mock_httpx_client.post.side_effect = mock_post_side_effect
 
             payload = EndpointPollingExecutionPayload(
                 endpoint_url="https://api.example.com/items",
@@ -801,15 +797,20 @@ class TestExecute:
                 workflow_input=sample_agent_inference_execution_payload,
             )
 
-            result = await execute(payload, db=mock_db_session, cron_id=uuid4())
+            result = await run_endpoint_polling(
+                cron_id=uuid4(),
+                payload=payload,
+                ada_url="https://test.example.com",
+                scheduler_api_key="test-key",
+            )
 
-            # Verify that workflows_triggered contains both success and error results
+            # Verify that workflows_triggered contains both accepted and error results
             assert "workflows_triggered" in result
             workflow_results = result["workflows_triggered"]
             assert len(workflow_results) > 0
 
-            # Find success and error results
-            success_results = [r for r in workflow_results if r["status"] == "success"]
+            # Find accepted and error results
+            accepted_results = [r for r in workflow_results if r["status"] == "accepted"]
             error_results = [r for r in workflow_results if r["status"] == "error"]
 
             # Verify that create_tracked_values_bulk was called
@@ -817,8 +818,8 @@ class TestExecute:
             # Verify that only successful values were added to history
             call_args = mock_create_bulk.call_args
             tracked_values = call_args[1]["tracked_values"]
-            # Only successful values should be in tracked_values
-            assert len(tracked_values) == len(success_results)
+            # Only accepted values should be in tracked_values
+            assert len(tracked_values) == len(accepted_results)
             # Verify that failed values are not in tracked_values
             failed_ids = {r["id"] for r in error_results}
             assert not any(v in failed_ids for v in tracked_values)
