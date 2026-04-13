@@ -114,6 +114,9 @@ jobs:
             SOURCE_KEY="${{ secrets.PROD_QDRANT_API_KEY }}"
             TARGET_URL="${{ secrets.STAGING_QDRANT_CLUSTER_URL }}"
             TARGET_KEY="${{ secrets.STAGING_QDRANT_API_KEY }}"
+            SECRET_NAME="qdrant-migration-keys-${{ github.run_id }}"
+
+            trap 'kubectl delete secret "${SECRET_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true' EXIT
 
             SOURCE_GRPC=$(echo "$SOURCE_URL" | sed -E 's/:[0-9]+$//')":6334"
             TARGET_GRPC=$(echo "$TARGET_URL" | sed -E 's/:[0-9]+$//')":6334"
@@ -126,7 +129,7 @@ jobs:
             TOTAL=$(echo "$COLLECTIONS" | wc -l | tr -d ' ')
             echo "🔍 Migrating ${TOTAL} collections via qdrant-migration (gRPC)"
 
-            kubectl create secret generic qdrant-migration-keys -n "${NS}" \
+            kubectl create secret generic "${SECRET_NAME}" -n "${NS}" \
               --from-literal=SOURCE_KEY="${SOURCE_KEY}" \
               --from-literal=TARGET_KEY="${TARGET_KEY}" \
               --dry-run=client -o yaml | kubectl apply -f -
@@ -159,12 +162,12 @@ jobs:
                     - name: SOURCE_KEY
                       valueFrom:
                         secretKeyRef:
-                          name: qdrant-migration-keys
+                          name: ${SECRET_NAME}
                           key: SOURCE_KEY
                     - name: TARGET_KEY
                       valueFrom:
                         secretKeyRef:
-                          name: qdrant-migration-keys
+                          name: ${SECRET_NAME}
                           key: TARGET_KEY
                     args:
                     - "qdrant"
@@ -208,8 +211,6 @@ jobs:
 
               kubectl delete job "${JOB_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
             done
-
-            kubectl delete secret qdrant-migration-keys -n "${NS}" --ignore-not-found 2>/dev/null || true
 
             echo ""
             echo "Qdrant migration: $((TOTAL - FAIL_COUNT))/${TOTAL} succeeded"
