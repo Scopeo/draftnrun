@@ -126,6 +126,11 @@ jobs:
             TOTAL=$(echo "$COLLECTIONS" | wc -l | tr -d ' ')
             echo "🔍 Migrating ${TOTAL} collections via qdrant-migration (gRPC)"
 
+            kubectl create secret generic qdrant-migration-keys -n "${NS}" \
+              --from-literal=SOURCE_KEY="${SOURCE_KEY}" \
+              --from-literal=TARGET_KEY="${TARGET_KEY}" \
+              --dry-run=client -o yaml | kubectl apply -f -
+
             FAIL_COUNT=0
             IDX=0
             for COLLECTION in $COLLECTIONS; do
@@ -150,13 +155,24 @@ jobs:
                   containers:
                   - name: migrate
                     image: registry.cloud.qdrant.io/library/qdrant-migration
+                    env:
+                    - name: SOURCE_KEY
+                      valueFrom:
+                        secretKeyRef:
+                          name: qdrant-migration-keys
+                          key: SOURCE_KEY
+                    - name: TARGET_KEY
+                      valueFrom:
+                        secretKeyRef:
+                          name: qdrant-migration-keys
+                          key: TARGET_KEY
                     args:
                     - "qdrant"
                     - "--source.url=${SOURCE_GRPC}"
-                    - "--source.api-key=${SOURCE_KEY}"
+                    - "--source.api-key=\$(SOURCE_KEY)"
                     - "--source.collection=${COLLECTION}"
                     - "--target.url=${TARGET_GRPC}"
-                    - "--target.api-key=${TARGET_KEY}"
+                    - "--target.api-key=\$(TARGET_KEY)"
                     - "--target.collection=${COLLECTION}"
                     - "--migration.batch-size=512"
                     - "--migration.restart"
@@ -192,6 +208,8 @@ jobs:
 
               kubectl delete job "${JOB_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
             done
+
+            kubectl delete secret qdrant-migration-keys -n "${NS}" --ignore-not-found 2>/dev/null || true
 
             echo ""
             echo "Qdrant migration: $((TOTAL - FAIL_COUNT))/${TOTAL} succeeded"
