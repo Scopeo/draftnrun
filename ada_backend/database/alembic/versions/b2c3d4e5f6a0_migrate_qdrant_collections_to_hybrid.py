@@ -28,26 +28,33 @@ BATCH_SIZE = 100
 CONTENT_FIELD = "content"
 
 
-async def _scroll_batch(
+async def _scroll_with_vectors(
     service: QdrantService,
     collection_name: str,
-    offset: Any = None,
     batch_size: int = BATCH_SIZE,
-) -> tuple[list[dict], Any]:
-    request_body: dict[str, Any] = {
-        "limit": batch_size,
-        "with_payload": True,
-        "with_vector": True,
-    }
-    if offset is not None:
-        request_body["offset"] = offset
-    response = await service._send_request_async(
-        method="POST",
-        endpoint=f"collections/{collection_name}/points/scroll?wait=true",
-        payload=request_body,
-    )
-    result = response.get("result", {})
-    return result.get("points", []), result.get("next_page_offset")
+) -> list[dict]:
+    all_points: list[dict] = []
+    offset = None
+    while True:
+        request_body: dict[str, Any] = {
+            "limit": batch_size,
+            "with_payload": True,
+            "with_vector": True,
+        }
+        if offset is not None:
+            request_body["offset"] = offset
+        response = await service._send_request_async(
+            method="POST",
+            endpoint=f"collections/{collection_name}/points/scroll?wait=true",
+            payload=request_body,
+        )
+        result = response.get("result", {})
+        points = result.get("points", [])
+        all_points.extend(points)
+        offset = result.get("next_page_offset")
+        if not offset or not points:
+            break
+    return all_points
 
 
 def _transform_point_to_hybrid(point: dict) -> Optional[dict]:
@@ -150,20 +157,16 @@ async def migrate_collection(service: QdrantService, collection_name: str) -> bo
         LOGGER.error(f"[{collection_name}] Failed to create temp hybrid collection: {response}")
         return False
 
-    LOGGER.info(f"[{collection_name}] Migrating points in batches of {BATCH_SIZE}...")
+    LOGGER.info(f"[{collection_name}] Scrolling all points with vectors...")
+    all_points = await _scroll_with_vectors(service, collection_name)
+    LOGGER.info(f"[{collection_name}] Scrolled {len(all_points)} points.")
+
     migrated_count = 0
     skipped_count = 0
-    scroll_offset = None
-    batch_num = 0
-
-    while True:
-        points, scroll_offset = await _scroll_batch(service, collection_name, scroll_offset)
-        if not points:
-            break
-
-        batch_num += 1
+    for i in range(0, len(all_points), BATCH_SIZE):
+        batch = all_points[i : i + BATCH_SIZE]
         transformed = []
-        for point in points:
+        for point in batch:
             new_point = _transform_point_to_hybrid(point)
             if new_point:
                 transformed.append(new_point)
@@ -173,15 +176,10 @@ async def migrate_collection(service: QdrantService, collection_name: str) -> bo
         if transformed:
             success = await service.insert_points_in_collection_async(transformed, tmp_name)
             if not success:
-                LOGGER.error(f"[{collection_name}] Failed to insert batch {batch_num}. Cleaning up temp.")
+                LOGGER.error(f"[{collection_name}] Failed to insert batch at offset {i}. Cleaning up temp.")
                 await service.delete_collection_async(tmp_name)
                 return False
             migrated_count += len(transformed)
-
-        LOGGER.info(f"[{collection_name}] Batch {batch_num}: +{len(transformed)}, total {migrated_count}")
-
-        if not scroll_offset:
-            break
 
     if skipped_count > 0:
         LOGGER.error(
