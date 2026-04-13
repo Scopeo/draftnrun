@@ -135,6 +135,7 @@ jobs:
               --dry-run=client -o yaml | kubectl apply -f -
 
             FAIL_COUNT=0
+            FAILED_COLLECTIONS=""
             IDX=0
             for COLLECTION in $COLLECTIONS; do
               IDX=$((IDX + 1))
@@ -151,7 +152,7 @@ jobs:
               name: ${JOB_NAME}
             spec:
               backoffLimit: 0
-              activeDeadlineSeconds: 600
+              activeDeadlineSeconds: 900
               template:
                 spec:
                   restartPolicy: Never
@@ -183,7 +184,7 @@ jobs:
 
               ELAPSED=0
               JOB_RESULT=""
-              while [ $ELAPSED -lt 600 ]; do
+              while [ $ELAPSED -lt 900 ]; do
                 SUCCEEDED=$(kubectl get job "${JOB_NAME}" -n "${NS}" -o jsonpath='{.status.succeeded}' 2>/dev/null || echo "")
                 JOB_FAILED=$(kubectl get job "${JOB_NAME}" -n "${NS}" -o jsonpath='{.status.failed}' 2>/dev/null || echo "")
                 if [ "$SUCCEEDED" = "1" ]; then
@@ -201,12 +202,15 @@ jobs:
               if [ "$JOB_RESULT" = "ok" ]; then
                 echo "  ✅ Done"
               elif [ "$JOB_RESULT" = "failed" ]; then
-                echo "  ❌ Failed"
-                kubectl logs "job/${JOB_NAME}" -n "${NS}" --tail=20 2>/dev/null || true
+                echo "  ❌ Failed: ${COLLECTION}"
+                kubectl logs "job/${JOB_NAME}" -n "${NS}" --tail=30 2>/dev/null || true
                 FAIL_COUNT=$((FAIL_COUNT + 1))
+                FAILED_COLLECTIONS="${FAILED_COLLECTIONS} ${COLLECTION}"
               else
-                echo "  ⏰ Timed out"
+                echo "  ⏰ Timed out: ${COLLECTION}"
+                kubectl logs "job/${JOB_NAME}" -n "${NS}" --tail=30 2>/dev/null || true
                 FAIL_COUNT=$((FAIL_COUNT + 1))
+                FAILED_COLLECTIONS="${FAILED_COLLECTIONS} ${COLLECTION}"
               fi
 
               kubectl delete job "${JOB_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
@@ -215,7 +219,7 @@ jobs:
             echo ""
             echo "Qdrant migration: $((TOTAL - FAIL_COUNT))/${TOTAL} succeeded"
             if [ $FAIL_COUNT -gt 0 ]; then
-              echo "❌ ${FAIL_COUNT} collection(s) failed"
+              echo "❌ ${FAIL_COUNT} collection(s) failed:${FAILED_COLLECTIONS}"
               exit 1
             fi
 
