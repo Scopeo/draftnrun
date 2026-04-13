@@ -132,27 +132,26 @@ async def get_chunks_from_docx(
     docx_parser: Callable[[str], str],
     chunk_size: int = CHUNK_SIZE,
     chunk_overlap: int = CHUNK_OVERLAP,
+    get_file_url: Optional[Callable[[str], str | None]] = None,
     **kwargs,
 ) -> list[FileChunk]:
     try:
-        content_to_process = get_file_content(document.id)
-        suffix = document.type.value if document.type.value in (".doc", ".docx") else ".docx"
-        with content_as_temporary_file_path(content_to_process, suffix=suffix) as file_path:
-            converted_docx_path = None
-            try:
-                if suffix == ".doc":
-                    file_path = _convert_doc_to_docx(file_path)
-                    converted_docx_path = file_path
-                markdown_text = await docx_parser(file_path, **kwargs)
-            except Exception as e:
-                LOGGER.error(
-                    f"Error parsing DOCX {document.file_name}: {e}",
-                    exc_info=True,
-                )
-                raise Exception(f"Error parsing DOCX {document.file_name}") from e
-            finally:
-                if converted_docx_path and Path(converted_docx_path).exists():
-                    Path(converted_docx_path).unlink()
+        file_url = get_file_url(document.id) if get_file_url else None
+        if file_url:
+            markdown_text = await docx_parser(file_url, **kwargs)
+        else:
+            content_to_process = get_file_content(document.id)
+            suffix = document.type.value if document.type.value in (".doc", ".docx") else ".docx"
+            with content_as_temporary_file_path(content_to_process, suffix=suffix) as file_path:
+                converted_docx_path = None
+                try:
+                    if suffix == ".doc":
+                        file_path = _convert_doc_to_docx(file_path)
+                        converted_docx_path = file_path
+                    markdown_text = await docx_parser(file_path, **kwargs)
+                finally:
+                    if converted_docx_path and Path(converted_docx_path).exists():
+                        Path(converted_docx_path).unlink()
         return chunk_markdown(
             document_to_process=document,
             content=markdown_text,

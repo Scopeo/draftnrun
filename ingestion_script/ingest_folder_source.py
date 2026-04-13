@@ -371,6 +371,7 @@ async def _ingest_folder_source(
                 overlapping_size=chunk_overlap,
                 llamaparse_api_key=llamaparse_api_key,
                 mistral_ocr_api_key=mistral_ocr_api_key,
+                get_file_url_func=folder_manager.get_file_presigned_url,
             )
         except Exception as e:
             error_msg = f"Failed to chunk documents: {str(e)}, PDF reading mode: {document_reading_mode}"

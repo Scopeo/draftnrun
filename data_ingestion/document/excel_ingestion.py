@@ -19,28 +19,39 @@ async def create_chunks_from_excel_file_with_llamaparse(
     llamaparse_api_key: str,
     chunk_size: Optional[int] = None,
     chunk_overlap: int = EXCEL_CHUNK_OVERLAP,
+    get_file_url: Optional[Callable[[str], str | None]] = None,
     **kwargs,
 ) -> list[FileChunk]:
     try:
-        content_to_process = get_file_content_func(document.id)
-        suffix = Path(document.file_name).suffix or document.type.value
-        with content_as_temporary_file_path(content_to_process, suffix=suffix) as file_path:
+        file_url = get_file_url(document.id) if get_file_url else None
+        if file_url:
             try:
                 markdown_documents = await _parse_document_with_llamaparse(
-                    file_path, llamaparse_api_key, split_by_page=True
+                    "presigned_url_input", llamaparse_api_key, split_by_page=True, file_url=file_url
                 )
-                result_chunks = []
-                for markdown_content, _ in markdown_documents:
-                    page_chunks = chunk_markdown(
-                        document_to_process=document,
-                        content=markdown_content,
-                        chunk_size=chunk_size if chunk_size is not None else EXCEL_CHUNK_SIZE,
-                        chunk_overlap=chunk_overlap,
-                    )
-                    result_chunks.extend(page_chunks)
             except Exception as e:
                 LOGGER.error(f"Error parsing Excel file {document.file_name}: {e}", exc_info=True)
                 raise Exception(f"Error parsing Excel file {document.file_name}") from e
+        else:
+            content_to_process = get_file_content_func(document.id)
+            suffix = Path(document.file_name).suffix or document.type.value
+            with content_as_temporary_file_path(content_to_process, suffix=suffix) as file_path:
+                try:
+                    markdown_documents = await _parse_document_with_llamaparse(
+                        file_path, llamaparse_api_key, split_by_page=True
+                    )
+                except Exception as e:
+                    LOGGER.error(f"Error parsing Excel file {document.file_name}: {e}", exc_info=True)
+                    raise Exception(f"Error parsing Excel file {document.file_name}") from e
+        result_chunks = []
+        for markdown_content, _ in markdown_documents:
+            page_chunks = chunk_markdown(
+                document_to_process=document,
+                content=markdown_content,
+                chunk_size=chunk_size if chunk_size is not None else EXCEL_CHUNK_SIZE,
+                chunk_overlap=chunk_overlap,
+            )
+            result_chunks.extend(page_chunks)
     except Exception as e:
         LOGGER.error(f"Error parsing Excel file {document.file_name}: {e}", exc_info=True)
         raise Exception(f"Error parsing Excel file {document.file_name}") from e

@@ -18,18 +18,23 @@ async def get_chunks_from_document_with_mistral_ocr(
     mistral_ocr_api_key: str,
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
+    get_file_url: Optional[Callable[[str], str | None]] = None,
     **kwargs,
 ) -> list[FileChunk]:
     if not mistral_ocr_api_key:
         raise ValueError("mistral_ocr_api_key is required for MISTRAL_OCR mode")
 
-    content_bytes = get_file_content(document.id)
-    if isinstance(content_bytes, str):
-        content_bytes = content_bytes.encode("utf-8")
+    presigned_url = get_file_url(document.id) if get_file_url else None
 
-    mime_type = mimetypes.guess_type(document.file_name)[0] or "application/pdf"
-    b64 = base64.b64encode(content_bytes).decode("utf-8")
-    file_data_url = f"data:{mime_type};base64,{b64}"
+    if presigned_url:
+        file_data_url = presigned_url
+    else:
+        content_bytes = get_file_content(document.id)
+        if isinstance(content_bytes, str):
+            content_bytes = content_bytes.encode("utf-8")
+        mime_type = mimetypes.guess_type(document.file_name)[0] or "application/pdf"
+        b64 = base64.b64encode(content_bytes).decode("utf-8")
+        file_data_url = f"data:{mime_type};base64,{b64}"
 
     ocr = OCRService(
         trace_manager=TraceManager(project_name="ingestion"),

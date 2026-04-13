@@ -21,19 +21,25 @@ async def create_chunks_from_pdf_document(
     pdf_parser: Callable[[str], str],
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
+    get_file_url: Optional[Callable[[str], str | None]] = None,
     **kwargs,
 ) -> list[FileChunk]:
     try:
-        content_to_process = get_file_content(document.id)
-        with content_as_temporary_file_path(content_to_process, suffix=".pdf") as file_path:
+        file_url = get_file_url(document.id) if get_file_url else None
+        if file_url:
             try:
-                markdown_text = await pdf_parser(file_path)
+                markdown_text = await pdf_parser("presigned_url_input", file_url=file_url)
             except Exception as e:
-                LOGGER.error(
-                    f"Error parsing PDF {document.file_name}: {e}",
-                    exc_info=True,
-                )
+                LOGGER.error(f"Error parsing PDF {document.file_name}: {e}", exc_info=True)
                 raise Exception(f"Error parsing PDF {document.file_name}") from e
+        else:
+            content_to_process = get_file_content(document.id)
+            with content_as_temporary_file_path(content_to_process, suffix=".pdf") as file_path:
+                try:
+                    markdown_text = await pdf_parser(file_path)
+                except Exception as e:
+                    LOGGER.error(f"Error parsing PDF {document.file_name}: {e}", exc_info=True)
+                    raise Exception(f"Error parsing PDF {document.file_name}") from e
         return chunk_markdown(
             document_to_process=document,
             content=markdown_text,
