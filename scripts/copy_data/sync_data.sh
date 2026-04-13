@@ -112,29 +112,20 @@ else
   fi
 fi
 
-sync_databases() {
-  echo "===> Checking if sync is needed (TTL 24h, based on ada_backend dump only)"
+pipe_dump_restore() {
+  local source_url="$1"
+  local target_url="$2"
+  local db_name="$3"
 
-  if [ "$FORCE_SYNC" != "1" ]; then
-    if check_dump_ttl "$BACKEND_DUMP_PATH" "ada_backend"; then
-      echo "===> Cache valid based on ada_backend dump, nothing to do"
-      return 1
-    fi
-  else
-    echo "===> FORCE_SYNC enabled, skipping TTL check and forcing full sync"
-  fi
+  echo "===> [$db_name] Preparing target database"
+  drop_and_create_db "$target_url" "$db_name"
 
-  echo "===> Cache expired or missing (based on ada_backend) or forced, starting sync process"
+  echo "===> [$db_name] Streaming pg_dump → pg_restore"
+  pg_dump -Fc "$source_url" | pg_restore -d "$target_url" --no-owner --no-privileges -Fc
+  echo "===> [$db_name] Done"
+}
 
-  ensure_pg_tools
-
-  echo "===> Dumping ada_backend from source"
-  pg_dump -Fc "$SOURCE_DB_URL" -f "$BACKEND_DUMP_PATH"
-  drop_and_create_db "$TARGET_DB_URL" "ada_backend"
-  echo "===> Restoring ada_backend"
-  pg_restore -d "$TARGET_DB_URL" --no-owner --no-privileges --single-transaction --verbose -Fc "$BACKEND_DUMP_PATH"
-
-  echo "===> Deactivating all cron jobs in staging database"
+deactivate_staging_crons() {
   DEACTIVATED_COUNT=$(psql "$TARGET_DB_URL" -t -A -c "
     WITH updated AS (
       UPDATE scheduler.cron_jobs 
@@ -154,13 +145,38 @@ sync_databases() {
       echo "===> Scheduler schema not found, skipping cron job deactivation"
     fi
   fi
+}
 
-  echo "===> Dumping ada_ingestion from source"
-  pg_dump -Fc "$SOURCE_INGESTION_DB_URL" -f "$INGESTION_DUMP_PATH"
-  drop_and_create_db "$TARGET_INGESTION_DB_URL" "ada_ingestion"
-  echo "===> Restoring ada_ingestion"
-  pg_restore -d "$TARGET_INGESTION_DB_URL" --no-owner --no-privileges --single-transaction --verbose -Fc "$INGESTION_DUMP_PATH"
+sync_databases() {
+  if [ "$FORCE_SYNC" != "1" ]; then
+    if check_dump_ttl "$BACKEND_DUMP_PATH" "ada_backend"; then
+      echo "===> Cache valid based on ada_backend dump, nothing to do"
+      return 1
+    fi
+  else
+    echo "===> FORCE_SYNC enabled, skipping TTL check"
+  fi
 
+  ensure_pg_tools
+
+  echo "===> Starting parallel database sync (ada_backend + ada_ingestion)"
+
+  (pipe_dump_restore "$SOURCE_DB_URL" "$TARGET_DB_URL" "ada_backend" && deactivate_staging_crons) &
+  local backend_pid=$!
+
+  pipe_dump_restore "$SOURCE_INGESTION_DB_URL" "$TARGET_INGESTION_DB_URL" "ada_ingestion" &
+  local ingestion_pid=$!
+
+  local failed=0
+  wait $backend_pid || { echo "===> ERROR: ada_backend sync failed"; failed=1; }
+  wait $ingestion_pid || { echo "===> ERROR: ada_ingestion sync failed"; failed=1; }
+
+  if [ "$failed" = "1" ]; then
+    echo "===> Database sync FAILED"
+    exit 1
+  fi
+
+  touch "$BACKEND_DUMP_PATH"
   echo "===> Database sync completed"
   return 0
 }
