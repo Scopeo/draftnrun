@@ -157,7 +157,7 @@ async def _run_direct_trigger(
 
     await _post(
         url=url,
-        body=payload,
+        body={"input_data": payload},
         webhook_api_key=webhook_api_key,
         context="direct trigger",
         params=params,
