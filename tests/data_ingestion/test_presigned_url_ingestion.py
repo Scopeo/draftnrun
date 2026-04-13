@@ -2,15 +2,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from data_ingestion.document.folder_management.folder_management import (
-    FileDocument,
-    FileDocumentType,
-    FolderManager,
-)
+from data_ingestion.document.excel_ingestion import create_chunks_from_excel_file_with_llamaparse
+from data_ingestion.document.folder_management.folder_management import FileDocument, FileDocumentType, FolderManager
 from data_ingestion.document.folder_management.s3_folder_management import S3FolderManager
 from data_ingestion.document.mistral_ocr_ingestion import get_chunks_from_document_with_mistral_ocr
 from data_ingestion.document.pdf_ingestion import create_chunks_from_pdf_document
-from data_ingestion.document.excel_ingestion import create_chunks_from_excel_file_with_llamaparse
 
 
 @pytest.fixture
@@ -118,9 +114,7 @@ class TestMistralOcrPresignedUrl:
         mock_get_url = MagicMock(return_value="https://s3.amazonaws.com/bucket/file.pdf?sig=abc")
 
         ocr_json = '{"pages": [{"markdown": "# Hello World"}]}'
-        with patch(
-            "data_ingestion.document.mistral_ocr_ingestion.OCRService"
-        ) as MockOCR:
+        with patch("data_ingestion.document.mistral_ocr_ingestion.OCRService") as MockOCR:
             mock_ocr_instance = MagicMock()
             mock_ocr_instance.get_ocr_text_async = AsyncMock(return_value=ocr_json)
             MockOCR.return_value = mock_ocr_instance
@@ -141,9 +135,7 @@ class TestMistralOcrPresignedUrl:
         mock_get_content = MagicMock(return_value=b"pdf bytes")
 
         ocr_json = '{"pages": [{"markdown": "# Hello World"}]}'
-        with patch(
-            "data_ingestion.document.mistral_ocr_ingestion.OCRService"
-        ) as MockOCR:
+        with patch("data_ingestion.document.mistral_ocr_ingestion.OCRService") as MockOCR:
             mock_ocr_instance = MagicMock()
             mock_ocr_instance.get_ocr_text_async = AsyncMock(return_value=ocr_json)
             MockOCR.return_value = mock_ocr_instance
@@ -164,9 +156,7 @@ class TestMistralOcrPresignedUrl:
         mock_get_url = MagicMock(return_value=None)
 
         ocr_json = '{"pages": [{"markdown": "# Hello World"}]}'
-        with patch(
-            "data_ingestion.document.mistral_ocr_ingestion.OCRService"
-        ) as MockOCR:
+        with patch("data_ingestion.document.mistral_ocr_ingestion.OCRService") as MockOCR:
             mock_ocr_instance = MagicMock()
             mock_ocr_instance.get_ocr_text_async = AsyncMock(return_value=ocr_json)
             MockOCR.return_value = mock_ocr_instance
@@ -258,9 +248,7 @@ class TestExcelIngestionPresignedUrl:
         with patch(mock_path, new_callable=AsyncMock) as mock_parse:
             mock_parse.return_value = [("| col1 | col2 |\n|---|---|\n| a | b |", 1)]
 
-            with patch(
-                "data_ingestion.document.excel_ingestion.content_as_temporary_file_path"
-            ) as mock_ctx:
+            with patch("data_ingestion.document.excel_ingestion.content_as_temporary_file_path") as mock_ctx:
                 mock_ctx.return_value.__enter__ = MagicMock(return_value="/tmp/test.xlsx")
                 mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
