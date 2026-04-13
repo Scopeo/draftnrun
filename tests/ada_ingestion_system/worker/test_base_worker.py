@@ -29,6 +29,7 @@ class DummyWorker(BaseWorker):
         self._return_raw = return_raw
         self.dead_letter_calls = []
         self.dead_letter_hook_calls = []
+        self.fatal_ack_hook_calls = []
 
     def get_required_fields(self) -> list[str]:
         return ["k"]
@@ -46,6 +47,9 @@ class DummyWorker(BaseWorker):
 
     def _on_dead_letter(self, message_id: str, fields: Dict[str, str], reason: str = "") -> None:
         self.dead_letter_hook_calls.append((message_id, fields, reason))
+
+    def _on_fatal_ack(self, message_id: str, fields: Dict[str, str], reason: str = "") -> None:
+        self.fatal_ack_hook_calls.append((message_id, fields, reason))
 
 
 class DummyRedis:
@@ -82,6 +86,19 @@ def test_fatal_acks_once(monkeypatch):
     worker._process_and_ack({"k": "v"}, "1-0", {"data": "{}"})
 
     assert redis.acks == [("stream", base_worker.CONSUMER_GROUP, "1-0")]
+
+
+def test_fatal_ack_calls_on_fatal_ack_hook(monkeypatch):
+    redis = DummyRedis()
+    monkeypatch.setattr(base_worker, "redis_client", redis)
+    worker = DummyWorker(outcome=ProcessTaskOutcome.FAIL_FATAL_ACK)
+    fields = {"data": '{"run_id": "abc"}'}
+
+    worker._process_and_ack({"k": "v"}, "1-0", fields)
+
+    assert len(worker.fatal_ack_hook_calls) == 1
+    assert worker.fatal_ack_hook_calls[0][0] == "1-0"
+    assert worker.fatal_ack_hook_calls[0][1] == fields
 
 
 def test_retry_under_threshold_does_not_ack(monkeypatch):

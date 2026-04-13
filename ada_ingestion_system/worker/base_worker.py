@@ -272,6 +272,7 @@ class BaseWorker:
                 logger.info("message_ack_fatal stream=%s message_id=%s", self.stream_name, message_id)
             except Exception as e:
                 logger.error("xack_failed stream=%s message_id=%s error=%s", self.stream_name, message_id, str(e))
+            self._on_fatal_ack(message_id, fields, reason=retry_reason)
             return
 
         delivery_count = self._get_delivery_count(message_id)
@@ -426,6 +427,11 @@ class BaseWorker:
     def _on_dead_letter(self, message_id: str, fields: Dict[str, str], reason: str = "") -> None:
         """Called when a message is dead-lettered.  Override in subclasses to
         mark the task as failed in the API, send alerts, etc."""
+        pass
+
+    def _on_fatal_ack(self, message_id: str, fields: Dict[str, str], reason: str = "") -> None:
+        """Called when a message is ACKed due to a fatal (non-retryable) failure.
+        Override in subclasses to mark the task as failed, send alerts, etc."""
         pass
 
     def _log_queued_task(self, payload: Dict[str, Any]) -> None:
