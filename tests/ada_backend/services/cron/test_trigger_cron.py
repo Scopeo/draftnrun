@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 
+from ada_backend.context import get_cron_execution_context
 from ada_backend.database.models import CronEntrypoint, CronStatus
 from ada_backend.services.cron.errors import CronJobAccessDenied, CronJobNotFound
 from ada_backend.services.cron.service import execute_cron_run, trigger_cron_job_now
@@ -178,3 +179,39 @@ class TestExecuteCronRun:
         mock_update.assert_called_once()
         call_kwargs = mock_update.call_args.kwargs
         assert call_kwargs["status"] == CronStatus.ERROR
+
+    @pytest.mark.asyncio
+    async def test_execute_sets_cron_execution_context(self):
+        run_id = uuid4()
+        cron_id = uuid4()
+        payload = {"message": "test"}
+
+        captured_ctx = {}
+
+        async def _capture_context(*args, **kwargs):
+            ctx = get_cron_execution_context()
+            captured_ctx["run_id"] = ctx.run_id
+            captured_ctx["cron_id"] = ctx.cron_id
+            return {"result": "ok"}
+
+        mock_spec = MagicMock()
+        mock_spec.execution_payload_model.return_value = MagicMock()
+        mock_spec.execution_validator = MagicMock()
+        mock_spec.executor = _capture_context
+
+        mock_session = MagicMock()
+        mock_session.__enter__ = MagicMock(return_value=mock_session)
+        mock_session.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch(
+                "ada_backend.services.cron.execution.CRON_REGISTRY",
+                {CronEntrypoint.DUMMY_PRINT: mock_spec},
+            ),
+            patch("ada_backend.services.cron.execution.get_db_session", return_value=mock_session),
+            patch("ada_backend.services.cron.execution.update_cron_run"),
+        ):
+            await execute_cron_run(run_id, cron_id, CronEntrypoint.DUMMY_PRINT, payload)
+
+        assert captured_ctx["run_id"] == run_id
+        assert captured_ctx["cron_id"] == cron_id

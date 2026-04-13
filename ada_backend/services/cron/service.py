@@ -8,6 +8,7 @@ import pytz
 from croniter import croniter
 from sqlalchemy.orm import Session
 
+from ada_backend.context import CronExecutionContext, set_cron_execution_context
 from ada_backend.database.models import CronJob, CronStatus
 from ada_backend.mixpanel_analytics import track_cron_job_created, track_cron_job_deleted, track_cron_job_toggled
 from ada_backend.repositories.cron_repository import (
@@ -322,7 +323,10 @@ def permanently_delete_cron_jobs_by_project_service(session: Session, project_id
 
 
 def pause_cron_job(
-    session: Session, cron_id: UUID, organization_id: UUID, user_id: UUID | None = None,
+    session: Session,
+    cron_id: UUID,
+    organization_id: UUID,
+    user_id: UUID | None = None,
 ) -> Optional[CronJobPauseResponse]:
     _assert_cron_in_org(session, cron_id, organization_id)
     updated_cron = update_cron_job(session, cron_id, is_enabled=False)
@@ -340,7 +344,10 @@ def pause_cron_job(
 
 
 def resume_cron_job(
-    session: Session, cron_id: UUID, organization_id: UUID, user_id: UUID | None = None,
+    session: Session,
+    cron_id: UUID,
+    organization_id: UUID,
+    user_id: UUID | None = None,
 ) -> Optional[CronJobPauseResponse]:
     _assert_cron_in_org(session, cron_id, organization_id)
     updated_cron = update_cron_job(session, cron_id, is_enabled=True)
@@ -401,6 +408,7 @@ def trigger_cron_job_now(
 
 async def execute_cron_run(run_id: UUID, cron_id: UUID, entrypoint: CronEntrypoint, payload: dict[str, Any]) -> None:
     """Execute a manually triggered cron job run. Delegates to shared execution logic."""
+    set_cron_execution_context(CronExecutionContext(run_id=run_id, cron_id=cron_id))
     try:
         await run_cron_spec(run_id=run_id, cron_id=cron_id, entrypoint=entrypoint, payload=payload)
     except Exception:
