@@ -1,8 +1,9 @@
-"""migrate qdrant collections to hybrid in place (existing dense + sparse BM25)
+"""migrate qdrant collections to hybrid (dense + sparse BM25)
 
 Revision ID: b2c3d4e5f6a0
 Revises: 4071a252013a
 Create Date: 2026-04-03
+
 """
 
 import asyncio
@@ -10,7 +11,6 @@ import logging
 from typing import Any, Optional, Sequence, Union
 
 from alembic import op
-from httpx import HTTPStatusError
 from sqlalchemy import text
 
 from engine.qdrant_service import BM25_MODEL, QdrantService
@@ -26,181 +26,203 @@ LOGGER = logging.getLogger(__name__)
 
 BATCH_SIZE = 100
 CONTENT_FIELD = "content"
-SPARSE_VECTOR_NAME = "sparse"
-MAX_RETRIES = 5
-RETRY_BASE_DELAY = 5
 
 
-async def _retry_async(coro_fn, description: str):
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            return await coro_fn()
-        except HTTPStatusError as e:
-            if e.response.status_code in (502, 503, 429) and attempt < MAX_RETRIES:
-                delay = RETRY_BASE_DELAY * attempt
-                LOGGER.warning(
-                    "%s: %s, retry %s/%s in %ss", description, e.response.status_code, attempt, MAX_RETRIES, delay
-                )
-                await asyncio.sleep(delay)
-            else:
-                raise
-
-
-async def _scroll_batch_for_sparse_backfill(
+async def _scroll_batch(
     service: QdrantService,
     collection_name: str,
     offset: Any = None,
     batch_size: int = BATCH_SIZE,
-) -> tuple[list[dict[str, Any]], Any]:
+) -> tuple[list[dict], Any]:
     request_body: dict[str, Any] = {
         "limit": batch_size,
-        "with_payload": [CONTENT_FIELD],
-        "with_vector": False,
+        "with_payload": True,
+        "with_vector": True,
     }
     if offset is not None:
         request_body["offset"] = offset
-
-    async def _do_scroll():
-        return await service._send_request_async(
-            method="POST",
-            endpoint=f"collections/{collection_name}/points/scroll?wait=true",
-            payload=request_body,
-        )
-
-    response = await _retry_async(_do_scroll, f"[{collection_name}] scroll")
+    response = await service._send_request_async(
+        method="POST",
+        endpoint=f"collections/{collection_name}/points/scroll?wait=true",
+        payload=request_body,
+    )
     result = response.get("result", {})
     return result.get("points", []), result.get("next_page_offset")
 
 
-async def _ensure_sparse_vector_config(
-    service: QdrantService,
-    collection_name: str,
-) -> None:
-    collection_info = await service.get_collection_info_async(collection_name)
-    sparse_vectors = collection_info.get("config", {}).get("params", {}).get("sparse_vectors")
+def _transform_point_to_hybrid(point: dict) -> Optional[dict]:
+    payload = point.get("payload", {})
+    vector = point.get("vector")
+    content = payload.get(CONTENT_FIELD, "")
 
-    if isinstance(sparse_vectors, dict) and SPARSE_VECTOR_NAME in sparse_vectors:
-        LOGGER.info("[%s] Sparse vector config already exists.", collection_name)
-        return
-
-    payload = {"sparse_vectors": {SPARSE_VECTOR_NAME: {"modifier": "idf"}}}
-
-    async def _do_patch():
-        return await service._send_request_async(
-            method="PATCH",
-            endpoint=f"collections/{collection_name}",
-            payload=payload,
-        )
-
-    response = await _retry_async(_do_patch, f"[{collection_name}] add sparse config")
-    if "result" not in response:
-        raise RuntimeError(f"[{collection_name}] Failed to add sparse vector config: {response}")
-
-    LOGGER.info("[%s] Added sparse vector config.", collection_name)
-
-
-def _build_sparse_vector_update(point: dict[str, Any]) -> Optional[dict[str, Any]]:
-    payload = point.get("payload") or {}
-    content = payload.get(CONTENT_FIELD)
-
-    if not isinstance(content, str):
-        return None
-
-    content = content.strip()
-    if not content:
+    if not vector or not content:
         return None
 
     return {
         "id": point["id"],
-        "vector": {SPARSE_VECTOR_NAME: {"text": content, "model": BM25_MODEL}},
+        "payload": payload,
+        "vector": {
+            "dense": vector,
+            "sparse": {"text": content, "model": BM25_MODEL},
+        },
     }
 
 
-async def _update_sparse_vectors(
-    service: QdrantService,
-    collection_name: str,
-    point_updates: list[dict[str, Any]],
-) -> None:
-    if not point_updates:
-        return
+async def _get_vector_config(service: QdrantService, collection_name: str) -> tuple[int, str]:
+    info = await service.get_collection_info_async(collection_name)
+    vectors_config = info.get("config", {}).get("params", {}).get("vectors", {})
+    if "size" in vectors_config:
+        return vectors_config["size"], vectors_config.get("distance", "Cosine")
+    if "dense" in vectors_config:
+        return vectors_config["dense"]["size"], vectors_config["dense"].get("distance", "Cosine")
+    raise ValueError(f"Cannot determine vector config for collection '{collection_name}'")
 
-    async def _do_update():
-        return await service._send_request_async(
-            method="PUT",
-            endpoint=f"collections/{collection_name}/points/vectors?wait=true",
-            payload={"points": point_updates},
-        )
 
-    response = await _retry_async(_do_update, f"[{collection_name}] update vectors")
-    if "result" not in response:
-        raise RuntimeError(f"[{collection_name}] Failed sparse vector batch update: {response}")
+async def _get_payload_indexes(service: QdrantService, collection_name: str) -> dict[str, Any]:
+    """Get all payload indexes from a collection."""
+    info = await service.get_collection_info_async(collection_name)
+    return info.get("payload_schema", {})
+
+
+async def _recreate_indexes(service: QdrantService, collection_name: str, payload_schema: dict[str, Any]) -> None:
+    """Recreate payload indexes on a collection."""
+    for field_name, field_info in payload_schema.items():
+        # Extract the field type from the schema
+        if isinstance(field_info, dict):
+            field_type = field_info.get("data_type") or field_info.get("type") or field_info.get("field_type")
+        else:
+            field_type = field_info
+
+        if field_type:
+            LOGGER.info(f"[{collection_name}] Recreating index for field '{field_name}' (type: {field_type})")
+            endpoint = f"/collections/{collection_name}/index"
+            payload = {"field_name": field_name, "field_schema": field_type}
+            try:
+                await service._send_request_async(method="PUT", endpoint=endpoint, payload=payload)
+            except Exception as e:
+                LOGGER.warning(f"[{collection_name}] Failed to recreate index for '{field_name}': {e}")
 
 
 async def migrate_collection(service: QdrantService, collection_name: str) -> bool:
-    try:
-        is_hybrid = await service.is_hybrid_collection_async(collection_name)
-        if is_hybrid:
-            LOGGER.info("[%s] Already hybrid, skipping.", collection_name)
-            return True
-
-        original_count = await service.count_points_async(collection_name)
-        LOGGER.info(
-            "[%s] Starting in-place sparse backfill. points=%s, batch_size=%s",
-            collection_name, original_count, BATCH_SIZE,
-        )
-
-        await _ensure_sparse_vector_config(service, collection_name)
-
-        if original_count == 0:
-            LOGGER.info("[%s] Empty collection, sparse config added.", collection_name)
-            return True
-
-        migrated_count = 0
-        skipped_count = 0
-        batch_num = 0
-        scroll_offset = None
-
-        while True:
-            points, scroll_offset = await _scroll_batch_for_sparse_backfill(
-                service=service, collection_name=collection_name, offset=scroll_offset, batch_size=BATCH_SIZE,
-            )
-            if not points:
-                break
-
-            batch_num += 1
-            updates: list[dict[str, Any]] = []
-
-            for point in points:
-                update = _build_sparse_vector_update(point)
-                if update is None:
-                    skipped_count += 1
-                    continue
-                updates.append(update)
-
-            if updates:
-                await _update_sparse_vectors(service=service, collection_name=collection_name, point_updates=updates)
-                migrated_count += len(updates)
-
-            LOGGER.info(
-                "[%s] Batch %s: updated=%s, skipped=%s, total_updated=%s",
-                collection_name, batch_num, len(updates), skipped_count, migrated_count,
-            )
-
-            if scroll_offset is None:
-                break
-
-        LOGGER.info(
-            "[%s] In-place hybrid migration complete. updated=%s skipped=%s total=%s",
-            collection_name, migrated_count, skipped_count, original_count,
-        )
+    is_hybrid = await service.is_hybrid_collection_async(collection_name)
+    if is_hybrid:
+        LOGGER.info(f"[{collection_name}] Already hybrid, skipping.")
         return True
 
-    except Exception as exc:
-        LOGGER.exception("[%s] Hybrid migration failed: %s", collection_name, exc)
+    LOGGER.info(f"[{collection_name}] Starting migration to hybrid...")
+
+    vector_size, distance = await _get_vector_config(service, collection_name)
+    original_count = await service.count_points_async(collection_name)
+    payload_indexes = await _get_payload_indexes(service, collection_name)
+    LOGGER.info(
+        f"[{collection_name}] {original_count} points, vector_size={vector_size}, distance={distance}, "
+        f"indexes={len(payload_indexes)}"
+    )
+
+    hybrid_payload = {
+        "vectors": {"dense": {"size": vector_size, "distance": distance}},
+        "sparse_vectors": {"sparse": {"modifier": "idf"}},
+    }
+
+    if original_count == 0:
+        LOGGER.info(f"[{collection_name}] Empty collection, recreating as hybrid.")
+        await service.delete_collection_async(collection_name)
+        response = await service._send_request_async(
+            method="PUT", endpoint=f"collections/{collection_name}?wait=true", payload=hybrid_payload
+        )
+        if "result" not in response:
+            LOGGER.error(f"[{collection_name}] Failed to recreate empty collection as hybrid: {response}")
+            return False
+        LOGGER.info(f"[{collection_name}] Recreated as hybrid (empty).")
+        if payload_indexes:
+            await _recreate_indexes(service, collection_name, payload_indexes)
+        return True
+
+    tmp_name = f"{collection_name}__hybrid_tmp"
+    if await service.collection_exists_async(tmp_name):
+        LOGGER.warning(f"[{collection_name}] Temp collection '{tmp_name}' exists, deleting it.")
+        await service.delete_collection_async(tmp_name)
+
+    response = await service._send_request_async(
+        method="PUT", endpoint=f"collections/{tmp_name}?wait=true", payload=hybrid_payload
+    )
+    if "result" not in response:
+        LOGGER.error(f"[{collection_name}] Failed to create temp hybrid collection: {response}")
         return False
 
+    LOGGER.info(f"[{collection_name}] Migrating points in batches of {BATCH_SIZE}...")
+    migrated_count = 0
+    skipped_count = 0
+    scroll_offset = None
+    batch_num = 0
 
-async def upgrade_collections(connection, qdrant_service: QdrantService) -> None:
+    while True:
+        points, scroll_offset = await _scroll_batch(service, collection_name, scroll_offset)
+        if not points:
+            break
+
+        batch_num += 1
+        transformed = []
+        for point in points:
+            new_point = _transform_point_to_hybrid(point)
+            if new_point:
+                transformed.append(new_point)
+            else:
+                skipped_count += 1
+
+        if transformed:
+            success = await service.insert_points_in_collection_async(transformed, tmp_name)
+            if not success:
+                LOGGER.error(f"[{collection_name}] Failed to insert batch {batch_num}. Cleaning up temp.")
+                await service.delete_collection_async(tmp_name)
+                return False
+            migrated_count += len(transformed)
+
+        LOGGER.info(f"[{collection_name}] Batch {batch_num}: +{len(transformed)}, total {migrated_count}")
+
+        if not scroll_offset:
+            break
+
+    if skipped_count > 0:
+        LOGGER.error(
+            f"[{collection_name}] {skipped_count} point(s) have missing vector or content. "
+            f"Aborting migration to preserve original data. Cleaning up temp collection."
+        )
+        await service.delete_collection_async(tmp_name)
+        return False
+
+    tmp_count = await service.count_points_async(tmp_name)
+    if tmp_count != original_count:
+        LOGGER.error(
+            f"[{collection_name}] Count mismatch: temp has {tmp_count}, expected {original_count}. "
+            f"Leaving temp '{tmp_name}' for inspection."
+        )
+        return False
+
+    if payload_indexes:
+        await _recreate_indexes(service, tmp_name, payload_indexes)
+
+    LOGGER.info(f"[{collection_name}] Deleting original and swapping alias to temp hybrid collection...")
+    await service.delete_collection_async(collection_name)
+
+    alias_actions = {
+        "actions": [
+            {"delete_alias": {"alias_name": collection_name}},
+            {"create_alias": {"collection_name": tmp_name, "alias_name": collection_name}},
+        ]
+    }
+    response = await service._send_request_async(method="POST", endpoint="collections/aliases", payload=alias_actions)
+    if "result" not in response:
+        LOGGER.error(f"[{collection_name}] Failed to swap alias: {response}. Data safe in '{tmp_name}'.")
+        return False
+
+    LOGGER.info(
+        f"[{collection_name}] Migration complete. {tmp_count} points in hybrid collection (alias → '{tmp_name}')."
+    )
+    return True
+
+
+async def upgrade_collections(connection, qdrant_service: QdrantService):
     result = connection.execute(
         text("SELECT DISTINCT qdrant_collection_name FROM data_sources WHERE qdrant_collection_name IS NOT NULL")
     )
@@ -210,30 +232,28 @@ async def upgrade_collections(connection, qdrant_service: QdrantService) -> None
         LOGGER.info("No Qdrant collections found in data_sources.")
         return
 
-    LOGGER.info("Found %s unique collection(s) to check.", len(collection_names))
+    LOGGER.info(f"Found {len(collection_names)} unique collection(s) to check.")
 
     migrated = 0
     skipped = 0
     failed = 0
-
     for name in collection_names:
         if not await qdrant_service.collection_exists_async(name):
-            LOGGER.warning("Collection '%s' not found in Qdrant, skipping.", name)
+            LOGGER.warning(f"Collection '{name}' not found in Qdrant, skipping.")
             skipped += 1
             continue
-
         success = await migrate_collection(qdrant_service, name)
         if success:
             migrated += 1
         else:
             failed += 1
 
-    LOGGER.info("Hybrid in-place migration done. Migrated: %s, Skipped: %s, Failed: %s", migrated, skipped, failed)
-
+    LOGGER.info(f"Hybrid migration done. Migrated: {migrated}, Skipped: {skipped}, Failed: {failed}")
     if failed > 0:
         raise RuntimeError(
             f"{failed} collection(s) failed hybrid migration (migrated={migrated}, skipped={skipped}). "
-            f"Check logs above."
+            f"Check logs above for per-collection details. "
+            f"Temp collections (*__hybrid_tmp) may still exist for manual recovery."
         )
 
 
@@ -244,4 +264,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    LOGGER.info("Downgrade is a no-op. Hybrid collections are backward-compatible.")
+    LOGGER.info("Downgrade is a no-op. Hybrid collections are backward-compatible with semantic search.")

@@ -277,13 +277,17 @@ class QdrantService:
         filter: Optional[dict] = None,
         **search_params,
     ) -> list[tuple[str, float, dict]]:
+        """
+        Async version of search_vectors.
+        Search for vectors similar to the given query vector in the Qdrant collection.
+        Uses the named ``dense`` vector so it works with hybrid collections.
+        """
         payload: dict[str, Any] = {
             "query": query_vector,
+            "using": "dense",
             "with_payload": True,
             "limit": search_params.pop("limit", DEFAULT_MAX_CHUNKS),
         }
-        if await self._has_named_dense_vector(collection_name):
-            payload["using"] = "dense"
         if filter:
             payload["filter"] = filter
         return await self._query_points_async(collection_name, payload)
@@ -311,9 +315,6 @@ class QdrantService:
         limit: int = DEFAULT_MAX_CHUNKS,
     ) -> list[tuple[str, float, dict]]:
         prefetch_limit = limit * 2
-        dense_prefetch: dict[str, Any] = {"query": query_vector, "limit": prefetch_limit}
-        if await self._has_named_dense_vector(collection_name):
-            dense_prefetch["using"] = "dense"
         payload: dict[str, Any] = {
             "prefetch": [
                 {
@@ -321,7 +322,11 @@ class QdrantService:
                     "using": "sparse",
                     "limit": prefetch_limit,
                 },
-                dense_prefetch,
+                {
+                    "query": query_vector,
+                    "using": "dense",
+                    "limit": prefetch_limit,
+                },
             ],
             "query": {"fusion": "rrf"},
             "limit": limit,
@@ -341,11 +346,10 @@ class QdrantService:
     ) -> list[tuple[str, float, dict]]:
         payload: dict[str, Any] = {
             "query": query_vector,
+            "using": "dense",
             "limit": limit,
             "with_payload": True,
         }
-        if await self._has_named_dense_vector(collection_name):
-            payload["using"] = "dense"
         if filter:
             payload["filter"] = filter
         return await self._query_points_async(collection_name, payload)
@@ -1054,14 +1058,10 @@ class QdrantService:
         return response.get("result", {})
 
     async def is_hybrid_collection_async(self, collection_name: str) -> bool:
+        """Check whether a collection has both dense and sparse named vectors."""
         info = await self.get_collection_info_async(collection_name)
         sparse_vectors = info.get("config", {}).get("params", {}).get("sparse_vectors", {})
         return bool(sparse_vectors and "sparse" in sparse_vectors)
-
-    async def _has_named_dense_vector(self, collection_name: str) -> bool:
-        info = await self.get_collection_info_async(collection_name)
-        vectors_config = info.get("config", {}).get("params", {}).get("vectors", {})
-        return "dense" in vectors_config
 
     def create_collection(
         self,
