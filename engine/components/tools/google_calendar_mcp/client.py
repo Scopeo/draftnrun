@@ -76,7 +76,7 @@ class GoogleCalendarClient:
         def _call():
             return (
                 self._service.events()
-                .insert(calendarId=calendar_id, body=event_body, conferenceDataVersion=1)
+                .insert(calendarId=calendar_id, body=event_body, conferenceDataVersion=1, sendUpdates="all")
                 .execute()
             )
 
@@ -88,7 +88,13 @@ class GoogleCalendarClient:
         def _call():
             return (
                 self._service.events()
-                .patch(calendarId=calendar_id, eventId=event_id, body=event_body, conferenceDataVersion=1)
+                .patch(
+                    calendarId=calendar_id,
+                    eventId=event_id,
+                    body=event_body,
+                    conferenceDataVersion=1,
+                    sendUpdates="all",
+                )
                 .execute()
             )
 
@@ -96,7 +102,7 @@ class GoogleCalendarClient:
 
     async def delete_event(self, event_id: str, calendar_id: str = "primary") -> dict[str, Any]:
         def _call():
-            self._service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
+            self._service.events().delete(calendarId=calendar_id, eventId=event_id, sendUpdates="all").execute()
             return {"status": "deleted", "eventId": event_id}
 
         return await asyncio.to_thread(_call)

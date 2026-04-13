@@ -8,11 +8,12 @@ Google Calendar API.
 
 import subprocess
 import sys
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from engine.components.tools.google_calendar_mcp import server as gcal_server
+from engine.components.tools.google_calendar_mcp.client import GoogleCalendarClient
 from engine.components.tools.google_calendar_mcp_tool import (
     _DEFAULT_TOOLS,
     GoogleCalendarMCPTool,
@@ -93,6 +94,47 @@ class TestGoogleCalendarMCPToolRunGuard:
         inputs = MCPToolInputs(tool_name="calendar_list_calendars", tool_arguments={})
         with pytest.raises(ValueError, match="OAuth connection"):
             await tool._run_without_io_trace(inputs, ctx={})
+
+
+class TestSendUpdatesParameter:
+    """Regression: mutating calls must pass sendUpdates='all' so attendees get email notifications."""
+
+    def _build_mock_service(self):
+        service = MagicMock()
+        events = MagicMock()
+        service.events.return_value = events
+        execute = MagicMock(return_value={"id": "evt123", "status": "confirmed"})
+        events.insert.return_value.execute = execute
+        events.patch.return_value.execute = execute
+        events.delete.return_value.execute = MagicMock()
+        return service, events
+
+    @pytest.mark.asyncio
+    async def test_create_event_sends_updates(self):
+        service, events = self._build_mock_service()
+        client = object.__new__(GoogleCalendarClient)
+        client._service = service
+        await client.create_event({"summary": "Test"})
+        events.insert.assert_called_once()
+        assert events.insert.call_args.kwargs["sendUpdates"] == "all"
+
+    @pytest.mark.asyncio
+    async def test_update_event_sends_updates(self):
+        service, events = self._build_mock_service()
+        client = object.__new__(GoogleCalendarClient)
+        client._service = service
+        await client.update_event("evt123", {"summary": "Updated"})
+        events.patch.assert_called_once()
+        assert events.patch.call_args.kwargs["sendUpdates"] == "all"
+
+    @pytest.mark.asyncio
+    async def test_delete_event_sends_updates(self):
+        service, events = self._build_mock_service()
+        client = object.__new__(GoogleCalendarClient)
+        client._service = service
+        await client.delete_event("evt123")
+        events.delete.assert_called_once()
+        assert events.delete.call_args.kwargs["sendUpdates"] == "all"
 
 
 class TestCalendarGetMyEmail:
