@@ -64,10 +64,6 @@ jobs:
                         --source-ingestion-db-url "${{ secrets.PROD_INGESTION_DB_URL }}" \
                         --target-db-url "${{ secrets.PREPROD_DB_URL }}" \
                         --target-ingestion-db-url "${{ secrets.PREPROD_INGESTION_DB_URL }}" \
-                        --source-qdrant-url "${{ secrets.PROD_QDRANT_CLUSTER_URL }}" \
-                        --source-qdrant-key "${{ secrets.PROD_QDRANT_API_KEY }}" \
-                        --target-qdrant-url "${{ secrets.PREPROD_QDRANT_CLUSTER_URL }}" \
-                        --target-qdrant-key "${{ secrets.PREPROD_QDRANT_API_KEY }}" \
                         $FORCE_SYNC_FLAG
 
             - name: SSH Remote Commands
