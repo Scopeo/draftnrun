@@ -1,7 +1,7 @@
 """migrate qdrant collections to hybrid (dense + sparse BM25)
 
 Revision ID: b2c3d4e5f6a0
-Revises: a2b3c4d5e6f7
+Revises: 4071a252013a
 Create Date: 2026-04-03
 
 """
@@ -16,7 +16,7 @@ from sqlalchemy import text
 from engine.qdrant_service import BM25_MODEL, QdrantService
 
 revision: str = "b2c3d4e5f6a0"
-down_revision: Union[str, None] = "a2b3c4d5e6f7"
+down_revision: Union[str, None] = "4071a252013a"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
