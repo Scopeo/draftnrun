@@ -99,8 +99,11 @@ def _assign_missing_ids(graph_data: dict) -> dict:
 
 
 _KNOWN_GRAPH_KEYS = {
-    "component_instances", "edges", "relationships",
-    "playground_input_schema", "playground_field_types",
+    "component_instances",
+    "edges",
+    "relationships",
+    "playground_input_schema",
+    "playground_field_types",
 }
 
 _LIKELY_TYPOS: dict[str, str] = {
