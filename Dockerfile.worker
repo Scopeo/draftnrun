@@ -41,7 +41,7 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /app/.venv /app/.venv
 
 # Copy application code
-COPY ada_ingestion_system/ ./ada_ingestion_system/
+COPY workers/ ./workers/
 COPY ada_backend/ ./ada_backend/
 COPY engine/ ./engine/
 COPY data_ingestion/ ./data_ingestion/
@@ -54,4 +54,4 @@ ENV PYTHONPATH="/app"
 ENV PYTHONUNBUFFERED=1
 
 # Worker runs continuously, consuming from Redis queue
-CMD ["python", "-m", "ada_ingestion_system.worker.main"]
+CMD ["python", "-m", "workers.worker.main"]

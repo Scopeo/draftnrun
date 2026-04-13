@@ -10,7 +10,7 @@ alwaysApply: true
 - `engine/` — Graph execution engine. `graph_runner/` (DAG scheduler), `components/` (component implementations), `field_expressions/` (AST).
 - `mcp_server/` — Standalone MCP server wrapping the API. Separate process, no imports from `ada_backend/` or `engine/`.
 - `data_ingestion/` — Document ingestion logic.
-- `ada_ingestion_system/` — Ingestion + webhook worker processes.
+- `workers/` — Ingestion + webhook worker processes.
 - `infra/k8s/` — Kustomize-based Kubernetes manifests.
 - `tests/` — Test suite.
 

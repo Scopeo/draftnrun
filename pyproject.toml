@@ -134,13 +134,13 @@ default-groups = [
 [tool.hatch.build.targets.sdist]
 include = [
     "engine",
-    "ada_ingestion_system",
+    "workers",
 ]
 
 [tool.hatch.build.targets.wheel]
 include = [
     "engine",
-    "ada_ingestion_system",
+    "workers",
 ]
 
 [build-system]
@@ -191,5 +191,5 @@ output = ".coverage/coverage.xml"
 
 [tool.pytest.ini_options]
 markers = ["alembic", "pdf_integration", "mixpanel"]
-addopts = "-m 'not alembic and not pdf_integration and not mixpanel'"
+addopts = "-m 'not alembic and not pdf_integration and not mixpanel' --import-mode=importlib"
 testpaths = ["tests"]

@@ -15,15 +15,15 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Check if ada_ingestion_system files changed
+      - name: Check if workers files changed
         id: check_changes
         run: |
-          if git diff --name-only HEAD~1 HEAD | grep -q "^ada_ingestion_system/"; then
+          if git diff --name-only HEAD~1 HEAD | grep -q "^workers/"; then
             echo "should_restart=true" >> $GITHUB_OUTPUT
-            echo "✅ ada_ingestion_system files changed - service will be restarted"
+            echo "✅ workers files changed - service will be restarted"
           else
             echo "should_restart=false" >> $GITHUB_OUTPUT
-            echo "ℹ️  No changes to ada_ingestion_system - service will not be restarted"
+            echo "ℹ️  No changes to workers - service will not be restarted"
           fi
 
       - name: Setup, CD to App Directory, and Fetch Latest Code

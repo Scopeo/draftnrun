@@ -2,8 +2,8 @@ import json
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from ada_ingestion_system.worker.base_worker import ProcessTaskOutcome
-from ada_ingestion_system.worker.webhook_worker import WebhookWorker, _classify_script_failure
+from workers.worker.base_worker import ProcessTaskOutcome
+from workers.worker.webhook_worker import WebhookWorker, _classify_script_failure
 
 
 def test_classify_script_failure_fatal_marker():
@@ -31,7 +31,7 @@ def test_classify_script_failure_both_markers_fatal_wins():
 
 def _make_worker() -> WebhookWorker:
     """Construct a WebhookWorker without connecting to Redis."""
-    with patch("ada_ingestion_system.worker.base_worker._xgroup_create_if_not_exists"):
+    with patch("workers.worker.base_worker._xgroup_create_if_not_exists"):
         return WebhookWorker()
 
 
@@ -49,7 +49,7 @@ class TestFailRun:
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
 
-        with patch("ada_ingestion_system.worker.webhook_worker.httpx.patch", return_value=mock_response) as mock_patch:
+        with patch("workers.worker.webhook_worker.httpx.patch", return_value=mock_response) as mock_patch:
             worker._on_fatal_ack("msg-1", fields, reason="422 Unprocessable Entity")
 
         mock_patch.assert_called_once()
@@ -71,7 +71,7 @@ class TestFailRun:
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
 
-        with patch("ada_ingestion_system.worker.webhook_worker.httpx.patch", return_value=mock_response) as mock_patch:
+        with patch("workers.worker.webhook_worker.httpx.patch", return_value=mock_response) as mock_patch:
             worker._on_dead_letter("msg-2", fields, reason="exceeded max attempts")
 
         mock_patch.assert_called_once()
@@ -86,7 +86,7 @@ class TestFailRun:
         monkeypatch.setenv("ADA_URL", "http://test")
         monkeypatch.setenv("WEBHOOK_API_KEY", "key")
 
-        with patch("ada_ingestion_system.worker.webhook_worker.httpx.patch") as mock_patch:
+        with patch("workers.worker.webhook_worker.httpx.patch") as mock_patch:
             worker._on_fatal_ack("msg-3", fields, reason="some error")
 
         mock_patch.assert_not_called()
