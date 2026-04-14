@@ -1026,3 +1026,110 @@ class TestStartNodeIntegration:
         }))
 
         assert result.messages[0].content == "echo[runtime_value]"
+
+
+class ListStrSink(Component):
+    """Accepts list[str] input and echoes it back as JSON."""
+
+    migrated = True
+
+    class Inputs(BaseModel):
+        items: list[str]
+
+    class Outputs(BaseModel):
+        output: str
+
+    @classmethod
+    def get_inputs_schema(cls):
+        return ListStrSink.Inputs
+
+    @classmethod
+    def get_outputs_schema(cls):
+        return ListStrSink.Outputs
+
+    def __init__(self, trace_manager: TraceManager, name: str = "list_sink"):
+        super().__init__(
+            trace_manager=trace_manager,
+            tool_description=ToolDescription(
+                name=f"ListStrSink_{name}",
+                description="List str sink",
+                tool_properties={},
+                required_tool_properties=[],
+            ),
+            component_attributes=ComponentAttributes(component_instance_name=name),
+        )
+
+    async def _run_without_io_trace(self, inputs: Inputs, ctx: dict) -> Outputs:  # type: ignore
+        return ListStrSink.Outputs(output=json.dumps(inputs.items))
+
+
+class ListStrSource(Component):
+    """Produces a fixed list[str] output."""
+
+    migrated = True
+
+    class Inputs(BaseModel):
+        input: str | None = None
+
+    class Outputs(BaseModel):
+        files: list[str]
+
+    @classmethod
+    def get_inputs_schema(cls):
+        return ListStrSource.Inputs
+
+    @classmethod
+    def get_outputs_schema(cls):
+        return ListStrSource.Outputs
+
+    def __init__(self, trace_manager: TraceManager, value: list[str], name: str):
+        super().__init__(
+            trace_manager=trace_manager,
+            tool_description=ToolDescription(
+                name=f"ListStrSource_{name}",
+                description="List str source",
+                tool_properties={},
+                required_tool_properties=[],
+            ),
+            component_attributes=ComponentAttributes(component_instance_name=name),
+        )
+        self._value = value
+
+    async def _run_without_io_trace(self, inputs: Inputs, ctx: dict) -> Outputs:  # type: ignore
+        return ListStrSource.Outputs(files=self._value)
+
+
+class TestRefExpressionPreservesListType:
+    """Regression: a RefNode expression targeting a list[str] field must preserve the list
+    rather than stringifying it via str(). Previously, top-level RefNodes fell through to
+    evaluate_node() which called to_string(), turning ["a", "b"] into "['a', 'b']" and then
+    coercion wrapped it as ["['a', 'b']"]."""
+
+    def test_pure_ref_preserves_list_str(self):
+        tm = TraceManager(project_name="test")
+        set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])
+
+        source = ListStrSource(tm, value=["file1.pdf", "file2.docx"], name="A")
+        sink = ListStrSink(tm, name="B")
+        runnables = {"A": source, "B": sink}
+
+        g = nx.DiGraph()
+        g.add_nodes_from(["A", "B"])
+
+        expressions = [
+            {
+                "target_instance_id": "B",
+                "field_name": "items",
+                "expression_ast": expr_from_json({"type": "ref", "instance": "A", "port": "files"}),
+            }
+        ]
+
+        gr = GraphRunner(
+            graph=g,
+            runnables=runnables,
+            start_nodes=["A"],
+            trace_manager=tm,
+            expressions=expressions,
+        )
+        result = asyncio.run(gr.run({"input": "seed"}))
+        assert result.messages[0].content == '["file1.pdf", "file2.docx"]'

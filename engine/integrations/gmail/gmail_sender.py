@@ -12,7 +12,12 @@ from ada_backend.database.setup_db import get_db_session
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.integrations.gmail.gmail_utils import create_raw_mail_message
-from engine.integrations.utils import get_gmail_sender_service, get_google_user_email, get_oauth_access_token
+from engine.integrations.utils import (
+    get_gmail_sender_service,
+    get_google_user_email,
+    get_oauth_access_token,
+    normalize_str_list,
+)
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
@@ -144,6 +149,11 @@ class GmailSenderInputs(BaseModel):
         if isinstance(v, str):
             return [v]
         return v
+
+    @field_validator("email_attachments", mode="before")
+    @classmethod
+    def validate_email_attachments(cls, v):
+        return normalize_str_list(v)
 
 
 class GmailSenderOutputs(BaseModel):

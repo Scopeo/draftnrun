@@ -12,6 +12,7 @@ from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.integrations.outlook.errors import OutlookAPIError
 from engine.integrations.outlook.outlook_utils import GRAPH_API_BASE, build_graph_mail_payload
+from engine.integrations.utils import normalize_str_list
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
@@ -143,6 +144,11 @@ class OutlookSenderInputs(BaseModel):
         if isinstance(v, str):
             return [v]
         return v
+
+    @field_validator("email_attachments", mode="before")
+    @classmethod
+    def validate_email_attachments(cls, v):
+        return normalize_str_list(v)
 
 
 class OutlookSenderOutputs(BaseModel):

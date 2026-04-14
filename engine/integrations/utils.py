@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -14,6 +15,23 @@ from ada_backend.database import models as db
 from ada_backend.repositories.integration_repository import get_integration_secret, update_integration_secret
 
 LOGGER = logging.getLogger(__name__)
+
+
+def normalize_str_list(v: Any) -> Any:
+    """Pydantic pre-validator helper: ensure a value destined for a list[str] field
+    is actually a flat list of strings. Handles bare strings, nested lists, and
+    non-string items."""
+    if isinstance(v, str):
+        return [v]
+    if isinstance(v, list):
+        flattened: list[str] = []
+        for item in v:
+            if isinstance(item, list):
+                flattened.extend(str(i) for i in item)
+            else:
+                flattened.append(str(item))
+        return flattened
+    return v
 
 
 def is_url(value: str) -> bool:
