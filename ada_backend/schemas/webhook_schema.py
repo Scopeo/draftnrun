@@ -51,6 +51,7 @@ class RunProjectBody(BaseModel):
     """Request body for POST /internal/webhooks/projects/{project_id}/envs/{env}/run."""
 
     input_data: Dict[str, Any]
+    cron_id: Optional[UUID] = None
     cron_run_id: Optional[UUID] = None
 
 

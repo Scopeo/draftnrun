@@ -39,10 +39,15 @@ Called by the webhook worker after consuming from the Redis stream:
 | Endpoint | Purpose |
 |---|---|
 | `POST /internal/webhooks/{webhook_id}/execute` | Resolve triggers, prepare input, run workflows |
-| `POST /internal/webhooks/projects/{project_id}/envs/{env}/run` | Enqueue workflow run (202). Accepts optional `run_id` query param to reuse a pre-created run |
+| `POST /internal/webhooks/projects/{project_id}/envs/{env}/run` | Enqueue workflow run (202). Accepts optional `run_id` query param to reuse a pre-created run; body may include `cron_id` for scheduler correlation and `cron_run_id` for top-level scheduler-owned executions |
 | `PATCH /internal/webhooks/projects/{project_id}/runs/{run_id}/fail` | Mark a pre-created run as FAILED (called by worker on dead-letter). Validates project ownership. |
 
 Authenticated via `X-Webhook-API-Key` (internal service key).
+
+For scheduler-triggered calls, always pass `cron_id` (job id) in the body so the API process keeps the cron correlation in
+logs and traces. Pass `cron_run_id` (execution id) only for the top-level scheduler-owned execution whose background task is
+responsible for CronRun state transitions. Endpoint-polling fan-out runs forward `cron_id` without reusing the parent
+`cron_run_id`.
 
 `WebhookExecuteResult.run_id` is a UUID (nullable), serialized as a UUID string in JSON responses.
 

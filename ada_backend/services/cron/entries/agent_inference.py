@@ -19,6 +19,7 @@ from ada_backend.services.cron.core import (
     CronEntrySpec,
     get_cron_context,
 )
+from engine.trace.span_context import set_tracing_span
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -117,6 +118,7 @@ def validate_execution(execution_payload: AgentInferenceExecutionPayload, **kwar
 
 async def execute(execution_payload: AgentInferenceExecutionPayload, **kwargs) -> AsyncCronJobResult:
     cron_id, log_extra = get_cron_context(**kwargs)
+    set_tracing_span(cron_id=str(cron_id))
 
     if not settings.ADA_URL:
         raise ValueError("ADA_URL is not configured")
@@ -135,6 +137,7 @@ async def execute(execution_payload: AgentInferenceExecutionPayload, **kwargs) -
     }
     body = {
         "input_data": execution_payload.input_data,
+        "cron_id": str(cron_id),
         "cron_run_id": str(cron_run_id),
     }
 

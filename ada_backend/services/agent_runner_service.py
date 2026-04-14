@@ -226,7 +226,6 @@ async def run_env_agent(
     input_data: dict,
     call_type: CallType,
     response_format: Optional[ResponseFormat] = None,
-    cron_id: Optional[UUID] = None,
     event_callback=None,
 ) -> ChatResponse:
     set_ids = _extract_set_ids(input_data)
@@ -244,13 +243,11 @@ async def run_env_agent(
         call_type=call_type,
         tag_name=tag_name,
         response_format=response_format,
-        cron_id=cron_id,
         set_ids=set_ids,
         event_callback=event_callback,
     )
 
 
-# TODO: agent_runner should not be aware of cron_id
 async def run_agent(
     project_id: UUID,
     graph_runner_id: UUID,
@@ -259,7 +256,6 @@ async def run_agent(
     call_type: CallType,
     tag_name: Optional[str] = None,
     response_format: Optional[ResponseFormat] = None,
-    cron_id: Optional[UUID] = None,
     set_ids: list[str] | None = None,
     event_callback=None,
 ) -> ChatResponse:
@@ -302,10 +298,6 @@ async def run_agent(
 
         save_input_files_to_temp_folder(input_data, uuid_for_temp_folder)
 
-        tracing_params = {}
-        if cron_id:
-            tracing_params["cron_id"] = str(cron_id)
-
         setup_tracing_context(
             session=session,
             project_id=project_id,
@@ -315,7 +307,6 @@ async def run_agent(
             call_type=call_type,
             graph_runner_id=graph_runner_id,
             tag_name=tag_name,
-            **tracing_params,
         )
     # Setup session freed — DB connection returned to pool before graph building.
 

@@ -34,6 +34,7 @@ from ada_backend.services.webhooks.webhook_service import (
     execute_webhook,
     get_webhook_triggers_service,
 )
+from engine.trace.span_context import set_tracing_span
 
 router = APIRouter(prefix="/internal/webhooks", tags=["Webhooks Internal"])
 LOGGER = logging.getLogger(__name__)
@@ -92,11 +93,15 @@ async def _execute_run(
     env: EnvType,
     input_data: Dict[str, Any],
     trigger: CallType,
+    cron_id: UUID | None = None,
 ) -> tuple[bool, str | None]:
     """
     Execute a workflow run and update its status (RUNNING -> COMPLETED/FAILED).
     Returns (success, error_msg) where error_msg is set when success is False.
     """
+    if cron_id:
+        set_tracing_span(cron_id=str(cron_id))
+
     try:
         await run_with_tracking(
             project_id=project_id,
@@ -130,6 +135,7 @@ async def _execute_cron_run(
     env: EnvType,
     input_data: Dict[str, Any],
     trigger: CallType,
+    cron_id: UUID | None,
     cron_run_id: UUID,
 ) -> None:
     """
@@ -143,7 +149,14 @@ async def _execute_cron_run(
             LOGGER.error(f"Failed to set CronRun {cron_run_id} to RUNNING: {e}", exc_info=True)
             raise
 
-    succeeded, error_msg = await _execute_run(run_id, project_id, env, input_data, trigger)
+    succeeded, error_msg = await _execute_run(
+        run_id,
+        project_id,
+        env,
+        input_data,
+        trigger,
+        cron_id=cron_id,
+    )
 
     with get_db_session() as session:
         try:
@@ -201,6 +214,7 @@ async def run_project_internal(
             env=env,
             input_data=body.input_data,
             trigger=trigger,
+            cron_id=body.cron_id,
             cron_run_id=body.cron_run_id,
         )
     else:
@@ -211,6 +225,7 @@ async def run_project_internal(
             env=env,
             input_data=body.input_data,
             trigger=trigger,
+            cron_id=body.cron_id,
         )
 
     return {"status": "accepted", "run_id": str(run_id)}

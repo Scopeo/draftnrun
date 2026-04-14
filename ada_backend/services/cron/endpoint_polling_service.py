@@ -374,6 +374,7 @@ async def run_endpoint_polling(
                             "messages": [{"role": "user", "content": input_message}],
                             "item": item,
                         },
+                        "cron_id": str(cron_id),
                     }
                     resp = await client.post(
                         run_url,

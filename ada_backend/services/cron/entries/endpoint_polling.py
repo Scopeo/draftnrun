@@ -32,6 +32,7 @@ from ada_backend.services.cron.entries.agent_inference import (
     validate_registration as validate_registration_agent_inference,
 )
 from ada_backend.services.cron.errors import CronValidationError
+from engine.trace.span_context import set_tracing_span
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -282,6 +283,7 @@ def post_registration(execution_payload: EndpointPollingExecutionPayload, **kwar
 
 async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) -> AsyncCronJobResult:
     cron_id, log_extra = get_cron_context(**kwargs)
+    set_tracing_span(cron_id=str(cron_id))
 
     if not settings.ADA_URL:
         raise ValueError("ADA_URL is not configured")
