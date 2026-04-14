@@ -107,10 +107,31 @@ The worker maps these markers to processing outcomes and applies ACK policy acco
 
 `FilterExpression` supports nested AND/OR conditions with operators: `equals`, `contains`. Evaluated against the webhook payload JSON in `webhook_service.evaluate_filter()`.
 
+## Run Failure Alerting
+
+When a webhook- or cron-triggered run transitions to `FAILED`, an email alert is sent via the Resend API to configured recipients.
+
+### How it works
+
+1. `update_run_status()` and `fail_pending_run()` in `services/run_service.py` call `maybe_send_run_failure_alert()` when the new status is `FAILED`.
+2. The alert service checks the run's `trigger` — only `WEBHOOK` and `CRON` triggers fire alerts.
+3. It queries `project_alert_emails` for the project's configured recipient list.
+4. If recipients exist and `RESEND_API_KEY` + `RESEND_FROM_EMAIL` are set, it sends the email in a background thread (fire-and-forget).
+5. All exceptions are caught and logged — alerting never breaks run processing.
+
+### Configuration
+
+- **Settings**: `RESEND_API_KEY` (existing) and `RESEND_FROM_EMAIL` must both be set. If either is missing, alerting silently no-ops.
+- **Recipients**: Managed per project via the CRUD API at `GET/POST/DELETE /projects/{project_id}/alert-emails`.
+- **DB table**: `project_alert_emails` with unique constraint on `(project_id, email)`.
+
 ## Key Files
 
 - `routers/webhooks/provider_webhooks_router.py` — Aircall, Resend endpoints
 - `routers/webhooks/webhook_trigger_router.py` — user-triggered webhook
 - `routers/webhooks/webhook_internal_router.py` — worker-called endpoints
+- `routers/alert_email_router.py` — CRUD for alert email recipients
 - `services/webhooks/webhook_service.py` — execution, filtering, input preparation
+- `services/alerting/alert_service.py` — run failure alert logic
+- `services/alerting/email_service.py` — Resend email sending wrapper
 - `schemas/webhook_schema.py` — Pydantic schemas

@@ -211,8 +211,8 @@ class CronEntrypoint(StrEnum):
 
 
 class CronStatus(StrEnum):
-    QUEUED = "queued"      # dispatched (202 accepted), not yet executing
-    RUNNING = "running"    # background task is actively executing
+    QUEUED = "queued"  # dispatched (202 accepted), not yet executing
+    RUNNING = "running"  # background task is actively executing
     COMPLETED = "completed"
     ERROR = "error"
 
@@ -1445,6 +1445,7 @@ class Project(Base):
     usage = relationship("Usage", back_populates="project", cascade="all, delete-orphan")
 
     runs = relationship("Run", back_populates="project", cascade="all, delete-orphan")
+    alert_emails = relationship("ProjectAlertEmail", back_populates="project", cascade="all, delete-orphan")
 
     __mapper_args__ = {"polymorphic_on": type, "polymorphic_identity": "base"}
 
@@ -1975,13 +1976,15 @@ class VersionOutput(Base):
     __table_args__ = (
         sa.Index(
             "uq_version_output_input_session",
-            "input_id", "qa_session_id",
+            "input_id",
+            "qa_session_id",
             unique=True,
             postgresql_where=sa.text("qa_session_id IS NOT NULL"),
         ),
         sa.Index(
             "uq_version_output_input_graph_runner_no_session",
-            "input_id", "graph_runner_id",
+            "input_id",
+            "graph_runner_id",
             unique=True,
             postgresql_where=sa.text("qa_session_id IS NULL"),
         ),
@@ -2089,9 +2092,7 @@ class QASession(Base):
     )
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
-    project_id = mapped_column(
-        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
-    )
+    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     dataset_id = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("quality_assurance.dataset_project.id", ondelete="CASCADE"),
@@ -2454,3 +2455,18 @@ class OrgVariableSet(Base):
         ),
         Index("ix_org_variable_sets_org_variable_type", "organization_id", "variable_type"),
     )
+
+
+class ProjectAlertEmail(Base):
+    __tablename__ = "project_alert_emails"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    email = mapped_column(String, nullable=False)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    project = relationship("Project", back_populates="alert_emails")
+
+    __table_args__ = (UniqueConstraint("project_id", "email", name="uq_project_alert_email"),)

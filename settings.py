@@ -60,6 +60,7 @@ class BaseConfig(BaseSettings):
     E2B_API_KEY: Optional[str] = None
     FIRECRAWL_API_KEY: Optional[str] = None
     RESEND_API_KEY: Optional[str] = None
+    RESEND_FROM_EMAIL: Optional[str] = None
 
     MIXPANEL_TOKEN: Optional[str] = None
     ENV: Optional[str] = None

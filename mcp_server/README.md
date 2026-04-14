@@ -93,6 +93,7 @@ All domain content lives in `docs.py` (single source of truth).
 | Monitoring | 5 | Traces, charts, KPIs, credits |
 | Crons | 9 | Create, pause/resume, manual trigger, execution history |
 | OAuth | 3 | List, check status, revoke |
+| Alert Emails | 3 | `list_alert_emails`, `add_alert_email`, `remove_alert_email` — per-project run failure recipients |
 | **Docs** | **1** | **`get_guide(domain)` — fallback for domain docs** |
 
 `get_project_overview(project_id)` is the default orientation tool for any version-aware work. It returns the editable draft runner, current production runner, production-only capability hints, warnings, and safe next steps.

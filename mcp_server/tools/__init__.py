@@ -9,6 +9,7 @@ def register_all_tools(mcp: FastMCP) -> None:
     from mcp_server.tools import (
         agent_config,
         agents,
+        alert_emails,
         api_keys,
         components,
         context_tools,
@@ -38,6 +39,7 @@ def register_all_tools(mcp: FastMCP) -> None:
         monitoring,
         crons,
         oauth_connections,
+        alert_emails,
     ]
     for module in modules:
         try:
