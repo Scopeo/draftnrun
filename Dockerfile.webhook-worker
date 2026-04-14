@@ -35,7 +35,7 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /app/.venv /app/.venv
 
 # Copy application code
-COPY ada_ingestion_system/ ./ada_ingestion_system/
+COPY workers/ ./workers/
 COPY ada_backend/ ./ada_backend/
 COPY webhook_scripts/ ./webhook_scripts/
 COPY settings.py logger.py logging-config.yaml ./
@@ -46,4 +46,4 @@ ENV PYTHONPATH="/app"
 ENV PYTHONUNBUFFERED=1
 
 # Webhook worker runs continuously, consuming from Redis webhook queue
-CMD ["python", "-m", "ada_ingestion_system.worker.webhook_worker"]
+CMD ["python", "-m", "workers.worker.webhook_worker"]

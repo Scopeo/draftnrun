@@ -11,7 +11,7 @@ import requests
 
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, ResultType, TaskResultMetadata
-from ada_ingestion_system.worker.base_worker import BaseWorker, ProcessTaskOutcome, logger, redis_client
+from workers.worker.base_worker import BaseWorker, ProcessTaskOutcome, logger, redis_client
 
 _LEVEL_RE = re.compile(r"\b(DEBUG|INFO|WARNING|ERROR|CRITICAL)\b")
 _LEVEL_MAP = {

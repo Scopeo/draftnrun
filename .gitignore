@@ -36,8 +36,8 @@ credentials.env
 sql_credentials.env
 custom_models.json
 
-# .env files for ada_ingestion_system
-ada_ingestion_system/.env
+# .env files for workers
+workers/.env
 
 # k8s secrets (use secrets.yaml.example as template)
 infra/k8s/*/secrets.yaml
@@ -66,7 +66,6 @@ observability_config.yaml
 custom_models.json
 
 # oauth
-ada-ingestion-system/.env
 
 # test reports
 tests/external_api_calls/external_api_calls_matrix.md

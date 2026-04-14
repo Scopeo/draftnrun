@@ -104,7 +104,7 @@ Migrations: Alembic (`make db-upgrade`). Seed data: `make db-seed`.
 | `make db-seed` | Seed database with component catalog |
 | `make trace-db-upgrade` | Apply trace schema migrations |
 | `uv run python -m ada_backend.run_scheduler` | Run the cron scheduler |
-| `uv run python -m ada_ingestion_system.worker.main` | Run the ingestion worker |
+| `uv run python -m workers.worker.main` | Run the ingestion worker |
 | `uv run pytest ada_backend` | Run tests |
 
 ## Domain Documentation

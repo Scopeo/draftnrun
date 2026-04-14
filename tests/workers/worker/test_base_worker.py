@@ -5,8 +5,8 @@ from typing import Any, Dict
 
 import redis
 
-from ada_ingestion_system.worker import base_worker
-from ada_ingestion_system.worker.base_worker import BaseWorker, ProcessTaskOutcome, _ScheduledRetry
+from workers.worker import base_worker
+from workers.worker.base_worker import BaseWorker, ProcessTaskOutcome, _ScheduledRetry
 
 _UNSET = object()
 

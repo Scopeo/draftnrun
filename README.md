@@ -44,7 +44,7 @@ Backend repository for Draft'n Run — an AI workflow platform. Build, deploy, a
 - `engine/` — Graph execution engine (GraphRunner, components, field expressions)
 - `mcp_server/` — MCP server (standalone, wraps the API). [README](mcp_server/README.md)
 - `data_ingestion/` — Document ingestion logic
-- `ada_ingestion_system/` — Ingestion + webhook worker processes
+- `workers/` — Ingestion + webhook worker processes
 - `infra/k8s/` — Kubernetes manifests (Kustomize)
 - `scripts/` — Dev/test scripts
 - `tests/` — Test suite
@@ -82,7 +82,7 @@ You will need to install the following packages:
 
 You will need to create two env files :
 
-- `.env` file in the `ada_ingestion_system` folder (you can copy the `.env.example` file)
+- `.env` file in the `workers` folder (you can copy the `.env.example` file)
 - `credentials.env` at the root of the repository (you can copy the `credentials.env.example` file)
 
 In the `credentials.env` file (copied from `credentials.env.example`).
@@ -122,7 +122,7 @@ The credentials that you will put will give you access to the s3 service of seaw
 
 Here are the env variables with the default values that work for Docker Compose:
 
-- In `ada_ingestion_system/.env`:
+- In `workers/.env`:
 
   ```env
   # Redis configuration
@@ -519,7 +519,7 @@ Ensure redis credentials are correctly set in both `.env` files.
 Run the worker:
 
 ```bash
-uv run python -m ada_ingestion_system.worker.main
+uv run python -m workers.worker.main
 ```
 
 ### Set up and run the Cron system (Apscheduler)

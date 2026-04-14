@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 import httpx
 
-from ada_ingestion_system.worker.base_worker import BaseWorker, ProcessTaskOutcome, logger
+from workers.worker.base_worker import BaseWorker, ProcessTaskOutcome, logger
 
 # Redis configuration
 WEBHOOK_STREAM_NAME = os.getenv("REDIS_WEBHOOK_STREAM", "ada_webhook_stream")
