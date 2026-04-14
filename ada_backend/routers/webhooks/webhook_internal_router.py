@@ -34,6 +34,7 @@ from ada_backend.services.webhooks.webhook_service import (
     execute_webhook,
     get_webhook_triggers_service,
 )
+from engine.trace.span_context import set_tracing_span
 
 router = APIRouter(prefix="/internal/webhooks", tags=["Webhooks Internal"])
 LOGGER = logging.getLogger(__name__)
@@ -130,6 +131,7 @@ async def _execute_cron_run(
     env: EnvType,
     input_data: Dict[str, Any],
     trigger: CallType,
+    cron_id: UUID | None,
     cron_run_id: UUID,
 ) -> None:
     """
@@ -142,6 +144,9 @@ async def _execute_cron_run(
         except Exception as e:
             LOGGER.error(f"Failed to set CronRun {cron_run_id} to RUNNING: {e}", exc_info=True)
             raise
+
+    if cron_id:
+        set_tracing_span(cron_id=str(cron_id))
 
     succeeded, error_msg = await _execute_run(run_id, project_id, env, input_data, trigger)
 
@@ -201,6 +206,7 @@ async def run_project_internal(
             env=env,
             input_data=body.input_data,
             trigger=trigger,
+            cron_id=body.cron_id,
             cron_run_id=body.cron_run_id,
         )
     else:
