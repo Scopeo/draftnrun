@@ -12,6 +12,7 @@ from typing import Any, Callable
 from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode, VarNode
 from engine.field_expressions.errors import FieldExpressionError
 from engine.graph_runner.types import Task
+from engine.secret import SecretValue
 
 LOGGER = logging.getLogger(__name__)
 
@@ -96,6 +97,8 @@ def evaluate_expression(
 
             case VarNode() as var:
                 raw_value = evaluate_var(var)
+                if isinstance(raw_value, SecretValue):
+                    return raw_value.get_secret_value()
                 return to_string(raw_value)
 
             case ConcatNode(parts=parts):
@@ -134,5 +137,5 @@ def evaluate_expression(
 
         case _:
             result = evaluate_node(expression)
-            LOGGER.debug(f"Evaluated expression for {target_field_name}: {result}")
+            LOGGER.debug("Evaluated expression for %s", target_field_name)
             return result

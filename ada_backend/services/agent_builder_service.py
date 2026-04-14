@@ -36,6 +36,7 @@ from engine.components.types import ComponentAttributes
 from engine.field_expressions.ast import ConcatNode, JsonBuildNode, LiteralNode, VarNode
 from engine.field_expressions.serializer import from_json as expression_from_json
 from engine.graph_runner.field_expression_management import evaluate_expression
+from engine.secret import unwrap_secrets
 
 LOGGER = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ def get_component_params(
             - Parameters with order=None are returned as single values
             - Parameters with order!=None are grouped in lists, ordered by the order field
     """
-    params = {}
+    params: dict[str, Any] = {}
     ordered_params: dict[str, list[tuple[int, Any]]] = {}  # name -> [(order, value), ...]
 
     for param in get_component_basic_parameters(session, component_instance_id):
@@ -336,7 +337,7 @@ async def instantiate_component(
         ) from e
 
     # Resolve secret placeholders for any parameter in input_params.
-    key_to_secret: dict[str, str] | None = None
+    key_to_secret: dict[str, Any] | None = None
     if project_id:
         secrets = get_organization_secrets_from_project_id(session, project_id)
         key_to_secret = {s.key: s.secret for s in secrets}
@@ -368,9 +369,10 @@ async def instantiate_component(
         if base_component and base_component == "API Call":
             component_version_id = COMPONENT_VERSION_UUIDS["api_call_tool"]
         set_current_project_id(project_id)
+        create_params = unwrap_secrets(input_params)
         return await FACTORY_REGISTRY.create(
             component_version_id=component_version_id,
-            **input_params,
+            **create_params,
         )
     except ConnectionError as e:
         raise ConnectionError(

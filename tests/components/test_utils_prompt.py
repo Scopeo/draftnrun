@@ -4,6 +4,7 @@ import pytest
 
 from engine.components.errors import MissingKeyPromptTemplateError
 from engine.components.utils_prompt import fill_prompt_template
+from engine.secret import SecretValue
 
 
 class TestFillPromptTemplate:
@@ -176,3 +177,9 @@ class TestFillPromptTemplate:
         # Single braces should be preserved (escaped then unescaped by format), double braces replaced
         assert "{single}" in result  # Single braces preserved as-is
         assert "replaced" in result  # Double braces replaced
+
+    def test_secret_value_is_unwrapped_for_template_substitution(self):
+        template = "Bearer {{api_key}}"
+        variables = {"api_key": SecretValue("real-secret")}
+        result = fill_prompt_template(template, component_name="test", variables=variables)
+        assert result == "Bearer real-secret"

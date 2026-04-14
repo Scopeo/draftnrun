@@ -116,6 +116,9 @@ Merge order: **defaults → set_ids[0] → set_ids[1] → ...**
 4. Secret values are returned as `SecretValue` objects from `engine/secret.py` (masked by `str()`/`repr()`)
 5. Returns `dict[str, Any]` consumed by `VarNode` expression evaluation
 
+`SecretValue` instances must be explicitly unwrapped at execution boundaries that require plaintext
+(for example prompt templating and component factory construction).
+
 ## Legacy Compatibility
 
 **File**: `engine/legacy_compatibility.py` (marked for deletion after migration)

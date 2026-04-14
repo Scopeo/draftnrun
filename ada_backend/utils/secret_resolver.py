@@ -4,13 +4,15 @@ from typing import Any, Dict, Optional
 
 from settings import settings
 
+from engine.secret import SecretValue
+
 LOGGER = logging.getLogger(__name__)
 
 
 _ENV_PATTERN = re.compile(r"@\{ENV:([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
-def _resolve_single_placeholder(var_name: str, secret_mapping: Optional[Dict[str, str]]) -> str:
+def _resolve_single_placeholder(var_name: str, secret_mapping: Optional[Dict[str, Any]]) -> str:
     """
     Resolve a single secret placeholder name to its value.
 
@@ -22,7 +24,10 @@ def _resolve_single_placeholder(var_name: str, secret_mapping: Optional[Dict[str
     """
     if secret_mapping is not None and var_name in secret_mapping:
         LOGGER.debug("Secret resolved from organization configuration")
-        return str(secret_mapping[var_name])
+        mapping_value = secret_mapping[var_name]
+        if isinstance(mapping_value, SecretValue):
+            return mapping_value.get_secret_value()
+        return str(mapping_value)
 
     env_val = getattr(settings, var_name, None)
     if env_val is not None:
@@ -36,7 +41,7 @@ def _resolve_single_placeholder(var_name: str, secret_mapping: Optional[Dict[str
     )
 
 
-def _replace_in_string(text: str, secret_mapping: Optional[Dict[str, str]]) -> str:
+def _replace_in_string(text: str, secret_mapping: Optional[Dict[str, Any]]) -> str:
     def _repl(match: re.Match) -> str:
         var_name = match.group(1)
         return _resolve_single_placeholder(var_name, secret_mapping)
@@ -44,7 +49,7 @@ def _replace_in_string(text: str, secret_mapping: Optional[Dict[str, str]]) -> s
     return _ENV_PATTERN.sub(_repl, text)
 
 
-def replace_secret_placeholders(value: Any, secret_mapping: Optional[Dict[str, str]] = None) -> Any:
+def replace_secret_placeholders(value: Any, secret_mapping: Optional[Dict[str, Any]] = None) -> Any:
     """
     Recursively replace secret placeholders in strings within common Python containers.
 
