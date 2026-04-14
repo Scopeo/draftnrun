@@ -201,13 +201,13 @@ class WebhookWorker(BaseWorker):
             logger.error("webhook_processing_error error=%s", str(e), exc_info=True)
             return ProcessTaskOutcome.FAIL_RETRY
 
-    def _on_dead_letter(self, message_id: str, fields: Dict[str, str], reason: str = "") -> None:
-        """Mark the pre-created run as FAILED when a direct-trigger message is dead-lettered."""
+    def _fail_run(self, fields: Dict[str, str], error_message: str, error_type: str) -> None:
+        """Mark the pre-created run as FAILED via the internal API."""
         try:
             raw = fields.get("data", "")
             payload = json.loads(raw) if raw else {}
         except (json.JSONDecodeError, TypeError):
-            logger.error("dead_letter_unparseable message_id=%s", message_id)
+            logger.error("fail_run_unparseable_payload")
             return
 
         run_id = payload.get("run_id")
@@ -219,28 +219,37 @@ class WebhookWorker(BaseWorker):
         webhook_api_key = os.getenv("WEBHOOK_API_KEY", "")
 
         logger.error(
-            "dead_letter_failing_run run_id=%s project_id=%s event_id=%s reason=%s",
+            "failing_run run_id=%s project_id=%s event_id=%s error_type=%s",
             run_id,
             project_id,
             payload.get("event_id"),
-            reason,
+            error_type,
         )
 
         try:
             response = httpx.patch(
                 f"{api_base_url}/internal/webhooks/projects/{project_id}/runs/{run_id}/fail",
-                json={
-                    "error": {
-                        "message": f"Webhook processing failed after repeated crashes: {reason}",
-                        "type": "DeadLetter",
-                    }
-                },
+                json={"error": {"message": error_message, "type": error_type}},
                 headers={"X-Webhook-API-Key": webhook_api_key, "Content-Type": "application/json"},
                 timeout=10,
             )
             response.raise_for_status()
         except httpx.HTTPError as e:
-            logger.error("dead_letter_fail_run_request_failed run_id=%s error=%s", run_id, str(e))
+            logger.error("fail_run_request_failed run_id=%s error=%s", run_id, str(e))
+
+    def _on_dead_letter(self, message_id: str, fields: Dict[str, str], reason: str = "") -> None:
+        self._fail_run(
+            fields,
+            error_message=f"Webhook processing failed after repeated crashes: {reason}",
+            error_type="DeadLetter",
+        )
+
+    def _on_fatal_ack(self, message_id: str, fields: Dict[str, str], reason: str = "") -> None:
+        self._fail_run(
+            fields,
+            error_message=f"Webhook processing failed with non-retryable error: {reason}",
+            error_type="FatalError",
+        )
 
     def _log_queued_task(self, payload: Dict[str, Any]) -> None:
         """Log queued webhook task."""
