@@ -649,7 +649,6 @@ class GraphRunner(Base):
 
     graph_edges = relationship("GraphRunnerEdge", back_populates="graph_runner")
     nodes = relationship("GraphRunnerNode", back_populates="graph_runner")
-    port_mappings = relationship("PortMapping", back_populates="graph_runner")
     modification_history = relationship(
         "GraphRunnerModificationHistory",
         back_populates="graph_runner",
@@ -795,18 +794,6 @@ class ComponentInstance(Base):
         "ComponentSubInput",
         foreign_keys="ComponentSubInput.child_component_instance_id",
         back_populates="child_component_instance",
-        cascade="all, delete-orphan",
-    )
-    source_port_mappings = relationship(
-        "PortMapping",
-        foreign_keys="PortMapping.source_instance_id",
-        back_populates="source_instance",
-        cascade="all, delete-orphan",
-    )
-    target_port_mappings = relationship(
-        "PortMapping",
-        foreign_keys="PortMapping.target_instance_id",
-        back_populates="target_instance",
         cascade="all, delete-orphan",
     )
     relationships = relationship(
@@ -1138,70 +1125,6 @@ class PortDefinition(Base):
 
     __table_args__ = (
         sa.UniqueConstraint("component_version_id", "name", "port_type", name="unique_component_version_port"),
-    )
-
-
-class PortMapping(Base):
-    """Stores the specific wiring for a GraphRunner instance."""
-
-    __tablename__ = "port_mappings"
-
-    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    graph_runner_id = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("graph_runners.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    source_instance_id = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("component_instances.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    source_port_definition_id = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("port_definitions.id", ondelete="CASCADE"),
-        nullable=True,
-    )
-    source_output_port_instance_id = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("port_instances.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    target_instance_id = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("component_instances.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    target_port_definition_id = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("port_definitions.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    dispatch_strategy = mapped_column(String, nullable=False, default="direct")
-
-    graph_runner = relationship("GraphRunner", back_populates="port_mappings")
-    source_instance = relationship(
-        "ComponentInstance",
-        foreign_keys=[source_instance_id],
-        back_populates="source_port_mappings",
-    )
-    target_instance = relationship(
-        "ComponentInstance",
-        foreign_keys=[target_instance_id],
-        back_populates="target_port_mappings",
-    )
-    source_port_definition = relationship(
-        "PortDefinition",
-        foreign_keys=[source_port_definition_id],
-    )
-    source_output_port_instance = relationship(
-        "OutputPortInstance",
-        foreign_keys=[source_output_port_instance_id],
-    )
-    target_port_definition = relationship(
-        "PortDefinition",
-        foreign_keys=[target_port_definition_id],
     )
 
 

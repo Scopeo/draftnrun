@@ -8,6 +8,7 @@ from pydantic import BaseModel, PrivateAttr
 
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ExecutionDirective, ExecutionStrategy, ToolDescription
+from engine.field_expressions.serializer import from_json as expr_from_json
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.graph_runner.types import TaskState
 from engine.trace.span_context import set_tracing_span
@@ -184,7 +185,7 @@ class ConfigurableRouter(Component):
 
 def _build_graph_with_data_portmapping_across_routers(tm: TraceManager) -> GraphRunner:
     """
-    Reproduces the scenario where a port_mapping from router1 to a grandchild node
+    Reproduces the scenario where a field expression from router1 to a grandchild node
     (leaf_c) creates an augmented dependency edge. Without the fix this augmented
     edge (order=None) causes _execute_selective_edges_indices to halt leaf_c even
     though it is on the selected path through router2.
@@ -195,7 +196,7 @@ def _build_graph_with_data_portmapping_across_routers(tm: TraceManager) -> Graph
                 └─ (order=1) ──▶ router2 ── (order=0) ──▶ leaf_b
                                           └─ (order=1) ──▶ leaf_c
 
-    Port mapping (data only, no execution edge):
+    Data expression (adds dependency edge, no execution edge):
         router1.output ──▶ leaf_c.input
 
     Scenario: router1 selects 1 (→ router2), router2 selects 1 (→ leaf_c).
@@ -219,13 +220,11 @@ def _build_graph_with_data_portmapping_across_routers(tm: TraceManager) -> Graph
         "leaf_c": FixedResponse(tm, message="Response C", name="leaf_c"),
     }
 
-    port_mappings = [
+    expressions = [
         {
-            "source_instance_id": "router1",
-            "source_port_name": "output",
             "target_instance_id": "leaf_c",
-            "target_port_name": "input",
-            "dispatch_strategy": "direct",
+            "field_name": "input",
+            "expression_ast": expr_from_json({"type": "ref", "instance": "router1", "port": "output"}),
         }
     ]
 
@@ -234,7 +233,7 @@ def _build_graph_with_data_portmapping_across_routers(tm: TraceManager) -> Graph
         runnables=runnables,
         start_nodes=["router1"],
         trace_manager=tm,
-        port_mappings=port_mappings,
+        expressions=expressions,
     )
 
 
@@ -242,8 +241,8 @@ class TestAugmentedEdgeWithRouter:
     def test_leaf_reachable_via_nested_router_with_data_portmapping_executes(self):
         """
         Regression: leaf_c must execute when it is on the selected path through router2,
-        even though a data port_mapping from router1 would have created an augmented
-        dependency edge router1 → leaf_c (which router1's selective routing would halt).
+        even though a field expression ref from router1 creates an augmented dependency
+        edge router1 → leaf_c (which router1's selective routing would otherwise halt).
         """
         tm = TraceManager(project_name="test")
         set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])

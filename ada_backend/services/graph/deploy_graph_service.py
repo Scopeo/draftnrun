@@ -34,11 +34,6 @@ from ada_backend.repositories.output_port_instance_repository import (
     create_output_port_instance,
     get_output_port_instances_for_component_instance,
 )
-from ada_backend.repositories.port_mapping_repository import (
-    insert_port_mapping,
-    insert_port_mapping_with_output_instance,
-    list_port_mappings_for_graph,
-)
 from ada_backend.repositories.tag_repository import update_graph_runner_tag_fields
 from ada_backend.repositories.tool_port_configuration_repository import (
     get_tool_port_configurations,
@@ -119,7 +114,6 @@ def clone_graph_runner(
     # Copy all component nodes to the new graph runner
     graph_nodes = get_component_nodes(session, graph_runner_id_to_copy)
     edges = get_edges(session, graph_runner_id_to_copy)
-    port_mappings = list_port_mappings_for_graph(session, graph_runner_id_to_copy)
     ids_map = {}
     source_tool_port_configs_by_instance: dict[UUID, list[db.ToolPortConfiguration]] = {}
     input_port_instance_ids_map: dict[UUID, UUID] = {}
@@ -219,44 +213,6 @@ def clone_graph_runner(
             f"Copied {len(output_port_instance_ids_map)} OutputPortInstance(s) "
             f"to new graph runner with ID {new_graph_runner_id}"
         )
-
-    for port_mapping in port_mappings:
-        if port_mapping.source_port_definition_id is not None:
-            insert_port_mapping(
-                session=session,
-                graph_runner_id=new_graph_runner_id,
-                source_instance_id=ids_map[port_mapping.source_instance_id],
-                source_port_definition_id=port_mapping.source_port_definition_id,
-                target_instance_id=ids_map[port_mapping.target_instance_id],
-                target_port_definition_id=port_mapping.target_port_definition_id,
-                dispatch_strategy=port_mapping.dispatch_strategy,
-            )
-        elif port_mapping.source_output_port_instance_id is not None:
-            new_source_output_port_instance_id = output_port_instance_ids_map.get(
-                port_mapping.source_output_port_instance_id
-            )
-            if not new_source_output_port_instance_id:
-                LOGGER.warning(
-                    f"Could not remap source_output_port_instance_id "
-                    f"{port_mapping.source_output_port_instance_id} during deploy; skipping port mapping"
-                )
-                continue
-            insert_port_mapping_with_output_instance(
-                session=session,
-                graph_runner_id=new_graph_runner_id,
-                source_instance_id=ids_map[port_mapping.source_instance_id],
-                source_output_port_instance_id=new_source_output_port_instance_id,
-                target_instance_id=ids_map[port_mapping.target_instance_id],
-                target_port_definition_id=port_mapping.target_port_definition_id,
-                dispatch_strategy=port_mapping.dispatch_strategy,
-            )
-        else:
-            LOGGER.warning(
-                f"PortMapping {port_mapping.id} has neither source_port_definition_id nor "
-                "source_output_port_instance_id set; skipping during deploy"
-            )
-
-    LOGGER.info(f"Copied port mappings to new graph runner with ID {new_graph_runner_id}")
 
     source_instance_ids = list(ids_map.keys())
     if source_instance_ids:

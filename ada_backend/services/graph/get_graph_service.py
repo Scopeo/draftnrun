@@ -12,11 +12,9 @@ from ada_backend.repositories.graph_runner_repository import (
     get_latest_modification_history,
 )
 from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
-from ada_backend.repositories.port_mapping_repository import get_source_port_name, list_port_mappings_for_graph
 from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterReadSchema
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionReadSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphGetResponse
-from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 from ada_backend.services.graph.graph_validation_utils import validate_graph_runner_belongs_to_project
 from ada_backend.services.graph.playground_utils import (
     classify_schema_fields,
@@ -44,7 +42,6 @@ def get_graph_service(
     component_instances_with_definitions = []
     relationships = []
     edges = []
-    port_mappings = []
     field_expressions_by_instance: dict[UUID, list[FieldExpressionReadSchema]] = defaultdict(list)
     playground_input_schema = None
 
@@ -77,23 +74,6 @@ def get_graph_service(
             )
         )
         LOGGER.info(f"Edge from {edge.source_node_id} to {edge.target_node_id}")
-
-    # Include port mappings at top-level so GET->PUT roundtrips
-    pms = list_port_mappings_for_graph(session, graph_runner_id)
-    for pm in pms:
-        source_port_name = get_source_port_name(pm)
-        if source_port_name is None:
-            LOGGER.warning(f"PortMapping {pm.id} has no source port; skipping in graph response")
-            continue
-        port_mappings.append(
-            PortMappingSchema(
-                source_instance_id=pm.source_instance_id,
-                source_port_name=source_port_name,
-                target_instance_id=pm.target_instance_id,
-                target_port_name=pm.target_port_definition.name,
-                dispatch_strategy=pm.dispatch_strategy,
-            )
-        )
 
     # Fetch field expressions via input_port_instances
     component_instance_ids = [node.id for node in component_nodes]
@@ -170,7 +150,6 @@ def get_graph_service(
         component_instances=component_instances_with_definitions,
         relationships=relationships,
         edges=edges,
-        port_mappings=port_mappings,
         tag_name=compose_tag_name(
             project_env_binding.graph_runner.tag_version,
             project_env_binding.graph_runner.version_name,

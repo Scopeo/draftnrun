@@ -587,30 +587,6 @@ class PortDefinitionAdmin(EnhancedModelView, model=db.PortDefinition):
     ]
 
 
-class PortMappingAdmin(EnhancedModelView, model=db.PortMapping):
-    category = AdminCategory.COMPONENTS
-    icon = "fas fa-network-wired"
-    column_list = [
-        "id",
-        "graph_runner",
-        "source_instance",
-        "source_port_definition",
-        "target_instance",
-        "target_port_definition",
-        "dispatch_strategy",
-    ]
-    column_searchable_list = ["dispatch_strategy"]
-    column_filters = ["dispatch_strategy", "graph_runner.id"]
-    form_columns = [
-        "graph_runner",
-        "source_instance",
-        "source_port_definition",
-        "target_instance",
-        "target_port_definition",
-        "dispatch_strategy",
-    ]
-
-
 class LLMJudgeAdmin(EnhancedModelView, model=db.LLMJudge):
     category = AdminCategory.QUALITY_ASSURANCE
     icon = "fas fa-balance-scale"
@@ -790,7 +766,6 @@ def setup_admin(app: FastAPI):
     admin.add_view(IngestionTaskAdmin)
     admin.add_view(SourceAttributesAdmin)
     admin.add_view(PortDefinitionAdmin)
-    admin.add_view(PortMappingAdmin)
     admin.add_view(CronJobAdmin)
     admin.add_view(CronRunAdmin)
     admin.add_view(EndpointPollingHistoryAdmin)

@@ -28,7 +28,7 @@ PROXY_SPECS: list[ToolSpec] = [
             "Get the full graph (DAG) for a project version.\n\n"
             "Returns the full, untrimmed payload so it can be safely round-tripped "
             "through update_graph. Includes component_instances (nodes), edges "
-            "(execution order), port_mappings (data flow), relationships (nesting), "
+            "(execution order), relationships (nesting), "
             "and playground_input_schema. See `docs://graphs`, `docs://versioning`, "
             "and `docs://known-quirks` for the full safety model."
         ),
@@ -101,16 +101,12 @@ def _assign_missing_ids(graph_data: dict) -> dict:
 _KNOWN_GRAPH_KEYS = {
     "component_instances",
     "edges",
-    "port_mappings",
     "relationships",
     "playground_input_schema",
     "playground_field_types",
 }
 
 _LIKELY_TYPOS: dict[str, str] = {
-    "ports_mappings": "port_mappings",
-    "port_mapping": "port_mappings",
-    "portmappings": "port_mappings",
     "components": "component_instances",
     "component_instance": "component_instances",
     "nodes": "component_instances",
@@ -308,7 +304,7 @@ def register(mcp: FastMCP) -> None:
         ],
         graph_data: Annotated[
             dict,
-            Field(description="Complete graph definition (component_instances, edges, port_mappings, relationships)."),
+            Field(description="Complete graph definition (component_instances, edges, relationships)."),
         ],
     ) -> dict:
         """Replace the full graph definition (PUT semantics).
@@ -323,22 +319,21 @@ def register(mcp: FastMCP) -> None:
 
         Safe pattern: `get_project_overview` -> `get_graph` -> modify -> `update_graph`.
         The `graph_runner_id` must be the true editable draft runner
-        (`env='draft'` and untagged). The `graph_data` should include
-        `component_instances`, `edges`, `port_mappings`, and `relationships`.
+        (`env='draft'` and untagged).         The `graph_data` should include
+        `component_instances`, `edges`, and `relationships`.
 
         New nodes and edges can have `id` set to null — a UUID is auto-generated
         before sending to the backend. You can also provide your own UUID for
         new nodes (useful when you need to reference the ID in edges,
         relationships, or field expressions within the same update).
 
-        Canonical port auto-wiring: the backend auto-generates a PortMapping
-        **and** a visible RefNode field expression for every edge whose
-        canonical input has no user-provided expression. This means you do NOT
-        need to inject `input_port_instances` or field expressions for
-        canonical inputs like `messages` (AI Agent), `markdown_content` (PDF),
-        `query` (Retriever/Search), etc. — just create the edge and the
-        backend handles the rest. The auto-generated expression (e.g.
-        `@{{<source_uuid>.output}}`) is returned in
+        Canonical port auto-wiring: the backend auto-generates a visible RefNode
+        field expression for every edge whose canonical input has no user-provided
+        expression. This means you do NOT need to inject `input_port_instances`
+        or field expressions for canonical inputs like `messages` (AI Agent),
+        `markdown_content` (PDF), `query` (Retriever/Search), etc. — just create
+        the edge and the backend handles the rest. The auto-generated expression
+        (e.g. `@{{<source_uuid>.output}}`) is returned in
         `auto_generated_field_expressions` and is visible and editable by the
         user. If you provide your own field expression for a canonical input,
         the backend respects it and skips auto-generation.
@@ -346,9 +341,6 @@ def register(mcp: FastMCP) -> None:
         Important constraints:
         - Save version creates an immutable snapshot and keeps the current draft.
         - Publish to production creates a fresh draft with new instance IDs.
-        - Explicit `port_mappings` are still needed for non-canonical wiring.
-        - Pure `port_mappings`-only edits are risky because current backend
-          change detection excludes `port_mappings`.
         - Key-extraction refs like `@{{uuid.port::key}}` are safest through
           `input_port_instances`.
         - `get_graph` returns `field_expressions` (normalized read format).
@@ -449,7 +441,6 @@ def register(mcp: FastMCP) -> None:
         graph_data = {
             "component_instances": instances,
             "edges": graph.get("edges", []),
-            "port_mappings": graph.get("port_mappings", []),
             "relationships": graph.get("relationships", []),
         }
         if graph.get("playground_input_schema") is not None:

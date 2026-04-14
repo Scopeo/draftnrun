@@ -8,7 +8,7 @@ from ada_backend.schemas.pipeline.base import (
     ComponentInstanceSchema,
     ComponentRelationshipSchema,
 )
-from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema, PortMappingSchema
+from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema
 
 
 def build_graph_test_source(source_id: UUID, organization_id: UUID) -> db.DataSource:
@@ -144,26 +144,4 @@ def build_graph_test_chatbot(
             order=1,
         ),
     ]
-    port_mappings = [
-        PortMappingSchema(
-            source_instance_id=COMPONENT_INSTANCES_IDS["llm_call_instance"],
-            source_port_name="output",
-            target_instance_id=COMPONENT_INSTANCES_IDS["rag_agent_instance"],
-            target_port_name="query_text",
-        ),
-        PortMappingSchema(
-            source_instance_id=COMPONENT_INSTANCES_IDS["rag_agent_instance"],
-            source_port_name="output",
-            target_instance_id=COMPONENT_INSTANCES_IDS["evaluation_instance"],
-            target_port_name="messages",
-        ),
-        PortMappingSchema(
-            source_instance_id=COMPONENT_INSTANCES_IDS["llm_call_instance"],
-            source_port_name="output",
-            target_instance_id=COMPONENT_INSTANCES_IDS["evaluation_instance"],
-            target_port_name="messages",
-        ),
-    ]
-    return GraphUpdateSchema(
-        component_instances=instances, relationships=relations, edges=edges, port_mappings=port_mappings
-    )
+    return GraphUpdateSchema(component_instances=instances, relationships=relations, edges=edges)

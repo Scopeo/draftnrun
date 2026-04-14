@@ -108,15 +108,13 @@ def test_warns_on_typo_key():
     }
     warnings = _warn_unknown_graph_keys(graph_data)
     assert len(warnings) == 1
-    assert "port_mappings" in warnings[0]
-    assert "did you mean" in warnings[0].lower()
+    assert "ports_mappings" in warnings[0]
 
 
 def test_no_warning_on_valid_keys():
     graph_data = {
         "component_instances": [],
         "edges": [],
-        "port_mappings": [],
         "relationships": [],
     }
     assert _warn_unknown_graph_keys(graph_data) == []

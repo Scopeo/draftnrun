@@ -249,13 +249,12 @@ the browser tab before making API edits.** You can optionally pass `last_edited_
 previous `update_graph` response) to detect conflicts — the backend returns 409 if the graph \
 was modified since that timestamp.
 
-A graph is a DAG with four top-level collections:
+A graph is a DAG with three top-level arrays and two top-level maps:
 
 ```json
 {
   "component_instances": [...],   // nodes
   "edges": [...],                 // execution flow (A runs before B)
-  "port_mappings": [...],         // explicit non-canonical data flow
   "relationships": [...],         // parent-child nesting (agent → tools)
   "playground_input_schema": {},  // Start node payload defaults
   "playground_field_types": {}    // playground field UI classification
@@ -324,8 +323,8 @@ Always create an edge between sequential nodes — the engine uses topological s
 
 ### Auto-canonical wiring — edges are enough
 
-When you create an edge, the backend auto-generates a `PortMapping` **and** a visible \
-RefNode field expression for each canonical input that has no user-provided expression. \
+When you create an edge, the backend auto-generates a visible RefNode field expression \
+for each canonical input that has no user-provided expression. \
 This uses the `is_canonical` flag on port definitions: \
 `source.canonical_output → target.canonical_input`. The auto-generated expression \
 (e.g. `@{{<source_uuid>.output}}`) is saved on the target's `input_port_instances` and \
@@ -348,12 +347,6 @@ user edits are never overwritten.
 
 `input_port_instances` are still the right tool for **non-canonical** wiring (concat \
 expressions, key extraction, cross-references to non-adjacent nodes, etc.).
-
-### Field expressions override port mappings
-
-When both an auto-mapped port mapping and a field expression target the same input port, \
-the field expression wins. At runtime, `synthesize_default_mappings` skips creating a \
-default port mapping when a field expression already targets the canonical input field.
 
 ### Canonical inputs are editable
 
@@ -391,13 +384,6 @@ static instructions with dynamic data from other nodes:
 The user's message flows through `messages` via the edge (or a custom expression). The \
 agent combines both to produce its response.
 
-### When to provide explicit port mappings
-
-Provide explicit `port_mappings` when you need non-canonical wiring (for example mapping \
-`output` to `mail_subject` instead of the canonical `mail_body`).
-
-Important quirk: pure `port_mappings`-only edits are risky because current graph change detection \
-excludes `port_mappings`. See `docs://known-quirks`.
 
 ## Tool Port Configurations
 
@@ -425,20 +411,6 @@ The read-only `tool_description` field on each component instance shows the comp
 result: the tool name, description, and JSON Schema properties the AI will see at runtime. \
 Use `tool_description_override` on the component instance to customize the tool description \
 text shown to the AI.
-
-## Port Mapping (data flow)
-
-```json
-{
-  "source_instance_id": "node-uuid-A",
-  "source_port_name": "output",
-  "target_instance_id": "node-uuid-B",
-  "target_port_name": "messages",
-  "dispatch_strategy": "direct"
-}
-```
-
-Distinct from edges — edges say "run B after A", port mappings say "send A's output to B's input".
 
 ## Relationship (nesting)
 
@@ -582,7 +554,6 @@ the formats are different and the backend expects the write format.
       "order": 0
     }
   ],
-  "port_mappings": [],
   "relationships": []
 }
 ```
@@ -604,10 +575,8 @@ pass it as a `kind="parameter"` with the value JSON-encoded as a string.
 
 Two ways to wire data into a node's input ports:
 
-1. **`kind="input"` parameters** — string values parsed into field expressions. Simple refs \
-like `@{{uuid.port}}` can also create save-time port mappings for validation.
-2. **`input_port_instances`** — JSON expression objects stored directly. No automatic save-time \
-port mapping validation.
+1. **`kind="input"` parameters** — string values parsed into field expressions.
+2. **`input_port_instances`** — JSON expression objects stored directly.
 
 Use `kind="input"` for most literal values and simple references between type-compatible ports.
 
@@ -617,7 +586,7 @@ Use `input_port_instances` when:
 - you need explicit expression JSON
 - you are using key-extraction refs like `@{{uuid.port::key}}`
 
-Reason: key-extraction refs are a backend special case. `kind="input"` skips automatic port mapping \
+Reason: key-extraction refs are a backend special case — `kind="input"` skips field expression \
 creation for `::key` refs to avoid false type-coercion errors.
 
 **Priority rule**: if a field name is present in both `input_port_instances` and a `kind="input"` \
@@ -818,7 +787,7 @@ and `output_ports` for each matching component, with a `canonical: true` flag on
 | Code Execution | `output` | `python_code` | |
 
 Port names marked as canonical are auto-wired by the backend when an edge is created — see \
-`docs://graphs` for the canonical port mapping table.
+`docs://graphs` for the canonical wiring table.
 """
 
 EXECUTION = """\
@@ -1489,21 +1458,6 @@ Safest approach:
 - After `update_graph` succeeds, call `get_graph` to verify the save persisted
 - If the graph appears reset, the UI likely overwrote it — close the tab and retry
 
-## Graph Update Hash Excludes `port_mappings`
-
-Current graph change detection hashes the graph while excluding `port_mappings`.
-
-Consequence:
-
-- a pure `port_mappings`-only edit can be treated as unchanged and skipped
-
-Safest workaround:
-
-- edit from the latest `get_graph(...)` payload
-- prefer canonical edge wiring or field expressions when possible
-- if you must rely on explicit `port_mappings`, validate carefully and be aware that save-time change \
-detection is imperfect
-
 ## Relationship Deletion Path Is Not Explicit
 
 `update_graph_service` clearly upserts provided relationships, but there is no explicit relationship \
@@ -1539,8 +1493,8 @@ no partial success and no dry-run mode.
 Safest approach:
 
 - always start from a `get_graph(...)` response and modify incrementally
-- the MCP layer now warns about likely key typos (e.g. `ports_mappings` instead of `port_mappings`) \
-before sending to the backend, but structural validation still happens server-side
+- the MCP layer warns about likely key typos before sending to the backend, but structural validation
+  still happens server-side
 
 ## OAuth Connections Cannot Be Assigned Programmatically
 
@@ -1570,11 +1524,8 @@ Workaround:
 
 ## Unknown Top-Level Keys In `update_graph` Are Silently Ignored
 
-The backend accepts and ignores unknown keys in the graph payload. A common mistake is \
-`ports_mappings` instead of `port_mappings` — the typo is accepted (200 OK) but the port \
-mappings are silently dropped.
-
-The MCP layer now warns about known typos, but less obvious unknown keys will still pass \
+The backend accepts and ignores unknown keys in the graph payload. \
+The MCP layer warns about known typos, but less obvious unknown keys will still pass \
 through silently.
 
 ## Organization Selection Must Be Sequential
@@ -1748,7 +1699,7 @@ DOMAINS: dict[str, str] = {
 DOMAIN_DESCRIPTIONS: dict[str, str] = {
     "getting-started": "First steps, RBAC, role hierarchy, constraints",
     "agent-config": "Configure agents: model, tools, system prompt",
-    "graphs": "Graph structure, edges, port mappings, field expressions",
+    "graphs": "Graph structure, edges, field expressions",
     "versioning": "Draft vs production, graph runners, save vs publish",
     "components": "Component catalog, parameter/port types",
     "execution": "Running agents, payloads, inspecting runs",

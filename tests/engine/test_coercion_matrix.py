@@ -287,18 +287,9 @@ def test_build_time_validation():
     }
 
     # Test 1: Valid port mapping (should not raise error)
-    valid_mappings = [
-        {
-            "source_instance_id": "A",
-            "source_port_name": "output",
-            "target_instance_id": "B",
-            "target_port_name": "input",
-            "dispatch_strategy": "direct",
-        }
-    ]
 
     try:
-        GraphRunner(graph=g, runnables=runnables, start_nodes=["A"], trace_manager=tm, port_mappings=valid_mappings)
+        GraphRunner(graph=g, runnables=runnables, start_nodes=["A"], trace_manager=tm)
         print("✅ Valid port mapping passed validation")
     except Exception as e:
         print(f"❌ Valid port mapping failed validation: {e}")

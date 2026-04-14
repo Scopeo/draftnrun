@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field, field_validator
 
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
-from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 
 
 class PlaygroundFieldType(str, Enum):
@@ -49,7 +48,6 @@ class GraphGetResponse(BaseModel):
     component_instances: list[ComponentInstanceReadSchema]
     relationships: list[ComponentRelationshipSchema]
     edges: list[EdgeSchema]
-    port_mappings: list[PortMappingSchema] = Field(default_factory=list)
     tag_name: Optional[str] = None
     change_log: Optional[str] = None
     last_edited_time: Optional[datetime] = None
@@ -72,9 +70,6 @@ class GraphUpdateSchema(BaseModel):
     component_instances: list[ComponentInstanceSchema]
     relationships: list[ComponentRelationshipSchema]
     edges: list[EdgeSchema]
-
-    # Multi-port data flow wiring. When omitted, canonical mappings will be auto-created for edges
-    port_mappings: list[PortMappingSchema] = Field(default_factory=list)
 
     # Optional optimistic locking: pass the last_edited_time from a previous update_graph
     # response. The backend returns 409 Conflict if the graph was modified since that timestamp.

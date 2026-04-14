@@ -8,11 +8,11 @@ from pydantic import BaseModel, Field
 from engine.components.component import Component
 from engine.components.inputs_outputs.start import Start
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
+from engine.field_expressions.errors import FieldExpressionError
 from engine.field_expressions.serializer import from_json as expr_from_json
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_manager import TraceManager
-from tests.mocks.dummy_agent import DummyAgent
 
 # Deterministic migrated components for robust, predictable tests
 
@@ -277,67 +277,15 @@ class TestGraphRunnerExpressions:
             }
         ]
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
-
         gr = GraphRunner(
             graph=g,
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
             expressions=expressions,
-            port_mappings=mappings,
         )
         result = asyncio.run(gr.run({"input": "seed"}))
         assert result.messages[0].content == "echo[x:va]"
-
-    def test_pure_ref_expression_is_ignored_in_presence_of_mapping(self):
-        tm = TraceManager(project_name="test")
-        set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])  # metrics
-
-        a = FixedStringSource(tm, value="AVAL", name="A")
-        c = FixedStringSource(tm, value="CVAL", name="C")
-        b = StrEcho(tm, name="B")
-        runnables = {"A": a, "B": b, "C": c}
-
-        g = nx.DiGraph()
-        g.add_nodes_from(["A", "B", "C"])
-
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
-        # Pure ref expression to a different source; should be ignored at runtime, mapping wins
-        expressions = [
-            {
-                "target_instance_id": "B",
-                "field_name": "input",
-                "expression_ast": expr_from_json({"type": "ref", "instance": "C", "port": "output"}),
-            }
-        ]
-
-        gr = GraphRunner(
-            graph=g,
-            runnables=runnables,
-            start_nodes=["A", "C"],
-            trace_manager=tm,
-            port_mappings=mappings,
-            expressions=expressions,
-        )
-        result = asyncio.run(gr.run({"input": "seed"}))
-        assert result.messages[0].content == "echo[AVAL]"
 
     def test_non_ref_expression_overrides_mapping(self):
         tm = TraceManager(project_name="test")
@@ -351,15 +299,6 @@ class TestGraphRunnerExpressions:
         g.add_nodes_from(["A", "B"])
         g.add_edge("A", "B")
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
         expressions = [
             {
                 "target_instance_id": "B",
@@ -373,7 +312,6 @@ class TestGraphRunnerExpressions:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=mappings,
             expressions=expressions,
         )
         result = asyncio.run(gr.run({"input": "seed"}))
@@ -408,15 +346,6 @@ class TestGraphRunnerExpressions:
             }
         ]
         # Provide mapping as well; non-ref expression overrides mapping value
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
 
         gr = GraphRunner(
             graph=g,
@@ -424,7 +353,6 @@ class TestGraphRunnerExpressions:
             start_nodes=["A", "C"],
             trace_manager=tm,
             expressions=expressions,
-            port_mappings=mappings,
         )
         result = asyncio.run(gr.run({"input": "seed"}))
         assert result.messages[0].content == "echo[upper[AA] lower[CC]]"
@@ -586,21 +514,17 @@ class TestGraphRunnerExpressions:
         g.add_nodes_from(["A", "JOIN"])
         g.add_edge("A", "JOIN")
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "JOIN",
-                "target_port_name": "a",
-                "dispatch_strategy": "direct",
-            }
-        ]
         expressions = [
+            {
+                "target_instance_id": "JOIN",
+                "field_name": "a",
+                "expression_ast": expr_from_json({"type": "ref", "instance": "A", "port": "output"}),
+            },
             {
                 "target_instance_id": "JOIN",
                 "field_name": "b",
                 "expression_ast": expr_from_json({"type": "literal", "value": "X"}),
-            }
+            },
         ]
 
         gr = GraphRunner(
@@ -608,7 +532,6 @@ class TestGraphRunnerExpressions:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=mappings,
             expressions=expressions,
         )
         result = asyncio.run(gr.run({"input": "seed"}))
@@ -627,29 +550,17 @@ class TestGraphRunnerExpressions:
         g.add_nodes_from(["A", "B", "JOIN"])
         g.add_edges_from([("A", "JOIN"), ("B", "JOIN")])
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "JOIN",
-                "target_port_name": "a",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "B",
-                "source_port_name": "output",
-                "target_instance_id": "JOIN",
-                "target_port_name": "b",
-                "dispatch_strategy": "direct",
-            },
-        ]
-        # Override 'a' via expression
         expressions = [
             {
                 "target_instance_id": "JOIN",
                 "field_name": "a",
                 "expression_ast": expr_from_json({"type": "literal", "value": "OVR"}),
-            }
+            },
+            {
+                "target_instance_id": "JOIN",
+                "field_name": "b",
+                "expression_ast": expr_from_json({"type": "ref", "instance": "B", "port": "output"}),
+            },
         ]
 
         gr = GraphRunner(
@@ -657,33 +568,10 @@ class TestGraphRunnerExpressions:
             runnables=runnables,
             start_nodes=["A", "B"],
             trace_manager=tm,
-            port_mappings=mappings,
             expressions=expressions,
         )
         result = asyncio.run(gr.run({"input": "seed"}))
         assert result.messages[0].content == "a[OVR]|b[BB]"
-
-    def test_expressions_for_unmigrated_target_raise(self):
-        tm = TraceManager(project_name="test")
-        g = nx.DiGraph()
-        g.add_nodes_from(["U"])  # unmigrated target
-
-        u = DummyAgent(tm, "U")  # unmigrated
-        runnables = {"U": u}
-
-        expressions = [
-            {
-                "target_instance_id": "U",
-                "field_name": "input",
-                "expression_ast": expr_from_json({"type": "literal", "value": "x"}),
-            }
-        ]
-
-        try:
-            GraphRunner(graph=g, runnables=runnables, start_nodes=["U"], trace_manager=tm, expressions=expressions)
-            assert False, "Expected expressions not supported for unmigrated target"
-        except ValueError as e:
-            assert "expressions are not supported" in str(e).lower()
 
     def test_mixed_concat_with_int_ref(self):
         tm = TraceManager(project_name="test")
@@ -734,38 +622,17 @@ class TestGraphRunnerComplexFormulas:
         g.add_nodes_from(["A", "B", "C", "D"])
         g.add_edges_from([("A", "B"), ("A", "C"), ("B", "D"), ("C", "D")])
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "C",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "B",
-                "source_port_name": "output",
-                "target_instance_id": "D",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-            {
-                "source_instance_id": "C",
-                "source_port_name": "output",
-                "target_instance_id": "D",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            },
-        ]
-
         expressions = [
+            {
+                "target_instance_id": "B",
+                "field_name": "input",
+                "expression_ast": expr_from_json({"type": "ref", "instance": "A", "port": "output"}),
+            },
+            {
+                "target_instance_id": "C",
+                "field_name": "input",
+                "expression_ast": expr_from_json({"type": "ref", "instance": "A", "port": "output"}),
+            },
             {
                 "target_instance_id": "D",
                 "field_name": "input",
@@ -779,19 +646,18 @@ class TestGraphRunnerComplexFormulas:
                         {"type": "literal", "value": "]"},
                     ],
                 }),
-            }
+            },
         ]
 
-        return tm, g, runnables, mappings, expressions
+        return tm, g, runnables, expressions
 
     def test_diamond_graph_execution(self):
-        tm, g, runnables, mappings, expressions = self._build_diamond_graph()
+        tm, g, runnables, expressions = self._build_diamond_graph()
         gr = GraphRunner(
             graph=g,
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=mappings,
             expressions=expressions,
         )
         result = asyncio.run(gr.run({"input": "seed"}))
@@ -809,15 +675,6 @@ class TestGraphRunnerComplexFormulas:
         g.add_nodes_from(["A", "B"])
         g.add_edge("A", "B")
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
         expressions = [
             {
                 "target_instance_id": "B",
@@ -836,7 +693,6 @@ class TestGraphRunnerComplexFormulas:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=mappings,
             expressions=expressions,
         )
         result = asyncio.run(gr.run({"input": "seed"}))
@@ -890,15 +746,6 @@ class TestGraphRunnerComplexFormulas:
         g.add_nodes_from(["A", "B"])
         g.add_edge("A", "B")
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
         expressions = [
             {
                 "target_instance_id": "B",
@@ -917,10 +764,9 @@ class TestGraphRunnerComplexFormulas:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=mappings,
             expressions=expressions,
         )
-        with pytest.raises(ValueError, match="not found in dict"):
+        with pytest.raises(FieldExpressionError, match="not found in dict"):
             asyncio.run(gr.run({"input": "seed"}))
 
     def test_key_extraction_non_dict_raises(self):
@@ -935,15 +781,6 @@ class TestGraphRunnerComplexFormulas:
         g.add_nodes_from(["A", "B"])
         g.add_edge("A", "B")
 
-        mappings = [
-            {
-                "source_instance_id": "A",
-                "source_port_name": "output",
-                "target_instance_id": "B",
-                "target_port_name": "input",
-                "dispatch_strategy": "direct",
-            }
-        ]
         expressions = [
             {
                 "target_instance_id": "B",
@@ -962,10 +799,9 @@ class TestGraphRunnerComplexFormulas:
             runnables=runnables,
             start_nodes=["A"],
             trace_manager=tm,
-            port_mappings=mappings,
             expressions=expressions,
         )
-        with pytest.raises(ValueError, match="not a dict"):
+        with pytest.raises(FieldExpressionError, match="not a dict"):
             asyncio.run(gr.run({"input": "seed"}))
 
 

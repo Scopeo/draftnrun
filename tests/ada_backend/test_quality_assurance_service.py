@@ -364,6 +364,18 @@ def _create_dummy_agent_workflow_config():
                         "is_advanced": False,
                     }
                 ],
+                "input_port_instances": [
+                    {
+                        "name": "messages",
+                        "field_expression": {
+                            "expression_json": {
+                                "type": "ref",
+                                "instance": api_input_id,
+                                "port": "messages",
+                            }
+                        },
+                    }
+                ],
                 "tool_description": {
                     "name": "Filter_Tool",
                     "description": "An filter tool that filters the input data to return an AgentPayload.",
@@ -377,14 +389,6 @@ def _create_dummy_agent_workflow_config():
         ],
         "relationships": [],
         "edges": [{"id": edge_id, "origin": api_input_id, "destination": filter_id, "order": 0}],
-        "port_mappings": [
-            {
-                "source_instance_id": api_input_id,
-                "source_port_name": "messages",
-                "target_instance_id": filter_id,
-                "target_port_name": "messages",
-            }
-        ],
     }
 
 

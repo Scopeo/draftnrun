@@ -143,7 +143,7 @@ Custom tools (validation, multi-step, client-side logic) are still defined as `@
 | Graph null IDs | `update_graph` auto-generates UUIDs for component instances **and edges** with `id: null`. |
 | Canonical field expressions | The backend auto-generates a visible, editable RefNode field expression (e.g. `@{{<source_uuid>.output}}`) for canonical inputs when an edge exists and no user expression is set. User-provided expressions are never overwritten. The MCP should create edges and let the backend handle canonical wiring. |
 | Tool port configurations | Tool input ports support three setup modes: `ai_filled` (default, AI provides value), `user_set` (pre-configured, hidden from AI), `deactivated` (removed from tool interface). Managed via `port_configurations` in `get_graph`/`update_graph`. |
-| Unknown graph keys | `update_graph` warns about unrecognised top-level keys (e.g. `ports_mappings` → `port_mappings`) before forwarding. |
+| Unknown graph keys | `update_graph` warns about unrecognised top-level keys before forwarding. |
 | Graph guide warning | `update_graph` tool description warns callers to `get_guide('graphs')` first and to close the browser tab before API edits. |
 | Optimistic locking | `update_graph` accepts optional `last_edited_time` for conflict detection (409 Conflict if the graph was modified since that timestamp). |
 | Edge format coercion | Edge `origin`/`destination` accept both plain UUID strings and dicts like `{"instance_id": "uuid"}` — the backend normalizes. |

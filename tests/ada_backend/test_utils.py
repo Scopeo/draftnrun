@@ -90,7 +90,6 @@ async def create_graph_with_start_node_and_ai_agent(
                 order=0,
             )
         ],
-        port_mappings=[],
     )
     await update_graph_service(session, graph_runner_id, project_id, graph_payload)
     return ai_agent_id

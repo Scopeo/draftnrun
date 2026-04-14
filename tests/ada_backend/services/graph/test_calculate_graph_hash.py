@@ -12,7 +12,6 @@ from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionUpdateSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema
-from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 from ada_backend.services.graph.update_graph_service import _calculate_graph_hash
 
 
@@ -78,35 +77,13 @@ def create_relationship(
     )
 
 
-def create_port_mapping(
-    source_id: UUID = None,
-    target_id: UUID = None,
-    source_port: str = "output",
-    target_port: str = "input",
-    dispatch_strategy: str = "direct",
-) -> PortMappingSchema:
-    """Helper to create a PortMappingSchema with defaults."""
-    if source_id is None:
-        source_id = uuid.uuid4()
-    if target_id is None:
-        target_id = uuid.uuid4()
-
-    return PortMappingSchema(
-        source_instance_id=source_id,
-        source_port_name=source_port,
-        target_instance_id=target_id,
-        target_port_name=target_port,
-        dispatch_strategy=dispatch_strategy,
-    )
-
-
 class TestCalculateGraphHashIdentical:
     """Test that identical graphs produce the same hash."""
 
     def test_empty_graphs_produce_same_hash(self):
         """Empty graphs should produce the same hash."""
-        graph1 = GraphUpdateSchema(component_instances=[], relationships=[], edges=[], port_mappings=[])
-        graph2 = GraphUpdateSchema(component_instances=[], relationships=[], edges=[], port_mappings=[])
+        graph1 = GraphUpdateSchema(component_instances=[], relationships=[], edges=[])
+        graph2 = GraphUpdateSchema(component_instances=[], relationships=[], edges=[])
 
         hash1 = _calculate_graph_hash(graph1)
         hash2 = _calculate_graph_hash(graph2)
@@ -258,41 +235,6 @@ class TestCalculateGraphHashIdentical:
 
         assert hash1 == hash2
 
-    def test_same_graph_with_port_mappings_produces_same_hash(self):
-        """Graphs with identical port mappings should produce the same hash."""
-        source_id = uuid.uuid4()
-        target_id = uuid.uuid4()
-        component_id = uuid.uuid4()
-        component_version_id = uuid.uuid4()
-
-        # Create the same objects to ensure identical serialization
-        source = create_component_instance(
-            instance_id=source_id, component_id=component_id, component_version_id=component_version_id
-        )
-        target = create_component_instance(
-            instance_id=target_id, component_id=component_id, component_version_id=component_version_id
-        )
-        port_mapping = create_port_mapping(source_id=source_id, target_id=target_id)
-
-        graph1 = GraphUpdateSchema(
-            component_instances=[source, target],
-            relationships=[],
-            edges=[],
-            port_mappings=[port_mapping],
-        )
-
-        graph2 = GraphUpdateSchema(
-            component_instances=[source, target],
-            relationships=[],
-            edges=[],
-            port_mappings=[port_mapping],
-        )
-
-        hash1 = _calculate_graph_hash(graph1)
-        hash2 = _calculate_graph_hash(graph2)
-
-        assert hash1 == hash2
-
     def test_same_graph_with_field_expressions_produces_same_hash(self):
         """Graphs with identical field expressions should produce the same hash."""
         instance_id = uuid.uuid4()
@@ -355,20 +297,16 @@ class TestCalculateGraphHashIdentical:
         )
         relationship = create_relationship(parent_id=instance1_id, child_id=instance2_id, parameter_name="input")
         edge = create_edge(edge_id=edge_id, origin=instance1_id, destination=instance2_id, order=0)
-        port_mapping = create_port_mapping(source_id=instance1_id, target_id=instance2_id)
-
         graph1 = GraphUpdateSchema(
             component_instances=[instance1, instance2],
             relationships=[relationship],
             edges=[edge],
-            port_mappings=[port_mapping],
         )
 
         graph2 = GraphUpdateSchema(
             component_instances=[instance1, instance2],
             relationships=[relationship],
             edges=[edge],
-            port_mappings=[port_mapping],
         )
 
         hash1 = _calculate_graph_hash(graph1)
@@ -477,45 +415,6 @@ class TestCalculateGraphHashOrderSensitivity:
                 create_relationship(parent_id=parent1_id, child_id=child_id, parameter_name="input1"),
             ],
             edges=[],
-        )
-
-        hash1 = _calculate_graph_hash(graph1)
-        hash2 = _calculate_graph_hash(graph2)
-
-        assert hash1 != hash2
-
-    def test_port_mapping_order_affects_hash(self):
-        """Port mappings in different orders should produce different hashes (order matters)."""
-        source1_id = uuid.uuid4()
-        source2_id = uuid.uuid4()
-        target_id = uuid.uuid4()
-
-        graph1 = GraphUpdateSchema(
-            component_instances=[
-                create_component_instance(instance_id=source1_id),
-                create_component_instance(instance_id=source2_id),
-                create_component_instance(instance_id=target_id),
-            ],
-            relationships=[],
-            edges=[],
-            port_mappings=[
-                create_port_mapping(source_id=source1_id, target_id=target_id, source_port="output1"),
-                create_port_mapping(source_id=source2_id, target_id=target_id, source_port="output2"),
-            ],
-        )
-
-        graph2 = GraphUpdateSchema(
-            component_instances=[
-                create_component_instance(instance_id=source1_id),
-                create_component_instance(instance_id=source2_id),
-                create_component_instance(instance_id=target_id),
-            ],
-            relationships=[],
-            edges=[],
-            port_mappings=[
-                create_port_mapping(source_id=source2_id, target_id=target_id, source_port="output2"),
-                create_port_mapping(source_id=source1_id, target_id=target_id, source_port="output1"),
-            ],
         )
 
         hash1 = _calculate_graph_hash(graph1)
@@ -945,68 +844,6 @@ class TestCalculateGraphHashDifferent:
 
         assert hash1 != hash2
 
-    def test_different_port_mappings_produce_different_hashes(self):
-        """Graphs with different port mappings should produce different hashes."""
-        source_id = uuid.uuid4()
-        target_id = uuid.uuid4()
-
-        graph1 = GraphUpdateSchema(
-            component_instances=[
-                create_component_instance(instance_id=source_id),
-                create_component_instance(instance_id=target_id),
-            ],
-            relationships=[],
-            edges=[],
-            port_mappings=[create_port_mapping(source_id=source_id, target_id=target_id, source_port="output1")],
-        )
-
-        graph2 = GraphUpdateSchema(
-            component_instances=[
-                create_component_instance(instance_id=source_id),
-                create_component_instance(instance_id=target_id),
-            ],
-            relationships=[],
-            edges=[],
-            port_mappings=[create_port_mapping(source_id=source_id, target_id=target_id, source_port="output2")],
-        )
-
-        hash1 = _calculate_graph_hash(graph1)
-        hash2 = _calculate_graph_hash(graph2)
-
-        assert hash1 != hash2
-
-    def test_different_port_mapping_dispatch_strategies_produce_different_hashes(self):
-        """Graphs with different dispatch strategies should produce different hashes."""
-        source_id = uuid.uuid4()
-        target_id = uuid.uuid4()
-
-        graph1 = GraphUpdateSchema(
-            component_instances=[
-                create_component_instance(instance_id=source_id),
-                create_component_instance(instance_id=target_id),
-            ],
-            relationships=[],
-            edges=[],
-            port_mappings=[create_port_mapping(source_id=source_id, target_id=target_id, dispatch_strategy="direct")],
-        )
-
-        graph2 = GraphUpdateSchema(
-            component_instances=[
-                create_component_instance(instance_id=source_id),
-                create_component_instance(instance_id=target_id),
-            ],
-            relationships=[],
-            edges=[],
-            port_mappings=[
-                create_port_mapping(source_id=source_id, target_id=target_id, dispatch_strategy="broadcast")
-            ],
-        )
-
-        hash1 = _calculate_graph_hash(graph1)
-        hash2 = _calculate_graph_hash(graph2)
-
-        assert hash1 != hash2
-
     def test_different_field_expressions_produce_different_hashes(self):
         """Graphs with different field expressions should produce different hashes."""
         instance_id = uuid.uuid4()
@@ -1159,36 +996,6 @@ class TestCalculateGraphHashDifferent:
 
         assert hash1 != hash2
 
-    def test_adding_port_mapping_produces_different_hash(self):
-        """Adding a port mapping should produce a different hash."""
-        source_id = uuid.uuid4()
-        target_id = uuid.uuid4()
-
-        graph1 = GraphUpdateSchema(
-            component_instances=[
-                create_component_instance(instance_id=source_id),
-                create_component_instance(instance_id=target_id),
-            ],
-            relationships=[],
-            edges=[],
-            port_mappings=[],
-        )
-
-        graph2 = GraphUpdateSchema(
-            component_instances=[
-                create_component_instance(instance_id=source_id),
-                create_component_instance(instance_id=target_id),
-            ],
-            relationships=[],
-            edges=[],
-            port_mappings=[create_port_mapping(source_id=source_id, target_id=target_id)],
-        )
-
-        hash1 = _calculate_graph_hash(graph1)
-        hash2 = _calculate_graph_hash(graph2)
-
-        assert hash1 != hash2
-
 
 class TestCalculateGraphHashEdgeCases:
     """Test edge cases and special values."""
@@ -1274,14 +1081,12 @@ class TestCalculateGraphHashEdgeCases:
             component_instances=[instance],
             relationships=[],
             edges=[],
-            port_mappings=[],
         )
 
         graph2 = GraphUpdateSchema(
             component_instances=[instance],
             relationships=[],
             edges=[],
-            port_mappings=[],
         )
 
         hash1 = _calculate_graph_hash(graph1)
