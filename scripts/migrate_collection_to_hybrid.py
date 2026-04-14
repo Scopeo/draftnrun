@@ -143,7 +143,7 @@ async def migrate_collection(service: QdrantService, name: str) -> bool:
             await _recreate_indexes(service, name, payload_indexes)
         return True
 
-    tmp = f"{name}__hybrid_tmp"
+    tmp = f"{name}_hybrid"
     if await service.collection_exists_async(tmp):
         print(f"[{name}] Temp '{tmp}' exists, deleting.")
         await service.delete_collection_async(tmp)
