@@ -157,6 +157,8 @@ class QdrantService:
 
         self.default_schema = default_schema
         self._schemas: dict[str, QdrantCollectionSchema] = {}
+        # TODO Remove when production all collections are hybrid
+        self._hybrid_cache: dict[str, bool] = {}
 
     def register_schema(self, collection_name: str, schema: QdrantCollectionSchema):
         """
@@ -279,10 +281,11 @@ class QdrantService:
     ) -> list[tuple[str, float, dict]]:
         payload: dict[str, Any] = {
             "query": query_vector,
-            "using": "dense",
             "with_payload": True,
             "limit": search_params.pop("limit", DEFAULT_MAX_CHUNKS),
         }
+        if await self.is_hybrid_collection_async(collection_name):
+            payload["using"] = "dense"
         if filter:
             payload["filter"] = filter
         return await self._query_points_async(collection_name, payload)
@@ -310,6 +313,9 @@ class QdrantService:
         limit: int = DEFAULT_MAX_CHUNKS,
     ) -> list[tuple[str, float, dict]]:
         prefetch_limit = limit * 2
+        dense_prefetch: dict[str, Any] = {"query": query_vector, "limit": prefetch_limit}
+        if await self.is_hybrid_collection_async(collection_name):
+            dense_prefetch["using"] = "dense"
         payload: dict[str, Any] = {
             "prefetch": [
                 {
@@ -317,11 +323,7 @@ class QdrantService:
                     "using": "sparse",
                     "limit": prefetch_limit,
                 },
-                {
-                    "query": query_vector,
-                    "using": "dense",
-                    "limit": prefetch_limit,
-                },
+                dense_prefetch,
             ],
             "query": {"fusion": "rrf"},
             "limit": limit,
@@ -341,10 +343,11 @@ class QdrantService:
     ) -> list[tuple[str, float, dict]]:
         payload: dict[str, Any] = {
             "query": query_vector,
-            "using": "dense",
             "limit": limit,
             "with_payload": True,
         }
+        if await self.is_hybrid_collection_async(collection_name):
+            payload["using"] = "dense"
         if filter:
             payload["filter"] = filter
         return await self._query_points_async(collection_name, payload)
@@ -1053,9 +1056,13 @@ class QdrantService:
         return response.get("result", {})
 
     async def is_hybrid_collection_async(self, collection_name: str) -> bool:
+        if collection_name in self._hybrid_cache:
+            return self._hybrid_cache[collection_name]
         info = await self.get_collection_info_async(collection_name)
         sparse_vectors = info.get("config", {}).get("params", {}).get("sparse_vectors", {})
-        return bool(sparse_vectors and "sparse" in sparse_vectors)
+        result = bool(sparse_vectors and "sparse" in sparse_vectors)
+        self._hybrid_cache[collection_name] = result
+        return result
 
     def create_collection(
         self,
