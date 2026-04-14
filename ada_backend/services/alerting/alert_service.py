@@ -1,3 +1,4 @@
+import html
 import logging
 import threading
 from datetime import datetime, timezone
@@ -29,13 +30,18 @@ def _build_alert_html(
 
     timestamp = (finished_at or datetime.now(timezone.utc)).strftime("%Y-%m-%d %H:%M:%S UTC")
 
+    safe_project = html.escape(project_name)
+    safe_trigger = html.escape(trigger)
+    safe_error_type = html.escape(error_type)
+    safe_error_message = html.escape(error_message)
+
     return f"""
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #dc2626;">Run Failed</h2>
         <table style="width: 100%; border-collapse: collapse;">
             <tr>
                 <td style="padding: 8px; font-weight: bold; color: #374151;">Project</td>
-                <td style="padding: 8px; color: #111827;">{project_name}</td>
+                <td style="padding: 8px; color: #111827;">{safe_project}</td>
             </tr>
             <tr style="background: #f9fafb;">
                 <td style="padding: 8px; font-weight: bold; color: #374151;">Run ID</td>
@@ -43,15 +49,15 @@ def _build_alert_html(
             </tr>
             <tr>
                 <td style="padding: 8px; font-weight: bold; color: #374151;">Trigger</td>
-                <td style="padding: 8px; color: #111827;">{trigger}</td>
+                <td style="padding: 8px; color: #111827;">{safe_trigger}</td>
             </tr>
             <tr style="background: #f9fafb;">
                 <td style="padding: 8px; font-weight: bold; color: #374151;">Error Type</td>
-                <td style="padding: 8px; color: #111827;">{error_type}</td>
+                <td style="padding: 8px; color: #111827;">{safe_error_type}</td>
             </tr>
             <tr>
                 <td style="padding: 8px; font-weight: bold; color: #374151;">Error</td>
-                <td style="padding: 8px; color: #dc2626;">{error_message}</td>
+                <td style="padding: 8px; color: #dc2626;">{safe_error_message}</td>
             </tr>
             <tr style="background: #f9fafb;">
                 <td style="padding: 8px; font-weight: bold; color: #374151;">Time</td>

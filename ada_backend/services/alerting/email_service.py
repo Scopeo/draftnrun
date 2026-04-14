@@ -11,7 +11,6 @@ RESEND_SEND_URL = "https://api.resend.com/emails"
 
 def send_email(to: list[str], subject: str, html: str) -> None:
     if not settings.RESEND_API_KEY or not settings.RESEND_FROM_EMAIL:
-        LOGGER.warning("Resend not configured (RESEND_API_KEY or RESEND_FROM_EMAIL missing), skipping email")
         return
 
     try:

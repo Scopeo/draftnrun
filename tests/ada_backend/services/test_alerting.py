@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from ada_backend.database.models import CallType, RunStatus
+from ada_backend.services.alerting.alert_service import _build_alert_html
 
 EMAIL_SERVICE_MODULE = "ada_backend.services.alerting.email_service"
 ALERT_SERVICE_MODULE = "ada_backend.services.alerting.alert_service"
@@ -17,6 +18,20 @@ def _make_fake_run(trigger=CallType.WEBHOOK, project_id=None):
     run.error = {"message": "timeout", "type": "TimeoutError"}
     run.finished_at = datetime.now(timezone.utc)
     return run
+
+
+class TestBuildAlertHtml:
+    def test_escapes_html_in_user_controlled_fields(self):
+        xss_payload = '<script>alert("xss")</script>'
+        result = _build_alert_html(
+            project_name=xss_payload,
+            run_id=uuid4(),
+            trigger=xss_payload,
+            error={"message": xss_payload, "type": xss_payload},
+            finished_at=datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+        )
+        assert "<script>" not in result
+        assert "&lt;script&gt;" in result
 
 
 class TestSendEmail:

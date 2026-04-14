@@ -1710,8 +1710,8 @@ read/revoke operations only; the actual connect flow happens in the web UI.
 Per-project email alerts sent via Resend when a webhook- or cron-triggered run fails:
 
 - `list_alert_emails(project_id)` → list configured recipient emails
-- `add_alert_email(project_id, email)` → add a recipient (duplicate emails rejected with 409)
-- `remove_alert_email(project_id, alert_email_id)` → remove a recipient
+- `create_alert_email(project_id, email)` → add a recipient (409 on duplicates). Developer+.
+- `delete_alert_email(project_id, alert_email_id)` → remove a recipient. Developer+.
 
 Alerts require `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to be configured on the backend. \
 If either is missing, alerting silently no-ops. Only runs triggered by webhooks or crons fire alerts \
