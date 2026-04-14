@@ -2,9 +2,8 @@ import logging
 import re
 from typing import Any, Dict, Optional
 
-from settings import settings
-
 from engine.secret import SecretValue
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 

@@ -29,7 +29,6 @@ from ada_backend.services.llm_models_service import (
     get_model_id_by_name_service,
 )
 from engine.components.rag.cohere_reranker import CohereReranker
-from engine.secret import SecretValue
 from engine.components.rag.formatter import Formatter
 from engine.components.rag.retriever import Retriever
 from engine.components.rag.vocabulary_search import VocabularySearch
@@ -38,6 +37,7 @@ from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import ToolDescription
 from engine.llm_services.llm_service import CompletionService, EmbeddingService, OCRService, WebSearchService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
+from engine.secret import SecretValue
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_context import get_trace_manager
 
