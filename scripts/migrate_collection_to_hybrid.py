@@ -121,7 +121,8 @@ async def migrate_collection(service: QdrantService, name: str) -> bool:
     original_count = await service.count_points_async(name)
     payload_indexes = await _get_payload_indexes(service, name)
     print(
-        f"[{name}] {original_count} points, vector_size={vector_size}, distance={distance}, indexes={len(payload_indexes)}"
+        f"[{name}] {original_count} points, vector_size={vector_size}, "
+        f"distance={distance}, indexes={len(payload_indexes)}"
     )
 
     hybrid_config = {
