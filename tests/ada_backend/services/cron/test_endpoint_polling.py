@@ -602,6 +602,36 @@ class TestExecute:
             assert mock_create_bulk.called
 
     @pytest.mark.asyncio
+    async def test_forwards_cron_id_to_child_workflow_runs(
+        self, mock_db_session, mock_source, mock_httpx_client, sample_agent_inference_execution_payload
+    ):
+        with (
+            patch("ada_backend.services.cron.endpoint_polling_service.get_tracked_values_history") as mock_get_history,
+            patch("ada_backend.services.cron.endpoint_polling_service.create_tracked_values_bulk"),
+        ):
+            mock_get_history.return_value = []
+            cron_id = uuid4()
+            payload = EndpointPollingExecutionPayload(
+                endpoint_url="https://api.example.com/items",
+                tracking_field_path="data[].id",
+                filter_fields=None,
+                headers=None,
+                timeout=30,
+                workflow_input=sample_agent_inference_execution_payload,
+            )
+
+            await run_endpoint_polling(
+                cron_id=cron_id,
+                payload=payload,
+                ada_url="https://test.example.com",
+                scheduler_api_key="test-key",
+            )
+
+            assert mock_httpx_client.post.await_count > 0
+            for call in mock_httpx_client.post.await_args_list:
+                assert call.kwargs["json"]["cron_id"] == str(cron_id)
+
+    @pytest.mark.asyncio
     async def test_execute_with_filter_fields(
         self, mock_db_session, mock_source, mock_httpx_client, sample_agent_inference_execution_payload
     ):

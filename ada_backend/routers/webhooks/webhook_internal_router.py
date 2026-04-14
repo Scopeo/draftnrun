@@ -93,11 +93,15 @@ async def _execute_run(
     env: EnvType,
     input_data: Dict[str, Any],
     trigger: CallType,
+    cron_id: UUID | None = None,
 ) -> tuple[bool, str | None]:
     """
     Execute a workflow run and update its status (RUNNING -> COMPLETED/FAILED).
     Returns (success, error_msg) where error_msg is set when success is False.
     """
+    if cron_id:
+        set_tracing_span(cron_id=str(cron_id))
+
     try:
         await run_with_tracking(
             project_id=project_id,
@@ -145,10 +149,14 @@ async def _execute_cron_run(
             LOGGER.error(f"Failed to set CronRun {cron_run_id} to RUNNING: {e}", exc_info=True)
             raise
 
-    if cron_id:
-        set_tracing_span(cron_id=str(cron_id))
-
-    succeeded, error_msg = await _execute_run(run_id, project_id, env, input_data, trigger)
+    succeeded, error_msg = await _execute_run(
+        run_id,
+        project_id,
+        env,
+        input_data,
+        trigger,
+        cron_id=cron_id,
+    )
 
     with get_db_session() as session:
         try:
@@ -217,6 +225,7 @@ async def run_project_internal(
             env=env,
             input_data=body.input_data,
             trigger=trigger,
+            cron_id=body.cron_id,
         )
 
     return {"status": "accepted", "run_id": str(run_id)}
