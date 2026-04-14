@@ -1705,6 +1705,18 @@ OAuth integrations (Slack, Gmail, HubSpot) must be set up in the web UI. Require
 Always ask the user before guiding OAuth setup or revoking an existing connection. MCP exposes \
 read/revoke operations only; the actual connect flow happens in the web UI.
 
+## Alert Emails
+
+Per-project email alerts sent via Resend when a webhook- or cron-triggered run fails:
+
+- `list_alert_emails(project_id)` → list configured recipient emails
+- `create_alert_email(project_id, email)` → add a recipient (409 on duplicates). Developer+.
+- `delete_alert_email(project_id, alert_email_id)` → remove a recipient. Developer+.
+
+Alerts require `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to be configured on the backend. \
+If either is missing, alerting silently no-ops. Only runs triggered by webhooks or crons fire alerts \
+(API/sandbox/QA runs do not).
+
 ## Monitoring
 
 - `list_traces(project_id, duration=30)` → recent traces (duration in days, 1–90). \
@@ -1747,7 +1759,7 @@ DOMAIN_DESCRIPTIONS: dict[str, str] = {
     "integrations": "Function-callable tools, OAuth lifecycle, integration-backed components",
     "known-quirks": "Backend/MCP caveats that require explicit workarounds",
     "qa": "QA datasets, judges, evaluations",
-    "admin": "API keys, crons, OAuth, monitoring",
+    "admin": "API keys, crons, OAuth, monitoring, alert emails",
 }
 
 

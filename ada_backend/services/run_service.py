@@ -15,6 +15,7 @@ from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.run_input_repository import get_run_input
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.run_schema import AsyncRunAcceptedSchema, RunResponseSchema
+from ada_backend.services.alerting.alert_service import maybe_send_run_failure_alert
 from ada_backend.services.errors import (
     InvalidRunStatusTransition,
     ProjectNotFound,
@@ -301,11 +302,12 @@ def fail_pending_run(
     error: dict,
     project_id: UUID | None = None,
 ) -> RunResponseSchema:
+    finished_at = datetime.now(timezone.utc)
     updated = run_repository.fail_run_if_pending(
         session,
         run_id=run_id,
         error=error,
-        finished_at=datetime.now(timezone.utc),
+        finished_at=finished_at,
         project_id=project_id,
     )
     if updated is None:
@@ -316,6 +318,7 @@ def fail_pending_run(
             raise RunNotFound(run_id)
         current = run.status if isinstance(run.status, RunStatus) else RunStatus(str(run.status))
         raise InvalidRunStatusTransition(current.value, RunStatus.FAILED.value)
+    maybe_send_run_failure_alert(updated, updated.project_id, error=error, finished_at=finished_at)
     return RunResponseSchema.model_validate(updated, from_attributes=True)
 
 
@@ -354,6 +357,8 @@ def update_run_status(
         started_at=started_at,
         finished_at=finished_at,
     )
+    if status == RunStatus.FAILED:
+        maybe_send_run_failure_alert(run, project_id, error=error, finished_at=finished_at)
     return RunResponseSchema.model_validate(updated, from_attributes=True)
 
 

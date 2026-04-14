@@ -18,6 +18,7 @@ from ada_backend.middleware.rate_limit_middleware import rate_limit_exceeded_han
 from ada_backend.middleware.request_context import RequestContextMiddleware
 from ada_backend.routers.admin_tools_router import router as admin_tools_router
 from ada_backend.routers.agent_router import router as agent_router
+from ada_backend.routers.alert_email_router import router as alert_email_router
 from ada_backend.routers.auth_router import router as auth_router
 from ada_backend.routers.categories_router import router as categories_router
 from ada_backend.routers.component_version_router import router as component_version_router
@@ -272,6 +273,7 @@ app.include_router(provider_webhooks_router)
 app.include_router(webhook_internal_router)
 app.include_router(webhook_trigger_router)
 app.include_router(scheduler_internal_router)
+app.include_router(alert_email_router)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)

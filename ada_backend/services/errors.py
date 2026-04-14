@@ -353,3 +353,9 @@ class GraphConflictError(Exception):
             f"Graph {graph_runner_id} was modified by another client since you last fetched it. "
             "Refresh the graph and retry your changes."
         )
+
+
+class DuplicateAlertEmailError(Exception):
+    def __init__(self, email: str):
+        self.email = email
+        super().__init__(f"Email {email} is already configured for this project")
