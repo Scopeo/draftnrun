@@ -2,6 +2,7 @@ import json
 from typing import Any, Optional
 
 from engine.components.utils import shorten_base64_string
+from engine.secret import SecretValue
 
 
 # TODO : when observability will handle json display, change the default indent to 0
@@ -40,6 +41,8 @@ def _serialize_object(obj: Any, visited: Optional[set] = None, shorten_string: b
 
     if obj is None:
         return None
+    elif isinstance(obj, SecretValue):
+        return obj.masked()
     elif isinstance(obj, str):
         if shorten_string:
             return shorten_base64_string(obj)

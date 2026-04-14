@@ -1,4 +1,5 @@
 from engine.secret import SecretValue, unwrap_secrets
+from engine.trace.serializer import serialize_to_json
 
 
 def test_secret_value_masks_str_and_repr():
@@ -29,3 +30,17 @@ def test_unwrap_secrets_recursively():
         "nested": ["def", {"inner": "ghi"}],
         "masked-key": "value",
     }
+
+
+def test_serialize_to_json_masks_secret_values():
+    payload = {
+        "api_key": SecretValue("sk-12345"),
+        "url": "https://example.com",
+        "nested": [SecretValue("inner-secret"), "public"],
+    }
+    result = serialize_to_json(payload)
+    assert "sk-12345" not in result
+    assert "inner-secret" not in result
+    assert "***" in result
+    assert "https://example.com" in result
+    assert "public" in result

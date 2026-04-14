@@ -29,6 +29,7 @@ from ada_backend.services.llm_models_service import (
     get_model_id_by_name_service,
 )
 from engine.components.rag.cohere_reranker import CohereReranker
+from engine.secret import SecretValue
 from engine.components.rag.formatter import Formatter
 from engine.components.rag.retriever import Retriever
 from engine.components.rag.vocabulary_search import VocabularySearch
@@ -239,7 +240,10 @@ async def resolve_oauth_access_token(
         LOGGER.info(f"Set run variables: {variables}")
         if variables and definition.name in variables:
             LOGGER.info(f"Using set run variables for {definition.name}: {variables[definition.name]}")
-            connection_uuid = UUID(variables[definition.name])
+            raw_connection_id = variables[definition.name]
+            if isinstance(raw_connection_id, SecretValue):
+                raw_connection_id = raw_connection_id.get_secret_value()
+            connection_uuid = UUID(raw_connection_id)
         elif definition.default_value:
             LOGGER.info(f"Using default value for {definition.name}: {definition.default_value}")
             connection_uuid = UUID(definition.default_value)

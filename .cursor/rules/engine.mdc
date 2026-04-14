@@ -15,6 +15,7 @@ globs:
 - Variable resolution: defaults → layered set overrides. See `ada_backend/services/variable_resolution_service.py`.
 - Secret handling: secret variables are represented as `SecretValue` (`engine/secret.py`). Never rely on `str(secret)` to get plaintext; use explicit unwrapping when a real value is required at execution boundaries.
 - Execution boundaries that call external systems or constructors (prompt rendering, component factory creation) must unwrap via `unwrap_secrets()` or `get_secret_value()`.
+- The trace serializer (`engine/trace/serializer.py`) emits `"***"` for `SecretValue` instances, preventing secret leakage into span attributes.
 - `requires_tool_name = True` for components that need a `tool_name` input (MCP tools, API tools).
 - Legacy system: some components still use `AgentPayload` pattern (`migrated = False`). New components MUST use the multi-port `NodeData` system (`migrated = True`).
 - `SQLLocalService` engine pools are cached per `engine_url` (process-level). Avoid patterns that instantiate many services for the same URL expecting independent pools.

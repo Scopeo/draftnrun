@@ -119,6 +119,9 @@ Merge order: **defaults → set_ids[0] → set_ids[1] → ...**
 `SecretValue` instances must be explicitly unwrapped at execution boundaries that require plaintext
 (for example prompt templating and component factory construction).
 
+The trace serializer (`engine/trace/serializer.py`) recognises `SecretValue` and emits `"***"` instead of the
+real value, preventing secret leakage into span attributes persisted via `SQLSpanExporter`.
+
 ## Legacy Compatibility
 
 **File**: `engine/legacy_compatibility.py` (marked for deletion after migration)

@@ -369,6 +369,12 @@ async def instantiate_component(
         if base_component and base_component == "API Call":
             component_version_id = COMPONENT_VERSION_UUIDS["api_call_tool"]
         set_current_project_id(project_id)
+        # TODO: Ideally SecretValue should propagate past the factory into each consumer
+        # (CompletionService, ParameterProcessors, component constructors), and each
+        # consumer would unwrap only when it truly needs plaintext. That requires making
+        # the entire factory/processor chain SecretValue-aware — a medium-large refactor.
+        # For now, unwrapping here keeps the blast radius small while SecretValue.__str__
+        # already masks all service-layer logs above this point.
         create_params = unwrap_secrets(input_params)
         return await FACTORY_REGISTRY.create(
             component_version_id=component_version_id,
@@ -386,7 +392,7 @@ async def instantiate_component(
             f"Failed to instantiate component '{component_name}' "
             f"with version ID {component_instance.component_version_id} "
             f"and instance ID {component_instance.id}: {e}. "
-            f"Input parameters: {input_params}",
+            f"Input parameter names: {list(input_params.keys())}",
             exc_info=True,
         )
         raise ValueError(
