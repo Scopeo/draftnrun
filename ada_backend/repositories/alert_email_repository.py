@@ -1,8 +1,10 @@
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
+from ada_backend.services.errors import DuplicateAlertEmailError
 
 
 def list_alert_emails_by_project(session: Session, project_id: UUID) -> list[db.ProjectAlertEmail]:
@@ -15,11 +17,17 @@ def list_alert_emails_by_project(session: Session, project_id: UUID) -> list[db.
 
 
 def create_alert_email(session: Session, project_id: UUID, email: str) -> db.ProjectAlertEmail:
-    alert_email = db.ProjectAlertEmail(project_id=project_id, email=email)
-    session.add(alert_email)
-    session.commit()
-    session.refresh(alert_email)
-    return alert_email
+    try:
+        alert_email = db.ProjectAlertEmail(project_id=project_id, email=email)
+        session.add(alert_email)
+        session.commit()
+        session.refresh(alert_email)
+        return alert_email
+    except IntegrityError as exc:
+        session.rollback()
+        if hasattr(exc.orig, "diag") and getattr(exc.orig.diag, "constraint_name", None) == "uq_project_alert_email":
+            raise DuplicateAlertEmailError(email) from exc
+        raise
 
 
 def get_alert_email_by_id(session: Session, alert_email_id: UUID) -> db.ProjectAlertEmail | None:

@@ -1,11 +1,11 @@
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.repositories import alert_email_repository
+from ada_backend.services.errors import DuplicateAlertEmailError
 
 
 def list_alert_emails_by_project_service(session: Session, project_id: UUID) -> list[db.ProjectAlertEmail]:
@@ -15,8 +15,8 @@ def list_alert_emails_by_project_service(session: Session, project_id: UUID) -> 
 def create_alert_email_service(session: Session, project_id: UUID, email: str) -> db.ProjectAlertEmail:
     try:
         return alert_email_repository.create_alert_email(session, project_id=project_id, email=email)
-    except IntegrityError:
-        raise HTTPException(status_code=409, detail=f"Email {email} is already configured for this project")
+    except DuplicateAlertEmailError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 def delete_alert_email_service(session: Session, project_id: UUID, alert_email_id: UUID) -> None:
