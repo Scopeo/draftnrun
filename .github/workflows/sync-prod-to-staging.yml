@@ -10,6 +10,11 @@ on:
         required: false
         default: false
         type: boolean
+      sync_qdrant:
+        description: "Sync Qdrant collections from prod to staging"
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   sync-database:
@@ -104,6 +109,11 @@ jobs:
             set -eo pipefail
             NS="ada-staging"
             STATE_FILE="/tmp/ada-sync-status-${{ github.run_id }}.txt"
+
+            if [ "${{ inputs.sync_qdrant }}" = "false" ]; then
+              echo "⏭️ Skipping Qdrant sync - disabled via workflow input"
+              exit 0
+            fi
 
             if [ -f "$STATE_FILE" ] && [ "$(cat "$STATE_FILE")" != "SYNCED" ]; then
               echo "⏭️ Skipping Qdrant sync - DB sync was not performed (status: $(cat "$STATE_FILE"))"
