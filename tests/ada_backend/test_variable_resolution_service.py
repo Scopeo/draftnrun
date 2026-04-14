@@ -6,6 +6,7 @@ from ada_backend.database import models as db
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.services.variable_resolution_service import resolve_variables
 from ada_backend.services.variables_service import upsert_set_service
+from engine.secret import SecretValue
 
 
 def _def(org_id, name, default_value=None):
@@ -165,7 +166,7 @@ def test_resolve_secret_values_from_encrypted_storage():
         result = resolve_variables(session, org_id, ["set1"])
 
     assert result["var_a"] == "override_a"
-    assert result["api_key"] == "super-secret"
+    assert result["api_key"] == SecretValue("super-secret")
 
 
 def test_resolve_secret_end_to_end_via_upsert_service():
@@ -196,7 +197,7 @@ def test_resolve_secret_end_to_end_via_upsert_service():
         result = resolve_variables(session, org_id, ["set1"])
 
     assert result["api_url"] == "https://example.com"
-    assert result["api_key"] == "my-secret-value"
+    assert result["api_key"] == SecretValue("my-secret-value")
 
 
 def test_resolve_secret_not_set_excluded():

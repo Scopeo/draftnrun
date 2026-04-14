@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
+from engine.secret import SecretValue
 
 LOGGER = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ class OrganizationSecretDTO:
     id: UUID
     organization_id: UUID
     key: str
-    secret: str
+    secret: SecretValue
     secret_type: db.OrgSecretType
 
 
@@ -48,7 +49,7 @@ def get_organization_secrets(
             id=secret.id,
             organization_id=organization_id,
             key=secret.key,
-            secret=secret.get_secret(),
+            secret=SecretValue(secret.get_secret()),
             secret_type=secret.secret_type,
         )
         for secret in project_secrets

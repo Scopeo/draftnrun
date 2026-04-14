@@ -11,6 +11,7 @@ from ada_backend.repositories.organization_repository import (
 )
 from ada_backend.repositories.variable_definitions_repository import list_org_definitions
 from ada_backend.repositories.variable_sets_repository import get_org_variable_set
+from engine.secret import SecretValue
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ def resolve_variables(
         if definition.type == VariableType.SECRET:
             row = secret_defaults.get(definition.id)
             if row:
-                resolved[definition.name] = row.get_secret()
+                resolved[definition.name] = SecretValue(row.get_secret())
         elif definition.default_value is not None:
             resolved[definition.name] = definition.default_value
 
@@ -68,5 +69,5 @@ def resolve_variables(
             if definition.type == VariableType.SECRET:
                 row = secrets_by_def.get(definition.id)
                 if row:
-                    resolved[definition.name] = row.get_secret()
+                    resolved[definition.name] = SecretValue(row.get_secret())
     return resolved

@@ -113,7 +113,8 @@ Merge order: **defaults → set_ids[0] → set_ids[1] → ...**
 1. Load all `VariableDefinition` rows for the org
 2. Apply defaults (secret type → secret row with `set_id=None`; other → `definition.default_value`)
 3. Layer variable sets in order, each overriding previous values
-4. Returns `dict[str, Any]` consumed by `VarNode` expression evaluation
+4. Secret values are returned as `SecretValue` objects from `engine/secret.py` (masked by `str()`/`repr()`)
+5. Returns `dict[str, Any]` consumed by `VarNode` expression evaluation
 
 ## Legacy Compatibility
 

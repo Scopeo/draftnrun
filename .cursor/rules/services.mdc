@@ -10,6 +10,7 @@ globs:
 - Heavy operations: use the Redis run queue (don't block the request).
 - External calls (Supabase Edge Functions, Nango, S3): always use `httpx.AsyncClient` with timeouts.
 - Secrets: encrypted with Fernet before storage, decrypted on read via `ada_backend/utils/encryption.py`.
+- Runtime secret values passed toward the engine should use `SecretValue` (`engine/secret.py`) until an explicit execution boundary requires plaintext.
 - Prefer UUID-typed identifiers in service-facing schemas and payload models; only stringify UUIDs at API/JSON boundaries.
 - Prefer typed schemas/models for service return payloads; avoid untyped `dict` returns when a stable shape exists.
 - See `ada_backend/docs/` for domain-specific documentation.
