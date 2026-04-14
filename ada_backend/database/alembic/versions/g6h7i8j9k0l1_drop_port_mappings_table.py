@@ -6,7 +6,7 @@ port mapping has a corresponding field expression.  A safety backfill runs
 first to cover any remaining gaps before the table is dropped.
 
 Revision ID: g6h7i8j9k0l1
-Revises: 4071a252013a
+Revises: a1b2c3d4f6g8
 Create Date: 2026-04-08
 """
 
@@ -20,7 +20,7 @@ from alembic import op
 LOGGER = logging.getLogger(__name__)
 
 revision: str = "g6h7i8j9k0l1"
-down_revision: Union[str, None] = "4071a252013a"
+down_revision: Union[str, None] = "a1b2c3d4f6g8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
