@@ -268,6 +268,16 @@ Run input data is persisted in the `run_inputs` table (keyed by `retry_group_id`
 | PATCH | `.../llm-models/{id}` | JWT(SuperAdmin) | Update model |
 | DELETE | `.../llm-models/{id}` | JWT(SuperAdmin) | Delete model |
 
+## Git Sync (`git_sync_router.py`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/webhooks/github` | Public (HMAC) | Receive GitHub push webhooks |
+| POST | `/organizations/{org_id}/git-sync` | JWT\|ApiKey(Developer) | Configure git sync for a project |
+| GET | `/organizations/{org_id}/git-sync` | JWT\|ApiKey(Member) | List git sync configs |
+| GET | `/organizations/{org_id}/git-sync/{config_id}` | JWT\|ApiKey(Member) | Get a git sync config |
+| DELETE | `/organizations/{org_id}/git-sync/{config_id}` | JWT\|ApiKey(Developer) | Disconnect git sync |
+
 ## Admin Tools (`admin_tools_router.py`, `global_secret_router.py`)
 
 | Method | Path | Auth | Description |

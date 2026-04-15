@@ -76,6 +76,7 @@ dependencies = [
     "deepdiff>=8.0.0,<9",
     "slowapi>=0.1.9",
     "sentry-sdk>=2.54.0",
+    "PyJWT[crypto]>=2.8.0,<3",
 ]
 [dependency-groups]
 dev = [

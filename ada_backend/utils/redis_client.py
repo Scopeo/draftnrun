@@ -449,6 +449,49 @@ def push_qa_task(
         return False
 
 
+_GIT_SYNC_DEDUP_TTL_SECONDS = 3600
+
+
+def push_git_sync_task(config_id: UUID, commit_sha: str) -> bool:
+    client = get_redis_client()
+    if not client:
+        LOGGER.error("Redis client unavailable. Cannot push git sync task for config %s", config_id)
+        return False
+
+    dedup_key = f"git_sync_dedup:{config_id}:{commit_sha}"
+    try:
+        was_set = client.set(dedup_key, "1", nx=True, ex=_GIT_SYNC_DEDUP_TTL_SECONDS)
+        if not was_set:
+            LOGGER.info(
+                "Git sync task for config %s at %s already enqueued — skipping duplicate",
+                config_id,
+                commit_sha[:8],
+            )
+            return True
+
+        payload = {"config_id": str(config_id), "commit_sha": commit_sha}
+        json_payload = json.dumps(payload)
+        result = client.rpush(settings.REDIS_GIT_SYNC_QUEUE_NAME, json_payload)
+        if result:
+            LOGGER.info(
+                "Pushed git sync task (config %s) to Redis queue %s (queue length: %s)",
+                config_id,
+                settings.REDIS_GIT_SYNC_QUEUE_NAME,
+                result,
+            )
+            return True
+        LOGGER.warning("Redis returned %s when pushing to queue %s", result, settings.REDIS_GIT_SYNC_QUEUE_NAME)
+        client.delete(dedup_key)
+        return False
+    except _RECONNECT_ERRORS as e:
+        LOGGER.error("Redis connection error pushing git sync task %s to queue: %s", config_id, e)
+        reset_redis_client()
+        return False
+    except Exception as e:
+        LOGGER.error("Failed to push git sync task %s to Redis queue: %s", config_id, e)
+        return False
+
+
 def publish_event(channel_prefix: str, resource_id: UUID, event: Dict[str, Any]) -> bool:
     """
     Publish an event to Redis Pub/Sub channel {channel_prefix}:{resource_id}.

@@ -1,0 +1,38 @@
+## Git Sync
+
+GitHub-to-Draft'n Run one-way sync using a **GitHub App**. Watches a GitHub repo folder and deploys graph changes on push.
+
+### Key Files
+
+- `ada_backend/routers/git_sync_router.py` — webhook receiver + CRUD endpoints
+- `ada_backend/workers/git_sync_queue_worker.py` — Redis queue worker that executes sync_graph_from_github
+- `ada_backend/services/git_sync_service.py` — import_from_github, sync_graph_from_github, disconnect_sync
+- `ada_backend/services/github_client.py` — GitHub App auth (JWT → installation token) + file fetch
+- `ada_backend/repositories/git_sync_repository.py` — GitSyncConfig CRUD
+- `ada_backend/database/models.py` — GitSyncConfig model
+
+### Auth: GitHub App (not OAuth)
+
+- No Nango involved. Auth is via JWT signed with the App's private key (RS256).
+- JWT is exchanged for a short-lived installation access token (~1 hour).
+- Env vars: `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`.
+
+### Webhook
+
+- ONE global webhook URL configured on the GitHub App (`{ADA_URL}/webhooks/github`)
+- ONE global webhook secret (`GITHUB_APP_WEBHOOK_SECRET` env var)
+- No per-repo webhook registration needed — the GitHub App receives events for all installed repos
+- Endpoint is public, secured by HMAC-SHA256
+- Webhook handler enqueues jobs to `ada_git_sync_queue` Redis queue (non-blocking); `GitSyncQueueWorker` processes them
+
+### Sync Strategy
+
+Git sync does **not** touch the user's draft. On each push it creates a fresh graph runner from the GitHub JSON, tags it, and promotes it directly to production. The draft remains untouched so in-progress edits are never lost.
+
+### Data Model
+
+- `github_owner` + `github_repo_name` — stored as separate columns (not combined `owner/repo`). The model exposes a `github_repo` property for the combined form when needed (e.g. GitHub API calls).
+
+### See Also
+
+- `ada_backend/docs/git-sync.md` for full documentation
