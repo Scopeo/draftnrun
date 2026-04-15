@@ -1679,7 +1679,8 @@ Requires the Draft'n Run GitHub App installed on the repo.
 A single repo can contain multiple projects (one per subfolder). Folders already linked are skipped. \
 `project_type` defaults to "workflow". Returns 422 if no `graph.json` found.
 - `list_git_sync_configs()` → list all git sync configs in the active org.
-- `get_git_sync_config(config_id)` → config details including last sync status/commit and `last_sync_error` (human-readable error on failure, null on success).
+- `get_git_sync_config(config_id)` → config details including last sync status/commit and `last_sync_error` \
+  (human-readable error on failure, null on success).
 - `disconnect_git_sync(config_id)` → remove the link. GitHub App installation stays. Developer+.
 
 Setup prerequisites:
