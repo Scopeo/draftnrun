@@ -90,12 +90,13 @@ class GmailSenderV2(Component):
         bcc: Optional[list[str]] = None,
         attachments: Optional[Iterable[str | Path]] = None,
         html_body: Optional[str] = None,
+        sender_email: Optional[str] = None,
     ):
         try:
             raw_email_message = create_raw_mail_message(
                 subject=email_subject,
                 body=email_body,
-                sender_email_address=self.email_address,
+                sender_email_address=sender_email or self.email_address,
                 recipients=email_recipients,
                 cc=cc,
                 bcc=bcc,
@@ -119,12 +120,13 @@ class GmailSenderV2(Component):
         bcc: Optional[list[str]] = None,
         attachments: Optional[Iterable[str | Path]] = None,
         html_body: Optional[str] = None,
+        sender_email: Optional[str] = None,
     ):
         try:
             create_message = create_raw_mail_message(
                 subject=email_subject,
                 body=email_body,
-                sender_email_address=self.email_address,
+                sender_email_address=sender_email or self.email_address,
                 recipients=email_recipients,
                 cc=cc,
                 bcc=bcc,
@@ -145,6 +147,7 @@ class GmailSenderV2(Component):
         span.set_attributes({
             SpanAttributes.INPUT_VALUE: serialize_to_json(
                 {
+                    "from_email": inputs.from_email,
                     "mail_subject": inputs.mail_subject,
                     "mail_body": inputs.mail_body,
                     "email_recipients": inputs.email_recipients,
@@ -165,6 +168,7 @@ class GmailSenderV2(Component):
                 bcc=inputs.bcc,
                 attachments=inputs.email_attachments,
                 html_body=inputs.mail_html_body,
+                sender_email=inputs.from_email,
             )
             if not draft:
                 raise RuntimeError("Failed to create draft email")
@@ -179,6 +183,7 @@ class GmailSenderV2(Component):
                 bcc=inputs.bcc,
                 attachments=inputs.email_attachments,
                 html_body=inputs.mail_html_body,
+                sender_email=inputs.from_email,
             )
             status = f"Email sent successfully with ID: {sent_message['id']}"
             message_id = sent_message["id"]

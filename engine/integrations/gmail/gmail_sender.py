@@ -31,6 +31,13 @@ GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
     name="Gmail Sender",
     description="A tool to send emails using Gmail API.",
     tool_properties={
+        "from_email": {
+            "type": "string",
+            "description": (
+                "Optional sender alias email address. Must be a verified 'Send mail as' alias "
+                "on the connected Gmail account. When omitted, sends from the account's primary address."
+            ),
+        },
         "mail_subject": {
             "type": "string",
             "description": "The subject of the email to be sent.",
@@ -72,6 +79,19 @@ GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
 
 
 class GmailSenderInputs(BaseModel):
+    from_email: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional sender alias email address. Must be a verified 'Send mail as' alias "
+            "on the connected Gmail account. When omitted, sends from the account's primary address."
+        ),
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 0,
+            "parameter_group_id": GMAIL_GROUP_EMAIL_CONTENT_ID,
+            "parameter_order_within_group": 0,
+        },
+    )
     mail_subject: str = Field(
         description="The subject of the email to be sent.",
         json_schema_extra={
