@@ -138,6 +138,7 @@ class BaseConfig(BaseSettings):
     REDIS_WEBHOOK_STREAM: str = "ada_webhook_stream"
     REDIS_RUNS_QUEUE_NAME: str = "ada_runs_queue"
     REDIS_QA_QUEUE_NAME: str = "ada_qa_queue"
+    REDIS_GIT_SYNC_QUEUE_NAME: str = "ada_git_sync_queue"
     REDIS_WEBHOOK_DEDUP_TTL: int = 86400  # 24 hours in seconds
     REDIS_CONSUMER_GROUP: str = "ada_workers"
     # Seconds the lifespan shutdown will wait for the in-flight run worker to finish
@@ -201,6 +202,11 @@ class BaseConfig(BaseSettings):
     NANGO_INTERNAL_URL: Optional[str] = None
     NANGO_PUBLIC_URL: Optional[str] = None
     NANGO_SECRET_KEY: Optional[str] = None
+
+    # GitHub App (for git sync)
+    GITHUB_APP_ID: Optional[str] = None
+    GITHUB_APP_PRIVATE_KEY: Optional[str] = None
+    GITHUB_APP_WEBHOOK_SECRET: Optional[str] = None
 
     @model_validator(mode="after")
     @classmethod

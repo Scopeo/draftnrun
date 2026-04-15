@@ -14,6 +14,7 @@ def register_all_tools(mcp: FastMCP) -> None:
         components,
         context_tools,
         crons,
+        git_sync,
         graphs,
         knowledge,
         monitoring,
@@ -40,6 +41,7 @@ def register_all_tools(mcp: FastMCP) -> None:
         crons,
         oauth_connections,
         alert_emails,
+        git_sync,
     ]
     for module in modules:
         try:

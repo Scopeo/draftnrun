@@ -25,6 +25,8 @@ from ada_backend.routers.component_version_router import router as component_ver
 from ada_backend.routers.components_router import router as components_router
 from ada_backend.routers.credits_router import router as credits_router
 from ada_backend.routers.cron_router import router as cron_router
+from ada_backend.routers.git_sync_router import org_router as git_sync_org_router
+from ada_backend.routers.git_sync_router import webhook_router as git_sync_webhook_router
 from ada_backend.routers.global_secret_router import router as global_secret_router
 from ada_backend.routers.graph_router import router as graph_router
 from ada_backend.routers.ingestion_database_router import router as ingestion_database_router
@@ -54,6 +56,7 @@ from ada_backend.routers.webhooks.webhook_trigger_router import router as webhoo
 from ada_backend.routers.widget_router import router as widget_router
 from ada_backend.services.rate_limit_service import limiter
 from ada_backend.utils.redis_client import xgroup_create_if_not_exists
+from ada_backend.workers.git_sync_queue_worker import _request_git_sync_drain, start_git_sync_queue_worker_thread
 from ada_backend.workers.qa_queue_worker import _request_qa_drain, start_qa_queue_worker_thread
 from ada_backend.workers.run_queue_worker import _request_drain, start_run_queue_worker_thread
 from engine.trace.trace_context import set_trace_manager
@@ -107,15 +110,18 @@ async def lifespan(app: FastAPI):
     # Start queue worker threads and set up graceful shutdown
     worker_thread = start_run_queue_worker_thread()
     qa_worker_thread = start_qa_queue_worker_thread()
+    git_sync_worker_thread = start_git_sync_queue_worker_thread()
 
     try:
         yield
     finally:
         _request_drain()
         _request_qa_drain()
+        _request_git_sync_drain()
         timeout = settings.WORKER_SHUTDOWN_TIMEOUT_SECONDS
         _join_worker(worker_thread, "run queue", "run", timeout)
         _join_worker(qa_worker_thread, "QA queue", "QA session", timeout)
+        _join_worker(git_sync_worker_thread, "git sync queue", "git sync", timeout)
 
 
 app = FastAPI(
@@ -269,6 +275,8 @@ app.include_router(llm_models_router)
 app.include_router(monitor_router)
 app.include_router(credits_router)
 app.include_router(widget_router)
+app.include_router(git_sync_webhook_router)
+app.include_router(git_sync_org_router)
 app.include_router(provider_webhooks_router)
 app.include_router(webhook_internal_router)
 app.include_router(webhook_trigger_router)

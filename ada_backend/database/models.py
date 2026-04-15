@@ -2393,3 +2393,37 @@ class ProjectAlertEmail(Base):
     project = relationship("Project", back_populates="alert_emails")
 
     __table_args__ = (UniqueConstraint("project_id", "email", name="uq_project_alert_email"),)
+
+
+class GitSyncConfig(Base):
+    __tablename__ = "git_sync_configs"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    github_owner = mapped_column(String(255), nullable=False)
+    github_repo_name = mapped_column(String(255), nullable=False)
+    graph_folder = mapped_column(String(500), nullable=False)
+    branch = mapped_column(String(255), nullable=False, server_default="main")
+    github_installation_id = mapped_column(Integer, nullable=False, index=True)
+    last_sync_at = mapped_column(DateTime(timezone=True), nullable=True)
+    last_sync_status = mapped_column(String(50), nullable=True)
+    last_sync_commit_sha = mapped_column(String(40), nullable=True)
+    last_sync_error = mapped_column(Text, nullable=True)
+    created_by_user_id = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    project = relationship("Project")
+
+    @property
+    def github_repo(self) -> str:
+        return f"{self.github_owner}/{self.github_repo_name}"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "github_owner", "github_repo_name", "graph_folder", "branch", name="uq_git_sync_graph_folder"
+        ),
+        UniqueConstraint("project_id", name="uq_git_sync_project"),
+        Index("ix_git_sync_configs_repo_branch", "github_owner", "github_repo_name", "branch"),
+    )

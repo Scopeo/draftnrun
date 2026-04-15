@@ -11,7 +11,7 @@ globs:
 - Auth: `SupabaseProvider` from FastMCP. Tokens are standard Supabase JWTs. MCP server does NOT issue its own tokens.
 - Consent page: lives in `back-office/src/pages/oauth/callback.vue`, NOT in the MCP server. Supabase redirects to `SITE_URL + authorization_path` for consent.
 - Use `get_access_token()` from `fastmcp.server.dependencies` to get the JWT; `.token` for the raw string, `.claims["sub"]` for user ID.
-- Org context: session-scoped via Redis and keyed by the MCP session ID when available. Tools must check for active org before calling org-scoped endpoints (use `require_org_context`). Developer+ operations (create/update/delete/pause/resume cron, OAuth, `create_agent`, knowledge mutations) use `require_role`. `trigger_cron` is org-scoped (member+).
+- Org context: session-scoped via Redis and keyed by the MCP session ID when available. Tools must check for active org before calling org-scoped endpoints (use `require_org_context`). Developer+ operations (create/update/delete/pause/resume cron, OAuth, `create_agent`, knowledge mutations, git sync configure/disconnect) use `require_role`. `trigger_cron` is org-scoped (member+).
 - Workflow creation: `create_workflow` creates workflow-type projects. Agent projects use `create_agent`.
 - Target-org permissions: tools that accept an explicit `org_id` must validate the caller's role on that target organization, not only on the active org session.
 - Component search: `search_components(query)` must reject blank or whitespace-only queries instead of returning the full catalog.

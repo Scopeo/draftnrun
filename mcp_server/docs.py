@@ -1668,6 +1668,26 @@ Alerts require `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to be configured on the 
 If either is missing, alerting silently no-ops. Only runs triggered by webhooks or crons fire alerts \
 (API/sandbox/QA runs do not).
 
+## Git Sync
+
+One-way deploy from a GitHub repo to Draft'n Run. On each push to the watched branch, \
+the backend fetches `graph.json` and deploys it to production (the user's draft is never touched). \
+Requires the Draft'n Run GitHub App installed on the repo.
+
+- `configure_git_sync(github_owner, github_repo_name, branch?, github_installation_id, project_type?)` \
+→ scan the repo for all `graph.json` files, create a project + sync config for each. Developer+. \
+A single repo can contain multiple projects (one per subfolder). Folders already linked are skipped. \
+`project_type` defaults to "workflow". Returns 422 if no `graph.json` found.
+- `list_git_sync_configs()` → list all git sync configs in the active org.
+- `get_git_sync_config(config_id)` → config details including last sync status/commit and `last_sync_error` \
+  (human-readable error on failure, null on success).
+- `disconnect_git_sync(config_id)` → remove the link. GitHub App installation stays. Developer+.
+
+Setup prerequisites:
+1. User installs the Draft'n Run GitHub App on their repo (via GitHub UI).
+2. User provides the `github_installation_id` from the GitHub App install page.
+3. The repo must contain at least one `graph.json` file in the write format (`GraphUpdateSchema`).
+
 ## Monitoring
 
 - `list_traces(project_id, duration=30)` → recent traces (duration in days, 1–90). \
@@ -1710,7 +1730,7 @@ DOMAIN_DESCRIPTIONS: dict[str, str] = {
     "integrations": "Function-callable tools, OAuth lifecycle, integration-backed components",
     "known-quirks": "Backend/MCP caveats that require explicit workarounds",
     "qa": "QA datasets, judges, evaluations",
-    "admin": "API keys, crons, OAuth, monitoring, alert emails",
+    "admin": "API keys, crons, OAuth, monitoring, alert emails, git sync",
 }
 
 
