@@ -6,21 +6,18 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-from ada_backend.database.models import EnvType, ProjectType
+from ada_backend.database.models import ProjectType
 from ada_backend.mixpanel_analytics import track_deployed_to_production
 from ada_backend.repositories import git_sync_repository
-from ada_backend.repositories.env_repository import update_graph_runner_env
 from ada_backend.repositories.graph_runner_repository import (
-    get_graph_runner_for_env,
     insert_graph_runner_and_bind_to_project,
 )
-from ada_backend.repositories.tag_repository import update_graph_runner_tag_fields
 from ada_backend.schemas.git_sync_schemas import GitSyncImportResult
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
 from ada_backend.services import github_client
+from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.services.project_service import create_project_with_graph_runner
-from ada_backend.services.tag_service import compute_next_tag_version
 from ada_backend.utils.redis_client import push_git_sync_task
 
 LOGGER = logging.getLogger(__name__)
@@ -215,14 +212,11 @@ async def sync_graph_from_github(
         raise GitSyncError(f"Graph update failed: {e}") from e
 
     try:
-        previous_prod = get_graph_runner_for_env(session, project_id=config.project_id, env=EnvType.PRODUCTION)
-        if previous_prod:
-            update_graph_runner_env(session, previous_prod.id, env=None, commit=False)
-
-        version_tag = compute_next_tag_version(session, config.project_id)
-        update_graph_runner_tag_fields(session, graph_runner_id=new_runner_id, tag_version=version_tag, commit=False)
-        update_graph_runner_env(session, new_runner_id, env=EnvType.PRODUCTION, commit=False)
-        session.commit()
+        deploy_graph_service(
+            session=session,
+            graph_runner_id=new_runner_id,
+            project_id=config.project_id,
+        )
     except Exception as e:
         LOGGER.error("Failed to deploy graph for project %s: %s", config.project_id, e)
         git_sync_repository.update_sync_status(
