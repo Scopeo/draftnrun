@@ -29,7 +29,7 @@ def unwrap_secrets(value: Any) -> Any:
     if isinstance(value, SecretValue):
         return value.get_secret_value()
     if isinstance(value, dict):
-        return {unwrap_secrets(key): unwrap_secrets(inner_value) for key, inner_value in value.items()}
+        return {key: unwrap_secrets(inner_value) for key, inner_value in value.items()}
     if isinstance(value, list):
         return [unwrap_secrets(inner_value) for inner_value in value]
     if isinstance(value, tuple):

@@ -361,7 +361,7 @@ async def instantiate_component(
     LOGGER.debug(
         f"Trying to create component: {component_name} "
         f"(version ID: {component_instance.component_version_id}) "
-        f"with input params: {input_params}\n"
+        f"with input param names: {list(input_params.keys())}\n"
     )
     try:
         component_version_id = component_instance.component_version_id
