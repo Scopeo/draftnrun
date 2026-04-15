@@ -15,6 +15,7 @@ from ada_backend.repositories.graph_runner_repository import (
     insert_graph_runner_and_bind_to_project,
 )
 from ada_backend.repositories.tag_repository import update_graph_runner_tag_fields
+from ada_backend.schemas.git_sync_schemas import GitSyncImportResult
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
 from ada_backend.services import github_client
 from ada_backend.services.graph.update_graph_service import update_graph_service
@@ -51,10 +52,10 @@ async def import_from_github(
     branch: str,
     github_installation_id: int,
     project_type: ProjectType = ProjectType.WORKFLOW,
-) -> tuple[list[dict], list[str]]:
+) -> tuple[list[GitSyncImportResult], list[str]]:
     """Scan a GitHub repo for graph.json files, create a project + sync config for each.
 
-    Returns (imported, skipped) where imported is a list of dicts with project/config info,
+    Returns (imported, skipped) where imported is a list of typed import results,
     and skipped is a list of folder names that already had a sync config.
     """
     github_repo = f"{github_owner}/{github_repo_name}"
@@ -71,7 +72,7 @@ async def import_from_github(
     )
     existing_folders = {existing_config.graph_folder for existing_config in existing_configs}
 
-    imported: list[dict] = []
+    imported: list[GitSyncImportResult] = []
     skipped: list[str] = []
 
     for github_folder in github_folders:
@@ -116,12 +117,15 @@ async def import_from_github(
 
         await _enqueue_initial_sync(config)
 
-        imported.append({
-            "graph_folder": github_folder,
-            "project_id": project.id,
-            "project_name": project_name,
-            "config_id": config.id,
-        })
+        imported.append(
+            GitSyncImportResult(
+                graph_folder=github_folder,
+                project_id=project.id,
+                project_name=project_name,
+                config_id=config.id,
+                status="created",
+            )
+        )
 
     LOGGER.info(
         "Imported %d project(s) from %s (branch %s), skipped %d already-linked folder(s)",
@@ -267,6 +271,7 @@ def handle_github_push(
     commit_sha: str,
     github_installation_id: int | None = None,
 ) -> tuple[int, int]:
+    """Queue git sync tasks for configs whose tracked graph file changed in a push."""
     configs = git_sync_repository.get_configs_by_repo_and_branch(
         session, github_owner, github_repo_name, branch, github_installation_id=github_installation_id
     )

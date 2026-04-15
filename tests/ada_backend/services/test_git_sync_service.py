@@ -320,8 +320,9 @@ class TestImportFromGithub:
             )
 
         assert len(imported) == 1
-        assert imported[0]["graph_folder"] == "my-agent"
-        assert imported[0]["project_name"] == "my-agent"
+        assert imported[0].graph_folder == "my-agent"
+        assert imported[0].project_name == "my-agent"
+        assert imported[0].status == "created"
         assert len(skipped) == 0
         create_proj_mock.assert_called_once()
 
@@ -443,7 +444,7 @@ class TestImportFromGithub:
             )
 
         assert len(imported) == 2
-        assert {i["graph_folder"] for i in imported} == {"agent-a", "agent-b"}
+        assert {i.graph_folder for i in imported} == {"agent-a", "agent-b"}
         assert len(skipped) == 0
 
     @pytest.mark.asyncio
@@ -493,7 +494,7 @@ class TestImportFromGithub:
             )
 
         assert len(imported) == 1
-        assert imported[0]["graph_folder"] == "agent-b"
+        assert imported[0].graph_folder == "agent-b"
         assert skipped == ["agent-a"]
 
     @pytest.mark.asyncio
@@ -569,7 +570,7 @@ class TestImportFromGithub:
                 github_installation_id=42,
             )
 
-        assert imported[0]["project_name"] == "repo"
+        assert imported[0].project_name == "repo"
         assert create_mock.call_args.kwargs["project_name"] == "repo"
 
     @pytest.mark.asyncio

@@ -17,7 +17,6 @@ from ada_backend.schemas.git_sync_schemas import (
     GitSyncConfigResponse,
     GitSyncImportRequest,
     GitSyncImportResponse,
-    GitSyncImportResult,
 )
 from ada_backend.services.git_sync_service import (
     GitSyncConfigNotFound,
@@ -122,19 +121,7 @@ async def create_git_sync(
             github_installation_id=request.github_installation_id,
             project_type=request.project_type,
         )
-        return GitSyncImportResponse(
-            imported=[
-                GitSyncImportResult(
-                    graph_folder=item["graph_folder"],
-                    project_id=item["project_id"],
-                    project_name=item["project_name"],
-                    config_id=item["config_id"],
-                    status="created",
-                )
-                for item in imported
-            ],
-            skipped=skipped,
-        )
+        return GitSyncImportResponse(imported=imported, skipped=skipped)
     except GraphJsonNotFound as e:
         raise HTTPException(
             status_code=422,

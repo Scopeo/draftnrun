@@ -72,6 +72,11 @@ This happens automatically on each webhook — no user interaction needed.
 
 MCP tools: `configure_git_sync`, `list_git_sync_configs`, `get_git_sync_config`, `disconnect_git_sync` (see `docs://admin`).
 
+## Service Contract
+
+- `import_from_github` returns typed `GitSyncImportResult` items plus `skipped` folder names.
+- Routers should pass those typed items through `GitSyncImportResponse` directly.
+
 ## Sync Flow (on push)
 
 1. GitHub sends `POST /webhooks/github` with signed payload
