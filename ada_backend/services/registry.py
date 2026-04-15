@@ -254,6 +254,16 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["retriever_v2"],
+        factory=EntityFactory(
+            entity_class=Retriever,
+            parameter_processors=[
+                trace_manager_processor,
+                qdrant_service_processor,
+            ],
+        ),
+    )
+    registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["cohere_reranker"],
         factory=EntityFactory(
             entity_class=CohereReranker,

@@ -412,3 +412,172 @@ def seed_rag_v4_components(session: Session):
         release_stage=rag_agent_v4_version.release_stage,
         component_version_id=rag_agent_v4_version.id,
     )
+
+    retriever_v2_version = db.ComponentVersion(
+        id=COMPONENT_VERSION_UUIDS["retriever_v2"],
+        component_id=COMPONENT_UUIDS["retriever"],
+        version_tag="0.0.2",
+        description="Retriever with configurable search mode (semantic, keyword, or hybrid).",
+        release_stage=db.ReleaseStage.INTERNAL,
+    )
+    upsert_component_versions(session=session, component_versions=[retriever_v2_version])
+
+    upsert_components_parameter_definitions(
+        session=session,
+        component_parameter_definitions=[
+            db.ComponentParameterDefinition(
+                id=UUID("a1d2e3f4-5678-9abc-def0-112233445566"),
+                component_version_id=retriever_v2_version.id,
+                name="data_source",
+                type=ParameterType.DATA_SOURCE,
+                nullable=False,
+                ui_component=UIComponent.SELECT,
+                ui_component_properties=UIComponentProperties(
+                    label="Data Source",
+                    description="The data source from which to retrieve chunks.",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=False,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("b2e3f4a5-6789-abcd-ef01-223344556677"),
+                component_version_id=retriever_v2_version.id,
+                name="max_retrieved_chunks",
+                type=ParameterType.INTEGER,
+                nullable=False,
+                default="10",
+                ui_component=UIComponent.TEXTFIELD,
+                ui_component_properties=UIComponentProperties(
+                    label="Max Retrieved Chunks",
+                    description=(
+                        "The maximum number of chunks to retrieve before applying any filtering or penalties. "
+                        "This sets the upper limit for how many chunks will be returned by the retrieval process."
+                    ),
+                    placeholder="Enter the maximum number of chunks here",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=False,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("c3f4a5b6-789a-bcde-f012-334455667788"),
+                component_version_id=retriever_v2_version.id,
+                name="search_mode",
+                type=ParameterType.STRING,
+                nullable=False,
+                default="semantic",
+                ui_component=UIComponent.SELECT,
+                ui_component_properties=UIComponentProperties(
+                    label="Search Mode",
+                    description="How the system searches your knowledge base. "
+                    "'Hybrid' finds results by combining meaning-based and exact word matching for the best "
+                    "accuracy. "
+                    "'Semantic' finds results based on meaning and context. "
+                    "'Keyword' finds results based on exact word matches.",
+                    options=[
+                        SelectOption(value="hybrid", label="Hybrid"),
+                        SelectOption(value="semantic", label="Semantic"),
+                        SelectOption(value="keyword", label="Keyword"),
+                    ],
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=False,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("d4a5b6c7-89ab-cdef-0123-445566778899"),
+                component_version_id=retriever_v2_version.id,
+                name="enable_date_penalty_for_chunks",
+                type=ParameterType.BOOLEAN,
+                nullable=True,
+                default="False",
+                ui_component=UIComponent.CHECKBOX,
+                ui_component_properties=UIComponentProperties(
+                    label="Apply age based penalty",
+                    description="When enabled, older content chunks will be penalized based on their age. "
+                    "This helps prioritize more recent content.",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("e5b6c7d8-9abc-def0-1234-556677889900"),
+                component_version_id=retriever_v2_version.id,
+                name="chunk_age_penalty_rate",
+                type=ParameterType.FLOAT,
+                nullable=True,
+                default="0.1",
+                ui_component=UIComponent.SLIDER,
+                ui_component_properties=UIComponentProperties(
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    marks=True,
+                    label="Penalty per Age",
+                    description="Determines how much to penalize older content chunks. "
+                    "A higher value means older chunks are penalized more.",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("f6c7d8e9-abcd-ef01-2345-667788990011"),
+                component_version_id=retriever_v2_version.id,
+                name="default_penalty_rate",
+                type=ParameterType.FLOAT,
+                nullable=True,
+                default="0.1",
+                ui_component=UIComponent.SLIDER,
+                ui_component_properties=UIComponentProperties(
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    marks=True,
+                    label="Default Penalty Rate",
+                    description="Used as a fallback penalty rate for chunks without a specific date. "
+                    "This allows you to decide how to deal with missing information.",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("a7d8e9f0-bcde-f012-3456-778899001122"),
+                component_version_id=retriever_v2_version.id,
+                name="metadata_date_key",
+                type=ParameterType.STRING,
+                nullable=True,
+                default="date",
+                ui_component=UIComponent.TEXTFIELD,
+                ui_component_properties=UIComponentProperties(
+                    label="Date field used for penalty",
+                    description=(
+                        "The metadata field(s) that contain the date information for each chunk. "
+                        "You can specify multiple date fields names as a comma-separated list "
+                        "(e.g., created_date,updated_date). "
+                        "The system will check each field in order and use the first valid (non-null) date "
+                        "it finds. This date is used to calculate the chunk's age when applying penalties."
+                    ),
+                    placeholder="Enter the date field here",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("b8e9f0a1-cdef-0123-4567-889900112233"),
+                component_version_id=retriever_v2_version.id,
+                name="max_retrieved_chunks_after_penalty",
+                type=ParameterType.INTEGER,
+                nullable=True,
+                default="10",
+                ui_component=UIComponent.TEXTFIELD,
+                ui_component_properties=UIComponentProperties(
+                    label="Max Retrieved Chunks After Penalty",
+                    description=(
+                        "The maximum number of chunks to retrieve after applying penalties. "
+                        "This sets the upper limit for how many chunks will be returned in the final result. "
+                        "Note: this value should be less than or equal to the maximum number "
+                        "of retrieved chunks before penalty."
+                    ),
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+        ],
+    )
+
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=retriever_v2_version.component_id,
+        release_stage=retriever_v2_version.release_stage,
+        component_version_id=retriever_v2_version.id,
+    )
