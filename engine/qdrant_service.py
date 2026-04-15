@@ -1119,6 +1119,7 @@ class QdrantService:
         )
         if "result" in response:
             LOGGER.info(f"Status of collection creation {collection_name} : {response['result']}")
+            self._hybrid_cache[collection_name] = True
             # TODO: Remove when production qdrant collections have proper indexes
             await self._create_indexes_from_schema(collection_name=collection_name, schema=schema)
             return True
@@ -1141,6 +1142,7 @@ class QdrantService:
         response = await self._send_request_async(method="DELETE", endpoint=f"collections/{collection_name}?wait=true")
         if "result" in response:
             LOGGER.info(f"Status of collection deletion {collection_name} : {response['result']}")
+            self._hybrid_cache.pop(collection_name, None)
             return True
         LOGGER.error(f"Problem with status of collection deletion {collection_name} : {response}")
         return False

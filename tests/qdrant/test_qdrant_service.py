@@ -980,6 +980,7 @@ class TestCreateCollectionHybrid:
         payload = create_call.kwargs["payload"]
         assert "dense" in payload["vectors"]
         assert "sparse" in payload["sparse_vectors"]
+        assert service._hybrid_cache["test_col"] is True
 
 
 class TestAddChunksHybrid:
