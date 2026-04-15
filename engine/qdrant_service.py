@@ -1102,8 +1102,10 @@ class QdrantService:
             return False
 
         payload = {
-            "vectors": {"dense": {"size": embedding_size, "distance": distance}},
-            "sparse_vectors": {"sparse": {"modifier": "idf"}},
+            "vectors": {"dense": {"size": embedding_size, "distance": distance, "on_disk": True}},
+            "sparse_vectors": {"sparse": {"modifier": "idf", "index": {"on_disk": True}}},
+            "hnsw_config": {"on_disk": True},
+            "on_disk_payload": True,
         }
 
         response = await self._send_request_async(

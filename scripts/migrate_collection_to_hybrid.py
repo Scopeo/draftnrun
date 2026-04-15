@@ -12,22 +12,30 @@ import logging
 import sys
 from typing import Any, Optional
 
-from httpx import HTTPStatusError
+from httpx import HTTPStatusError, TimeoutException
 
 from engine.qdrant_service import BM25_MODEL, QdrantService
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-BATCH_SIZE = 250
+BATCH_SIZE = 500
 CONTENT_FIELD = "content"
 MAX_RETRIES = 5
 RETRY_BASE_DELAY = 5
+CONCURRENT_INSERTS = 2
 
 
 async def _retry(coro_fn, description: str):
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             return await coro_fn()
+        except TimeoutException as e:
+            if attempt < MAX_RETRIES:
+                delay = RETRY_BASE_DELAY * attempt
+                print(f"  {description}: timeout ({e}), retry {attempt}/{MAX_RETRIES} in {delay}s")
+                await asyncio.sleep(delay)
+            else:
+                raise
         except HTTPStatusError as e:
             if e.response.status_code in (502, 503, 429) and attempt < MAX_RETRIES:
                 delay = RETRY_BASE_DELAY * attempt
@@ -126,8 +134,10 @@ async def migrate_collection(service: QdrantService, name: str) -> bool:
     )
 
     hybrid_config = {
-        "vectors": {"dense": {"size": vector_size, "distance": distance}},
-        "sparse_vectors": {"sparse": {"modifier": "idf"}},
+        "vectors": {"dense": {"size": vector_size, "distance": distance, "on_disk": True}},
+        "sparse_vectors": {"sparse": {"modifier": "idf", "index": {"on_disk": True}}},
+        "hnsw_config": {"on_disk": True},
+        "on_disk_payload": True,
     }
 
     if original_count == 0:
@@ -148,6 +158,8 @@ async def migrate_collection(service: QdrantService, name: str) -> bool:
         print(f"[{name}] Temp '{tmp}' exists, deleting.")
         await service.delete_collection_async(tmp)
 
+    hybrid_config["optimizers_config"] = {"indexing_threshold": 0}
+
     resp = await service._send_request_async(
         method="PUT", endpoint=f"collections/{tmp}?wait=true", payload=hybrid_config
     )
@@ -155,11 +167,23 @@ async def migrate_collection(service: QdrantService, name: str) -> bool:
         print(f"[{name}] ERROR: Failed to create temp: {resp}")
         return False
 
-    print(f"[{name}] Copying in batches of {BATCH_SIZE}...")
+    print(f"[{name}] Copying in batches of {BATCH_SIZE} (concurrency={CONCURRENT_INSERTS})...")
     migrated = 0
     skipped = 0
     batch_num = 0
     scroll_offset = None
+    semaphore = asyncio.Semaphore(CONCURRENT_INSERTS)
+
+    async def _insert_batch(pts: list[dict], num: int) -> bool:
+        async with semaphore:
+            async def _do():
+                return await service.insert_points_in_collection_async(pts, tmp)
+            try:
+                return await _retry(_do, f"[{name}] insert batch {num}")
+            except HTTPStatusError:
+                return False
+
+    insert_tasks: list[asyncio.Task] = []
 
     while True:
         points, scroll_offset = await _scroll_batch(service, name, scroll_offset)
@@ -171,23 +195,26 @@ async def migrate_collection(service: QdrantService, name: str) -> bool:
         skipped += len(points) - len(transformed)
 
         if transformed:
-
-            async def _do_insert(pts=transformed):
-                return await service.insert_points_in_collection_async(pts, tmp)
-
-            try:
-                success = await _retry(_do_insert, f"[{name}] insert batch {batch_num}")
-            except HTTPStatusError:
-                success = False
-            if not success:
-                print(f"[{name}] ERROR: Batch {batch_num} failed. Cleaning up.")
-                await service.delete_collection_async(tmp)
-                return False
+            task = asyncio.create_task(_insert_batch(transformed, batch_num))
+            insert_tasks.append(task)
             migrated += len(transformed)
 
         print(f"  [{name}] Batch {batch_num}: +{len(transformed)}, total {migrated}/{original_count}")
         if not scroll_offset:
             break
+
+    results = await asyncio.gather(*insert_tasks)
+    if not all(results):
+        print(f"[{name}] ERROR: Some batches failed. Cleaning up.")
+        await service.delete_collection_async(tmp)
+        return False
+
+    print(f"[{name}] Re-enabling indexing...")
+    await service._send_request_async(
+        method="PATCH",
+        endpoint=f"collections/{tmp}",
+        payload={"optimizers_config": {"indexing_threshold": 20000}},
+    )
 
     if skipped > 0:
         print(f"[{name}] WARNING: {skipped} points skipped (missing vector/content). Aborting.")
@@ -219,7 +246,7 @@ async def migrate_collection(service: QdrantService, name: str) -> bool:
 
 
 async def main(collection_names: list[str]):
-    service = QdrantService.from_defaults()
+    service = QdrantService.from_defaults(timeout=120)
     succeeded = 0
     failed = 0
     for name in collection_names:
