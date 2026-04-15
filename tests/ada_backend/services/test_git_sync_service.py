@@ -68,7 +68,6 @@ class TestSyncGraphFromGithub:
             "edges": [],
             "port_mappings": [],
         })
-        prev_prod = MagicMock(id=uuid4())
 
         session = MagicMock()
         with (
@@ -85,12 +84,8 @@ class TestSyncGraphFromGithub:
                 new_callable=AsyncMock,
             ) as update_mock,
             patch(
-                "ada_backend.services.git_sync_service.get_graph_runner_for_env",
-                return_value=prev_prod,
-            ) as get_prod_mock,
-            patch("ada_backend.services.git_sync_service.update_graph_runner_env") as env_mock,
-            patch("ada_backend.services.git_sync_service.compute_next_tag_version", return_value="v2") as tag_mock,
-            patch("ada_backend.services.git_sync_service.update_graph_runner_tag_fields") as tag_fields_mock,
+                "ada_backend.services.git_sync_service.deploy_graph_service",
+            ) as deploy_mock,
             patch("ada_backend.services.git_sync_service.track_deployed_to_production") as track_mock,
             patch("ada_backend.services.git_sync_service.git_sync_repository") as repo_mock,
         ):
@@ -105,10 +100,9 @@ class TestSyncGraphFromGithub:
         insert_mock.assert_called_once()
         update_mock.assert_called_once()
         assert update_mock.call_args.kwargs["bypass_validation"] is True
-        get_prod_mock.assert_called_once()
-        env_mock.assert_any_call(session, prev_prod.id, env=None, commit=False)
-        tag_mock.assert_called_once_with(session, config.project_id)
-        tag_fields_mock.assert_called_once()
+        deploy_mock.assert_called_once()
+        assert deploy_mock.call_args.kwargs["session"] is session
+        assert deploy_mock.call_args.kwargs["project_id"] == config.project_id
         track_mock.assert_called_once_with(config.created_by_user_id, config.organization_id, config.project_id)
         repo_mock.update_sync_status.assert_called_once_with(
             session=session, config_id=config.id, status="success", commit_sha="abc123def456"
@@ -204,7 +198,7 @@ class TestSyncGraphFromGithub:
                 new_callable=AsyncMock,
             ),
             patch(
-                "ada_backend.services.git_sync_service.get_graph_runner_for_env",
+                "ada_backend.services.git_sync_service.deploy_graph_service",
                 side_effect=Exception("DB connection lost"),
             ),
             patch("ada_backend.services.git_sync_service.git_sync_repository") as repo_mock,
@@ -224,7 +218,6 @@ class TestSyncGraphFromGithub:
             "relationships": [],
             "edges": [],
         })
-        prev_prod = MagicMock(id=uuid4())
         session = MagicMock()
         with (
             patch(
@@ -234,10 +227,7 @@ class TestSyncGraphFromGithub:
             ),
             patch("ada_backend.services.git_sync_service.insert_graph_runner_and_bind_to_project"),
             patch("ada_backend.services.git_sync_service.update_graph_service", new_callable=AsyncMock),
-            patch("ada_backend.services.git_sync_service.get_graph_runner_for_env", return_value=prev_prod),
-            patch("ada_backend.services.git_sync_service.update_graph_runner_env"),
-            patch("ada_backend.services.git_sync_service.compute_next_tag_version", return_value="v1"),
-            patch("ada_backend.services.git_sync_service.update_graph_runner_tag_fields"),
+            patch("ada_backend.services.git_sync_service.deploy_graph_service"),
             patch("ada_backend.services.git_sync_service.track_deployed_to_production"),
             patch("ada_backend.services.git_sync_service.git_sync_repository") as repo_mock,
         ):

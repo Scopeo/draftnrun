@@ -1,15 +1,16 @@
 # Git Sync
 
-One-way sync from a GitHub repository to Draft'n Run. When a user pushes to the configured branch (default `main`), the backend receives a webhook from the GitHub App, fetches the updated `graph.json`, creates a new versioned graph runner, and promotes it directly to production — without touching the user's draft.
+One-way sync from a GitHub repository to Draft'n Run. When a user pushes to the configured branch (default `main`), the backend receives a webhook from the GitHub App, fetches the updated `graph.json`, creates a new versioned graph runner, and deploys it through the same publish path as the frontend: promote to production, then create a fresh draft clone from that promoted graph.
 
 ## Architecture
 
 Uses a **GitHub App** (not an OAuth App). The app:
+
 - Receives push webhooks automatically for all repos it's installed on (one global webhook URL)
 - Authenticates via JWT + installation access tokens (no Nango, no user OAuth tokens)
 - Requires `contents: read` permission only
 
-```
+```text
 GitHub repo (push to main)
   → GitHub App fires webhook to POST /webhooks/github
   → Backend verifies HMAC with GITHUB_APP_WEBHOOK_SECRET
@@ -20,8 +21,8 @@ GitHub repo (push to main)
     → Generates an installation token (JWT → installation access token)
     → Fetches graph.json via GitHub Contents API
     → Creates a new graph runner, populates it with the graph JSON
-    → Tags with the next version and binds to production
-    → User's draft is never touched
+    → Calls the standard deploy service used by frontend publish
+    → Deployed runner becomes production (tagged), and a new draft clone is created from it
 ```
 
 ## Data Model
@@ -68,7 +69,7 @@ This happens automatically on each webhook — no user interaction needed.
 3. User calls `POST /organizations/{org_id}/git-sync` (or MCP tool `configure_git_sync`) with `github_owner`, `github_repo_name`, `branch`, `github_installation_id`, and optionally `project_type`
 4. Backend scans the repo tree (Git Trees API, recursive) for all `graph.json` files
 5. For each folder containing a `graph.json` that doesn't already have a sync config, the backend creates a new project (named after the folder, or the repo name for root-level) and a `GitSyncConfig` row
-6. Backend enqueues an initial sync job for each new config — the existing `graph.json` is deployed to production immediately (best-effort: if enqueue fails, subsequent pushes will trigger syncs normally)
+6. Backend enqueues an initial sync job for each new config — the existing `graph.json` is deployed immediately using the standard deploy flow (best-effort: if enqueue fails, subsequent pushes will trigger syncs normally)
 
 MCP tools: `configure_git_sync`, `list_git_sync_configs`, `get_git_sync_config`, `disconnect_git_sync` (see `docs://admin`).
 
@@ -84,11 +85,12 @@ MCP tools: `configure_git_sync`, `list_git_sync_configs`, `get_git_sync_config`,
 3. Looks up matching `git_sync_configs` by `(github_owner, github_repo_name, branch)`
 4. For each matching config where `{graph_folder}/graph.json` changed, enqueues a job to the `ada_git_sync_queue` Redis queue and returns immediately. Enqueue is idempotent per `(config_id, commit_sha)` via a Redis `SET NX` dedup key (TTL 1 hour), so webhook retries (e.g. on partial enqueue failure returning 502) never produce duplicate queue entries
 5. The `GitSyncQueueWorker` (daemon thread in the API process) picks up each job and:
+
    - Loads the config from DB
    - Generates an installation token
    - Fetches graph.json from GitHub
    - Creates a new graph runner and populates it from the JSON
-   - Tags with the next version and promotes to production (draft untouched)
+   - Calls the canonical deploy flow (tag + production promotion + fresh draft clone)
    - Updates `last_sync_status` and `last_sync_error` (human-readable error message on failure, cleared on success)
 
 ## Graph JSON Format
@@ -114,7 +116,7 @@ The `graph.json` file must be in the **write format** (`GraphUpdateSchema`), not
 ## Env Vars
 
 | Var | Description |
-|-----|-------------|
+| --- | --- |
 | `GITHUB_APP_ID` | App ID from the GitHub App settings page |
 | `GITHUB_APP_PRIVATE_KEY` | PEM private key (contents, not file path) |
 | `GITHUB_APP_WEBHOOK_SECRET` | Webhook secret configured on the GitHub App |
