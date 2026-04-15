@@ -19,12 +19,46 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Get main branch migration revisions
+      - name: Get main branch migration revisions and head
         id: migrations
         run: |
-          REVISIONS=$(ls ada_backend/database/alembic/versions/*.py 2>/dev/null | xargs -I {} basename {} .py | cut -d'_' -f1 | tr '\n' ' ')
-          echo "revisions=${REVISIONS}" >> $GITHUB_OUTPUT
-          echo "Main branch revisions: ${REVISIONS}"
+          python3 << 'PYEOF'
+          import ast, os
+
+          versions_dir = "ada_backend/database/alembic/versions"
+          revisions = set()
+          down_revisions = set()
+
+          for f in os.listdir(versions_dir):
+              if not f.endswith(".py"):
+                  continue
+              with open(os.path.join(versions_dir, f)) as fp:
+                  tree = ast.parse(fp.read())
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                      if node.target.id == "revision" and isinstance(node.value, ast.Constant):
+                          revisions.add(node.value.value)
+                      elif node.target.id == "down_revision" and isinstance(node.value, ast.Constant):
+                          down_revisions.add(node.value.value)
+                  elif isinstance(node, ast.Assign):
+                      for target in node.targets:
+                          if isinstance(target, ast.Name) and isinstance(node.value, ast.Constant):
+                              if target.id == "revision":
+                                  revisions.add(node.value.value)
+                              elif target.id == "down_revision":
+                                  down_revisions.add(node.value.value)
+
+          heads = revisions - down_revisions
+          rev_str = " ".join(sorted(revisions))
+          head_str = " ".join(sorted(heads))
+
+          print(f"Main revisions ({len(revisions)}): {rev_str}")
+          print(f"Main heads: {head_str}")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as gh:
+              gh.write(f"revisions={rev_str}\n")
+              gh.write(f"head={head_str}\n")
+          PYEOF
 
       - name: Auto-downgrade migrations before reset
         uses: appleboy/ssh-action@master
@@ -35,41 +69,38 @@ jobs:
           port: 22
           script: |
             set -e
-            MAIN_REVISIONS="${{ steps.migrations.outputs.revisions }}"
+            MAIN_REVISIONS=" ${{ steps.migrations.outputs.revisions }} "
+            MAIN_HEAD="${{ steps.migrations.outputs.head }}"
 
             echo "📊 Current Alembic revision:"
             kubectl exec deployment/ada-api -n ada-staging -- \
               alembic -c ada_backend/database/alembic.ini current || echo "No running pod"
 
             CURRENT_REV=$(kubectl exec deployment/ada-api -n ada-staging -- \
-              alembic -c ada_backend/database/alembic.ini current 2>/dev/null | grep -oE '^[a-f0-9]+' || echo "")
+              alembic -c ada_backend/database/alembic.ini current 2>/dev/null \
+              | awk 'NF{print $1; exit}' || true)
 
-            if [ -n "$CURRENT_REV" ]; then
-              if ! echo "$MAIN_REVISIONS" | grep -q "${CURRENT_REV:0:12}"; then
-                echo "⬇️ Current revision $CURRENT_REV not in main, downgrading..."
-
-                while true; do
-                  CURRENT_REV=$(kubectl exec deployment/ada-api -n ada-staging -- \
-                    alembic -c ada_backend/database/alembic.ini current 2>/dev/null | grep -oE '^[a-f0-9]+' || echo "")
-
-                  if [ -z "$CURRENT_REV" ]; then
-                    echo "📊 Reached base revision"
-                    break
+            if [ -z "$CURRENT_REV" ]; then
+              echo "📊 No current revision found, skipping downgrade"
+            else
+              case " $MAIN_REVISIONS " in
+                *" $CURRENT_REV "*)
+                  echo "✅ Current revision $CURRENT_REV exists in main, no downgrade needed"
+                  ;;
+                *)
+                  if [ -z "$MAIN_HEAD" ]; then
+                    echo "❌ Current revision $CURRENT_REV not in main, but could not determine main HEAD"
+                    exit 1
                   fi
-
-                  REV_PREFIX="${CURRENT_REV:0:12}"
-                  if echo "$MAIN_REVISIONS" | grep -q "$REV_PREFIX"; then
-                    echo "✅ Reached revision $CURRENT_REV (exists in main)"
-                    break
-                  fi
-
-                  echo "⬇️ Downgrading from $CURRENT_REV..."
+                  TARGET=$(echo "$MAIN_HEAD" | awk '{print $1}')
+                  echo "⬇️ Current revision $CURRENT_REV not in main, downgrading to main HEAD $TARGET..."
                   kubectl exec deployment/ada-api -n ada-staging -- \
-                    alembic -c ada_backend/database/alembic.ini downgrade -1
-                done
-              else
-                echo "✅ Current revision exists in main, no downgrade needed"
-              fi
+                    alembic -c ada_backend/database/alembic.ini downgrade "$TARGET"
+                  echo "📊 Post-downgrade revision:"
+                  kubectl exec deployment/ada-api -n ada-staging -- \
+                    alembic -c ada_backend/database/alembic.ini current || true
+                  ;;
+              esac
             fi
 
       - name: Deploy with existing main image (no rebuild!)
