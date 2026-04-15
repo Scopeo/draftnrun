@@ -3,6 +3,7 @@ import re
 from typing import Any, Dict, Optional
 
 from pydantic import SecretStr
+
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)

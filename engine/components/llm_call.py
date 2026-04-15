@@ -288,7 +288,10 @@ class LLMCallAgent(Component):
 
         span = get_current_span()
         span_attributes: dict[str, Any] = {
-            SpanAttributes.INPUT_VALUE: serialize_to_json([{"role": "user", "content": masked_content}], shorten_string=True),
+            SpanAttributes.INPUT_VALUE: serialize_to_json(
+                [{"role": "user", "content": masked_content}],
+                shorten_string=True,
+            ),
             SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
             "model_id": (
                 str(self._completion_service._model_id) if self._completion_service._model_id is not None else None
