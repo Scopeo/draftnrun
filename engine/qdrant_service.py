@@ -739,6 +739,8 @@ class QdrantService:
         Add chunks to the Qdrant collection asynchronously.
         """
         schema = self._get_schema(collection_name)
+        # TODO: Remove old-collection branch once all production collections are migrated to hybrid
+        is_hybrid = await self.is_hybrid_collection_async(collection_name)
 
         for i in range(0, len(list_chunks), self._max_chunks_to_add):
             current_chunk_batch = list_chunks[i : i + self._max_chunks_to_add]
@@ -761,13 +763,17 @@ class QdrantService:
 
             list_payloads = []
             for chunk, vector in zip(current_chunk_batch, list_embeddings, strict=False):
+                if is_hybrid:
+                    point_vector = {
+                        "dense": vector,
+                        "sparse": {"text": chunk[schema.content_field], "model": BM25_MODEL},
+                    }
+                else:
+                    point_vector = vector
                 point = {
                     "id": self.get_uuid(self._build_point_id_seed(chunk, schema)),
                     "payload": {field: chunk[field] for field in chunk.keys()},
-                    "vector": {
-                        "dense": vector,
-                        "sparse": {"text": chunk[schema.content_field], "model": BM25_MODEL},
-                    },
+                    "vector": point_vector,
                 }
                 list_payloads.append(point)
 

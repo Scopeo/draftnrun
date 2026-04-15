@@ -984,10 +984,11 @@ class TestCreateCollectionHybrid:
 
 class TestAddChunksHybrid:
     @pytest.mark.asyncio
-    async def test_always_sends_named_vectors(self):
+    async def test_sends_named_vectors_for_hybrid_collection(self):
         service, mock_send = _make_qdrant_service_with_mock_http()
         service._build_vectors_async = AsyncMock(return_value=[[0.1, 0.2, 0.3]])
         service.insert_points_in_collection_async = AsyncMock(return_value=True)
+        service._hybrid_cache["test_col"] = True
 
         chunks = [{"chunk_id": "1", "content": "hello world", "file_id": "f1", "url": "http://x"}]
         await service.add_chunks_async(chunks, "test_col")
@@ -998,6 +999,21 @@ class TestAddChunksHybrid:
         assert "sparse" in vector
         assert vector["sparse"]["model"] == BM25_MODEL
         assert vector["sparse"]["text"] == "hello world"
+
+    @pytest.mark.asyncio
+    async def test_sends_flat_vector_for_old_collection(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        service._build_vectors_async = AsyncMock(return_value=[[0.1, 0.2, 0.3]])
+        service.insert_points_in_collection_async = AsyncMock(return_value=True)
+        service._hybrid_cache["test_col"] = False
+
+        chunks = [{"chunk_id": "1", "content": "hello world", "file_id": "f1", "url": "http://x"}]
+        await service.add_chunks_async(chunks, "test_col")
+
+        inserted_points = service.insert_points_in_collection_async.call_args.kwargs["points"]
+        vector = inserted_points[0]["vector"]
+        assert isinstance(vector, list)
+        assert vector == [0.1, 0.2, 0.3]
 
 
 class TestSearchRouting:
