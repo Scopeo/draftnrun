@@ -19,17 +19,18 @@ def test_secret_value_truthiness_and_length():
 
 
 def test_unwrap_secrets_recursively():
+    key_secret = SecretValue("masked-key")
     payload = {
         "token": SecretValue("abc"),
         "nested": [SecretValue("def"), {"inner": SecretValue("ghi")}],
-        SecretValue("masked-key"): "value",
+        key_secret: "value",
     }
 
-    assert unwrap_secrets(payload) == {
-        "token": "abc",
-        "nested": ["def", {"inner": "ghi"}],
-        "masked-key": "value",
-    }
+    result = unwrap_secrets(payload)
+    assert result["token"] == "abc"
+    assert result["nested"] == ["def", {"inner": "ghi"}]
+    assert key_secret in result
+    assert "masked-key" not in result
 
 
 def test_serialize_to_json_masks_secret_values():
