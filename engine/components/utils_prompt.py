@@ -2,11 +2,12 @@ import logging
 import re
 from typing import Any
 
+from pydantic import SecretStr
+
 from engine.components.errors import (
     KeyTypePromptTemplateError,
     MissingKeyPromptTemplateError,
 )
-from engine.secret import SecretValue
 
 LOGGER = logging.getLogger(__name__)
 
@@ -15,6 +16,7 @@ def fill_prompt_template(
     prompt_template: str,
     component_name: str = "",
     variables: dict[str, Any] | None = None,
+    reveal_secrets: bool = True,
 ) -> str:
     """
     Fills the system prompt with only the keys required from variables.
@@ -73,8 +75,8 @@ def fill_prompt_template(
     for key in template_vars:
         value = variables[key]
         try:
-            if isinstance(value, SecretValue):
-                str_value = value.get_secret_value()
+            if isinstance(value, SecretStr):
+                str_value = value.get_secret_value() if reveal_secrets else str(value)
             else:
                 str_value = str(value)
         except Exception as e:

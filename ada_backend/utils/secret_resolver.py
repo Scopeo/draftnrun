@@ -2,7 +2,7 @@ import logging
 import re
 from typing import Any, Dict, Optional
 
-from engine.secret import SecretValue
+from pydantic import SecretStr
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -11,7 +11,7 @@ LOGGER = logging.getLogger(__name__)
 _ENV_PATTERN = re.compile(r"@\{ENV:([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
-def _resolve_single_placeholder(var_name: str, secret_mapping: Optional[Dict[str, Any]]) -> str:
+def _resolve_single_placeholder(var_name: str, secret_mapping: Optional[Dict[str, Any]]) -> Any:
     """
     Resolve a single secret placeholder name to its value.
 
@@ -24,14 +24,12 @@ def _resolve_single_placeholder(var_name: str, secret_mapping: Optional[Dict[str
     if secret_mapping is not None and var_name in secret_mapping:
         LOGGER.debug("Secret resolved from organization configuration")
         mapping_value = secret_mapping[var_name]
-        if isinstance(mapping_value, SecretValue):
-            return mapping_value.get_secret_value()
-        return str(mapping_value)
+        return mapping_value
 
     env_val = getattr(settings, var_name, None)
     if env_val is not None:
         LOGGER.debug("Secret resolved from global settings")
-        return str(env_val)
+        return env_val
 
     # Only log variable name in debug mode, use generic message in production
     LOGGER.error("Secret placeholder resolution failed: variable not found in available sources")
@@ -40,10 +38,17 @@ def _resolve_single_placeholder(var_name: str, secret_mapping: Optional[Dict[str
     )
 
 
-def _replace_in_string(text: str, secret_mapping: Optional[Dict[str, Any]]) -> str:
+def _replace_in_string(text: str, secret_mapping: Optional[Dict[str, Any]]) -> Any:
+    full_match = _ENV_PATTERN.fullmatch(text)
+    if full_match:
+        return _resolve_single_placeholder(full_match.group(1), secret_mapping)
+
     def _repl(match: re.Match) -> str:
         var_name = match.group(1)
-        return _resolve_single_placeholder(var_name, secret_mapping)
+        value = _resolve_single_placeholder(var_name, secret_mapping)
+        if isinstance(value, SecretStr):
+            return value.get_secret_value()
+        return str(value)
 
     return _ENV_PATTERN.sub(_repl, text)
 

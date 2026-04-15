@@ -1,3 +1,4 @@
+import json
 import logging
 from collections.abc import Callable
 from typing import Any, Optional, Type
@@ -204,9 +205,11 @@ class LLMCallAgent(Component):
         return []
 
     async def _run_without_io_trace(self, inputs: LLMCallInputs, ctx: Optional[dict] = None) -> LLMCallOutputs:
-        LOGGER.info(f"Running LLM call agent with inputs: {inputs} and ctx: {ctx}")
-        prompt_template = inputs.prompt_template
+        LOGGER.debug("Running LLM call agent for %s", self.component_attributes.component_instance_name)
+        prompt_template = inputs.prompt_template or ""
         output_format = inputs.output_format
+        if isinstance(output_format, dict):
+            output_format = json.dumps(output_format)
 
         files_content = []
         images_content = []
@@ -232,6 +235,12 @@ class LLMCallAgent(Component):
             component_name=self.component_attributes.component_instance_name,
             variables=merged_dict,
         )
+        masked_text_content = fill_prompt_template(
+            prompt_template=prompt_template,
+            component_name=self.component_attributes.component_instance_name,
+            variables=merged_dict,
+            reveal_secrets=False,
+        )
 
         files_content.extend(self._extract_file_content(inputs, ctx))
         files_content.extend(self._extract_file_url(inputs, ctx))
@@ -254,6 +263,8 @@ class LLMCallAgent(Component):
         ):
             raise ValueError(f"Image content is not supported for provider '{self._completion_service._provider}'.")
 
+        content: str | list[dict[str, Any]]
+        masked_content: str | list[dict[str, Any]]
         if len(files_content) > 0 or len(images_content) > 0:
             content = [
                 {
@@ -263,17 +274,27 @@ class LLMCallAgent(Component):
                 *files_content,
                 *images_content,
             ]
+            masked_content = [
+                {
+                    "type": "text",
+                    "text": masked_text_content,
+                },
+                *files_content,
+                *images_content,
+            ]
         else:
             content = text_content
+            masked_content = masked_text_content
 
         span = get_current_span()
-        span.set_attributes({
-            SpanAttributes.INPUT_VALUE: serialize_to_json([{"role": "user", "content": content}], shorten_string=True),
+        span_attributes: dict[str, Any] = {
+            SpanAttributes.INPUT_VALUE: serialize_to_json([{"role": "user", "content": masked_content}], shorten_string=True),
             SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
             "model_id": (
                 str(self._completion_service._model_id) if self._completion_service._model_id is not None else None
             ),
-        })
+        }
+        span.set_attributes(span_attributes)
         if output_format:
             openai_response_format = _convert_properties_to_openai_format(output_format)
             response = await self._completion_service.constrained_complete_with_json_schema_async(

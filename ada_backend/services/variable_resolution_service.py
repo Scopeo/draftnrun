@@ -2,6 +2,7 @@ import logging
 from typing import Any, Optional
 from uuid import UUID
 
+from pydantic import SecretStr
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import VariableType
@@ -11,8 +12,6 @@ from ada_backend.repositories.organization_repository import (
 )
 from ada_backend.repositories.variable_definitions_repository import list_org_definitions
 from ada_backend.repositories.variable_sets_repository import get_org_variable_set
-from engine.secret import SecretValue
-
 LOGGER = logging.getLogger(__name__)
 
 
@@ -43,7 +42,10 @@ def resolve_variables(
         if definition.type == VariableType.SECRET:
             row = secret_defaults.get(definition.id)
             if row:
-                resolved[definition.name] = SecretValue(row.get_secret())
+                resolved_value = row.get_secret()
+                resolved[definition.name] = (
+                    resolved_value if isinstance(resolved_value, SecretStr) else SecretStr(resolved_value)
+                )
         elif definition.default_value is not None:
             resolved[definition.name] = definition.default_value
 
@@ -61,13 +63,16 @@ def resolve_variables(
         set_secrets = list_variable_secrets_for_set(session, org_set.id)
         secrets_by_def = {s.variable_definition_id: s for s in set_secrets}
         for name, value in org_set.values.items():
-            definition = definitions_by_name.get(name)
-            if definition and definition.type != VariableType.SECRET:
+            matching_definition = definitions_by_name.get(name)
+            if matching_definition and matching_definition.type != VariableType.SECRET:
                 resolved[name] = value
 
         for definition in variable_definitions:
             if definition.type == VariableType.SECRET:
                 row = secrets_by_def.get(definition.id)
                 if row:
-                    resolved[definition.name] = SecretValue(row.get_secret())
+                    resolved_value = row.get_secret()
+                    resolved[definition.name] = (
+                        resolved_value if isinstance(resolved_value, SecretStr) else SecretStr(resolved_value)
+                    )
     return resolved

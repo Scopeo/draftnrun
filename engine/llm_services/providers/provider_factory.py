@@ -1,5 +1,7 @@
 import logging
-from typing import Optional
+from typing import Optional, cast
+
+from pydantic import SecretStr
 
 from engine.llm_services.providers.base_provider import BaseProvider
 from settings import settings
@@ -10,10 +12,13 @@ LOGGER = logging.getLogger(__name__)
 def create_provider(
     provider: str,
     model_name: str,
-    api_key: Optional[str] = None,
+    api_key: Optional[str | SecretStr] = None,
     base_url: Optional[str] = None,
     **kwargs,
 ) -> BaseProvider:
+    if isinstance(api_key, SecretStr):
+        api_key = api_key.get_secret_value()
+
     if api_key is None:
         match provider:
             case "openai":
@@ -72,28 +77,30 @@ def create_provider(
                 if base_url is None:
                     raise ValueError(f"Base URL must be provided for custom provider: {provider}")
 
+    resolved_api_key = cast(str, api_key)
+
     match provider:
         case "openai":
             from engine.llm_services.providers.openai_provider import OpenAIProvider
 
-            return OpenAIProvider(api_key, base_url, model_name, **kwargs)
+            return OpenAIProvider(resolved_api_key, base_url, model_name, **kwargs)
         case "anthropic":
             from engine.llm_services.providers.anthropic_provider import AnthropicProvider
 
-            return AnthropicProvider(api_key, base_url, model_name, **kwargs)
+            return AnthropicProvider(resolved_api_key, base_url, model_name, **kwargs)
         case "google":
             from engine.llm_services.providers.google_provider import GoogleProvider
 
-            return GoogleProvider(api_key, base_url, model_name, **kwargs)
+            return GoogleProvider(resolved_api_key, base_url, model_name, **kwargs)
         case "mistral":
             from engine.llm_services.providers.mistral_provider import MistralProvider
 
-            return MistralProvider(api_key, base_url, model_name, **kwargs)
+            return MistralProvider(resolved_api_key, base_url, model_name, **kwargs)
         case "cerebras":
             from engine.llm_services.providers.cerebras_provider import CerebrasProvider
 
-            return CerebrasProvider(api_key, base_url, model_name, **kwargs)
+            return CerebrasProvider(resolved_api_key, base_url, model_name, **kwargs)
         case _:
             from engine.llm_services.providers.custom_provider import CustomProvider
 
-            return CustomProvider(api_key, base_url, model_name, provider, **kwargs)
+            return CustomProvider(resolved_api_key, base_url, model_name, provider, **kwargs)

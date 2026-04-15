@@ -36,7 +36,6 @@ from engine.components.types import ComponentAttributes
 from engine.field_expressions.ast import ConcatNode, JsonBuildNode, LiteralNode, VarNode
 from engine.field_expressions.serializer import from_json as expression_from_json
 from engine.graph_runner.field_expression_management import evaluate_expression
-from engine.secret import unwrap_secrets
 
 LOGGER = logging.getLogger(__name__)
 
@@ -369,16 +368,9 @@ async def instantiate_component(
         if base_component and base_component == "API Call":
             component_version_id = COMPONENT_VERSION_UUIDS["api_call_tool"]
         set_current_project_id(project_id)
-        # TODO: Ideally SecretValue should propagate past the factory into each consumer
-        # (CompletionService, ParameterProcessors, component constructors), and each
-        # consumer would unwrap only when it truly needs plaintext. That requires making
-        # the entire factory/processor chain SecretValue-aware — a medium-large refactor.
-        # For now, unwrapping here keeps the blast radius small while SecretValue.__str__
-        # already masks all service-layer logs above this point.
-        create_params = unwrap_secrets(input_params)
         return await FACTORY_REGISTRY.create(
             component_version_id=component_version_id,
-            **create_params,
+            **input_params,
         )
     except ConnectionError as e:
         raise ConnectionError(

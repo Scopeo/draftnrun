@@ -10,7 +10,7 @@ globs:
 - Heavy operations: use the Redis run queue (don't block the request).
 - External calls (Supabase Edge Functions, Nango, S3): always use `httpx.AsyncClient` with timeouts.
 - Secrets: encrypted with Fernet before storage, decrypted on read via `ada_backend/utils/encryption.py`.
-- Runtime secret values passed toward the engine should use `SecretValue` (`engine/secret.py`) until an explicit execution boundary requires plaintext.
+- Runtime secret values passed toward the engine should use `SecretStr` (`pydantic.SecretStr`) until an explicit execution boundary requires plaintext.
 - When passing constructor params to engine factories or placeholder/template resolvers, unwrap secrets explicitly and as late as possible.
 - Never log full parameter dicts after `replace_secret_placeholders()` — log only parameter names (`list(params.keys())`) to avoid exposing resolved plaintext secrets.
 - Prefer UUID-typed identifiers in service-facing schemas and payload models; only stringify UUIDs at API/JSON boundaries.

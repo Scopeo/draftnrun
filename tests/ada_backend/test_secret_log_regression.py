@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
+from pydantic import SecretStr
 
 import ada_backend.services.agent_builder_service as agent_builder_service
 import ada_backend.services.entity_factory as entity_factory
@@ -11,21 +12,21 @@ from ada_backend.utils.secret_resolver import replace_secret_placeholders
 from engine.components.utils_prompt import fill_prompt_template
 from engine.field_expressions.ast import ConcatNode, LiteralNode, VarNode
 from engine.graph_runner.field_expression_management import evaluate_expression
-from engine.secret import SecretValue, unwrap_secrets
+from engine.secret_utils import unwrap_secrets
 from engine.trace.serializer import serialize_to_json
 
 LEAK_MARKER = "SUPER_SECRET_API_KEY_12345"
 
 
-def test_secret_value_fstring_masks_plaintext():
-    secret = SecretValue(LEAK_MARKER)
-    assert f"{secret}" == "***"
+def test_secret_str_fstring_masks_plaintext():
+    secret = SecretStr(LEAK_MARKER)
+    assert f"{secret}" == "**********"
     assert LEAK_MARKER not in f"{secret}"
 
 
 def test_unwrap_secrets_preserves_dict_keys_and_unwraps_values():
-    key_secret = SecretValue("dict-key-secret")
-    payload = {"param_name": SecretValue(LEAK_MARKER), key_secret: "value"}
+    key_secret = SecretStr("dict-key-secret")
+    payload = {"param_name": SecretStr(LEAK_MARKER), key_secret: "value"}
 
     result = unwrap_secrets(payload)
 
@@ -39,7 +40,7 @@ def test_replace_secret_placeholders_does_not_log_plaintext(caplog):
     payload = {"headers": {"Authorization": "Bearer @{ENV:MY_KEY}"}}
 
     with caplog.at_level(logging.DEBUG):
-        result = replace_secret_placeholders(payload, {"MY_KEY": SecretValue(LEAK_MARKER)})
+        result = replace_secret_placeholders(payload, {"MY_KEY": SecretStr(LEAK_MARKER)})
 
     assert result["headers"]["Authorization"] == f"Bearer {LEAK_MARKER}"
     assert LEAK_MARKER not in caplog.text
@@ -50,7 +51,7 @@ def test_fill_prompt_template_unwraps_for_execution_without_log_leak(caplog):
         result = fill_prompt_template(
             "Bearer {{api_key}}",
             component_name="qa_component",
-            variables={"api_key": SecretValue(LEAK_MARKER)},
+            variables={"api_key": SecretStr(LEAK_MARKER)},
         )
 
     assert result == f"Bearer {LEAK_MARKER}"
@@ -59,8 +60,8 @@ def test_fill_prompt_template_unwraps_for_execution_without_log_leak(caplog):
 
 def test_serialize_to_json_masks_secret_values_in_nested_payload():
     payload = {
-        "token": SecretValue(LEAK_MARKER),
-        "nested": [{"api_key": SecretValue("another-secret")}],
+        "token": SecretStr(LEAK_MARKER),
+        "nested": [{"api_key": SecretStr("another-secret")}],
         "public": "ok",
     }
 
@@ -68,12 +69,12 @@ def test_serialize_to_json_masks_secret_values_in_nested_payload():
 
     assert LEAK_MARKER not in serialized
     assert "another-secret" not in serialized
-    assert '"***"' in serialized
+    assert '"**********"' in serialized
     assert "ok" in serialized
 
 
 @pytest.mark.asyncio
-async def test_resolve_oauth_access_token_unwraps_secret_value_before_uuid(monkeypatch, caplog):
+async def test_resolve_oauth_access_token_unwraps_secretstr_before_uuid(monkeypatch, caplog):
     definition_id = str(uuid4())
     connection_id = str(uuid4())
     captured: dict[str, UUID] = {}
@@ -89,7 +90,7 @@ async def test_resolve_oauth_access_token_unwraps_secret_value_before_uuid(monke
         "get_oauth_definition_by_id",
         lambda session, definition_uuid: SimpleNamespace(name="oauth_connection", default_value=None),
     )
-    monkeypatch.setattr(entity_factory, "get_run_variables", lambda: {"oauth_connection": SecretValue(connection_id)})
+    monkeypatch.setattr(entity_factory, "get_run_variables", lambda: {"oauth_connection": SecretStr(connection_id)})
     monkeypatch.setattr(entity_factory, "get_oauth_access_token", fake_get_oauth_access_token)
 
     with caplog.at_level(logging.INFO):
@@ -150,7 +151,7 @@ async def test_instantiate_component_error_logs_only_param_names_after_secret_re
     monkeypatch.setattr(
         agent_builder_service,
         "get_organization_secrets_from_project_id",
-        lambda session, pid: [SimpleNamespace(key="API_KEY", secret=SecretValue(LEAK_MARKER))],
+        lambda session, pid: [SimpleNamespace(key="API_KEY", secret=SecretStr(LEAK_MARKER))],
     )
     monkeypatch.setattr(agent_builder_service, "FACTORY_REGISTRY", FakeRegistry())
 
@@ -178,12 +179,12 @@ def test_evaluate_expression_varnode_logs_masked_secret(caplog):
             expression=expression,
             target_field_name="auth_header",
             tasks={},
-            variables={"api_key": SecretValue(LEAK_MARKER)},
+            variables={"api_key": SecretStr(LEAK_MARKER)},
         )
 
-    assert isinstance(result, SecretValue)
+    assert isinstance(result, SecretStr)
     assert LEAK_MARKER not in caplog.text
-    assert "***" in caplog.text
+    assert "**********" in caplog.text
 
 
 def test_evaluate_expression_concatnode_unwraps_for_runtime_without_log_leak(caplog):
@@ -194,7 +195,7 @@ def test_evaluate_expression_concatnode_unwraps_for_runtime_without_log_leak(cap
             expression=expression,
             target_field_name="auth_header",
             tasks={},
-            variables={"api_key": SecretValue(LEAK_MARKER)},
+            variables={"api_key": SecretStr(LEAK_MARKER)},
         )
 
     assert result == f"Bearer {LEAK_MARKER}"

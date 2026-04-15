@@ -3,7 +3,7 @@ import json
 
 import networkx as nx
 import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from engine.components.component import Component
 from engine.components.inputs_outputs.start import Start
@@ -11,7 +11,6 @@ from engine.components.types import ChatMessage, ComponentAttributes, ToolDescri
 from engine.field_expressions.errors import FieldExpressionError
 from engine.field_expressions.serializer import from_json as expr_from_json
 from engine.graph_runner.graph_runner import GraphRunner
-from engine.secret import SecretValue
 from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_manager import TraceManager
 
@@ -635,7 +634,7 @@ class TestGraphRunnerExpressions:
             start_nodes=["B"],
             trace_manager=tm,
             expressions=expressions,
-            variables={"api_key": SecretValue("real-secret")},
+            variables={"api_key": SecretStr("real-secret")},
         )
         result = asyncio.run(gr.run({"input": "seed"}))
         assert result.messages[0].content == "echo[Bearer real-secret]"

@@ -47,9 +47,15 @@ class Synthesizer(CloseMixin):
                 component_name=self.component_attributes.component_instance_name,
                 variables=input_dict,
             )
+            masked_input_str = fill_prompt_template(
+                prompt_template=self._prompt_template,
+                component_name=self.component_attributes.component_instance_name,
+                variables=input_dict,
+                reveal_secrets=False,
+            )
             span.set_attributes({
                 SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
-                SpanAttributes.INPUT_VALUE: input_str,
+                SpanAttributes.INPUT_VALUE: masked_input_str,
                 SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
                 "component_instance_id": (
                     str(self.component_attributes.component_instance_id)

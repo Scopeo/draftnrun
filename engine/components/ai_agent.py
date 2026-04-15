@@ -435,6 +435,12 @@ class AIAgent(Component):
             component_name=self.component_attributes.component_instance_name,
             variables=merged_dict,
         )
+        masked_system_prompt = fill_prompt_template(
+            prompt_template=system_prompt_content,
+            component_name=self.component_attributes.component_instance_name,
+            variables=merged_dict,
+            reveal_secrets=False,
+        )
 
         if system_message is None:
             original_agent_input.messages.insert(
@@ -456,9 +462,14 @@ class AIAgent(Component):
         tool_choice = "auto" if self._current_iteration + 1 < self._max_iterations else "none"
         with self.trace_manager.start_span("Agentic reflexion") as span:
             llm_input_messages = [msg.model_dump() for msg in history_messages_handled]
+            trace_input_messages = [dict(message) for message in llm_input_messages]
+            for message in trace_input_messages:
+                if message.get("role") == "system":
+                    message["content"] = masked_system_prompt
+                    break
             span.set_attributes({
                 SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
-                SpanAttributes.LLM_INPUT_MESSAGES: json.dumps(llm_input_messages),
+                SpanAttributes.LLM_INPUT_MESSAGES: json.dumps(trace_input_messages),
                 SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
                 "model_id": (
                     str(self._completion_service._model_id) if self._completion_service._model_id is not None else None

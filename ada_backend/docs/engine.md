@@ -113,14 +113,14 @@ Merge order: **defaults → set_ids[0] → set_ids[1] → ...**
 1. Load all `VariableDefinition` rows for the org
 2. Apply defaults (secret type → secret row with `set_id=None`; other → `definition.default_value`)
 3. Layer variable sets in order, each overriding previous values
-4. Secret values are returned as `SecretValue` objects from `engine/secret.py` (masked by `str()`/`repr()`)
+4. Secret values are returned as `SecretStr` objects from `pydantic` (masked by `str()`/`repr()`)
 5. Returns `dict[str, Any]` consumed by `VarNode` expression evaluation
 
-`SecretValue` instances must be explicitly unwrapped at execution boundaries that require plaintext
-(for example prompt templating and component factory construction).
+`SecretStr` instances must be explicitly unwrapped at execution boundaries that require plaintext
+(for example prompt templating, component input validation, and external SDK/client construction).
 
-The trace serializer (`engine/trace/serializer.py`) recognises `SecretValue` and emits `"***"` instead of the
-real value, preventing secret leakage into span attributes persisted via `SQLSpanExporter`.
+The trace serializer (`engine/trace/serializer.py`) recognises `SecretStr` and emits the masked string instead of
+the real value, preventing secret leakage into span attributes persisted via `SQLSpanExporter`.
 
 ## Legacy Compatibility
 

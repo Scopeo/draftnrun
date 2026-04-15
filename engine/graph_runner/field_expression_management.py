@@ -9,10 +9,11 @@ type coercion, and input resolution for field expressions.
 import logging
 from typing import Any, Callable
 
+from pydantic import SecretStr
+
 from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode, VarNode
 from engine.field_expressions.errors import FieldExpressionError
 from engine.graph_runner.types import Task
-from engine.secret import SecretValue
 
 LOGGER = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ def evaluate_expression(
             result = obj
             for placeholder, value in sorted(refs.items(), key=lambda item: len(item[0]), reverse=True):
                 if placeholder in result:
-                    result = result.replace(placeholder, to_string(value))
+                    result = result.replace(placeholder, to_runtime_string(value))
             return result
         elif isinstance(obj, dict):
             return {key: substitute_in_template(val, refs) for key, val in obj.items()}
@@ -85,6 +86,11 @@ def evaluate_expression(
             raise FieldExpressionError(f"Variable '{var.name}' not found")
         return variables[var.name]
 
+    def to_runtime_string(value: Any) -> str:
+        if isinstance(value, SecretStr):
+            return value.get_secret_value()
+        return to_string(value)
+
     def evaluate_node(node: ExpressionNode) -> str:
         """Evaluate node to string (for concat/ref/literal)."""
         match node:
@@ -93,13 +99,11 @@ def evaluate_expression(
 
             case RefNode() as ref:
                 raw_value = evaluate_ref_as_object(ref)
-                return to_string(raw_value)
+                return to_runtime_string(raw_value)
 
             case VarNode() as var:
                 raw_value = evaluate_var(var)
-                if isinstance(raw_value, SecretValue):
-                    return raw_value.get_secret_value()
-                return to_string(raw_value)
+                return to_runtime_string(raw_value)
 
             case ConcatNode(parts=parts):
                 return "".join(evaluate_node(part) for part in parts)
