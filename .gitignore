@@ -45,6 +45,7 @@ infra/k8s/*/secrets.yaml
 # cache
 **__pycache__**
 *checkpoint.ipynb
+.mypy_cache
 
 # logs
 logs

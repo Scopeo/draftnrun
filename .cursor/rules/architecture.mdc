@@ -52,6 +52,14 @@ DAG of ComponentInstances connected via FieldExpressions (JSON AST). See `ada_ba
 
 Mixpanel Python SDK (`mixpanel_analytics.py`). `non_breaking_track` decorator wraps every tracking function with try/except internally — never add try/except at call sites. Lazy init via `_refresh_client()` (thread-safe, re-checks settings on every call). Only active when `ENV == "production"` **and** `MIXPANEL_TOKEN` is set; otherwise all calls silently no-op (no errors). Events cover: identity, project/agent lifecycle, deployment, run completion, ingestion, cron, API keys, OAuth, and observability page views. New user-facing actions should get a corresponding `track_*` call in the **service layer** (not routers). Integration tests (`@pytest.mark.mixpanel`) hit the real Mixpanel API and run in CI only when `mixpanel_analytics.py` or `tests/ada_backend/test_mixpanel_analytics.py` changes.
 
+### Tracing Context and Sentry
+
+`engine/trace/span_context.py` is the canonical tracing context lifecycle hook. `set_tracing_span(**kwargs)` merges
+partial updates into the existing `TracingSpanParams` context and synchronizes `SENTRY_TAG_FIELDS` to Sentry tags on
+each update. Non-`None` values are stringified via `sentry_sdk.set_tag`; `None` values clear the tag from the current
+isolation scope (`remove_tag`) to prevent stale tags. Do not set tracing tags in routers/services directly; add new
+searchable fields in `TracingSpanParams` + `SENTRY_TAG_FIELDS` instead.
+
 ### MCP Server
 
 `mcp_server/`: standalone pod calling the backend over HTTP + Supabase directly. See `mcp_server/README.md`.

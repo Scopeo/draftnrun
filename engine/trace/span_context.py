@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 from uuid import UUID
 
+import sentry_sdk
 from e2b_code_interpreter import AsyncSandbox
 
 from ada_backend.database.models import CallType, EnvType
@@ -31,6 +32,26 @@ class TracingSpanParams:
 _tracing_context: ContextVar[Optional[TracingSpanParams]] = ContextVar("_tracing_context", default=None)
 
 _SPAN_FIELDS = {f.name for f in dataclasses.fields(TracingSpanParams)}
+SENTRY_TAG_FIELDS = (
+    "cron_id",
+    "trace_id",
+    "project_id",
+    "organization_id",
+    "environment",
+    "call_type",
+    "graph_runner_id",
+    "tag_name",
+)
+
+
+def _sync_to_sentry(params: TracingSpanParams) -> None:
+    isolation_scope = sentry_sdk.get_isolation_scope()
+    for field_name in SENTRY_TAG_FIELDS:
+        field_value = getattr(params, field_name)
+        if field_value is None:
+            isolation_scope.remove_tag(field_name)
+            continue
+        sentry_sdk.set_tag(field_name, str(field_value))
 
 
 def set_tracing_span(**kwargs) -> None:
@@ -49,6 +70,7 @@ def set_tracing_span(**kwargs) -> None:
     else:
         params = TracingSpanParams(**kwargs)
     _tracing_context.set(params)
+    _sync_to_sentry(params)
 
 
 def get_tracing_span() -> Optional[TracingSpanParams]:
