@@ -121,7 +121,9 @@ async def migrate_collection(service: QdrantService, name: str) -> bool:
         print(f"[{name}] Not found, skipping.")
         return False
 
-    if await service.is_hybrid_collection_async(name):
+    info = await service.get_collection_info_async(name)
+    sparse_vectors = info.get("config", {}).get("params", {}).get("sparse_vectors", {})
+    if sparse_vectors and "sparse" in sparse_vectors:
         print(f"[{name}] Already hybrid, skipping.")
         return True
 

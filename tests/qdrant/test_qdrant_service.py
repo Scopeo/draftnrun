@@ -910,61 +910,6 @@ def _make_qdrant_service_with_mock_http() -> tuple[QdrantService, AsyncMock]:
     return service, mock_send
 
 
-class TestIsHybridCollection:
-    @pytest.mark.asyncio
-    async def test_hybrid_collection_detected(self):
-        service, mock_send = _make_qdrant_service_with_mock_http()
-        mock_send.return_value = {
-            "result": {
-                "config": {
-                    "params": {
-                        "vectors": {"dense": {"size": 3072, "distance": "Cosine"}},
-                        "sparse_vectors": {"sparse": {"modifier": "idf"}},
-                    }
-                }
-            }
-        }
-        assert await service.is_hybrid_collection_async("test") is True
-
-    @pytest.mark.asyncio
-    async def test_dense_only_collection_detected(self):
-        service, mock_send = _make_qdrant_service_with_mock_http()
-        mock_send.return_value = {
-            "result": {
-                "config": {
-                    "params": {
-                        "vectors": {"size": 3072, "distance": "Cosine"},
-                        "sparse_vectors": {},
-                    }
-                }
-            }
-        }
-        assert await service.is_hybrid_collection_async("test") is False
-
-    @pytest.mark.asyncio
-    async def test_missing_sparse_vectors_key(self):
-        service, mock_send = _make_qdrant_service_with_mock_http()
-        mock_send.return_value = {"result": {"config": {"params": {"vectors": {"size": 3072, "distance": "Cosine"}}}}}
-        assert await service.is_hybrid_collection_async("test") is False
-
-    @pytest.mark.asyncio
-    async def test_result_is_cached(self):
-        service, mock_send = _make_qdrant_service_with_mock_http()
-        mock_send.return_value = {
-            "result": {
-                "config": {
-                    "params": {
-                        "vectors": {"dense": {"size": 3072, "distance": "Cosine"}},
-                        "sparse_vectors": {"sparse": {"modifier": "idf"}},
-                    }
-                }
-            }
-        }
-        assert await service.is_hybrid_collection_async("test") is True
-        assert await service.is_hybrid_collection_async("test") is True
-        assert mock_send.call_count == 1
-
-
 class TestCreateCollectionHybrid:
     @pytest.mark.asyncio
     async def test_always_creates_hybrid_collection(self):
@@ -980,16 +925,14 @@ class TestCreateCollectionHybrid:
         payload = create_call.kwargs["payload"]
         assert "dense" in payload["vectors"]
         assert "sparse" in payload["sparse_vectors"]
-        assert service._hybrid_cache["test_col"] is True
 
 
 class TestAddChunksHybrid:
     @pytest.mark.asyncio
-    async def test_sends_named_vectors_for_hybrid_collection(self):
+    async def test_always_sends_named_vectors(self):
         service, mock_send = _make_qdrant_service_with_mock_http()
         service._build_vectors_async = AsyncMock(return_value=[[0.1, 0.2, 0.3]])
         service.insert_points_in_collection_async = AsyncMock(return_value=True)
-        service._hybrid_cache["test_col"] = True
 
         chunks = [{"chunk_id": "1", "content": "hello world", "file_id": "f1", "url": "http://x"}]
         await service.add_chunks_async(chunks, "test_col")
@@ -1000,21 +943,6 @@ class TestAddChunksHybrid:
         assert "sparse" in vector
         assert vector["sparse"]["model"] == BM25_MODEL
         assert vector["sparse"]["text"] == "hello world"
-
-    @pytest.mark.asyncio
-    async def test_sends_flat_vector_for_old_collection(self):
-        service, mock_send = _make_qdrant_service_with_mock_http()
-        service._build_vectors_async = AsyncMock(return_value=[[0.1, 0.2, 0.3]])
-        service.insert_points_in_collection_async = AsyncMock(return_value=True)
-        service._hybrid_cache["test_col"] = False
-
-        chunks = [{"chunk_id": "1", "content": "hello world", "file_id": "f1", "url": "http://x"}]
-        await service.add_chunks_async(chunks, "test_col")
-
-        inserted_points = service.insert_points_in_collection_async.call_args.kwargs["points"]
-        vector = inserted_points[0]["vector"]
-        assert isinstance(vector, list)
-        assert vector == [0.1, 0.2, 0.3]
 
 
 class TestSearchRouting:
@@ -1080,7 +1008,6 @@ class TestQueryPointsAsync:
     @pytest.mark.asyncio
     async def test_hybrid_search_sends_prefetch_and_fusion(self):
         service, mock_send = _make_qdrant_service_with_mock_http()
-        service._hybrid_cache["col"] = True
         mock_send.return_value = {"result": {"points": []}}
 
         await service._search_hybrid_async(
@@ -1096,24 +1023,8 @@ class TestQueryPointsAsync:
         assert call_payload["query"] == {"fusion": "rrf"}
 
     @pytest.mark.asyncio
-    async def test_hybrid_search_omits_dense_using_for_old_collection(self):
-        service, mock_send = _make_qdrant_service_with_mock_http()
-        service._hybrid_cache["col"] = False
-        mock_send.return_value = {"result": {"points": []}}
-
-        await service._search_hybrid_async(
-            query_text="test query",
-            query_vector=[0.1, 0.2],
-            collection_name="col",
-            limit=5,
-        )
-        call_payload = mock_send.call_args.kwargs["payload"]
-        assert "using" not in call_payload["prefetch"][1]
-
-    @pytest.mark.asyncio
     async def test_hybrid_search_propagates_filter_to_both_prefetches(self):
         service, mock_send = _make_qdrant_service_with_mock_http()
-        service._hybrid_cache["col"] = True
         mock_send.return_value = {"result": {"points": []}}
         test_filter = {"must": [{"key": "source_id", "match": {"value": "src-1"}}]}
 
@@ -1131,7 +1042,6 @@ class TestQueryPointsAsync:
     @pytest.mark.asyncio
     async def test_hybrid_search_omits_filter_when_none(self):
         service, mock_send = _make_qdrant_service_with_mock_http()
-        service._hybrid_cache["col"] = True
         mock_send.return_value = {"result": {"points": []}}
 
         await service._search_hybrid_async(
@@ -1145,9 +1055,8 @@ class TestQueryPointsAsync:
         assert "filter" not in call_payload["prefetch"][1]
 
     @pytest.mark.asyncio
-    async def test_search_vectors_sends_using_for_hybrid_collection(self):
+    async def test_search_vectors_always_sends_using_dense(self):
         service, mock_send = _make_qdrant_service_with_mock_http()
-        service._hybrid_cache["col"] = True
         mock_send.return_value = {"result": {"points": [{"id": "id1", "score": 0.9, "payload": {}}]}}
 
         await service.search_vectors_async(query_vector=[0.1, 0.2], collection_name="col")
@@ -1155,34 +1064,13 @@ class TestQueryPointsAsync:
         assert call_payload["using"] == "dense"
 
     @pytest.mark.asyncio
-    async def test_search_vectors_omits_using_for_old_collection(self):
+    async def test_dense_named_always_sends_using_dense(self):
         service, mock_send = _make_qdrant_service_with_mock_http()
-        service._hybrid_cache["col"] = False
-        mock_send.return_value = {"result": {"points": [{"id": "id1", "score": 0.9, "payload": {}}]}}
-
-        await service.search_vectors_async(query_vector=[0.1, 0.2], collection_name="col")
-        call_payload = mock_send.call_args.kwargs["payload"]
-        assert "using" not in call_payload
-
-    @pytest.mark.asyncio
-    async def test_dense_named_sends_using_for_hybrid_collection(self):
-        service, mock_send = _make_qdrant_service_with_mock_http()
-        service._hybrid_cache["col"] = True
         mock_send.return_value = {"result": {"points": []}}
 
         await service._search_dense_named_async(query_vector=[0.1, 0.2], collection_name="col")
         call_payload = mock_send.call_args.kwargs["payload"]
         assert call_payload["using"] == "dense"
-
-    @pytest.mark.asyncio
-    async def test_dense_named_omits_using_for_old_collection(self):
-        service, mock_send = _make_qdrant_service_with_mock_http()
-        service._hybrid_cache["col"] = False
-        mock_send.return_value = {"result": {"points": []}}
-
-        await service._search_dense_named_async(query_vector=[0.1, 0.2], collection_name="col")
-        call_payload = mock_send.call_args.kwargs["payload"]
-        assert "using" not in call_payload
 
     @pytest.mark.asyncio
     async def test_sparse_search_sends_bm25_document(self):

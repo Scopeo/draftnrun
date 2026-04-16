@@ -157,8 +157,6 @@ class QdrantService:
 
         self.default_schema = default_schema
         self._schemas: dict[str, QdrantCollectionSchema] = {}
-        # TODO Remove when production all collections are hybrid
-        self._hybrid_cache: dict[str, bool] = {}
 
     def register_schema(self, collection_name: str, schema: QdrantCollectionSchema):
         """
@@ -281,11 +279,10 @@ class QdrantService:
     ) -> list[tuple[str, float, dict]]:
         payload: dict[str, Any] = {
             "query": query_vector,
+            "using": "dense",
             "with_payload": True,
             "limit": search_params.pop("limit", DEFAULT_MAX_CHUNKS),
         }
-        if await self.is_hybrid_collection_async(collection_name):
-            payload["using"] = "dense"
         if filter:
             payload["filter"] = filter
         return await self._query_points_async(collection_name, payload)
@@ -313,9 +310,7 @@ class QdrantService:
         limit: int = DEFAULT_MAX_CHUNKS,
     ) -> list[tuple[str, float, dict]]:
         prefetch_limit = limit * 2
-        dense_prefetch: dict[str, Any] = {"query": query_vector, "limit": prefetch_limit}
-        if await self.is_hybrid_collection_async(collection_name):
-            dense_prefetch["using"] = "dense"
+        dense_prefetch: dict[str, Any] = {"query": query_vector, "using": "dense", "limit": prefetch_limit}
         payload: dict[str, Any] = {
             "prefetch": [
                 {
@@ -343,11 +338,10 @@ class QdrantService:
     ) -> list[tuple[str, float, dict]]:
         payload: dict[str, Any] = {
             "query": query_vector,
+            "using": "dense",
             "limit": limit,
             "with_payload": True,
         }
-        if await self.is_hybrid_collection_async(collection_name):
-            payload["using"] = "dense"
         if filter:
             payload["filter"] = filter
         return await self._query_points_async(collection_name, payload)
@@ -739,8 +733,6 @@ class QdrantService:
         Add chunks to the Qdrant collection asynchronously.
         """
         schema = self._get_schema(collection_name)
-        # TODO: Remove old-collection branch once all production collections are migrated to hybrid
-        is_hybrid = await self.is_hybrid_collection_async(collection_name)
 
         for i in range(0, len(list_chunks), self._max_chunks_to_add):
             current_chunk_batch = list_chunks[i : i + self._max_chunks_to_add]
@@ -763,13 +755,10 @@ class QdrantService:
 
             list_payloads = []
             for chunk, vector in zip(current_chunk_batch, list_embeddings, strict=False):
-                if is_hybrid:
-                    point_vector = {
-                        "dense": vector,
-                        "sparse": {"text": chunk[schema.content_field], "model": BM25_MODEL},
-                    }
-                else:
-                    point_vector = vector
+                point_vector = {
+                    "dense": vector,
+                    "sparse": {"text": chunk[schema.content_field], "model": BM25_MODEL},
+                }
                 point = {
                     "id": self.get_uuid(self._build_point_id_seed(chunk, schema)),
                     "payload": {field: chunk[field] for field in chunk.keys()},
@@ -1061,15 +1050,6 @@ class QdrantService:
         response = await self._send_request_async(method="GET", endpoint=f"collections/{collection_name}")
         return response.get("result", {})
 
-    async def is_hybrid_collection_async(self, collection_name: str) -> bool:
-        if collection_name in self._hybrid_cache:
-            return self._hybrid_cache[collection_name]
-        info = await self.get_collection_info_async(collection_name)
-        sparse_vectors = info.get("config", {}).get("params", {}).get("sparse_vectors", {})
-        result = bool(sparse_vectors and "sparse" in sparse_vectors)
-        self._hybrid_cache[collection_name] = result
-        return result
-
     def create_collection(
         self,
         collection_name: str,
@@ -1119,7 +1099,6 @@ class QdrantService:
         )
         if "result" in response:
             LOGGER.info(f"Status of collection creation {collection_name} : {response['result']}")
-            self._hybrid_cache[collection_name] = True
             # TODO: Remove when production qdrant collections have proper indexes
             await self._create_indexes_from_schema(collection_name=collection_name, schema=schema)
             return True
@@ -1142,7 +1121,6 @@ class QdrantService:
         response = await self._send_request_async(method="DELETE", endpoint=f"collections/{collection_name}?wait=true")
         if "result" in response:
             LOGGER.info(f"Status of collection deletion {collection_name} : {response['result']}")
-            self._hybrid_cache.pop(collection_name, None)
             return True
         LOGGER.error(f"Problem with status of collection deletion {collection_name} : {response}")
         return False
