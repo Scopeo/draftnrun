@@ -58,9 +58,14 @@ Mixpanel Python SDK (`mixpanel_analytics.py`). `non_breaking_track` decorator wr
 
 `engine/trace/span_context.py` is the canonical tracing context lifecycle hook. `set_tracing_span(**kwargs)` merges
 partial updates into the existing `TracingSpanParams` context and synchronizes `SENTRY_TAG_FIELDS` to Sentry tags on
-each update. Non-`None` values are stringified via `sentry_sdk.set_tag`; `None` values clear the tag from the current
-isolation scope (`remove_tag`) to prevent stale tags. Do not set tracing tags in routers/services directly; add new
-searchable fields in `TracingSpanParams` + `SENTRY_TAG_FIELDS` instead.
+each update. Non-`None` values are stringified via `sentry_sdk.get_isolation_scope().set_tag(...)`; `None` values
+clear the tag from the current isolation scope (`remove_tag`) to prevent stale tags. Do not mutate `TracingSpanParams`
+directly in normal code paths; if you need to add/update `trace_id`, `run_id`, or other searchable fields, call
+`set_tracing_span(...)` so Sentry stays synchronized. `GraphRunner.run()` is the exception: it preserves `trace_id`
+across root span isolation before calling `set_tracing_span(trace_id=...)`. `run_id` is injected at run boundaries in
+`ada_backend/services/run_service.py::run_with_tracking()` and `ada_backend/workers/run_queue_worker.py::process_payload()`.
+Do not set tracing tags in routers/services directly; add new searchable fields in `TracingSpanParams` +
+`SENTRY_TAG_FIELDS` instead.
 
 ### MCP Server
 

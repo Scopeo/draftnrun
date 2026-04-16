@@ -26,6 +26,7 @@ class TracingSpanParams:
     graph_runner_id: Optional[UUID] = None
     tag_name: Optional[str] = None
     cron_id: Optional[str] = None
+    run_id: Optional[str] = None
     shared_sandbox: Optional["AsyncSandbox"] = None
 
 
@@ -33,6 +34,7 @@ _tracing_context: ContextVar[Optional[TracingSpanParams]] = ContextVar("_tracing
 
 _SPAN_FIELDS = {f.name for f in dataclasses.fields(TracingSpanParams)}
 SENTRY_TAG_FIELDS = (
+    "run_id",
     "cron_id",
     "trace_id",
     "project_id",
@@ -51,7 +53,7 @@ def _sync_to_sentry(params: TracingSpanParams) -> None:
         if field_value is None:
             isolation_scope.remove_tag(field_name)
             continue
-        sentry_sdk.set_tag(field_name, str(field_value))
+        isolation_scope.set_tag(field_name, str(field_value))
 
 
 def set_tracing_span(**kwargs) -> None:

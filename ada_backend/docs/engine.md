@@ -140,14 +140,18 @@ In ingestion workers, `ingestion_script.ingest_db_source.upload_db_source()` sho
 `set_tracing_span(**kwargs)` is the canonical place to mutate tracing context. It merges partial updates into the
 existing `ContextVar` entry and then synchronizes selected fields to Sentry tags through `_sync_to_sentry`.
 
-- `SENTRY_TAG_FIELDS` defines the allowlist propagated to Sentry (`cron_id`, `trace_id`, `project_id`,
+- `SENTRY_TAG_FIELDS` defines the allowlist propagated to Sentry (`run_id`, `cron_id`, `trace_id`, `project_id`,
   `organization_id`, `environment`, `call_type`, `graph_runner_id`, `tag_name`)
-- non-`None` values are converted to strings and sent via `sentry_sdk.set_tag`
+- non-`None` values are converted to strings and sent via `sentry_sdk.get_isolation_scope().set_tag(...)`
 - `None` values remove the tag from the current Sentry isolation scope (`remove_tag`) to avoid stale tag leakage
 - calling `set_tracing_span` is safe when Sentry is disabled; tag operations are no-ops until `sentry_sdk.init` runs
 
 When introducing a new tracing field, add it to `TracingSpanParams` first. If it should be searchable in Sentry,
 also add it to `SENTRY_TAG_FIELDS` so the propagation remains centralized and endpoint-agnostic.
+Avoid mutating `TracingSpanParams` fields directly after reading the context; use `set_tracing_span(...)` so Sentry
+stays in sync. `GraphRunner.run()` is the only exception: it updates the existing `trace_id` before calling
+`set_tracing_span(trace_id=...)` so the value survives root span isolation and remains available to callers after
+failures. `run_id` is injected at run boundaries in `run_with_tracking()` and `RunQueueWorker.process_payload()`.
 
 ## Key Files
 

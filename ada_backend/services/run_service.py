@@ -26,6 +26,7 @@ from ada_backend.services.errors import (
 from ada_backend.services.s3_files_service import get_s3_client_and_ensure_bucket
 from ada_backend.utils.redis_client import push_run_task
 from data_ingestion.boto3_client import get_content_from_file, upload_file_to_bucket
+from engine.trace.span_context import set_tracing_span
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -97,6 +98,7 @@ async def run_with_tracking(
                 event_id=event_id,
             )
             run_id = run.id
+        set_tracing_span(run_id=str(run_id))
         now = datetime.now(timezone.utc)
         update_run_status(
             session,
