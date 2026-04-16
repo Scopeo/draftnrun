@@ -83,7 +83,7 @@ All domain content lives in `docs.py` (single source of truth).
 | Projects | 7 | `create_workflow` (auto ID/icon), `get_project_overview` |
 | Agents | 3 | `create_agent` (auto ID/icon — single AI node; use `create_workflow` for DAGs) |
 | Agent Config | 3 | `configure_agent`, `add_tool_to_agent`, `remove_tool_from_agent` |
-| Graphs | 8 | `get_graph`, `get_draft_graph` (auto-resolves draft runner), `update_graph`, `update_component_parameters`, `save_graph_version`, `publish_to_production`, `promote_version_to_env`, `get_graph_history` |
+| Graphs | 13 | `get_graph`, `get_graph_v2`, `get_draft_graph` (auto-resolves draft runner), `update_graph`, `create_component_v2`, `update_component_v2`, `delete_component_v2`, `update_graph_topology_v2`, `update_component_parameters`, `save_graph_version`, `publish_to_production`, `promote_version_to_env`, `get_graph_history` |
 | Components | 2 | `list_components` (auto-filtered by release stage), `search_components` |
 | Runs | 5 | `run` (payload dict, async + polling), `list_runs`, `get_run`, `get_run_result`, `retry_run` |
 | API Keys | 6 | Project + org level keys |
@@ -94,7 +94,7 @@ All domain content lives in `docs.py` (single source of truth).
 | Crons | 9 | Create, pause/resume, manual trigger, execution history |
 | OAuth | 3 | List, check status, revoke |
 | Alert Emails | 3 | `list_alert_emails`, `create_alert_email`, `delete_alert_email` — per-project run failure recipients (developer+) |
-| Git Sync | 4 | `configure_git_sync`, `list_git_sync_configs`, `get_git_sync_config`, `disconnect_git_sync` — scan a GitHub repo for graph.json files, create projects + sync configs; one-way deploy on push (developer+) |
+| Git Sync | 4 | `configure_git_sync`, `list_git_sync_configs`, `get_git_sync_config`, `disconnect_git_sync` — scan a GitHub repo for `graph.json` files, create projects + sync configs; one-way deploy on push (developer+) |
 | **Docs** | **1** | **`get_guide(domain)` — fallback for domain docs** |
 
 `get_project_overview(project_id)` is the default orientation tool for any version-aware work. It returns the editable draft runner, current production runner, production-only capability hints, warnings, and safe next steps.
@@ -141,7 +141,7 @@ Custom tools (validation, multi-step, client-side logic) are still defined as `@
 | Model validation | `configure_agent` validates the requested model against the agent's available options and rejects unknown or deprecated names with a clear error listing valid choices. |
 | Source creation | `create_source` validates type-specific required fields and only supports `website`/`database` (developer+ role). |
 | Knowledge mutation | `update_document_chunks` is blocked by default unless the caller explicitly confirms a full replacement. |
-| Graph null IDs | `update_graph` auto-generates UUIDs for component instances **and edges** with `id: null`. |
+| Graph null IDs | `update_graph` auto-generates UUIDs for component instances **and edges** with `id: null`; granular v2 endpoints (`create_component_v2`, `update_component_v2`, `delete_component_v2`, `update_graph_topology_v2`) operate on individual components or topology. |
 | Canonical field expressions | The backend auto-generates a visible, editable RefNode field expression (e.g. `@{{<source_uuid>.output}}`) for canonical inputs when an edge exists and no user expression is set. User-provided expressions are never overwritten. The MCP should create edges and let the backend handle canonical wiring. |
 | Tool port configurations | Tool input ports support three setup modes: `ai_filled` (default, AI provides value), `user_set` (pre-configured, hidden from AI), `deactivated` (removed from tool interface). Managed via `port_configurations` in `get_graph`/`update_graph`. |
 | Unknown graph keys | `update_graph` warns about unrecognised top-level keys before forwarding. |

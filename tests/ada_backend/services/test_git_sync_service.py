@@ -63,10 +63,9 @@ class TestSyncGraphFromGithub:
     @pytest.mark.asyncio
     async def test_successful_sync(self, config):
         graph_json = json.dumps({
-            "component_instances": [],
-            "relationships": [],
+            "nodes": [],
             "edges": [],
-            "port_mappings": [],
+            "relationships": [],
         })
 
         session = MagicMock()
@@ -123,7 +122,10 @@ class TestSyncGraphFromGithub:
                 await sync_graph_from_github(session, config, "deadbeef")
 
         repo_mock.update_sync_status.assert_called_once_with(
-            session=session, config_id=config.id, status="fetch_failed", commit_sha="deadbeef",
+            session=session,
+            config_id=config.id,
+            status="fetch_failed",
+            commit_sha="deadbeef",
             error_message="404 Not Found",
         )
 
@@ -138,22 +140,22 @@ class TestSyncGraphFromGithub:
             ),
             patch("ada_backend.services.git_sync_service.git_sync_repository") as repo_mock,
         ):
-            with pytest.raises(GitSyncError, match="Invalid graph JSON"):
+            with pytest.raises(GitSyncError, match="Failed to fetch graph from GitHub"):
                 await sync_graph_from_github(session, config, "badjson1")
 
         call_kwargs = repo_mock.update_sync_status.call_args.kwargs
         assert call_kwargs["session"] is session
         assert call_kwargs["config_id"] == config.id
-        assert call_kwargs["status"] == "parse_failed"
+        assert call_kwargs["status"] == "fetch_failed"
         assert call_kwargs["commit_sha"] == "badjson1"
         assert call_kwargs["error_message"] is not None
 
     @pytest.mark.asyncio
     async def test_update_failure_records_error_message(self, config):
         graph_json = json.dumps({
-            "component_instances": [],
-            "relationships": [],
+            "nodes": [],
             "edges": [],
+            "relationships": [],
         })
         session = MagicMock()
         with (
@@ -174,16 +176,19 @@ class TestSyncGraphFromGithub:
                 await sync_graph_from_github(session, config, "badgraph1")
 
         repo_mock.update_sync_status.assert_called_once_with(
-            session=session, config_id=config.id, status="update_failed", commit_sha="badgraph1",
+            session=session,
+            config_id=config.id,
+            status="update_failed",
+            commit_sha="badgraph1",
             error_message="Parameter 'initial_prompt' not found",
         )
 
     @pytest.mark.asyncio
     async def test_deploy_failure_records_error_message(self, config):
         graph_json = json.dumps({
-            "component_instances": [],
-            "relationships": [],
+            "nodes": [],
             "edges": [],
+            "relationships": [],
         })
         session = MagicMock()
         with (
@@ -207,16 +212,19 @@ class TestSyncGraphFromGithub:
                 await sync_graph_from_github(session, config, "deployfail1")
 
         repo_mock.update_sync_status.assert_called_once_with(
-            session=session, config_id=config.id, status="deploy_failed", commit_sha="deployfail1",
+            session=session,
+            config_id=config.id,
+            status="deploy_failed",
+            commit_sha="deployfail1",
             error_message="DB connection lost",
         )
 
     @pytest.mark.asyncio
     async def test_success_clears_error_message(self, config):
         graph_json = json.dumps({
-            "component_instances": [],
-            "relationships": [],
+            "nodes": [],
             "edges": [],
+            "relationships": [],
         })
         session = MagicMock()
         with (
@@ -235,6 +243,71 @@ class TestSyncGraphFromGithub:
 
         repo_mock.update_sync_status.assert_called_once_with(
             session=session, config_id=config.id, status="success", commit_sha="goodcommit"
+        )
+
+    @pytest.mark.asyncio
+    async def test_v2_graph_map_format_sync(self, config):
+        config.graph_folder = ""
+        graph_map = json.dumps({
+            "nodes": [
+                {"file_key": "start", "is_start_node": True},
+                {"file_key": "agent"},
+            ],
+            "edges": [{"from": {"file_key": "start"}, "to": {"file_key": "agent"}}],
+        })
+        component_start = json.dumps({
+            "component_id": str(uuid4()),
+            "component_version_id": str(uuid4()),
+            "parameters": [],
+        })
+        component_agent = json.dumps({
+            "component_id": str(uuid4()),
+            "component_version_id": str(uuid4()),
+            "parameters": [],
+            "input_port_instances": [
+                {
+                    "name": "input",
+                    "field_expression": {
+                        "expression_json": {"type": "ref", "file_key": "start", "port": "output"},
+                    },
+                }
+            ],
+        })
+        session = MagicMock()
+
+        async def fetch_side_effect(*, repo, path, ref, installation_id):
+            if path == "graph.json":
+                return graph_map
+            if path == "start.json":
+                return component_start
+            if path == "agent.json":
+                return component_agent
+            raise Exception(f"unexpected path {path}")
+
+        with (
+            patch(
+                "ada_backend.services.git_sync_service.github_client.fetch_file",
+                new_callable=AsyncMock,
+                side_effect=fetch_side_effect,
+            ),
+            patch("ada_backend.services.git_sync_service.insert_graph_runner_and_bind_to_project"),
+            patch("ada_backend.services.git_sync_service.update_graph_service", new_callable=AsyncMock) as update_mock,
+            patch("ada_backend.services.git_sync_service.deploy_graph_service"),
+            patch("ada_backend.services.git_sync_service.track_deployed_to_production"),
+            patch("ada_backend.services.git_sync_service.git_sync_repository") as repo_mock,
+        ):
+            await sync_graph_from_github(session, config, "mapcommit")
+
+        assert update_mock.await_count == 1
+        graph_data = update_mock.call_args.kwargs["graph_project"]
+        start_instance = graph_data.component_instances[0]
+        agent_instance = graph_data.component_instances[1]
+        agent_port = agent_instance.input_port_instances[0]
+        resolved_expr = agent_port.field_expression.expression_json
+        assert resolved_expr["instance"] == str(start_instance.id)
+        assert "file_key" not in resolved_expr
+        repo_mock.update_sync_status.assert_called_once_with(
+            session=session, config_id=config.id, status="success", commit_sha="mapcommit"
         )
 
 
@@ -757,6 +830,51 @@ class TestHandleGithubPush:
 
         assert queued == 2
         assert failed == 0
+
+    def test_root_config_ignores_subdirectory_changes(self):
+        session = MagicMock()
+        config = SimpleNamespace(id=uuid4(), graph_folder="")
+        with (
+            patch(
+                "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
+                return_value=[config],
+            ),
+            patch("ada_backend.services.git_sync_service.push_git_sync_task", return_value=True) as push_mock,
+        ):
+            queued, failed = handle_github_push(
+                session,
+                "owner",
+                "repo",
+                "main",
+                changed_files={"subdir/some_file.json", "other/deep/file.py"},
+                commit_sha="abc123",
+            )
+
+        assert queued == 0
+        assert failed == 0
+        push_mock.assert_not_called()
+
+    def test_root_config_triggers_on_root_level_changes(self):
+        session = MagicMock()
+        config = SimpleNamespace(id=uuid4(), graph_folder="")
+        with (
+            patch(
+                "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
+                return_value=[config],
+            ),
+            patch("ada_backend.services.git_sync_service.push_git_sync_task", return_value=True) as push_mock,
+        ):
+            queued, failed = handle_github_push(
+                session,
+                "owner",
+                "repo",
+                "main",
+                changed_files={"graph.json", "subdir/unrelated.py"},
+                commit_sha="abc123",
+            )
+
+        assert queued == 1
+        push_mock.assert_called_once_with(config.id, "abc123")
 
 
 class TestPushGitSyncTaskDedup:

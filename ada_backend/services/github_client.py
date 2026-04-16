@@ -121,7 +121,7 @@ async def list_repo_contents(repo: str, path: str, ref: str, installation_id: in
 
 
 async def find_graph_json_folders(repo: str, ref: str, installation_id: int) -> list[str]:
-    """Return folder paths (relative to repo root) that contain a graph.json file.
+    """Return folder paths containing a graph.json file.
 
     Uses the Git Trees API with recursive mode for a single-call scan.
     Returns empty string "" for root-level graph.json, or "subfolder/path" otherwise.
@@ -144,4 +144,4 @@ async def find_graph_json_folders(repo: str, ref: str, installation_id: int) -> 
             folders.append("")
         elif path.endswith("/graph.json"):
             folders.append(path.rsplit("/graph.json", 1)[0])
-    return folders
+    return sorted(set(folders))

@@ -44,6 +44,16 @@ Complete endpoint reference for the Draft'n Run backend.
 | GET | `/projects/{project_id}/graph/{graph_runner_id}/load-copy` | JWT(Developer) | Load copy |
 | DELETE | `/projects/{project_id}/graph/{graph_runner_id}` | JWT(Developer) | Delete graph |
 
+## Graphs V2 (`graph_router_v2.py`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/v2/projects/{project_id}/graph/{graph_runner_id}` | JWT(Member) | Get top-level v2 graph info (`graph_map` only; nodes include `instance_id`, `label`) |
+| POST | `/v2/projects/{project_id}/graph/{graph_runner_id}/components` | JWT(Developer) | Create a new component instance + node in graph |
+| PUT | `/v2/projects/{project_id}/graph/{graph_runner_id}/components/{instance_id}` | JWT(Developer) | Update a single component instance (params, ports, integration) |
+| DELETE | `/v2/projects/{project_id}/graph/{graph_runner_id}/components/{instance_id}` | JWT(Developer) | Delete component instance + node + cascade edges/relationships |
+| PUT | `/v2/projects/{project_id}/graph/{graph_runner_id}/map` | JWT(Developer) | Update graph topology: edges, relationships, node metadata |
+
 ## Runs (`run_router.py`)
 
 | Method | Path | Auth | Description |

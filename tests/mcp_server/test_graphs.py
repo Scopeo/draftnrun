@@ -236,6 +236,11 @@ async def test_get_draft_graph_skips_tagged_drafts(monkeypatch, fake_mcp):
 def test_promote_version_to_env_registered(fake_mcp):
     graphs.register(fake_mcp)
     assert "promote_version_to_env" in fake_mcp.tools
+    assert "get_graph_v2" in fake_mcp.tools
+    assert "create_component_v2" in fake_mcp.tools
+    assert "update_component_v2" in fake_mcp.tools
+    assert "delete_component_v2" in fake_mcp.tools
+    assert "update_graph_topology_v2" in fake_mcp.tools
 
 
 # --- _convert_field_expressions_to_write_format ---

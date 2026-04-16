@@ -12,6 +12,8 @@ globs:
 - Error responses: always use `HTTPException` with specific status codes.
 - Secrets/credentials: never return in API responses.
 - When adding a new router: register in `main.py`, add to `ada_backend/docs/api-reference.md`, update cursor rules if new patterns emerge.
+- Graph save APIs now have versioned routes; keep legacy and `/v2/...` behavior isolated with dedicated schemas to avoid breaking clients.
+- V2 graph endpoints: granular endpoints (`POST/PUT/DELETE .../components`, `PUT .../map`) for front/MCP. Git sync calls the same service functions internally (no HTTP endpoint). Both paths use the same building blocks (`create_or_update_component_instance`, `upsert_component_node`, `upsert_edge`, etc.).
 
 ## HTTP Error Details — No Python Exceptions in Responses
 
