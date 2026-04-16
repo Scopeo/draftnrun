@@ -1,0 +1,124 @@
+{
+    "charts": [
+        {
+            "id": "agent-metrics",
+            "type": "line",
+            "title": "Agent Performance Metrics",
+            "data": {
+                "labels": [
+                    0,
+                    10,
+                    20,
+                    30,
+                    40,
+                    50,
+                    60,
+                    70,
+                    80,
+                    90,
+                    100
+                ],
+                "datasets": [
+                    {
+                        "label": "JunoAgent",
+                        "data": [
+                            80,
+                            150,
+                            180,
+                            270,
+                            210,
+                            160,
+                            160,
+                            202,
+                            265,
+                            210,
+                            270
+                        ],
+                        "borderColor": "#FF5733",
+                        "backgroundColor": "#FF5733",
+                        "fill": false
+                    },
+                    {
+                        "label": "RAG",
+                        "data": [
+                            80,
+                            125,
+                            105,
+                            130,
+                            215,
+                            195,
+                            140,
+                            160,
+                            230,
+                            300,
+                            220
+                        ],
+                        "borderColor": "#4CAF50",
+                        "backgroundColor": "#4CAF50",
+                        "fill": false
+                    }
+                ]
+            }
+        },
+        {
+            "id": "resource-distribution",
+            "type": "doughnut",
+            "title": "Resource Distribution",
+            "data": {
+                "labels": [
+                    "1",
+                    "2",
+                    "3",
+                    "4"
+                ],
+                "datasets": [
+                    {
+                        "data": [
+                            45,
+                            25,
+                            20,
+                            10
+                        ],
+                        "backgroundColor": [
+                            "#FF5733",
+                            "#4CAF50",
+                            "#2196F3",
+                            "#FFC107"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "id": "request-metrics",
+            "type": "bar",
+            "title": "Request Distribution",
+            "data": {
+                "labels": [
+                    "Mon",
+                    "Tue",
+                    "Wed",
+                    "Thu",
+                    "Fri",
+                    "Sat",
+                    "Sun"
+                ],
+                "datasets": [
+                    {
+                        "label": "Requests per Day",
+                        "data": [
+                            65,
+                            59,
+                            80,
+                            81,
+                            56,
+                            55,
+                            40
+                        ],
+                        "backgroundColor": "#FF5733"
+                    }
+                ]
+            }
+        }
+    ]
+}
