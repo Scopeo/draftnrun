@@ -28,6 +28,7 @@ SENSITIVE_FIELD_MARKERS: tuple[str, ...] = (
     "api_key",
     "apikey",
     "authorization",
+    "bearer",
     "client_secret",
     "cookie",
     "credential",
@@ -96,8 +97,10 @@ def redact_mapping(mapping: dict[str, Any]) -> dict[str, Any]:
 def scrub_sentry_event(event: Any) -> Any:
     """``before_send`` / ``before_send_log`` / ``before_send_transaction`` hook.
 
-    Returns the same event shape with sensitive values replaced. Mirrors the
-    scrubber already in use by ``mcp_server/server.py`` so the backend,
-    scheduler and workers get parity coverage.
+    Returns the same event shape with sensitive values replaced. Wired into
+    ``ada_backend/main.py``, ``ada_backend/run_scheduler.py`` and
+    ``workers/worker/base_worker.py``. ``mcp_server/server.py`` keeps its own
+    historical scrubber with different key-based and bearer-token regex logic;
+    parity between the two implementations is not guaranteed.
     """
     return redact_sensitive(event)

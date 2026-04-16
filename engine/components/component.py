@@ -281,11 +281,14 @@ class Component(ABC):
                         validated_inputs = InputModel(**data)
                     except ValidationError as e:
                         component_name = self.component_attributes.component_instance_name or self.__class__.__name__
+                        error_summary = "; ".join(
+                            f"{'.'.join(str(loc) for loc in err['loc'])}: {err['type']}" for err in e.errors()
+                        )
                         raise CoercionError(
                             source_type=type(data),
                             target_type=InputModel,
-                            value=data,
-                            reason=f"Failed to validate inputs for component '{component_name}': {e}",
+                            value=None,
+                            reason=f"Failed to validate inputs for component '{component_name}': {error_summary}",
                         ) from e
                     # Pass ctx that was explicitly provided by caller (e.g., ReActAgent)
                     output_model_instance = await self._run_without_io_trace(inputs=validated_inputs, ctx=ctx)

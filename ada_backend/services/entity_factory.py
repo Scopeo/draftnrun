@@ -314,7 +314,8 @@ class OAuthComponentFactory:
         if isinstance(definition_id, list):
             definition_id = definition_id[0]
         access_token = await resolve_oauth_access_token(definition_id, self.provider_config_key)
-        kwargs[self.target_param_name] = access_token  # may be None; component raises at run if required
+        # may be None; component raises at run if required
+        kwargs[self.target_param_name] = SecretStr(access_token) if access_token is not None else None
 
         for processor in self.parameter_processors:
             kwargs = processor(kwargs, self.constructor_params)

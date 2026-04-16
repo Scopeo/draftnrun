@@ -347,7 +347,7 @@ class AIAgent(Component):
             tool_output = await tool_to_use.run(ctx=ctx, **merged_arguments)
             LOGGER.debug("Tool %s returned (type=%s)", tool_function_name, type(tool_output).__name__)
         except Exception as e:
-            LOGGER.error("Error running tool %s: %s", tool_function_name, type(e).__name__)
+            LOGGER.error("Error running tool %s: %s", tool_function_name, type(e).__name__, exc_info=True)
             tool_output = AgentPayload(messages=[ChatMessage(role="assistant", content=str(e))], error=str(e))
         return tool_call_id, tool_output
 
@@ -496,7 +496,7 @@ class AIAgent(Component):
             )
 
             span.set_attributes({
-                SpanAttributes.LLM_OUTPUT_MESSAGES: json.dumps(chat_response.choices[0].message.model_dump()),
+                SpanAttributes.LLM_OUTPUT_MESSAGES: serialize_to_json(chat_response.choices[0].message.model_dump()),
             })
             span.set_status(trace_api.StatusCode.OK)
 

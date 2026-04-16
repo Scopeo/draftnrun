@@ -188,7 +188,7 @@ def test_evaluate_expression_varnode_logs_masked_secret(caplog):
 
     assert isinstance(result, SecretStr)
     assert LEAK_MARKER not in caplog.text
-    assert "**********" in caplog.text
+    assert "type=SecretStr" in caplog.text
 
 
 def test_evaluate_expression_concatnode_unwraps_for_runtime_without_log_leak(caplog):

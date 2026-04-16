@@ -114,7 +114,7 @@ def evaluate_expression(
     match expression:
         case VarNode() as var:
             result = evaluate_var(var)
-            LOGGER.debug(f"Evaluated variable expression for {target_field_name}: {result}")
+            LOGGER.debug("Evaluated variable expression for %s (type=%s)", target_field_name, type(result).__name__)
             return result
 
         case RefNode() as ref:
