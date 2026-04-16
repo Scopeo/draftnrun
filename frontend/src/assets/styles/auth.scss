@@ -1,0 +1,33 @@
+.auth-wrapper {
+  display: flex;
+  min-block-size: 100dvh;
+  overflow: hidden;
+}
+
+.auth-card-v2 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-illustration-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  block-size: 100%;
+  inline-size: 100%;
+}
+
+.auth-logo {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: var(--dnr-space-6);
+  inset-inline-start: var(--dnr-space-7);
+}
+
+.auth-title {
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.25;
+}

@@ -1,0 +1,141 @@
+:root {
+  // Spacing scale — core rhythm: 8 / 12 / 16 / 24 / 32 / 48 / 64
+  --dnr-space-0: 0px;
+  --dnr-space-1: 4px;
+  --dnr-space-2: 8px;
+  --dnr-space-3: 12px;
+  --dnr-space-4: 16px;
+  --dnr-space-5: 24px;
+  --dnr-space-6: 32px;
+  --dnr-space-7: 48px;
+  --dnr-space-8: 64px;
+
+  // Border radius
+  --dnr-radius-sm: 6px;
+  --dnr-radius-md: 8px;
+  --dnr-radius-lg: 12px;
+  --dnr-radius-xl: 16px;
+  --dnr-radius-full: 9999px;
+
+  // Elevation / depth — light mode
+  --dnr-elevation-0: none;
+  --dnr-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --dnr-elevation-2: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --dnr-elevation-3: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+
+  // Surface borders
+  --dnr-border-default: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  --dnr-border-subtle: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.5));
+
+  // Layout dimensions
+  --dnr-sidebar-width: 190px;
+  --dnr-toolbar-height: 56px;
+  --dnr-page-padding: 16px;
+  --dnr-page-padding-mobile: 16px;
+  --dnr-page-max-width-content: 960px;
+  --dnr-page-max-width-wide: 1280px;
+
+  // Dialog sizes
+  --dnr-dialog-sm: 480px;
+  --dnr-dialog-md: 640px;
+  --dnr-dialog-lg: 800px;
+  --dnr-dialog-xl: 1024px;
+
+  // Text emphasis (aliases for Vuetify's opacity system)
+  --dnr-text-high: var(--v-high-emphasis-opacity);
+  --dnr-text-medium: var(--v-medium-emphasis-opacity);
+  --dnr-text-disabled: var(--v-disabled-opacity);
+}
+
+.v-theme--dark {
+  --dnr-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.16), 0 1px 2px rgba(0, 0, 0, 0.12);
+  --dnr-elevation-2: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -2px rgba(0, 0, 0, 0.14);
+  --dnr-elevation-3: 0 10px 15px -3px rgba(0, 0, 0, 0.24), 0 4px 6px -4px rgba(0, 0, 0, 0.16);
+}
+
+// ─── Universal spacing corrections ────────────────────────────────────────────
+// Vuetify ships several structural components with tight or zero default
+// spacing. These rules set comfortable floor-level gaps app-wide so
+// individual components don't need per-instance margin/padding tweaks.
+
+.v-card-actions {
+  gap: var(--dnr-space-3);
+}
+
+:not(.v-card-actions) > .v-btn + .v-btn {
+  margin-inline-start: var(--dnr-space-3);
+}
+
+.v-chip:not(:first-child) {
+  margin-inline-start: var(--dnr-space-2);
+}
+
+.v-avatar:not(:last-child),
+.project-avatar:not(:last-child) {
+  margin-inline-end: var(--dnr-space-2);
+}
+
+.info-popover:not(:first-child) {
+  margin-inline-start: var(--dnr-space-2);
+}
+
+// Soften outlined borders — Vuetify defaults use currentColor (≈ black/white) which is too heavy.
+.v-card--variant-outlined,
+.v-btn-group--variant-outlined {
+  border-color: rgba(var(--v-border-color), var(--v-border-opacity)) !important;
+}
+
+.v-btn-group--variant-outlined.v-btn-group--divided .v-btn:not(:last-child) {
+  border-inline-end-color: rgba(var(--v-border-color), var(--v-border-opacity)) !important;
+}
+
+.v-field--variant-outlined .v-field__outline {
+  --v-field-border-opacity: 0.18;
+}
+
+// Prevent autocomplete dropdown jiggle caused by scrollbar appearing/disappearing on hover.
+.v-autocomplete__content .v-list {
+  scrollbar-gutter: stable;
+}
+
+// Pill-style tab labels (agent/project header tabs, cron dialogs) — readable body size
+.v-tabs-pill .v-tab {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+// Shrink the switch toggle to a modern, compact size while keeping label text untouched.
+.v-switch .v-selection-control__wrapper {
+  transform: scale(0.75);
+  transform-origin: center;
+}
+
+// Shrink comfortable-density inputs app-wide (48px → 36px).
+// Vuetify defaults set density="comfortable" on all form inputs; this overrides
+// the sizing variables globally so every field is compact without per-instance props.
+// Extra `.v-input` / `.v-list-item` class bumps specificity above Vuetify's own rules
+// (which load later in the cascade).
+.v-input.v-input--density-comfortable {
+  --v-input-control-height: 36px;
+  --v-input-padding-top: 6px;
+}
+
+.v-input.v-input--density-comfortable .v-field--variant-outlined,
+.v-input.v-input--density-comfortable .v-field--single-line,
+.v-input.v-input--density-comfortable .v-field--no-label {
+  --v-field-padding-bottom: 6px;
+}
+
+// Shrink compact-density list items (dropdowns, menus, sidebar, etc.) from 40px to 32px.
+.v-list-item.v-list-item--density-compact.v-list-item--one-line {
+  min-height: 32px;
+}
+
+// Tighter vertical rhythm for dialog / dense forms — apply class to a wrapper.
+.dnr-form-compact .v-row {
+  margin-block: -4px;
+
+  > [class*='v-col'] {
+    padding-block: 4px;
+  }
+}
