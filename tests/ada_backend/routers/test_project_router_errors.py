@@ -39,13 +39,12 @@ def _make_run(run_id=None):
 
 class TestChatAsyncNoneEnvironment:
     @pytest.mark.asyncio
-    @patch("ada_backend.routers.project_router.set_tracing_span")
     @patch("ada_backend.routers.project_router.setup_tracing_context")
     @patch("ada_backend.routers.project_router.push_run_task", return_value=True)
     @patch("ada_backend.routers.project_router.create_run")
     @patch("ada_backend.routers.project_router.get_project_env_binding")
     async def test_does_not_crash_when_environment_is_none(
-        self, mock_get_binding, mock_create_run, mock_push, mock_setup_ctx, mock_set_span
+        self, mock_get_binding, mock_create_run, mock_push, mock_setup_ctx
     ):
         run = _make_run()
         gr_id = uuid4()
@@ -67,16 +66,14 @@ class TestChatAsyncNoneEnvironment:
         assert mock_push.call_args.kwargs["env"] is None
         assert mock_push.call_args.kwargs["graph_runner_id"] == gr_id
         mock_setup_ctx.assert_called_once_with(session=session, project_id=project_id)
-        mock_set_span.assert_called_once_with(run_id=str(run.id))
 
     @pytest.mark.asyncio
-    @patch("ada_backend.routers.project_router.set_tracing_span")
     @patch("ada_backend.routers.project_router.setup_tracing_context")
     @patch("ada_backend.routers.project_router.push_run_task", return_value=True)
     @patch("ada_backend.routers.project_router.create_run")
     @patch("ada_backend.routers.project_router.get_project_env_binding")
     async def test_passes_env_value_when_environment_is_present(
-        self, mock_get_binding, mock_create_run, mock_push, mock_setup_ctx, mock_set_span
+        self, mock_get_binding, mock_create_run, mock_push, mock_setup_ctx
     ):
         mock_env = EnvType.DRAFT
         run = _make_run()
@@ -98,14 +95,13 @@ class TestChatAsyncNoneEnvironment:
         assert mock_push.call_args.kwargs["graph_runner_id"] == gr_id
 
     @pytest.mark.asyncio
-    @patch("ada_backend.routers.project_router.set_tracing_span")
     @patch("ada_backend.routers.project_router.setup_tracing_context")
     @patch("ada_backend.routers.project_router.push_run_task", return_value=False)
     @patch("ada_backend.routers.project_router.update_run_status")
     @patch("ada_backend.routers.project_router.create_run")
     @patch("ada_backend.routers.project_router.get_project_env_binding")
     async def test_returns_503_when_push_fails_with_none_env(
-        self, mock_get_binding, mock_create_run, mock_update, mock_push, mock_setup_ctx, mock_set_span
+        self, mock_get_binding, mock_create_run, mock_update, mock_push, mock_setup_ctx
     ):
         mock_get_binding.return_value = _make_binding(environment=None)
         mock_create_run.return_value = _make_run()

@@ -159,7 +159,6 @@ class TestRetryRun:
             patch(f"{MODULE}.create_run", return_value=created_run) as create_run_mock,
             patch(f"{MODULE}.push_run_task", return_value=True) as push_mock,
             patch(f"{MODULE}.setup_tracing_context") as setup_ctx_mock,
-            patch(f"{MODULE}.set_tracing_span") as set_span_mock,
         ):
             repo.get_run.return_value = existing_run
             repo.get_latest_run_by_retry_group.return_value = latest_attempt
@@ -178,7 +177,6 @@ class TestRetryRun:
         push_mock.assert_called_once()
         assert push_mock.call_args.kwargs["input_data"] == {"messages": [{"role": "user", "content": "retry"}]}
         setup_ctx_mock.assert_called_once_with(session=session, project_id=project_id)
-        set_span_mock.assert_called_once_with(run_id=str(new_run_id))
 
     def test_raises_when_no_persisted_input_exists(self):
         session = self._make_session()
