@@ -33,30 +33,43 @@ class TracingSpanParams:
 _tracing_context: ContextVar[Optional[TracingSpanParams]] = ContextVar("_tracing_context", default=None)
 
 _SPAN_FIELDS = {f.name for f in dataclasses.fields(TracingSpanParams)}
-SENTRY_TAG_FIELDS = (
-    "run_id",
-    "cron_id",
-    "trace_id",
-    "project_id",
-    "organization_id",
-    "environment",
-    "call_type",
-    "graph_runner_id",
-    "tag_name",
-)
+
+# Mapping of TracingSpanParams attribute name → Sentry tag/attribute key.
+# Keys must exist on TracingSpanParams. Values are the key used on Sentry's
+# isolation scope (tags and attributes). `environment` is remapped to `env` to
+# avoid shadowing Sentry's native `environment` tag (which identifies staging vs.
+# prod). All other fields keep the same name on both sides.
+SENTRY_TAG_FIELDS: dict[str, str] = {
+    "run_id": "run_id",
+    "cron_id": "cron_id",
+    "trace_id": "trace_id",
+    "project_id": "project_id",
+    "organization_id": "organization_id",
+    "environment": "env",
+    "call_type": "call_type",
+    "graph_runner_id": "graph_runner_id",
+    "tag_name": "tag_name",
+}
+
+_invalid_sentry_fields = set(SENTRY_TAG_FIELDS) - _SPAN_FIELDS
+if _invalid_sentry_fields:
+    raise RuntimeError(
+        f"SENTRY_TAG_FIELDS contains attributes not defined on TracingSpanParams: "
+        f"{sorted(_invalid_sentry_fields)}"
+    )
 
 
 def _sync_to_sentry(params: TracingSpanParams) -> None:
     isolation_scope = sentry_sdk.get_isolation_scope()
-    for field_name in SENTRY_TAG_FIELDS:
-        field_value = getattr(params, field_name)
+    for attr_name, sentry_key in SENTRY_TAG_FIELDS.items():
+        field_value = getattr(params, attr_name)
         if field_value is None:
-            isolation_scope.remove_tag(field_name)
-            isolation_scope.remove_attribute(field_name)
+            isolation_scope.remove_tag(sentry_key)
+            isolation_scope.remove_attribute(sentry_key)
             continue
         str_value = str(field_value)
-        isolation_scope.set_tag(field_name, str_value)
-        isolation_scope.set_attribute(field_name, str_value)
+        isolation_scope.set_tag(sentry_key, str_value)
+        isolation_scope.set_attribute(sentry_key, str_value)
 
 
 def set_tracing_span(**kwargs) -> None:

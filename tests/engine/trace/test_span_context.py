@@ -129,7 +129,7 @@ class TestSetTracingSpan:
         monkeypatch.setattr(
             span_context,
             "SENTRY_TAG_FIELDS",
-            (*span_context.SENTRY_TAG_FIELDS, "conversation_id"),
+            {**span_context.SENTRY_TAG_FIELDS, "conversation_id": "conversation_id"},
         )
         mock_scope = Mock()
         with patch("engine.trace.span_context.sentry_sdk.get_isolation_scope", return_value=mock_scope):
@@ -142,3 +142,28 @@ class TestSetTracingSpan:
 
         assert ("conversation_id", "conv-1") in [args.args for args in mock_scope.set_tag.call_args_list]
         assert ("conversation_id", "conv-1") in [args.args for args in mock_scope.set_attribute.call_args_list]
+
+    def test_environment_is_remapped_to_env_sentry_key(self):
+        from ada_backend.database.models import EnvType
+
+        mock_scope = Mock()
+        with patch("engine.trace.span_context.sentry_sdk.get_isolation_scope", return_value=mock_scope):
+            set_tracing_span(environment=EnvType.DRAFT)
+
+        tag_keys = {args.args[0] for args in mock_scope.set_tag.call_args_list}
+        attr_keys = {args.args[0] for args in mock_scope.set_attribute.call_args_list}
+        assert "env" in tag_keys
+        assert "env" in attr_keys
+        assert "environment" not in tag_keys
+        assert "environment" not in attr_keys
+
+    def test_environment_removal_uses_env_sentry_key(self):
+        from ada_backend.database.models import EnvType
+
+        mock_scope = Mock()
+        with patch("engine.trace.span_context.sentry_sdk.get_isolation_scope", return_value=mock_scope):
+            set_tracing_span(environment=EnvType.DRAFT)
+            set_tracing_span(environment=None)
+
+        mock_scope.remove_tag.assert_any_call("env")
+        mock_scope.remove_attribute.assert_any_call("env")

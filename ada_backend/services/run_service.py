@@ -16,6 +16,7 @@ from ada_backend.repositories.run_input_repository import get_run_input
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.run_schema import AsyncRunAcceptedSchema, RunResponseSchema
 from ada_backend.services.alerting.alert_service import maybe_send_run_failure_alert
+from ada_backend.services.agent_runner_service import setup_tracing_context
 from ada_backend.services.errors import (
     InvalidRunStatusTransition,
     ProjectNotFound,
@@ -396,6 +397,9 @@ def retry_run(
         retry_group_id=retry_group_id,
         attempt_number=next_attempt,
     )
+
+    setup_tracing_context(session=session, project_id=project_id)
+    set_tracing_span(run_id=str(retried_run.id))
 
     pushed = push_run_task(
         run_id=retried_run.id,

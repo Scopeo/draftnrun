@@ -140,8 +140,11 @@ In ingestion workers, `ingestion_script.ingest_db_source.upload_db_source()` sho
 `set_tracing_span(**kwargs)` is the canonical place to mutate tracing context. It merges partial updates into the
 existing `ContextVar` entry and then synchronizes selected fields to Sentry through `_sync_to_sentry`.
 
-- `SENTRY_TAG_FIELDS` defines the allowlist propagated to Sentry (`run_id`, `cron_id`, `trace_id`, `project_id`,
-  `organization_id`, `environment`, `call_type`, `graph_runner_id`, `tag_name`)
+- `SENTRY_TAG_FIELDS` is a `dict[str, str]` mapping each `TracingSpanParams` attribute to the key used on the Sentry
+  isolation scope. Currently: `run_id`, `cron_id`, `trace_id`, `project_id`, `organization_id`,
+  `environment` → `env`, `call_type`, `graph_runner_id`, `tag_name`. The `environment` attribute is deliberately
+  remapped to the Sentry key `env` so it does not shadow Sentry's native `environment` tag (which identifies
+  staging vs. prod deployments).
 - non-`None` values are stringified and propagated to **both** streams on the isolation scope:
   - `set_tag(...)` for the events/issues stream (searchable on Sentry Issues)
   - `set_attribute(...)` for the logs/metrics stream (searchable on Sentry Logs)
@@ -149,11 +152,23 @@ existing `ContextVar` entry and then synchronizes selected fields to Sentry thro
 - calling `set_tracing_span` is safe when Sentry is disabled; tag/attribute operations are no-ops until `sentry_sdk.init` runs
 
 When introducing a new tracing field, add it to `TracingSpanParams` first. If it should be searchable in Sentry,
-also add it to `SENTRY_TAG_FIELDS` so the propagation remains centralized and endpoint-agnostic.
+also add it to `SENTRY_TAG_FIELDS` so the propagation remains centralized and endpoint-agnostic. At import time,
+`span_context` asserts that every key in `SENTRY_TAG_FIELDS` is a real `TracingSpanParams` attribute.
 Avoid mutating `TracingSpanParams` fields directly after reading the context; use `set_tracing_span(...)` so Sentry
 stays in sync. `GraphRunner.run()` is the only exception: it updates the existing `trace_id` before calling
 `set_tracing_span(trace_id=...)` so the value survives root span isolation and remains available to callers after
-failures. `run_id` is injected at run boundaries in `run_with_tracking()` and `RunQueueWorker.process_payload()`.
+failures.
+
+`run_id`, `project_id`, and `organization_id` are injected at the earliest point of each run flow so that even
+router-level logs emitted *before* the run reaches the worker (e.g. `push_run_task` enqueue logs) already carry
+the tags:
+- Sync path: `run_with_tracking()` calls `set_tracing_span(run_id=...)` right after (re)creating the run; project
+  and organization come from the upstream `setup_tracing_context(...)` call in `run_agent(...)`.
+- Async enqueue path (`POST /projects/{id}/graphs/{gr_id}/chat/async` and `retry_run()`): both call
+  `setup_tracing_context(session, project_id)` + `set_tracing_span(run_id=str(run.id))` immediately after
+  `create_run(...)`, before `push_run_task(...)`.
+- Worker path: `RunQueueWorker.process_payload(...)` opens a fresh `sentry_sdk.isolation_scope()` and re-sets
+  `run_id` so tags are isolated per payload (no leakage across consecutive runs on the same worker thread).
 
 ## Key Files
 
