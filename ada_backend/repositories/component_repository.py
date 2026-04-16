@@ -410,6 +410,14 @@ def get_component_sub_components(
     )
 
 
+def delete_sub_component_inputs_for_instance(session: Session, instance_id: UUID) -> None:
+    session.query(db.ComponentSubInput).filter(
+        (db.ComponentSubInput.parent_component_instance_id == instance_id)
+        | (db.ComponentSubInput.child_component_instance_id == instance_id)
+    ).delete(synchronize_session="fetch")
+    session.commit()
+
+
 def get_component_name_from_instance(
     session: Session,
     component_instance_id: UUID,

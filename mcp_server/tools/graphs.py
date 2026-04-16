@@ -19,7 +19,11 @@ logger = logging.getLogger(__name__)
 
 _P_PROJECT = Param("project_id", UUID, description="The project ID (from list_projects or get_project_overview).")
 _P_RUNNER = Param("graph_runner_id", UUID, description="The graph runner version ID (from get_project_overview).")
+_P_INSTANCE = Param(
+    "instance_id", UUID, description="The component instance ID (from get_graph or get_graph_v2)."
+)
 _GRAPH_BASE = "/projects/{project_id}/graph/{graph_runner_id}"
+_GRAPH_BASE_V2 = "/v2/projects/{project_id}/graph/{graph_runner_id}"
 
 PROXY_SPECS: list[ToolSpec] = [
     ToolSpec(
@@ -34,6 +38,19 @@ PROXY_SPECS: list[ToolSpec] = [
         ),
         method="get",
         path=_GRAPH_BASE,
+        path_params=(_P_PROJECT, _P_RUNNER),
+        trim=False,
+    ),
+    ToolSpec(
+        name="get_graph_v2",
+        description=(
+            "Get the graph using the file-based v2 format.\n\n"
+            "Returns top-level graph info only in graph_map nodes, where each node "
+            "includes file_key, instance_id, and label. "
+            "Node references in edges can use id or file_key."
+        ),
+        method="get",
+        path=_GRAPH_BASE_V2,
         path_params=(_P_PROJECT, _P_RUNNER),
         trim=False,
     ),
@@ -75,6 +92,82 @@ PROXY_SPECS: list[ToolSpec] = [
         method="get",
         path=f"{_GRAPH_BASE}/modification-history",
         path_params=(_P_PROJECT, _P_RUNNER),
+    ),
+    ToolSpec(
+        name="create_component_v2",
+        description=(
+            "Create a new component instance in a graph (v2).\n\n"
+            "Adds a single component to the draft graph. Returns the new instance_id. "
+            "After creation, use update_graph_topology_v2 to connect it with edges."
+        ),
+        method="post",
+        path=f"{_GRAPH_BASE_V2}/components",
+        path_params=(_P_PROJECT, _P_RUNNER),
+        body_param=Param(
+            "component_data",
+            dict,
+            description=(
+                "Component definition: {component_id, component_version_id, label, "
+                "is_start_node, parameters, input_port_instances, ...}."
+            ),
+        ),
+    ),
+    ToolSpec(
+        name="update_component_v2",
+        description=(
+            "Update a single component instance's parameters and ports (v2).\n\n"
+            "Only updates the specified component — does not touch topology. "
+            "Optionally update label and is_start_node."
+        ),
+        method="put",
+        path=f"{_GRAPH_BASE_V2}/components/{{instance_id}}",
+        path_params=(_P_PROJECT, _P_RUNNER, _P_INSTANCE),
+        body_param=Param(
+            "component_data",
+            dict,
+            description=(
+                "Component update: {parameters, input_port_instances, label?, is_start_node?, ...}."
+            ),
+        ),
+    ),
+    ToolSpec(
+        name="delete_component_v2",
+        description=(
+            "Delete a component instance from a graph (v2).\n\n"
+            "Removes the component, its node, and cascades deletion of edges "
+            "and relationships referencing it."
+        ),
+        method="delete",
+        path=f"{_GRAPH_BASE_V2}/components/{{instance_id}}",
+        path_params=(_P_PROJECT, _P_RUNNER, _P_INSTANCE),
+    ),
+    ToolSpec(
+        name="update_graph_topology_v2",
+        description=(
+            "Update graph topology: edges, relationships, and node metadata (v2).\n\n"
+            "⚠️ REQUIRED: Call `get_guide('graphs')` before using this tool for the "
+            "first time in a session. The guide contains edge format and topology rules "
+            "that are critical for a successful call.\n\n"
+            "⚠️ CONCURRENT EDIT WARNING: If the project is open in the Draft'n Run "
+            "web UI, the browser may overwrite API changes (last-write-wins). "
+            "Close the browser tab before calling this tool.\n\n"
+            "This tool mutates the draft graph and uses full-replace edge semantics — "
+            "edges not in the payload are deleted. Always send the complete set of edges "
+            "to avoid partial-topology writes and autosave races.\n\n"
+            "All referenced instance_ids must already exist in the graph."
+        ),
+        method="put",
+        path=f"{_GRAPH_BASE_V2}/map",
+        path_params=(_P_PROJECT, _P_RUNNER),
+        body_param=Param(
+            "topology_data",
+            dict,
+            description=(
+                "Topology payload: {nodes: [{instance_id, label, is_start_node}], "
+                "edges: [{from: {id}, to: {id}, order?}], "
+                "relationships: [{parent: {id}, child: {id}, parameter_name, order?}]}."
+            ),
+        ),
     ),
 ]
 

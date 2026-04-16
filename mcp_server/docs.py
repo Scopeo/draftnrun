@@ -463,6 +463,24 @@ and use it consistently across the payload.
 
 For existing nodes, include their current `id` from `get_graph`.
 
+### File-based v2 graph endpoints
+
+The v2 endpoints support two save granularities:
+
+**Granular save (front/MCP):**
+- `create_component_v2` — add a new component to the graph, returns `instance_id`
+- `update_component_v2` — update a single component's parameters, ports, integration
+- `delete_component_v2` — remove a component and cascade-delete its edges/relationships
+- `update_graph_topology_v2` — sync edges, relationships, and node metadata (label, is_start_node); \
+  all referenced instance_ids must already exist; edges use full-replace semantics
+
+Typical flow: create component → update topology to connect it.
+
+Git sync uses the same service functions internally (no HTTP endpoint).
+
+**Read:**
+- `get_graph_v2` returns `graph_map.nodes` with `instance_id`, `label`, and `is_start_node`
+
 ### Critical: always use current instance IDs
 
 After `publish_to_production`, the backend creates a fresh draft with remapped instance UUIDs. \

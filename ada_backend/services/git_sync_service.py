@@ -13,9 +13,10 @@ from ada_backend.repositories.graph_runner_repository import (
     insert_graph_runner_and_bind_to_project,
 )
 from ada_backend.schemas.git_sync_schemas import GitSyncImportResult
-from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
+from ada_backend.schemas.pipeline.graph_schema import GraphSaveV2Schema, GraphUpdateSchema
 from ada_backend.services import github_client
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
+from ada_backend.services.graph.graph_v2_mapper_service import graph_save_v2_to_graph_update
 from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.services.project_service import create_project_with_graph_runner
 from ada_backend.utils.redis_client import push_git_sync_task
@@ -38,6 +39,42 @@ class GraphJsonNotFound(Exception):
         self.repo = repo
         self.branch = branch
         super().__init__(f"No graph.json found in {repo} on branch {branch}")
+
+
+async def _fetch_graph_update_payload(config: db.GitSyncConfig, commit_sha: str) -> GraphUpdateSchema:
+    graph_path = f"{config.graph_folder}/graph.json" if config.graph_folder else "graph.json"
+
+    raw = await github_client.fetch_file(
+        repo=config.github_repo,
+        path=graph_path,
+        ref=commit_sha,
+        installation_id=config.github_installation_id,
+    )
+    graph_map = json.loads(raw)
+
+    nodes = graph_map.get("nodes", [])
+    components = []
+    for node in nodes:
+        file_key = node.get("file_key")
+        if not file_key:
+            raise ValueError("Each node in graph.json must define file_key")
+        component_path = (
+            f"{config.graph_folder}/{file_key}.json"
+            if config.graph_folder
+            else f"{file_key}.json"
+        )
+        component_raw = await github_client.fetch_file(
+            repo=config.github_repo,
+            path=component_path,
+            ref=commit_sha,
+            installation_id=config.github_installation_id,
+        )
+        component_data = json.loads(component_raw)
+        component_data["file_key"] = file_key
+        components.append(component_data)
+
+    payload_v2 = GraphSaveV2Schema(graph_map=graph_map, components=components)
+    return graph_save_v2_to_graph_update(payload_v2)
 
 
 async def import_from_github(
@@ -159,18 +196,11 @@ async def sync_graph_from_github(
     config: db.GitSyncConfig,
     commit_sha: str,
 ) -> None:
-    graph_path = f"{config.graph_folder}/graph.json" if config.graph_folder else "graph.json"
     try:
-        raw = await github_client.fetch_file(
-            repo=config.github_repo,
-            path=graph_path,
-            ref=commit_sha,
-            installation_id=config.github_installation_id,
-        )
+        graph_data = await _fetch_graph_update_payload(config, commit_sha)
     except Exception as e:
         LOGGER.error(
-            "Failed to fetch %s from %s at %s: %s",
-            graph_path,
+            "Failed to fetch graph payload from %s at %s: %s",
             config.github_repo,
             commit_sha,
             e,
@@ -180,16 +210,6 @@ async def sync_graph_from_github(
             error_message=str(e),
         )
         raise GitSyncError(f"Failed to fetch graph from GitHub: {e}") from e
-
-    try:
-        graph_data = GraphUpdateSchema(**json.loads(raw))
-    except Exception as e:
-        LOGGER.error("Failed to parse graph JSON for project %s: %s", config.project_id, e)
-        git_sync_repository.update_sync_status(
-            session=session, config_id=config.id, status="parse_failed", commit_sha=commit_sha,
-            error_message=str(e),
-        )
-        raise GitSyncError(f"Invalid graph JSON: {e}") from e
 
     new_runner_id = uuid4()
     try:
@@ -275,9 +295,13 @@ def handle_github_push(
     queued = 0
     failed = 0
     for config in configs:
-        graph_file = f"{config.graph_folder}/graph.json" if config.graph_folder else "graph.json"
-        if graph_file not in changed_files:
-            continue
+        if config.graph_folder:
+            folder_prefix = f"{config.graph_folder}/"
+            if not any(path.startswith(folder_prefix) for path in changed_files):
+                continue
+        else:
+            if not any("/" not in path for path in changed_files):
+                continue
 
         if push_git_sync_task(config.id, commit_sha):
             queued += 1

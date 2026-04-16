@@ -29,6 +29,7 @@ from ada_backend.routers.git_sync_router import org_router as git_sync_org_route
 from ada_backend.routers.git_sync_router import webhook_router as git_sync_webhook_router
 from ada_backend.routers.global_secret_router import router as global_secret_router
 from ada_backend.routers.graph_router import router as graph_router
+from ada_backend.routers.graph_router_v2 import router as graph_router_v2
 from ada_backend.routers.ingestion_database_router import router as ingestion_database_router
 from ada_backend.routers.ingestion_task_router import router as ingestion_task_router
 from ada_backend.routers.integration_router import router as integration_router
@@ -260,6 +261,7 @@ app.include_router(components_router)
 app.include_router(component_version_router)
 app.include_router(categories_router)
 app.include_router(graph_router)
+app.include_router(graph_router_v2)
 app.include_router(quality_assurance_router)
 app.include_router(qa_stream_router)
 app.include_router(llm_judges_router)
