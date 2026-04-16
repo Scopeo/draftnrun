@@ -129,6 +129,7 @@ async def import_from_github(
             template=None,
             graph_id=uuid4(),
             add_input=True,
+            tags=["github"],
         )
 
         try:

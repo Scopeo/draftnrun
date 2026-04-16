@@ -14,12 +14,15 @@ from ada_backend.repositories.graph_runner_repository import (
     insert_graph_runner,
 )
 from ada_backend.repositories.project_repository import (
+    add_tags_to_project,
     delete_project,
     get_project,
     get_project_with_details,
     get_projects_by_organization_with_details,
+    get_tags_for_organization,
     get_workflows_by_organization,
     insert_project,
+    remove_tag_from_project,
     update_project,
 )
 from ada_backend.schemas.project_schema import (
@@ -85,8 +88,9 @@ def get_projects_by_organization_with_details_service(
     organization_id: UUID,
     type: Optional[ProjectType] = ProjectType.WORKFLOW,
     include_templates: Optional[bool] = False,
+    tags: Optional[list[str]] = None,
 ) -> list[ProjectWithGraphRunnersSchema]:
-    return get_projects_by_organization_with_details(session, organization_id, type, include_templates)
+    return get_projects_by_organization_with_details(session, organization_id, type, include_templates, tags=tags)
 
 
 def delete_project_service(session: Session, project_id: UUID) -> ProjectDeleteResponse:
@@ -113,6 +117,7 @@ def create_project_with_graph_runner(
     add_input: bool,
     icon: Optional[str] = None,
     icon_color: Optional[str] = None,
+    tags: Optional[list[str]] = None,
 ) -> tuple:
     """
     Shared helper function to create a project with a graph runner.
@@ -150,6 +155,7 @@ def create_project_with_graph_runner(
         project_type=project_type,
         icon=icon,
         icon_color=icon_color,
+        tags=tags,
     )
 
     bind_graph_runner_to_project(
@@ -182,12 +188,14 @@ def create_workflow(
         add_input=True,
         icon=project_schema.icon,
         icon_color=project_schema.icon_color,
+        tags=project_schema.tags,
     )
 
     track_project_created(
         user_id, organization_id, project.id, project.name,
         project_type="workflow", from_template=project_schema.template is not None,
     )
+    tags = sorted(pt.tag for pt in project.tags) if project.tags else []
     return ProjectWithGraphRunnersSchema(
         project_id=project.id,
         project_name=project.name,
@@ -204,6 +212,7 @@ def create_workflow(
                 env=EnvType.DRAFT,
             )
         ],
+        tags=tags,
     )
 
 
@@ -220,6 +229,7 @@ def update_project_service(
         description=project_schema.description,
         icon=project_schema.icon,
         icon_color=project_schema.icon_color,
+        tags=project_schema.tags,
     )
     if not project:
         raise ProjectNotFound(project_id)
@@ -231,3 +241,32 @@ def update_project_service(
         icon=project.icon,
         icon_color=project.icon_color,
     )
+
+
+def add_tags_to_project_service(
+    session: Session,
+    project_id: UUID,
+    tags: list[str],
+) -> list[str]:
+    project = get_project(session, project_id=project_id)
+    if not project:
+        raise ProjectNotFound(project_id)
+    return add_tags_to_project(session, project_id, tags)
+
+
+def remove_tag_from_project_service(
+    session: Session,
+    project_id: UUID,
+    tag: str,
+) -> list[str]:
+    project = get_project(session, project_id=project_id)
+    if not project:
+        raise ProjectNotFound(project_id)
+    return remove_tag_from_project(session, project_id, tag)
+
+
+def get_tags_for_organization_service(
+    session: Session,
+    organization_id: UUID,
+) -> list[str]:
+    return get_tags_for_organization(session, organization_id)

@@ -2,7 +2,7 @@ import logging
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import and_, exists, or_
+from sqlalchemy import and_, distinct, exists, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from ada_backend.database import models as db
@@ -13,6 +13,10 @@ from ada_backend.schemas.project_schema import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _extract_tags(project: db.Project) -> list[str]:
+    return sorted(pt.tag for pt in project.tags) if project.tags else []
 
 
 # --- READ operations ---
@@ -54,7 +58,8 @@ def get_project_with_details(
                 db.GraphRunner.version_name,
                 db.GraphRunner.change_log,
                 db.GraphRunner.created_at,
-            )
+            ),
+            joinedload(db.Project.tags),
         )
         .filter(db.Project.id == project_id)
         .first()
@@ -79,7 +84,6 @@ def get_project_with_details(
         if env_binding.graph_runner
     ]
 
-    # Sort by GraphRunner.created_at, ProjectEnvironmentBinding.created_at, GraphRunner.id
     graph_runners_data.sort(
         key=lambda x: (x[0].created_at, x[1].created_at, x[0].id)
     )
@@ -97,6 +101,7 @@ def get_project_with_details(
         organization_id=project.organization_id,
         created_at=str(project.created_at),
         updated_at=str(project.updated_at),
+        tags=_extract_tags(project),
     )
 
 
@@ -113,9 +118,11 @@ def get_projects_by_organization_with_details(
     organization_id: UUID,
     type: Optional[db.ProjectType] = db.ProjectType.WORKFLOW,
     include_templates: bool = False,
+    tags: Optional[list[str]] = None,
 ) -> list[ProjectWithGraphRunnersSchema]:
     """
     Get projects (both workflow and agent) by organization with graph runners and templates.
+    When tags is provided, only projects that have ALL specified tags are returned.
     """
 
     query = session.query(db.Project).options(
@@ -126,11 +133,11 @@ def get_projects_by_organization_with_details(
             db.GraphRunner.tag_version,
             db.GraphRunner.version_name,
             db.GraphRunner.change_log,
-        )
+        ),
+        joinedload(db.Project.tags),
     )
 
     if include_templates:
-        # Include own projects + production templates from template org
         has_production = exists().where(
             and_(
                 db.ProjectEnvironmentBinding.project_id == db.Project.id,
@@ -149,17 +156,27 @@ def get_projects_by_organization_with_details(
     if type:
         query = query.filter(db.Project.type == type)
 
+    if tags:
+        for tag in tags:
+            normalized = tag.lower().strip()
+            query = query.filter(
+                exists().where(
+                    and_(
+                        db.ProjectTag.project_id == db.Project.id,
+                        db.ProjectTag.tag == normalized,
+                    )
+                )
+            )
+
     projects = query.order_by(db.Project.created_at).all()
 
     project_schemas = []
     for project in projects:
-        # Context-aware: templates only when viewed from other orgs
         is_template = (
             str(organization_id) != TEMPLATE_ORGANIZATION_ID
             and str(project.organization_id) == TEMPLATE_ORGANIZATION_ID
         )
 
-        # For templates, only include production graph runners
         graph_runners = [
             GraphRunnerEnvDTO(
                 graph_runner_id=env_binding.graph_runner.id,
@@ -185,6 +202,7 @@ def get_projects_by_organization_with_details(
                 updated_at=str(project.updated_at),
                 graph_runners=graph_runners,
                 is_template=is_template,
+                tags=_extract_tags(project),
             )
         )
 
@@ -201,6 +219,7 @@ def insert_project(
     project_type: Optional[db.ProjectType] = db.ProjectType.WORKFLOW,
     icon: Optional[str] = None,
     icon_color: Optional[str] = None,
+    tags: Optional[list[str]] = None,
 ) -> db.Project:
     if project_type == db.ProjectType.WORKFLOW:
         project = db.WorkflowProject(
@@ -225,6 +244,9 @@ def insert_project(
     else:
         raise ValueError(f"Invalid project_type: {project_type!r}")
     session.add(project)
+    if tags:
+        for tag in tags:
+            session.add(db.ProjectTag(project_id=project_id, tag=tag.lower().strip()))
     session.commit()
     session.refresh(project)
     return project
@@ -238,6 +260,7 @@ def update_project(
     description: Optional[str] = None,
     icon: Optional[str] = None,
     icon_color: Optional[str] = None,
+    tags: Optional[list[str]] = None,
 ) -> db.Project:
     project = get_project(session, project_id=project_id)
     if not project:
@@ -250,9 +273,63 @@ def update_project(
         project.icon = icon
     if icon_color is not None:
         project.icon_color = icon_color
+    if tags is not None:
+        session.query(db.ProjectTag).filter(db.ProjectTag.project_id == project_id).delete()
+        for tag in tags:
+            session.add(db.ProjectTag(project_id=project_id, tag=tag.lower().strip()))
     session.commit()
     session.refresh(project)
     return project
+
+
+# --- TAG operations ---
+def add_tags_to_project(
+    session: Session,
+    project_id: UUID,
+    tags: list[str],
+) -> list[str]:
+    existing = {
+        row.tag
+        for row in session.query(db.ProjectTag.tag).filter(db.ProjectTag.project_id == project_id).all()
+    }
+    for tag in tags:
+        normalized = tag.lower().strip()
+        if normalized and normalized not in existing:
+            session.add(db.ProjectTag(project_id=project_id, tag=normalized))
+            existing.add(normalized)
+    session.commit()
+    return sorted(existing)
+
+
+def remove_tag_from_project(
+    session: Session,
+    project_id: UUID,
+    tag: str,
+) -> list[str]:
+    session.query(db.ProjectTag).filter(
+        db.ProjectTag.project_id == project_id,
+        db.ProjectTag.tag == tag.lower().strip(),
+    ).delete()
+    session.commit()
+    remaining = session.query(db.ProjectTag.tag).filter(db.ProjectTag.project_id == project_id).all()
+    return sorted(row.tag for row in remaining)
+
+
+def get_tags_for_organization(
+    session: Session,
+    organization_id: UUID,
+) -> list[str]:
+    rows = (
+        session.execute(
+            select(distinct(db.ProjectTag.tag))
+            .join(db.Project, db.ProjectTag.project_id == db.Project.id)
+            .where(db.Project.organization_id == organization_id)
+            .order_by(db.ProjectTag.tag)
+        )
+        .scalars()
+        .all()
+    )
+    return list(rows)
 
 
 # --- DELETE operations ---

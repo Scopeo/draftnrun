@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema, PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
@@ -18,6 +18,7 @@ class ProjectAgentSchema(BaseModel):
     icon: Optional[str] = None
     icon_color: Optional[str] = None
     template: Optional[InputTemplate] = None
+    tags: list[str] = Field(default_factory=list)
 
 
 class AgentInfoSchema(BaseModel):

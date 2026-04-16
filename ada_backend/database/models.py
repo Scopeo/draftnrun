@@ -1369,6 +1369,7 @@ class Project(Base):
 
     runs = relationship("Run", back_populates="project", cascade="all, delete-orphan")
     alert_emails = relationship("ProjectAlertEmail", back_populates="project", cascade="all, delete-orphan")
+    tags = relationship("ProjectTag", back_populates="project", cascade="all, delete-orphan")
 
     __mapper_args__ = {"polymorphic_on": type, "polymorphic_identity": "base"}
 
@@ -1388,6 +1389,22 @@ class AgentProject(Project):
     id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"), primary_key=True)
 
     __mapper_args__ = {"polymorphic_identity": ProjectType.AGENT.value}
+
+
+class ProjectTag(Base):
+    __tablename__ = "project_tags"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    tag = mapped_column(String, nullable=False)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    project = relationship("Project", back_populates="tags")
+
+    __table_args__ = (
+        UniqueConstraint("project_id", "tag", name="uq_project_tags_project_id_tag"),
+        Index("ix_project_tags_project_id", "project_id"),
+    )
 
 
 class Run(Base):
