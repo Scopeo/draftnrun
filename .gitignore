@@ -1,6 +1,6 @@
 # editor
-.vscode
-!.vscode/settings.json
+/.vscode
+!/.vscode/settings.json
 .DS_store
 .coverage
 .pytest_cache
@@ -15,18 +15,19 @@
 venv
 .venv/
 
-# data
-data
-vectorstore
-azure_files
-docstore
-images/*
-monitoring
+# data (backend-only; anchored to root so they don't catch frontend/)
+/data
+/vectorstore
+/azure_files
+/docstore
+/images/*
+/monitoring
 *.db
 pipeline.json
 *.csv
 *.png
 *.docx
+!frontend/public/images/**
 config/seaweedfs/master_data
 config/seaweedfs/volume_data
 config/seaweedfs/filer_data
