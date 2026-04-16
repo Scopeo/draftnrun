@@ -97,7 +97,7 @@ async def test_resolve_oauth_access_token_unwraps_secretstr_before_uuid(monkeypa
     monkeypatch.setattr(entity_factory, "get_run_variables", lambda: {"oauth_connection": SecretStr(connection_id)})
     monkeypatch.setattr(entity_factory, "get_oauth_access_token", fake_get_oauth_access_token)
 
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.DEBUG):
         token = await entity_factory.resolve_oauth_access_token(definition_id, "github")
 
     assert token == "access-token"

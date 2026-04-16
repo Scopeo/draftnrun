@@ -38,7 +38,7 @@ SENSITIVE_FIELD_MARKERS: tuple[str, ...] = (
     "private_key",
     "refresh_token",
     "secret",
-    "session",
+    "session_key",
     "token",
 )
 
