@@ -52,8 +52,11 @@ def _sync_to_sentry(params: TracingSpanParams) -> None:
         field_value = getattr(params, field_name)
         if field_value is None:
             isolation_scope.remove_tag(field_name)
+            isolation_scope.remove_attribute(field_name)
             continue
-        isolation_scope.set_tag(field_name, str(field_value))
+        str_value = str(field_value)
+        isolation_scope.set_tag(field_name, str_value)
+        isolation_scope.set_attribute(field_name, str_value)
 
 
 def set_tracing_span(**kwargs) -> None:

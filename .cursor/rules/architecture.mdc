@@ -57,14 +57,16 @@ Mixpanel Python SDK (`mixpanel_analytics.py`). `non_breaking_track` decorator wr
 ### Tracing Context and Sentry
 
 `engine/trace/span_context.py` is the canonical tracing context lifecycle hook. `set_tracing_span(**kwargs)` merges
-partial updates into the existing `TracingSpanParams` context and synchronizes `SENTRY_TAG_FIELDS` to Sentry tags on
-each update. Non-`None` values are stringified via `sentry_sdk.get_isolation_scope().set_tag(...)`; `None` values
-clear the tag from the current isolation scope (`remove_tag`) to prevent stale tags. Do not mutate `TracingSpanParams`
-directly in normal code paths; if you need to add/update `trace_id`, `run_id`, or other searchable fields, call
-`set_tracing_span(...)` so Sentry stays synchronized. `GraphRunner.run()` is the exception: it preserves `trace_id`
-across root span isolation before calling `set_tracing_span(trace_id=...)`. `run_id` is injected at run boundaries in
+partial updates into the existing `TracingSpanParams` context and synchronizes `SENTRY_TAG_FIELDS` to Sentry on each
+update. Sentry 2.x uses two separate streams: tags (events/issues) and attributes (logs/metrics). Non-`None` values are
+stringified and propagated to both via `sentry_sdk.get_isolation_scope().set_tag(...)` **and** `set_attribute(...)`;
+`None` values clear both (`remove_tag` + `remove_attribute`) on the isolation scope to prevent stale leakage between
+runs on the same thread. Do not mutate `TracingSpanParams` directly in normal code paths; if you need to add/update
+`trace_id`, `run_id`, or other searchable fields, call `set_tracing_span(...)` so both Sentry streams stay in sync.
+`GraphRunner.run()` is the exception: it preserves `trace_id` across root span isolation before calling
+`set_tracing_span(trace_id=...)`. `run_id` is injected at run boundaries in
 `ada_backend/services/run_service.py::run_with_tracking()` and `ada_backend/workers/run_queue_worker.py::process_payload()`.
-Do not set tracing tags in routers/services directly; add new searchable fields in `TracingSpanParams` +
+Do not set tracing tags/attributes in routers/services directly; add new searchable fields in `TracingSpanParams` +
 `SENTRY_TAG_FIELDS` instead.
 
 ### MCP Server

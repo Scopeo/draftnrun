@@ -74,16 +74,15 @@ class TestSetTracingSpan:
                 trace_id="trace-123",
             )
 
-        mock_scope.set_tag.assert_has_calls(
-            [
-                call("run_id", "run-123"),
-                call("cron_id", "cron-123"),
-                call("trace_id", "trace-123"),
-                call("project_id", "proj"),
-                call("organization_id", "org"),
-            ],
-            any_order=True,
-        )
+        expected = [
+            call("run_id", "run-123"),
+            call("cron_id", "cron-123"),
+            call("trace_id", "trace-123"),
+            call("project_id", "proj"),
+            call("organization_id", "org"),
+        ]
+        mock_scope.set_tag.assert_has_calls(expected, any_order=True)
+        mock_scope.set_attribute.assert_has_calls(expected, any_order=True)
 
     def test_none_fields_not_sent_to_isolation_scope(self):
         mock_scope = Mock()
@@ -91,7 +90,9 @@ class TestSetTracingSpan:
             set_tracing_span(project_id="proj", organization_id="org", organization_llm_providers=[], cron_id=None)
 
         assert all(args.args[0] != "cron_id" for args in mock_scope.set_tag.call_args_list)
+        assert all(args.args[0] != "cron_id" for args in mock_scope.set_attribute.call_args_list)
         mock_scope.remove_tag.assert_any_call("cron_id")
+        mock_scope.remove_attribute.assert_any_call("cron_id")
 
     def test_run_id_removal_clears_tag_from_isolation_scope(self):
         mock_scope = Mock()
@@ -100,7 +101,9 @@ class TestSetTracingSpan:
             set_tracing_span(run_id=None)
 
         assert ("run_id", "run-123") in [args.args for args in mock_scope.set_tag.call_args_list]
+        assert ("run_id", "run-123") in [args.args for args in mock_scope.set_attribute.call_args_list]
         mock_scope.remove_tag.assert_any_call("run_id")
+        mock_scope.remove_attribute.assert_any_call("run_id")
 
     def test_non_whitelisted_fields_not_sent(self):
         mock_scope = Mock()
@@ -117,6 +120,10 @@ class TestSetTracingSpan:
         assert "organization_llm_providers" not in sent_fields
         assert "shared_sandbox" not in sent_fields
         assert "uuid_for_temp_folder" not in sent_fields
+        sent_attribute_fields = {args.args[0] for args in mock_scope.set_attribute.call_args_list}
+        assert "organization_llm_providers" not in sent_attribute_fields
+        assert "shared_sandbox" not in sent_attribute_fields
+        assert "uuid_for_temp_folder" not in sent_attribute_fields
 
     def test_sentry_tag_fields_extensibility(self, monkeypatch):
         monkeypatch.setattr(
@@ -134,3 +141,4 @@ class TestSetTracingSpan:
             )
 
         assert ("conversation_id", "conv-1") in [args.args for args in mock_scope.set_tag.call_args_list]
+        assert ("conversation_id", "conv-1") in [args.args for args in mock_scope.set_attribute.call_args_list]

@@ -138,13 +138,15 @@ In ingestion workers, `ingestion_script.ingest_db_source.upload_db_source()` sho
 **File**: `engine/trace/span_context.py`
 
 `set_tracing_span(**kwargs)` is the canonical place to mutate tracing context. It merges partial updates into the
-existing `ContextVar` entry and then synchronizes selected fields to Sentry tags through `_sync_to_sentry`.
+existing `ContextVar` entry and then synchronizes selected fields to Sentry through `_sync_to_sentry`.
 
 - `SENTRY_TAG_FIELDS` defines the allowlist propagated to Sentry (`run_id`, `cron_id`, `trace_id`, `project_id`,
   `organization_id`, `environment`, `call_type`, `graph_runner_id`, `tag_name`)
-- non-`None` values are converted to strings and sent via `sentry_sdk.get_isolation_scope().set_tag(...)`
-- `None` values remove the tag from the current Sentry isolation scope (`remove_tag`) to avoid stale tag leakage
-- calling `set_tracing_span` is safe when Sentry is disabled; tag operations are no-ops until `sentry_sdk.init` runs
+- non-`None` values are stringified and propagated to **both** streams on the isolation scope:
+  - `set_tag(...)` for the events/issues stream (searchable on Sentry Issues)
+  - `set_attribute(...)` for the logs/metrics stream (searchable on Sentry Logs)
+- `None` values clear both `remove_tag(...)` and `remove_attribute(...)` to avoid stale leakage across runs
+- calling `set_tracing_span` is safe when Sentry is disabled; tag/attribute operations are no-ops until `sentry_sdk.init` runs
 
 When introducing a new tracing field, add it to `TracingSpanParams` first. If it should be searchable in Sentry,
 also add it to `SENTRY_TAG_FIELDS` so the propagation remains centralized and endpoint-agnostic.
