@@ -75,7 +75,10 @@ class TestTraceIdSetOnFailure:
             trace_manager=tm,
         )
 
-        with patch("engine.graph_runner.graph_runner.set_tracing_span", wraps=set_tracing_span) as mock_set_tracing_span:
+        with patch(
+            "engine.graph_runner.graph_runner.set_tracing_span",
+            wraps=set_tracing_span,
+        ) as mock_set_tracing_span:
             with pytest.raises(RuntimeError, match="simulated component failure"):
                 asyncio.run(gr.run({"input": "hello"}, is_root_execution=True))
 
