@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+  vue-project:
+    container_name: vue-project_dev
+    build:
+      context: .
+      dockerfile: dev.Dockerfile
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+    restart: always
+    ports:
+      - 5173:5173

@@ -1,0 +1,54 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "useDefineForClassFields": true,
+    "module": "esnext",
+    "moduleResolution": "Bundler",
+    "isolatedModules": true,
+    "strict": true,
+    "jsx": "preserve",
+    "jsxFactory": "h",
+    "jsxFragmentFactory": "Fragment",
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@images/*": [
+        "./src/assets/images/*"
+      ],
+      "@styles/*": [
+        "./src/assets/styles/*"
+      ]
+    },
+    "lib": [
+      "esnext",
+      "dom",
+      "dom.iterable",
+      "scripthost"
+    ],
+    "skipLibCheck": true,
+    "types": [
+      "vite/client",
+      "unplugin-vue-router/client",
+      "vite-plugin-vue-layouts/client",
+      "vitest/globals"
+    ]
+  },
+  "include": [
+    "./typed-router.d.ts",
+    "./vite.config.*",
+    "./env.d.ts",
+    "./shims.d.ts",
+    "./src/**/*",
+    "./src/**/*.vue",
+    "./auto-imports.d.ts",
+    "./components.d.ts"
+  ],
+  "exclude": [
+    "./dist",
+    "./node_modules"
+  ]
+}

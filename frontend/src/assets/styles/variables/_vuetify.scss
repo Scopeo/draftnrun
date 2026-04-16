@@ -1,0 +1,42 @@
+@use 'vuetify/settings' with (
+  $body-font-family: (
+    'DM Sans',
+    sans-serif,
+  ),
+  $heading-font-family: (
+    'DM Sans',
+    sans-serif,
+  ),
+  $typography: (
+    'h1': (
+      letter-spacing: -0.015em,
+      font-weight: 700,
+    ),
+    'h2': (
+      letter-spacing: -0.015em,
+      font-weight: 700,
+    ),
+    'h3': (
+      letter-spacing: -0.01em,
+      font-weight: 600,
+    ),
+    'h4': (
+      letter-spacing: -0.01em,
+      font-weight: 600,
+    ),
+    'h5': (
+      letter-spacing: -0.005em,
+      font-weight: 600,
+    ),
+    'h6': (
+      letter-spacing: normal,
+      font-weight: 600,
+    ),
+    'body-1': (
+      line-height: 1.7,
+    ),
+    'body-2': (
+      line-height: 1.65,
+    ),
+  )
+);
