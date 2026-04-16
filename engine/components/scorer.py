@@ -56,22 +56,13 @@ PROMPT_TEMPLATE = (
 )
 
 OUTPUT_FORMAT = {
-    "name": "scoring_result",
-    "strict": True,
-    "schema": {
-        "type": "object",
-        "properties": {
-            "score": {
-                "type": "number",
-                "description": "Score from 0 to 100",
-            },
-            "reason": {
-                "type": "string",
-                "description": "Brief explanation for the assigned score",
-            },
-        },
-        "additionalProperties": False,
-        "required": ["score", "reason"],
+    "score": {
+        "type": "number",
+        "description": "Score from 0 to 100",
+    },
+    "reason": {
+        "type": "string",
+        "description": "Brief explanation for the assigned score",
     },
 }
 

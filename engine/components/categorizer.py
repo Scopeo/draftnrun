@@ -57,27 +57,18 @@ def _build_output_format(categories: dict[str, str]) -> str:
     category_names = list(categories.keys())
 
     return json.dumps({
-        "name": "categorization_result",
-        "strict": True,
-        "schema": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string",
-                    "description": "The selected category",
-                    "enum": category_names,
-                },
-                "score": {
-                    "type": "number",
-                    "description": "Confidence score between 0 and 1",
-                },
-                "reason": {
-                    "type": "string",
-                    "description": "Brief explanation for why this category was selected",
-                },
-            },
-            "additionalProperties": False,
-            "required": ["category", "score", "reason"],
+        "category": {
+            "type": "string",
+            "description": "The selected category",
+            "enum": category_names,
+        },
+        "score": {
+            "type": "number",
+            "description": "Confidence score between 0 and 1",
+        },
+        "reason": {
+            "type": "string",
+            "description": "Brief explanation for why this category was selected",
         },
     })
 
