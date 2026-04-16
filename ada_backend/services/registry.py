@@ -254,6 +254,16 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["retriever_v2"],
+        factory=EntityFactory(
+            entity_class=Retriever,
+            parameter_processors=[
+                trace_manager_processor,
+                qdrant_service_processor,
+            ],
+        ),
+    )
+    registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["cohere_reranker"],
         factory=EntityFactory(
             entity_class=CohereReranker,
@@ -369,18 +379,23 @@ def create_factory_registry() -> FactoryRegistry:
             ],
         ),
     )
+    rag_v3_factory = AgentFactory(
+        entity_class=RAG,
+        parameter_processors=[
+            retriever_processor,
+            synthesizer_processor,
+            reranker_processor,
+            vocabulary_search_processor,
+            formatter_processor,
+        ],
+    )
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["rag_agent_v3"],
-        factory=AgentFactory(
-            entity_class=RAG,
-            parameter_processors=[
-                retriever_processor,
-                synthesizer_processor,
-                reranker_processor,
-                vocabulary_search_processor,
-                formatter_processor,
-            ],
-        ),
+        factory=rag_v3_factory,
+    )
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["rag_agent_v4"],
+        factory=rag_v3_factory,
     )
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["hybrid_rag_agent"],
@@ -456,16 +471,21 @@ def create_factory_registry() -> FactoryRegistry:
             entity_class=LinkupSearchTool,
         ),
     )
+    retriever_tool_factory = AgentFactory(
+        entity_class=Retriever,
+        parameter_processors=[
+            build_retriever_params_translator_processor(),
+            trace_manager_processor,
+            qdrant_service_processor,
+        ],
+    )
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["retriever_tool"],
-        factory=AgentFactory(
-            entity_class=Retriever,
-            parameter_processors=[
-                build_retriever_params_translator_processor(),
-                trace_manager_processor,
-                qdrant_service_processor,
-            ],
-        ),
+        factory=retriever_tool_factory,
+    )
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["retriever_tool_v2"],
+        factory=retriever_tool_factory,
     )
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["react_sql_agent"],

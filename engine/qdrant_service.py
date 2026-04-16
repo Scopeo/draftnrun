@@ -20,6 +20,7 @@ DEFAULT_MAX_CHUNKS = 10
 MAX_BATCH_SIZE_FOR_CHUNK_UPLOAD = 50
 DEFAULT_TIMEOUT = 20.0
 SOURCE_ID_COLUMN_NAME = "source_id"
+BM25_MODEL = "Qdrant/bm25"
 
 
 class FieldSchema(Enum):
@@ -28,6 +29,12 @@ class FieldSchema(Enum):
     INTEGER = "integer"
     FLOAT = "float"
     BOOLEAN = "bool"
+
+
+class SearchMode(str, Enum):
+    SEMANTIC = "semantic"
+    KEYWORD = "keyword"
+    HYBRID = "hybrid"
 
 
 def map_internal_type_to_qdrant_field_schema(internal_type: str) -> FieldSchema:
@@ -150,6 +157,8 @@ class QdrantService:
 
         self.default_schema = default_schema
         self._schemas: dict[str, QdrantCollectionSchema] = {}
+        # TODO Remove when production all collections are hybrid
+        self._hybrid_cache: dict[str, bool] = {}
 
     def register_schema(self, collection_name: str, schema: QdrantCollectionSchema):
         """
@@ -270,27 +279,95 @@ class QdrantService:
         filter: Optional[dict] = None,
         **search_params,
     ) -> list[tuple[str, float, dict]]:
-        """
-        Async version of search_vectors.
-        Search for vectors similar to the given query vector in the Qdrant collection.
-        """
-        if filter is None:
-            filter = {}
-
-        payload = {
-            "vector": query_vector,
-            "filter": filter,
+        payload: dict[str, Any] = {
+            "query": query_vector,
             "with_payload": True,
-            "with_vector": False,
-            **search_params,
+            "limit": search_params.pop("limit", DEFAULT_MAX_CHUNKS),
         }
+        if await self.is_hybrid_collection_async(collection_name):
+            payload["using"] = "dense"
+        if filter:
+            payload["filter"] = filter
+        return await self._query_points_async(collection_name, payload)
+
+    async def _query_points_async(
+        self,
+        collection_name: str,
+        query_payload: dict,
+    ) -> list[tuple[str, float, dict]]:
+        """Call the /points/query endpoint and return results in the same format as search_vectors_async."""
         response = await self._send_request_async(
             method="POST",
-            endpoint=f"collections/{collection_name}/points/search",
-            payload=payload,
+            endpoint=f"collections/{collection_name}/points/query",
+            payload=query_payload,
         )
-        vector_results = [(result["id"], result["score"], result["payload"]) for result in response.get("result", [])]
-        return vector_results
+        points = response.get("result", {}).get("points", [])
+        return [(point["id"], point["score"], point.get("payload", {})) for point in points]
+
+    async def _search_hybrid_async(
+        self,
+        query_text: str,
+        query_vector: list[float],
+        collection_name: str,
+        filter: Optional[dict] = None,
+        limit: int = DEFAULT_MAX_CHUNKS,
+    ) -> list[tuple[str, float, dict]]:
+        prefetch_limit = limit * 2
+        dense_prefetch: dict[str, Any] = {"query": query_vector, "limit": prefetch_limit}
+        if await self.is_hybrid_collection_async(collection_name):
+            dense_prefetch["using"] = "dense"
+        payload: dict[str, Any] = {
+            "prefetch": [
+                {
+                    "query": {"text": query_text, "model": BM25_MODEL},
+                    "using": "sparse",
+                    "limit": prefetch_limit,
+                },
+                dense_prefetch,
+            ],
+            "query": {"fusion": "rrf"},
+            "limit": limit,
+            "with_payload": True,
+        }
+        if filter:
+            payload["prefetch"][0]["filter"] = filter
+            payload["prefetch"][1]["filter"] = filter
+        return await self._query_points_async(collection_name, payload)
+
+    async def _search_dense_named_async(
+        self,
+        query_vector: list[float],
+        collection_name: str,
+        filter: Optional[dict] = None,
+        limit: int = DEFAULT_MAX_CHUNKS,
+    ) -> list[tuple[str, float, dict]]:
+        payload: dict[str, Any] = {
+            "query": query_vector,
+            "limit": limit,
+            "with_payload": True,
+        }
+        if await self.is_hybrid_collection_async(collection_name):
+            payload["using"] = "dense"
+        if filter:
+            payload["filter"] = filter
+        return await self._query_points_async(collection_name, payload)
+
+    async def _search_sparse_async(
+        self,
+        query_text: str,
+        collection_name: str,
+        filter: Optional[dict] = None,
+        limit: int = DEFAULT_MAX_CHUNKS,
+    ) -> list[tuple[str, float, dict]]:
+        payload: dict[str, Any] = {
+            "query": {"text": query_text, "model": BM25_MODEL},
+            "using": "sparse",
+            "limit": limit,
+            "with_payload": True,
+        }
+        if filter:
+            payload["filter"] = filter
+        return await self._query_points_async(collection_name, payload)
 
     def get_chunk_data_by_id(
         self,
@@ -388,6 +465,7 @@ class QdrantService:
         metadata_date_key: Optional[list[str]] = None,
         max_retrieved_chunks_after_penalty: Optional[int] = None,
         source_schemas: Optional[dict[str, "QdrantCollectionSchema"]] = None,
+        search_mode: SearchMode = SearchMode.SEMANTIC,
         **search_params,
     ) -> list[SourceChunk]:
         """
@@ -406,6 +484,7 @@ class QdrantService:
                 metadata_date_key,
                 max_retrieved_chunks_after_penalty,
                 source_schemas=source_schemas,
+                search_mode=search_mode,
                 **search_params,
             )
         )
@@ -422,6 +501,7 @@ class QdrantService:
         metadata_date_key: Optional[list[str]] = None,
         max_retrieved_chunks_after_penalty: Optional[int] = None,
         source_schemas: Optional[dict[str, "QdrantCollectionSchema"]] = None,
+        search_mode: SearchMode = SearchMode.SEMANTIC,
         **search_params,
     ) -> list[SourceChunk]:
         """
@@ -429,14 +509,32 @@ class QdrantService:
         Search for chunks similar to the given text.
         """
         schema = self._get_schema(collection_name)
-        query_vector = (await self._build_vectors_async(query_text))[0]
-        vector_results = await self.search_vectors_async(
-            query_vector=query_vector,
-            collection_name=collection_name,
-            filter=filter,
-            **search_params,
-            limit=limit,
-        )
+
+        if search_mode == SearchMode.KEYWORD:
+            vector_results = await self._search_sparse_async(
+                query_text=query_text,
+                collection_name=collection_name,
+                filter=filter,
+                limit=limit,
+            )
+        elif search_mode == SearchMode.HYBRID:
+            query_vector = (await self._build_vectors_async(query_text))[0]
+            vector_results = await self._search_hybrid_async(
+                query_text=query_text,
+                query_vector=query_vector,
+                collection_name=collection_name,
+                filter=filter,
+                limit=limit,
+            )
+        else:
+            query_vector = (await self._build_vectors_async(query_text))[0]
+            vector_results = await self._search_dense_named_async(
+                query_vector=query_vector,
+                collection_name=collection_name,
+                filter=filter,
+                limit=limit,
+            )
+
         if not vector_results:
             LOGGER.warning(f"No similar vectors found for query: {query_text}")
             return []
@@ -641,6 +739,8 @@ class QdrantService:
         Add chunks to the Qdrant collection asynchronously.
         """
         schema = self._get_schema(collection_name)
+        # TODO: Remove old-collection branch once all production collections are migrated to hybrid
+        is_hybrid = await self.is_hybrid_collection_async(collection_name)
 
         for i in range(0, len(list_chunks), self._max_chunks_to_add):
             current_chunk_batch = list_chunks[i : i + self._max_chunks_to_add]
@@ -661,14 +761,22 @@ class QdrantService:
             if schema.source_id_field:
                 payload_fields.add(schema.source_id_field)
 
-            list_payloads = [
-                {
+            list_payloads = []
+            for chunk, vector in zip(current_chunk_batch, list_embeddings, strict=False):
+                if is_hybrid:
+                    point_vector = {
+                        "dense": vector,
+                        "sparse": {"text": chunk[schema.content_field], "model": BM25_MODEL},
+                    }
+                else:
+                    point_vector = vector
+                point = {
                     "id": self.get_uuid(self._build_point_id_seed(chunk, schema)),
                     "payload": {field: chunk[field] for field in chunk.keys()},
-                    "vector": vector,
+                    "vector": point_vector,
                 }
-                for chunk, vector in zip(current_chunk_batch, list_embeddings, strict=False)
-            ]
+                list_payloads.append(point)
+
             if not await self.insert_points_in_collection_async(
                 points=list_payloads,
                 collection_name=collection_name,
@@ -948,6 +1056,20 @@ class QdrantService:
         response = await self._send_request_async(method="GET", endpoint=f"collections/{collection_name}/exists")
         return response.get("result", {}).get("exists", False)
 
+    async def get_collection_info_async(self, collection_name: str) -> dict:
+        """Return the full collection info payload from Qdrant."""
+        response = await self._send_request_async(method="GET", endpoint=f"collections/{collection_name}")
+        return response.get("result", {})
+
+    async def is_hybrid_collection_async(self, collection_name: str) -> bool:
+        if collection_name in self._hybrid_cache:
+            return self._hybrid_cache[collection_name]
+        info = await self.get_collection_info_async(collection_name)
+        sparse_vectors = info.get("config", {}).get("params", {}).get("sparse_vectors", {})
+        result = bool(sparse_vectors and "sparse" in sparse_vectors)
+        self._hybrid_cache[collection_name] = result
+        return result
+
     def create_collection(
         self,
         collection_name: str,
@@ -984,12 +1106,20 @@ class QdrantService:
         if await self.collection_exists_async(collection_name):
             LOGGER.error(f"Collection {collection_name} already exists.")
             return False
-        payload = {"vectors": {"size": embedding_size, "distance": distance}}
+
+        payload = {
+            "vectors": {"dense": {"size": embedding_size, "distance": distance, "on_disk": True}},
+            "sparse_vectors": {"sparse": {"modifier": "idf", "index": {"on_disk": True}}},
+            "hnsw_config": {"on_disk": True},
+            "on_disk_payload": True,
+        }
+
         response = await self._send_request_async(
             method="PUT", endpoint=f"collections/{collection_name}?wait=true", payload=payload
         )
         if "result" in response:
             LOGGER.info(f"Status of collection creation {collection_name} : {response['result']}")
+            self._hybrid_cache[collection_name] = True
             # TODO: Remove when production qdrant collections have proper indexes
             await self._create_indexes_from_schema(collection_name=collection_name, schema=schema)
             return True
@@ -1012,6 +1142,7 @@ class QdrantService:
         response = await self._send_request_async(method="DELETE", endpoint=f"collections/{collection_name}?wait=true")
         if "result" in response:
             LOGGER.info(f"Status of collection deletion {collection_name} : {response['result']}")
+            self._hybrid_cache.pop(collection_name, None)
             return True
         LOGGER.error(f"Problem with status of collection deletion {collection_name} : {response}")
         return False

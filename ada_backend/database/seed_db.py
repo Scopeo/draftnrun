@@ -36,6 +36,7 @@ from ada_backend.database.seed.seed_ports import seed_port_definitions
 from ada_backend.database.seed.seed_project_reference import seed_project_reference_components
 from ada_backend.database.seed.seed_python_code_runner import seed_python_code_runner_components
 from ada_backend.database.seed.seed_rag import seed_rag_components, seed_rag_v3_parameter_groups
+from ada_backend.database.seed.seed_rag_v4 import seed_rag_v4_components, seed_rag_v4_parameter_groups
 from ada_backend.database.seed.seed_react_sql import seed_react_sql_components
 from ada_backend.database.seed.seed_remote_mcp_tool import seed_remote_mcp_tool_components
 from ada_backend.database.seed.seed_retriever_tool import seed_retriever_tool_components
@@ -72,6 +73,8 @@ def seed_db(session: Session):
 
         seed_rag_components(session)
         seed_rag_v3_parameter_groups(session)
+        seed_rag_v4_components(session)
+        seed_rag_v4_parameter_groups(session)
         session.commit()
 
         seed_api_call_components(session)

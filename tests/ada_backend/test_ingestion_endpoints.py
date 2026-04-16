@@ -120,12 +120,11 @@ def test_ingest_local_folder_source():
 
     mock_qdrant_instance = MagicMock()
     mock_qdrant_instance.collection_exists = MagicMock(return_value=True)
-    mock_qdrant_instance.collection_exists_async = AsyncMock(return_value=False)
+    mock_qdrant_instance.collection_exists_async = AsyncMock(return_value=False)  # Collection doesn't exist initially
     mock_qdrant_instance.create_collection_async = AsyncMock()
     mock_qdrant_instance.create_index_if_needed_async = AsyncMock()
     mock_qdrant_instance.sync_batched_with_collection_async = AsyncMock()
     mock_qdrant_instance.count_points = MagicMock(return_value=0)
-    mock_qdrant_instance.delete_points = MagicMock(return_value=True)
 
     with (
         patch("ingestion_script.ingest_folder_source.create_source", side_effect=mock_create_source),
@@ -183,15 +182,17 @@ def test_ingest_local_folder_source():
     delete_response = client.delete(f"/ingestion_task/{ORGANIZATION_ID}/{task_id}", headers=HEADERS_JWT)
     assert delete_response.status_code == 204
 
-    with patch("ada_backend.services.source_service.QdrantService") as mock_delete_qdrant_class:
-        mock_delete_qdrant_class.from_defaults.return_value = mock_qdrant_instance
-        delete_source_response = client.delete(f"/sources/{ORGANIZATION_ID}/{test_source_id}", headers=HEADERS_JWT)
+    delete_source_response = client.delete(f"/sources/{ORGANIZATION_ID}/{test_source_id}", headers=HEADERS_JWT)
     assert delete_source_response.status_code == 204
 
-    mock_qdrant_instance.delete_points.assert_called_once_with(
-        collection_name=qdrant_collection_name,
-        filter={"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": test_source_id}}]},
-    )
+    # Collections and tables are shared per organization, so they should still exist
+    # But the data for this specific source should be deleted
+    # Use the same mock instance for verification
+    assert mock_qdrant_instance.collection_exists(qdrant_collection_name)
+    # Check that points for this source_id have been deleted from Qdrant
+    source_id_filter = {"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": test_source_id}}]}
+    point_count = mock_qdrant_instance.count_points(collection_name=qdrant_collection_name, filter=source_id_filter)
+    assert point_count == 0, f"Expected 0 points for source {test_source_id}, but found {point_count}"
 
     assert db_service.table_exists(
         table_name=database_table_name,

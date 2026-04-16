@@ -13,7 +13,7 @@ from engine.components.component import Component
 from engine.components.synthesizer_prompts import DEFAULT_INSTRUCTIONS_FEW_SHOT_LEARNING
 from engine.components.types import ComponentAttributes, SourceChunk, ToolDescription
 from engine.components.utils import merge_qdrant_filters_with_and_conditions
-from engine.qdrant_service import SOURCE_ID_COLUMN_NAME, QdrantCollectionSchema, QdrantService
+from engine.qdrant_service import SOURCE_ID_COLUMN_NAME, QdrantCollectionSchema, QdrantService, SearchMode
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
@@ -141,6 +141,7 @@ class Retriever(Component):
         source_ids: Optional[list[UUID]] = None,
         source_schemas: Optional[dict[str, QdrantCollectionSchema]] = None,
         tool_description: ToolDescription = RETRIEVER_TOOL_DESCRIPTION,
+        search_mode: SearchMode = SearchMode.SEMANTIC,
     ):
         if component_attributes is None:
             component_attributes = ComponentAttributes(component_instance_name=self.__class__.__name__)
@@ -161,7 +162,11 @@ class Retriever(Component):
         self.max_retrieved_chunks_after_penalty = max_retrieved_chunks_after_penalty
         self.source_ids = source_ids
         self.source_schemas = source_schemas
-        LOGGER.info(f"Retriever initialized with source_ids={self.source_ids} for collection={collection_name}")
+        self.search_mode = SearchMode(search_mode)
+        LOGGER.info(
+            f"Retriever initialized with source_ids={self.source_ids} for collection={collection_name} "
+            f"search_mode={self.search_mode.value}"
+        )
 
     async def _get_chunks_without_trace(
         self,
@@ -199,6 +204,7 @@ class Retriever(Component):
             metadata_date_key=cast_string_to_list(self.metadata_date_key),
             max_retrieved_chunks_after_penalty=self.max_retrieved_chunks_after_penalty,
             source_schemas=self.source_schemas,
+            search_mode=self.search_mode,
         )
         LOGGER.info(
             f"Retriever retrieved {len(chunks)} chunks from collection "
