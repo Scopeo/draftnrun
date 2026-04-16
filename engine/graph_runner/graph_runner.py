@@ -282,15 +282,7 @@ class GraphRunner:
                 )
                 evaluated_value = coerced
         input_data[field_name] = evaluated_value
-        # Don't log `evaluated_value`: after ConcatNode unwrap it can be a plaintext
-        # rendering of a SecretStr (e.g. "Bearer sk-...").
-        LOGGER.debug(
-            "Set %s.%s from %s (type=%s)",
-            node_id,
-            field_name,
-            log_prefix,
-            type(evaluated_value).__name__,
-        )
+        LOGGER.debug(f"Set {node_id}.{field_name} from {log_prefix} (type={type(evaluated_value).__name__})")
 
     def _gather_inputs(self, node_id: str) -> dict[str, Any]:
         """Assemble input data for a node by evaluating all field expressions.

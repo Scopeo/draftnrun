@@ -64,8 +64,8 @@ def resolve_variables(
         set_secrets = list_variable_secrets_for_set(session, org_set.id)
         secrets_by_def = {s.variable_definition_id: s for s in set_secrets}
         for name, value in org_set.values.items():
-            matching_definition = definitions_by_name.get(name)
-            if matching_definition and matching_definition.type != VariableType.SECRET:
+            definition = definitions_by_name.get(name)
+            if definition and definition.type != VariableType.SECRET:
                 resolved[name] = value
 
         for definition in variable_definitions:

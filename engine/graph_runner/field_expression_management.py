@@ -134,6 +134,12 @@ def evaluate_expression(
             LOGGER.debug(f"Evaluated JSON build expression for {target_field_name}")
             return result
 
+        # TODO: duplicate of the RefNode case above, never reached — remove.
+        case RefNode() as ref:
+            result = evaluate_ref_as_object(ref)
+            LOGGER.debug("Evaluated ref expression for %s (type=%s)", target_field_name, type(result).__name__)
+            return result
+
         case _:
             result = evaluate_node(expression)
             LOGGER.debug("Evaluated expression for %s", target_field_name)

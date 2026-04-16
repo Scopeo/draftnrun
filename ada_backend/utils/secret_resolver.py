@@ -24,8 +24,7 @@ def _resolve_single_placeholder(var_name: str, secret_mapping: Optional[Dict[str
     """
     if secret_mapping is not None and var_name in secret_mapping:
         LOGGER.debug("Secret resolved from organization configuration")
-        mapping_value = secret_mapping[var_name]
-        return mapping_value
+        return secret_mapping[var_name]
 
     env_val = getattr(settings, var_name, None)
     if env_val is not None:

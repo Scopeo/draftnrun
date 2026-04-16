@@ -210,7 +210,7 @@ def test_graph_runner_set_from_expression_does_not_log_evaluated_value():
     with open(graph_runner_module.__file__, "r", encoding="utf-8") as handle:
         module_src = handle.read()
     assert "Set {node_id}.{field_name} from {log_prefix}: {evaluated_value}" not in module_src
-    assert "Don't log `evaluated_value`" in module_src
+    assert "(type={type(evaluated_value).__name__})" in module_src
 
 
 def test_ai_agent_tool_call_log_format_is_keys_only():

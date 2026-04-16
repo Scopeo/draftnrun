@@ -62,6 +62,7 @@ from ada_backend.utils.redis_client import xgroup_create_if_not_exists
 from ada_backend.workers.git_sync_queue_worker import _request_git_sync_drain, start_git_sync_queue_worker_thread
 from ada_backend.workers.qa_queue_worker import _request_qa_drain, start_qa_queue_worker_thread
 from ada_backend.workers.run_queue_worker import _request_drain, start_run_queue_worker_thread
+from engine.log_redaction import scrub_sentry_event
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from logger import setup_logging
@@ -74,8 +75,6 @@ LOGGER = logging.getLogger(__name__)
 set_trace_manager(tm=TraceManager(project_name="ada-backend"))
 
 if settings.SENTRY_DSN:
-    from engine.log_redaction import scrub_sentry_event
-
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
         environment=settings.SENTRY_ENVIRONMENT,

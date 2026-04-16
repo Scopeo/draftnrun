@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, cast
+from typing import Optional
 
 from pydantic import SecretStr
 
@@ -77,30 +77,28 @@ def create_provider(
                 if base_url is None:
                     raise ValueError(f"Base URL must be provided for custom provider: {provider}")
 
-    resolved_api_key = cast(str, api_key)
-
     match provider:
         case "openai":
             from engine.llm_services.providers.openai_provider import OpenAIProvider
 
-            return OpenAIProvider(resolved_api_key, base_url, model_name, **kwargs)
+            return OpenAIProvider(api_key, base_url, model_name, **kwargs)
         case "anthropic":
             from engine.llm_services.providers.anthropic_provider import AnthropicProvider
 
-            return AnthropicProvider(resolved_api_key, base_url, model_name, **kwargs)
+            return AnthropicProvider(api_key, base_url, model_name, **kwargs)
         case "google":
             from engine.llm_services.providers.google_provider import GoogleProvider
 
-            return GoogleProvider(resolved_api_key, base_url, model_name, **kwargs)
+            return GoogleProvider(api_key, base_url, model_name, **kwargs)
         case "mistral":
             from engine.llm_services.providers.mistral_provider import MistralProvider
 
-            return MistralProvider(resolved_api_key, base_url, model_name, **kwargs)
+            return MistralProvider(api_key, base_url, model_name, **kwargs)
         case "cerebras":
             from engine.llm_services.providers.cerebras_provider import CerebrasProvider
 
-            return CerebrasProvider(resolved_api_key, base_url, model_name, **kwargs)
+            return CerebrasProvider(api_key, base_url, model_name, **kwargs)
         case _:
             from engine.llm_services.providers.custom_provider import CustomProvider
 
-            return CustomProvider(resolved_api_key, base_url, model_name, provider, **kwargs)
+            return CustomProvider(api_key, base_url, model_name, provider, **kwargs)
