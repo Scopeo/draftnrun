@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from ada_backend.database.models import UIComponent, UIComponentProperties
 from engine.components.component import Component
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
-from engine.components.utils import merge_constrained_output_to_root, parse_openai_message_format
+from engine.components.utils import load_str_to_json, merge_constrained_output_to_root, parse_openai_message_format
 from engine.components.utils_prompt import fill_prompt_template
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.serializer import serialize_to_json
@@ -18,6 +18,32 @@ from engine.trace.trace_manager import TraceManager
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_PROMPT_TEMPLATE = "Answer this question: {{input}}"
+
+
+def _convert_properties_to_openai_format(output_format: str | dict) -> dict:
+    """Convert flat properties dict to the OpenAI structured output format.
+
+    Accepts the same flat properties format used by AI Agent, e.g.:
+        {"answer": {"type": "string"}, "score": {"type": "number"}}
+
+    Returns the full OpenAI json_schema response_format dict expected by
+    CompletionService.constrained_complete_with_json_schema_async.
+    """
+    if isinstance(output_format, str):
+        properties = load_str_to_json(output_format)
+    else:
+        properties = output_format
+
+    return {
+        "name": "output_schema",
+        "schema": {
+            "type": "object",
+            "properties": properties,
+            "required": list(properties.keys()),
+            "additionalProperties": False,
+        },
+    }
+
 
 DEFAULT_LLM_CALL_TOOL_DESCRIPTION = ToolDescription(
     name="LLM Call",
@@ -84,8 +110,9 @@ class LLMCallInputs(BaseModel):
     output_format: Optional[str | dict] = Field(
         default=None,
         description=(
-            "Enter the output format here using this documentation from OpenAI: "
-            "https://platform.openai.com/docs/guides/structured-outputs#supported-schemas"
+            "JSON schema defining the properties of the structured output. "
+            'Example: {"answer": {"type": "string", "description": "The answer content"}, '
+            '"score": {"type": "number", "description": "Confidence score"}}'
         ),
         json_schema_extra={
             "is_tool_input": False,
@@ -94,8 +121,7 @@ class LLMCallInputs(BaseModel):
                 label="Output Format",
             ).model_dump(exclude_unset=True, exclude_none=True),
             "is_advanced": True,
-            # TODO: Set to “True” once the output schema is unified to match the AI agent’s format.
-            "drives_output_schema": False,
+            "drives_output_schema": True,
         },
     )
     # Allow extra fields for backward compatibility
@@ -249,9 +275,10 @@ class LLMCallAgent(Component):
             ),
         })
         if output_format:
+            openai_response_format = _convert_properties_to_openai_format(output_format)
             response = await self._completion_service.constrained_complete_with_json_schema_async(
                 messages=[{"role": "user", "content": content}],
-                response_format=output_format,
+                response_format=openai_response_format,
             )
         else:
             response = await self._completion_service.complete_async(

@@ -439,7 +439,7 @@ update_component_parameters(project_id, graph_runner_id, component_instance_id,
 ```
 
 ⚠️ Do NOT use `update_component_parameters` on `drives_output_schema` fields \
-(`payload_schema` on Start, `output_format` on AI Agent) unless you intend to change dynamic \
+(`payload_schema` on Start, `output_format` on AI Agent and AI/LLM Call) unless you intend to change dynamic \
 output ports — modifying those fields deletes and recreates `OutputPortInstance` rows, which \
 may break downstream field expressions.
 
@@ -1575,8 +1575,8 @@ for the full workflow.
 
 ## `drives_output_schema` Fields Control Dynamic Output Ports
 
-Some component parameters (e.g. `payload_schema` on Start, `output_format` on AI Agent) have \
-`drives_output_schema: true`. Changing these fields deletes **all** existing `OutputPortInstance` \
+Some component parameters (e.g. `payload_schema` on Start, `output_format` on AI Agent and AI/LLM Call) \
+have `drives_output_schema: true`. Changing these fields deletes **all** existing `OutputPortInstance` \
 rows for that component and recreates them from the new schema's top-level keys.
 
 Consequences:

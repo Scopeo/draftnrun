@@ -3,46 +3,32 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from engine.components.llm_call import LLMCallAgent, LLMCallInputs
+from engine.components.llm_call import LLMCallAgent, LLMCallInputs, _convert_properties_to_openai_format
 from engine.components.types import ComponentAttributes
-from engine.components.utils import load_str_to_json
 from engine.llm_services.utils import chat_completion_to_response
 from tests.components.test_llm_call import make_capability_resolver
 
 base64_string = base64.b64encode(b"dummy pdf content").decode("utf-8")
 QUESTION = "What is the ideal weather for a pool party?"
 PROMPT_TEMPLATE = "{{input}}"
-OUTPUT_FORMAT = load_str_to_json(
-    """{
-    "name": "weather_data",
-    "type": "json_schema",
-    "strict": true,
-    "schema": {
-        "type": "object",
-        "properties": {
-            "location": {
-                "type": "string",
-                "description": "The location to get the weather for"
-            },
-            "unit": {
-                "type": ["string", "null"],
-                "description": "The unit to return the temperature in",
-                "enum": ["F", "C"]
-            },
-            "value": {
-                "type": "number",
-                "description": "The actual temperature value in the location",
-                "minimum": -130,
-                "maximum": 130
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "location", "unit", "value"
-        ]
-    }
-}"""
-)
+
+OUTPUT_FORMAT = {
+    "location": {
+        "type": "string",
+        "description": "The location to get the weather for",
+    },
+    "unit": {
+        "type": ["string", "null"],
+        "description": "The unit to return the temperature in",
+        "enum": ["F", "C"],
+    },
+    "value": {
+        "type": "number",
+        "description": "The actual temperature value in the location",
+        "minimum": -130,
+        "maximum": 130,
+    },
+}
 
 
 @pytest.fixture
@@ -86,8 +72,8 @@ def llm_call_with_output_format():
     trace_manager = MagicMock()
 
     llm_service = MagicMock()
-    llm_service._provider = "openai"  # Set the provider to openai to support file content
-    llm_service._model_name = "gpt-4.1-mini"  # Set a model that supports files
+    llm_service._provider = "openai"
+    llm_service._model_name = "gpt-4.1-mini"
     llm_service.constrained_complete_with_json_schema_async = AsyncMock(
         return_value='{"location": "Miami", "unit": "F", "value": 85}'
     )
@@ -107,9 +93,32 @@ def llm_call_with_output_format():
     return agent
 
 
+class TestConvertPropertiesToOpenAIFormat:
+    def test_converts_flat_properties_dict(self):
+        result = _convert_properties_to_openai_format({"answer": {"type": "string"}})
+        assert result == {
+            "name": "output_schema",
+            "schema": {
+                "type": "object",
+                "properties": {"answer": {"type": "string"}},
+                "required": ["answer"],
+                "additionalProperties": False,
+            },
+        }
+
+    def test_converts_json_string(self):
+        result = _convert_properties_to_openai_format('{"score": {"type": "number"}}')
+        assert result["schema"]["properties"] == {"score": {"type": "number"}}
+        assert result["schema"]["required"] == ["score"]
+
+    def test_preserves_all_property_keys_as_required(self):
+        props = {"a": {"type": "string"}, "b": {"type": "number"}, "c": {"type": "boolean"}}
+        result = _convert_properties_to_openai_format(props)
+        assert sorted(result["schema"]["required"]) == ["a", "b", "c"]
+
+
 @pytest.mark.anyio
-async def test_agent_input_combinations(llm_call_with_output_format, input_payload):
-    # Convert dict to LLMCallInputs Pydantic model
+async def test_structured_output_with_flat_properties(llm_call_with_output_format, input_payload):
     inputs = LLMCallInputs.model_validate({
         **input_payload,
         "prompt_template": PROMPT_TEMPLATE,
@@ -117,26 +126,41 @@ async def test_agent_input_combinations(llm_call_with_output_format, input_paylo
     })
     response = await llm_call_with_output_format._run_without_io_trace(inputs, ctx={})
 
-    # Check that the response is the correct type
     assert isinstance(response.output, str)
 
-    # Check that response_format was passed
-    assert OUTPUT_FORMAT is not None
-    assert OUTPUT_FORMAT["name"] == "weather_data"
-    assert OUTPUT_FORMAT["type"] == "json_schema"
-    assert isinstance(OUTPUT_FORMAT["strict"], bool) and OUTPUT_FORMAT["strict"] is True
+    call_kwargs = (
+        llm_call_with_output_format._completion_service.constrained_complete_with_json_schema_async.call_args[1]
+    )
+    passed_format = call_kwargs["response_format"]
+    assert passed_format["name"] == "output_schema"
+    assert passed_format["schema"]["type"] == "object"
+    assert passed_format["schema"]["properties"] == OUTPUT_FORMAT
+    assert set(passed_format["schema"]["required"]) == {"location", "unit", "value"}
+    assert passed_format["schema"]["additionalProperties"] is False
+
+
+@pytest.mark.anyio
+async def test_dynamic_output_ports_merged(llm_call_with_output_format, input_payload):
+    inputs = LLMCallInputs.model_validate({
+        **input_payload,
+        "prompt_template": PROMPT_TEMPLATE,
+        "output_format": OUTPUT_FORMAT,
+    })
+    response = await llm_call_with_output_format._run_without_io_trace(inputs, ctx={})
+
+    assert response.location == "Miami"
+    assert response.unit == "F"
+    assert response.value == 85
 
 
 @pytest.mark.anyio
 async def test_chat_completion_to_response(llm_call_with_output_format, input_payload_with_file):
-    # Convert dict to LLMCallInputs Pydantic model
     inputs = LLMCallInputs.model_validate({
         **input_payload_with_file,
         "prompt_template": PROMPT_TEMPLATE,
         "output_format": OUTPUT_FORMAT,
     })
     response = await llm_call_with_output_format._run_without_io_trace(inputs, ctx={})
-    # Check that the response is the correct type
     assert isinstance(response.output, str)
 
     llm_service_input_messages = (
