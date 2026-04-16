@@ -179,7 +179,15 @@ class APICallTool(Component):
                     response_body = e.response.json()
                 except Exception:
                     response_body = e.response.text
-            LOGGER.error(f"API request failed: {str(e)} | status={status_code} | response_body={response_body}")
+            # TODO(security): `response_body` may echo request headers (e.g. Authorization)
+            # returned by misbehaving upstream APIs. Deep redaction of third-party payloads
+            # requires a broader policy.
+            LOGGER.error(
+                "API request failed: %s | status=%s | response_body_type=%s",
+                type(e).__name__,
+                status_code,
+                type(response_body).__name__,
+            )
             return {
                 "status_code": status_code or 0,
                 "error": str(e),

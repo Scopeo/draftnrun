@@ -215,7 +215,7 @@ async def instantiate_component(
         project_id=project_id,
     )
 
-    LOGGER.debug(f"{input_params=}\n")
+    LOGGER.debug("Loaded component input param names: %s", list(input_params.keys()))
 
     component_integration = get_integration_from_component(session, component_instance.component_version_id)
 
@@ -289,15 +289,15 @@ async def instantiate_component(
                 error_msg,
                 exc_info=True,
                 extra={
-                    "input_params": input_params,
-                    "grouped_sub_components": grouped_sub_components,
+                    "input_param_names": list(input_params.keys()),
+                    "grouped_sub_component_names": list(grouped_sub_components.keys()),
                 },
             )
             raise ValueError(error_msg) from e
-    LOGGER.debug(f"Resolved sub-components: {grouped_sub_components}\n")
+    LOGGER.debug("Resolved sub-component parameter names: %s", list(grouped_sub_components.keys()))
     # Merge grouped sub-components into input parameters
     for parameter_name, sub_component_list in grouped_sub_components.items():
-        LOGGER.debug(f"Merging sub-components for parameter '{parameter_name}': {sub_component_list}\n")
+        LOGGER.debug("Merging %d sub-component(s) for parameter '%s'", len(sub_component_list), parameter_name)
         if not any(order is not None for order, _ in sub_component_list):
             # All sub-components have order=None, treat as singleton if only one
             if len(sub_component_list) == 1:
@@ -309,7 +309,7 @@ async def instantiate_component(
             input_params[parameter_name] = [
                 instance for _, instance in sorted(sub_component_list, key=lambda x: x[0] or 0)
             ]
-    LOGGER.debug(f"Merged input parameters: {input_params}\n")
+    LOGGER.debug("Merged input parameter names: %s", list(input_params.keys()))
 
     # Apply global component parameters (non-overridable, invisible to UI)
     try:
@@ -329,7 +329,10 @@ async def instantiate_component(
                 input_params[pname] = gparam.get_value()
         for pname, values in grouped_globals.items():
             input_params[pname] = [v for _, v in sorted(values, key=lambda x: x[0])]
-        LOGGER.debug(f"Input parameters after applying global component parameters: {input_params}\n")
+        LOGGER.debug(
+            "Input parameter names after applying global component parameters: %s",
+            list(input_params.keys()),
+        )
     except Exception as e:
         raise ValueError(
             f"Failed to apply global component parameters for instance {component_instance.ref}: {e}"

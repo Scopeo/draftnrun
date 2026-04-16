@@ -122,6 +122,21 @@ Merge order: **defaults → set_ids[0] → set_ids[1] → ...**
 The trace serializer (`engine/trace/serializer.py`) recognises `SecretStr` and emits the masked string instead of
 the real value, preventing secret leakage into span attributes persisted via `SQLSpanExporter`.
 
+### Secret Redaction
+
+The primary boundary for secrets is `SecretStr` typing + explicit unwrap at the execution boundary. The serializer
+masks any `SecretStr` that reaches a span or log.
+
+For the cases where `SecretStr` cannot apply — arbitrary exception messages and externally-supplied MCP tool
+arguments — `engine/log_redaction.py` provides a best-effort name-based scrubber (`redact_sensitive`,
+`scrub_sentry_event`). It is wired as `before_send*` on Sentry (API, scheduler, Redis worker, MCP server) and on
+the MCP `TOOL_PARAMETERS` span attribute. Treat it as defense-in-depth only; prefer typing new fields as
+`SecretStr` instead of adding call sites.
+
+Open follow-ups (tagged `TODO(security)` in code): plaintext secrets in component `INPUT_VALUE`/`OUTPUT_VALUE`
+spans and the graph root span, durable persistence (`run_inputs`, Redis stream payloads), FastMCP
+`ValidationError` logs, and deep redaction of third-party `response_body` in the API-call tool.
+
 ## Legacy Compatibility
 
 **File**: `engine/legacy_compatibility.py` (marked for deletion after migration)

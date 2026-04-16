@@ -28,12 +28,17 @@ logger.info("loading_env_vars path=%s", dotenv_path)
 load_dotenv(dotenv_path=dotenv_path)
 
 if settings.SENTRY_DSN_REDIS:
+    from engine.log_redaction import scrub_sentry_event
+
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN_REDIS,
         environment=settings.SENTRY_ENVIRONMENT,
         send_default_pii=False,
         enable_logs=True,
         traces_sample_rate=0.1,
+        before_send=lambda event, hint: scrub_sentry_event(event),
+        before_send_log=lambda log, hint: scrub_sentry_event(log),
+        before_send_transaction=lambda event, hint: scrub_sentry_event(event),
     )
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")

@@ -74,6 +74,8 @@ LOGGER = logging.getLogger(__name__)
 set_trace_manager(tm=TraceManager(project_name="ada-backend"))
 
 if settings.SENTRY_DSN:
+    from engine.log_redaction import scrub_sentry_event
+
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
         environment=settings.SENTRY_ENVIRONMENT,
@@ -82,6 +84,9 @@ if settings.SENTRY_DSN:
         enable_logs=True,
         profile_session_sample_rate=settings.SENTRY_PROFILE_SESSION_SAMPLE_RATE,
         profile_lifecycle="trace",
+        before_send=lambda event, hint: scrub_sentry_event(event),
+        before_send_log=lambda log, hint: scrub_sentry_event(log),
+        before_send_transaction=lambda event, hint: scrub_sentry_event(event),
     )
 
 

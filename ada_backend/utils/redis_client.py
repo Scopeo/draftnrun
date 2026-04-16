@@ -252,12 +252,13 @@ def push_ingestion_task(
             "source_id": source_id,
         }
 
-        safe_payload = payload.copy()
-        safe_payload["source_attributes"] = safe_payload["source_attributes"].copy()
-        if "access_token" in safe_payload["source_attributes"]:
-            safe_payload["source_attributes"]["access_token"] = "****REDACTED****"
-
-        LOGGER.debug(f"Prepared payload for Redis stream: {safe_payload}")
+        # TODO(security): the raw `payload` is serialized to the Redis stream via client.xadd
+        # below; durable persistence of secrets is still open.
+        LOGGER.debug(
+            "Prepared ingestion payload for Redis stream: source_id=%s keys=%s",
+            payload.get("source_id"),
+            list(payload.keys()),
+        )
 
         message_id = client.xadd(settings.REDIS_INGESTION_STREAM, {"data": json.dumps(payload)})
 
@@ -335,14 +336,13 @@ def push_webhook_event(
         if run_id:
             queue_payload["run_id"] = run_id
 
-        safe_payload = queue_payload.copy()
-        if "payload" in safe_payload:
-            safe_payload["payload"] = {
-                k: "***REDACTED***" if k in ["token", "access_token"] else v
-                for k, v in safe_payload["payload"].items()
-            }
-
-        LOGGER.debug(f"Prepared webhook payload for Redis stream: {safe_payload}")
+        # TODO(security): the raw `queue_payload` is serialized to the Redis stream via xadd
+        # below; durable persistence of secrets is still open.
+        LOGGER.debug(
+            "Prepared webhook payload for Redis stream: keys=%s payload_keys=%s",
+            list(queue_payload.keys()),
+            list(queue_payload.get("payload", {}).keys()) if isinstance(queue_payload.get("payload"), dict) else None,
+        )
 
         message_id = client.xadd(settings.REDIS_WEBHOOK_STREAM, {"data": json.dumps(queue_payload)})
 
@@ -399,6 +399,9 @@ def push_run_task(
         LOGGER.error("Redis client unavailable. Cannot push run task %s", run_id)
         return False
 
+    # TODO(security): `input_data` is persisted verbatim on the Redis runs queue and
+    # mirrors whatever the caller passed (including any inlined secrets). Sanitization
+    # here requires a convention for sensitive fields or per-graph metadata.
     payload = {
         "run_id": str(run_id),
         "project_id": str(project_id),

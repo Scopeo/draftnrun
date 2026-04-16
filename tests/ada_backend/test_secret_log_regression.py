@@ -3,15 +3,19 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
+import pandas as pd
 import pytest
 from pydantic import SecretStr
 
 import ada_backend.services.agent_builder_service as agent_builder_service
 import ada_backend.services.entity_factory as entity_factory
+import ada_backend.services.trace_service as trace_service
+import engine.graph_runner.graph_runner as graph_runner_module
 from ada_backend.utils.secret_resolver import replace_secret_placeholders
 from engine.components.utils_prompt import fill_prompt_template
 from engine.field_expressions.ast import ConcatNode, LiteralNode, VarNode
 from engine.graph_runner.field_expression_management import evaluate_expression
+from engine.log_redaction import redact_sensitive
 from engine.secret_utils import unwrap_secrets
 from engine.trace.serializer import serialize_to_json
 
@@ -200,3 +204,82 @@ def test_evaluate_expression_concatnode_unwraps_for_runtime_without_log_leak(cap
 
     assert result == f"Bearer {LEAK_MARKER}"
     assert LEAK_MARKER not in caplog.text
+
+
+def test_graph_runner_set_from_expression_does_not_log_evaluated_value():
+    with open(graph_runner_module.__file__, "r", encoding="utf-8") as handle:
+        module_src = handle.read()
+    assert "Set {node_id}.{field_name} from {log_prefix}: {evaluated_value}" not in module_src
+    assert "Don't log `evaluated_value`" in module_src
+
+
+def test_ai_agent_tool_call_log_format_is_keys_only():
+    import engine.components.ai_agent as ai_agent_module
+
+    with open(ai_agent_module.__file__, "r", encoding="utf-8") as handle:
+        module_src = handle.read()
+    assert "Calling tool %s with argument keys=%s" in module_src
+    assert "Calling tool {tool_function_name} with arguments:" not in module_src
+
+
+def test_trace_service_error_log_does_not_include_input_data(caplog, monkeypatch):
+    monkeypatch.setattr(
+        trace_service,
+        "_safe_json_loads",
+        lambda raw: [{"messages": None, "secret": LEAK_MARKER}] if raw == "input" else [],
+    )
+
+    row = pd.Series({
+        "input_content": "input",
+        "output_content": "[]",
+        "attributes": {"llm": {}},
+        "events": "[]",
+    })
+
+    with caplog.at_level(logging.ERROR):
+        try:
+            trace_service.get_attributes_with_messages("LLM", row, filter_to_last_message=True)
+        except Exception:
+            pass
+
+    error_records = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert error_records, "expected error log on unparseable messages"
+    for record in error_records:
+        assert LEAK_MARKER not in record.getMessage()
+
+
+def test_redis_client_payload_log_is_keys_only():
+    import ada_backend.utils.redis_client as redis_client_module
+
+    with open(redis_client_module.__file__, "r", encoding="utf-8") as handle:
+        module_src = handle.read()
+    assert "Prepared ingestion payload for Redis stream: source_id=%s keys=%s" in module_src
+    assert "Prepared webhook payload for Redis stream: keys=%s payload_keys=%s" in module_src
+    assert "Prepared payload for Redis stream: {safe_payload}" not in module_src
+    assert "Prepared webhook payload for Redis stream: {safe_payload}" not in module_src
+
+
+def test_mcp_tool_parameters_span_attribute_masks_secretstr_and_sensitive_keys():
+    arguments = {
+        "api_key": SecretStr(LEAK_MARKER),
+        "authorization": LEAK_MARKER,
+        "prompt": "hi",
+    }
+
+    tool_parameters_attr = serialize_to_json(redact_sensitive(arguments))
+
+    assert LEAK_MARKER not in tool_parameters_attr
+    assert "[REDACTED]" in tool_parameters_attr
+    assert "hi" in tool_parameters_attr
+
+
+def test_ai_agent_llm_input_messages_serialize_masks_secretstr():
+    messages = [
+        {"role": "system", "content": "safe"},
+        {"role": "user", "content": SecretStr(LEAK_MARKER)},
+    ]
+
+    serialized = serialize_to_json(messages)
+
+    assert LEAK_MARKER not in serialized
+    assert "safe" in serialized

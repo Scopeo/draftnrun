@@ -47,6 +47,10 @@ For detailed guidance on any domain, fetch the matching docs:// resource \
 or call get_guide(domain):
 """
 
+# TODO(security): Pydantic / FastMCP ValidationError messages can include
+# `input_value='<secret>'` in plain log output (stderr / structured logger) before
+# Sentry's before_send scrubber ever sees them. A full fix requires a logging filter
+# or a validator that redacts sensitive arguments before the framework renders them.
 _BEARER_TOKEN_RE = re.compile(r"Bearer\s+[A-Za-z0-9._\-+/=]+", re.IGNORECASE)
 _SENSITIVE_FIELD_MARKERS = ("authorization", "token", "secret", "password", "api_key", "cookie", "jwt")
 _SENSITIVE_ID_FIELDS = {"user", "user_id", "userid"}

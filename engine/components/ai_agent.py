@@ -19,6 +19,7 @@ from engine.components.utils import extract_source_ranks, load_str_to_json, merg
 from engine.components.utils_prompt import fill_prompt_template
 from engine.graph_runner.runnable import Runnable
 from engine.llm_services.llm_service import CompletionService
+from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -321,7 +322,12 @@ class AIAgent(Component):
         tool_call_id = tool_call.id
         tool_function_name = tool_call.function.name
         tool_arguments = json.loads(tool_call.function.arguments)
-        LOGGER.info(f"Tool call: {tool_function_name} with query string: {tool_arguments} and id: {tool_call_id}")
+        LOGGER.info(
+            "Tool call: %s (id=%s) with argument keys=%s",
+            tool_function_name,
+            tool_call_id,
+            list(tool_arguments.keys()),
+        )
 
         tool_entry = self._tool_registry.get(tool_function_name)
         if tool_entry is None:
@@ -333,11 +339,15 @@ class AIAgent(Component):
         # Merge pre-configured literal inputs with LLM-provided arguments; LLM args win.
         merged_arguments = {**pre_configured, **tool_arguments}
         try:
-            LOGGER.info(f"Calling tool {tool_function_name} with arguments: {merged_arguments}")
+            LOGGER.debug(
+                "Calling tool %s with argument keys=%s",
+                tool_function_name,
+                list(merged_arguments.keys()),
+            )
             tool_output = await tool_to_use.run(ctx=ctx, **merged_arguments)
-            LOGGER.info(f"Tool {tool_function_name} returned: {tool_output}")
+            LOGGER.debug("Tool %s returned (type=%s)", tool_function_name, type(tool_output).__name__)
         except Exception as e:
-            LOGGER.error(f"Error running tool {tool_function_name}: {e}")
+            LOGGER.error("Error running tool %s: %s", tool_function_name, type(e).__name__)
             tool_output = AgentPayload(messages=[ChatMessage(role="assistant", content=str(e))], error=str(e))
         return tool_call_id, tool_output
 
@@ -467,9 +477,12 @@ class AIAgent(Component):
                 if message.get("role") == "system":
                     message["content"] = masked_system_prompt
                     break
+            # TODO(security): user/tool/assistant history messages can still contain plaintext
+            # secrets coming from upstream concat/unwrap. serialize_to_json masks SecretStr only;
+            # per-role redaction requires catalog-level "sensitive port" metadata.
             span.set_attributes({
                 SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
-                SpanAttributes.LLM_INPUT_MESSAGES: json.dumps(trace_input_messages),
+                SpanAttributes.LLM_INPUT_MESSAGES: serialize_to_json(trace_input_messages),
                 SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
                 "model_id": (
                     str(self._completion_service._model_id) if self._completion_service._model_id is not None else None

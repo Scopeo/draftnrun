@@ -16,6 +16,7 @@ globs:
 - Secret handling: secret variables are represented as `SecretStr` (`pydantic.SecretStr`). Never rely on `str(secret)` to get plaintext; use explicit unwrapping when a real value is required at execution boundaries.
 - Execution boundaries that call external systems or constructors (prompt rendering, component input validation, provider/client construction) must unwrap via `unwrap_secrets()` or `get_secret_value()`.
 - The trace serializer (`engine/trace/serializer.py`) emits the masked `SecretStr` string instead of the plaintext value, preventing secret leakage into span attributes.
+- Primary secret boundary is `SecretStr` + unwrap at the boundary. For the cases where that cannot apply (arbitrary Sentry events, externally-supplied MCP tool arguments), use the best-effort scrubber in `engine/log_redaction.py`. Do not add new call sites elsewhere; prefer typing new fields as `SecretStr`. Sentry init in API, scheduler, Redis worker and MCP server must wire `scrub_sentry_event`.
 - `requires_tool_name = True` for components that need a `tool_name` input (MCP tools, API tools).
 - Legacy system: some components still use `AgentPayload` pattern (`migrated = False`). New components MUST use the multi-port `NodeData` system (`migrated = True`).
 - `SQLLocalService` engine pools are cached per `engine_url` (process-level). Avoid patterns that instantiate many services for the same URL expecting independent pools.

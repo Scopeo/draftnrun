@@ -161,6 +161,9 @@ class Component(ABC):
         with self.trace_manager.start_span(span_name) as span:
             try:
                 if input_node_data is not None:
+                    # TODO(security): serialize_to_json masks SecretStr but not plaintext
+                    # secrets produced by prior concat/unwrap. Richer redaction requires
+                    # catalog-level "sensitive port" metadata.
                     span.set_attributes({
                         SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
                         SpanAttributes.INPUT_VALUE: serialize_to_json(input_node_data.data, shorten_string=True),

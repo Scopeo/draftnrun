@@ -119,7 +119,7 @@ def evaluate_expression(
 
         case RefNode() as ref:
             result = evaluate_ref_as_object(ref)
-            LOGGER.debug(f"Evaluated ref expression for {target_field_name}: {result}")
+            LOGGER.debug("Evaluated ref expression for %s (type=%s)", target_field_name, type(result).__name__)
             return result
 
         case JsonBuildNode(template=template, refs=ref_nodes):
@@ -132,11 +132,6 @@ def evaluate_expression(
 
             result = substitute_in_template(template, evaluated_refs)
             LOGGER.debug(f"Evaluated JSON build expression for {target_field_name}")
-            return result
-
-        case RefNode() as ref:
-            result = evaluate_ref_as_object(ref)
-            LOGGER.debug(f"Evaluated ref expression for {target_field_name}: {result}")
             return result
 
         case _:

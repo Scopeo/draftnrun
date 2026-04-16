@@ -8,6 +8,8 @@ from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 
 from engine.components.types import ToolDescription
+from engine.log_redaction import redact_sensitive
+from engine.trace.serializer import serialize_to_json
 
 DEFAULT_MCP_TOOL_DESCRIPTION = ToolDescription(
     name="mcp_tool",
@@ -129,10 +131,13 @@ async def execute_mcp_tool_call(
         arguments.update(inputs.model_extra)
 
     span = get_current_span()
+    # TODO(security): redact_sensitive is a best-effort heuristic (match by key-name substring)
+    # used here because MCP tool arguments are user/LLM-supplied and cannot be typed as SecretStr.
+    redacted_arguments = redact_sensitive(arguments)
     span.set_attributes({
         SpanAttributes.OPENINFERENCE_SPAN_KIND: trace_span_kind,
         SpanAttributes.TOOL_NAME: tool_name,
-        SpanAttributes.TOOL_PARAMETERS: json.dumps(arguments),
+        SpanAttributes.TOOL_PARAMETERS: serialize_to_json(redacted_arguments),
     })
     result = await call_tool_fn(tool_name, arguments)
 
