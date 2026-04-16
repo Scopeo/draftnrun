@@ -203,7 +203,7 @@ class CompletionService(LLMService):
     def constrained_complete_with_json_schema(
         self,
         messages: list[dict] | str,
-        response_format: str,
+        response_format: str | dict,
         stream: bool = False,
     ) -> str:
         return asyncio.run(self.constrained_complete_with_json_schema_async(messages, response_format, stream))
@@ -211,10 +211,12 @@ class CompletionService(LLMService):
     async def constrained_complete_with_json_schema_async(
         self,
         messages: list[dict] | str,
-        response_format: str,
+        response_format: str | dict,
         stream: bool = False,
     ) -> str:
-        response_format_dict = load_str_to_json(response_format)
+        response_format_dict = (
+            response_format if isinstance(response_format, dict) else load_str_to_json(response_format)
+        )
         response_format_dict["strict"] = True
         response_format_dict["type"] = "json_schema"
         response_format_dict = OutputFormatModel(**response_format_dict).model_dump(
