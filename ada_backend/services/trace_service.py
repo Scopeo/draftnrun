@@ -224,8 +224,11 @@ def get_root_traces_by_project(
     )
     track_monitoring_loaded(user_id, project_count=1, organization_id=organization_id)
     LOGGER.info(
-        f"Querying root spans for project {project_id} with duration={duration} "
-        f"start_time={start_time} end_time={end_time}"
+        "Querying root spans for project %s with duration=%s start_time=%s end_time=%s",
+        project_id,
+        duration,
+        start_time,
+        end_time,
     )
 
     traces = build_root_spans(rows)

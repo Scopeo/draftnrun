@@ -151,7 +151,7 @@ def _resolve_literal_field_expressions(
                     expr_ast, ipi.name, tasks={}, variables=variables
                 )
             except Exception as exc:
-                LOGGER.warning(f"Failed to evaluate field expression for port {ipi.name}: {exc}")
+                LOGGER.warning("Failed to evaluate field expression for port %s: %s", ipi.name, exc)
 
     # 2. Resolve from ToolPortConfiguration.expression_json (custom ports + overrides)
     for config in configs:
@@ -177,7 +177,7 @@ def _resolve_literal_field_expressions(
             try:
                 resolved_values[port_name] = evaluate_expression(expr_ast, port_name, tasks={}, variables=variables)
             except Exception as exc:
-                LOGGER.warning(f"Failed to evaluate field expression for port {port_name}: {exc}")
+                LOGGER.warning("Failed to evaluate field expression for port %s: %s", port_name, exc)
     return resolved_values
 
 
