@@ -191,7 +191,7 @@ export function useProjectEntityEditor(options: UseProjectEntityEditorOptions) {
       isUpdating.value = true
       editError.value = null
 
-      const normalizedTags = editedTags.value.map(t => t.toLowerCase().trim()).filter(Boolean)
+      const normalizedTags = [...new Set(editedTags.value.map(t => t.toLowerCase().trim()).filter(Boolean))]
 
       await scopeoApi.projects.updateProject(entityToEdit.value.project_id, {
         project_name: editedName.value.trim(),

@@ -510,7 +510,7 @@ defineExpose({
           Your {{ type === 'AGENT' ? 'agents' : 'workflows' }}
         </span>
         <VAutocomplete
-          v-if="orgTags && orgTags.length > 0"
+          v-if="(orgTags && orgTags.length > 0) || selectedTags.length > 0"
           v-model="selectedTags"
           :items="orgTags"
           placeholder="Filter by tags…"

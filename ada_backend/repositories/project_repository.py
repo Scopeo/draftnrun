@@ -3,6 +3,7 @@ from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import and_, distinct, exists, or_, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, joinedload
 
 from ada_backend.database import models as db
@@ -13,6 +14,10 @@ from ada_backend.schemas.project_schema import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _normalize_tags(tags: list[str]) -> set[str]:
+    return {t.lower().strip() for t in tags if t.strip()}
 
 
 def _extract_tags(project: db.Project) -> list[str]:
@@ -157,8 +162,7 @@ def get_projects_by_organization_with_details(
         query = query.filter(db.Project.type == type)
 
     if tags:
-        for tag in tags:
-            normalized = tag.lower().strip()
+        for normalized in _normalize_tags(tags):
             query = query.filter(
                 exists().where(
                     and_(
@@ -245,8 +249,7 @@ def insert_project(
         raise ValueError(f"Invalid project_type: {project_type!r}")
     session.add(project)
     if tags:
-        normalized_tags = {t.lower().strip() for t in tags if t.strip()}
-        for tag in normalized_tags:
+        for tag in _normalize_tags(tags):
             session.add(db.ProjectTag(project_id=project_id, tag=tag))
     session.commit()
     session.refresh(project)
@@ -276,8 +279,7 @@ def update_project(
         project.icon_color = icon_color
     if tags is not None:
         session.query(db.ProjectTag).filter(db.ProjectTag.project_id == project_id).delete()
-        normalized_tags = {t.lower().strip() for t in tags if t.strip()}
-        for tag in normalized_tags:
+        for tag in _normalize_tags(tags):
             session.add(db.ProjectTag(project_id=project_id, tag=tag))
     session.commit()
     session.refresh(project)
@@ -290,17 +292,17 @@ def add_tags_to_project(
     project_id: UUID,
     tags: list[str],
 ) -> list[str]:
-    existing = {
-        row.tag
-        for row in session.query(db.ProjectTag.tag).filter(db.ProjectTag.project_id == project_id).all()
-    }
-    for tag in tags:
-        normalized = tag.lower().strip()
-        if normalized and normalized not in existing:
-            session.add(db.ProjectTag(project_id=project_id, tag=normalized))
-            existing.add(normalized)
+    normalized = _normalize_tags(tags)
+    if normalized:
+        stmt = (
+            insert(db.ProjectTag)
+            .values([{"project_id": project_id, "tag": t} for t in normalized])
+            .on_conflict_do_nothing(index_elements=["project_id", "tag"])
+        )
+        session.execute(stmt)
     session.commit()
-    return sorted(existing)
+    rows = session.query(db.ProjectTag.tag).filter(db.ProjectTag.project_id == project_id).all()
+    return sorted(row.tag for row in rows)
 
 
 def remove_tag_from_project(

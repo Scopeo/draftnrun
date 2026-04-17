@@ -1397,7 +1397,7 @@ class ProjectTag(Base):
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     tag = mapped_column(String, nullable=False)
-    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     project = relationship("Project", back_populates="tags")
 

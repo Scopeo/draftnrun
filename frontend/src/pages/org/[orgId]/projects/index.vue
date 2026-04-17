@@ -42,6 +42,10 @@ const {
   selectedOrgId,
 })
 
+function onTagsUpdate(value: string[]) {
+  editedTags.value = [...new Set(value.map(t => t.toLowerCase().trim()).filter(Boolean))]
+}
+
 const showCreateError = computed(() => createError.value !== null)
 
 definePage({
@@ -98,7 +102,7 @@ definePage({
         <IconPicker v-model="editedIconSelection" />
 
         <VCombobox
-          v-model="editedTags"
+          :model-value="editedTags"
           :items="orgTags || []"
           label="Tags"
           variant="outlined"
@@ -108,9 +112,10 @@ definePage({
           class="mt-4"
           placeholder="Type to add a tag…"
           hide-details
+          @update:model-value="onTagsUpdate"
         >
-          <template #chip="{ props: chipProps, item }">
-            <VChip v-bind="chipProps" size="small" variant="tonal" :color="tagColor(item.raw)" label closable>
+          <template #chip="{ props: chipProps, item, index }">
+            <VChip v-bind="chipProps" size="small" variant="tonal" :color="tagColor(item.raw)" label closable @click:close="editedTags.splice(index, 1)">
               {{ item.raw }}
             </VChip>
           </template>
