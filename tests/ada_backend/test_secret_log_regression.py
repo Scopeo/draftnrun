@@ -288,6 +288,7 @@ def test_redis_client_payload_log_is_keys_only(monkeypatch, caplog):
             return {"api_key": LEAK_MARKER, "public": "ok"}
 
     monkeypatch.setattr(redis_client_module, "get_redis_client", lambda: FakeRedisClient())
+    monkeypatch.setattr(redis_client_module.LOGGER, "propagate", True)
 
     with caplog.at_level(logging.DEBUG, logger=redis_client_module.LOGGER.name):
         assert redis_client_module.push_ingestion_task(
