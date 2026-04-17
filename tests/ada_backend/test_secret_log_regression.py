@@ -345,3 +345,56 @@ def test_ai_agent_llm_input_messages_serialize_masks_secretstr():
 
     assert LEAK_MARKER not in serialized
     assert "safe" in serialized
+
+
+# A10
+def test_serialize_to_json_masks_secretstr_inside_pydantic_model():
+    from pydantic import BaseModel
+
+    class MyModel(BaseModel):
+        api_key: SecretStr
+        public: str
+
+    payload = MyModel(api_key=SecretStr(LEAK_MARKER), public="visible")
+
+    serialized = serialize_to_json(payload)
+
+    assert LEAK_MARKER not in serialized
+    assert "visible" in serialized
+    assert "[REDACTED]" in serialized
+
+
+# A11
+def test_unwrap_secret_and_unwrap_secrets_do_not_log_plaintext(caplog):
+    with caplog.at_level(logging.DEBUG):
+        plain = unwrap_secrets({"key": SecretStr(LEAK_MARKER), "nested": [SecretStr(LEAK_MARKER)]})
+
+    assert plain["key"] == LEAK_MARKER
+    assert plain["nested"] == [LEAK_MARKER]
+    assert LEAK_MARKER not in caplog.text
+
+
+# A20
+def test_ai_agent_uses_reveal_secrets_false_for_span_and_true_for_llm():
+    import engine.components.ai_agent as ai_agent_module
+
+    with open(ai_agent_module.__file__, "r", encoding="utf-8") as fh:
+        src = fh.read()
+
+    assert "reveal_secrets=False" in src, "ai_agent must use reveal_secrets=False for span"
+    assert "LLM_INPUT_MESSAGES" in src, "ai_agent must set LLM_INPUT_MESSAGES span attribute"
+    masked_idx = src.index("reveal_secrets=False")
+    assert "fill_prompt_template" in src[:masked_idx], "fill_prompt_template must be called before masked variant"
+
+
+# A21
+def test_llm_call_uses_reveal_secrets_false_for_span_and_true_for_llm():
+    import engine.components.llm_call as llm_call_module
+
+    with open(llm_call_module.__file__, "r", encoding="utf-8") as fh:
+        src = fh.read()
+
+    assert "reveal_secrets=False" in src, "llm_call must use reveal_secrets=False for span"
+    fill_idx = src.index("fill_prompt_template")
+    masked_idx = src.index("reveal_secrets=False")
+    assert fill_idx < masked_idx, "fill_prompt_template (reveal) must appear before reveal_secrets=False variant"
