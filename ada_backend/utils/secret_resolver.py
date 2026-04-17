@@ -1,17 +1,23 @@
 import logging
 import re
-from typing import Any, Dict, Optional
+from collections.abc import Mapping
+from typing import Any, TypeAlias
+
+from pydantic import SecretStr
 
 from engine.secret_utils import unwrap_secret
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
+SecretPlaceholderValue: TypeAlias = str | SecretStr
+SecretMapping: TypeAlias = Mapping[str, SecretPlaceholderValue]
+
 
 _ENV_PATTERN = re.compile(r"@\{ENV:([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
-def _resolve_single_placeholder(var_name: str, secret_mapping: Optional[Dict[str, Any]]) -> Any:
+def _resolve_single_placeholder(var_name: str, secret_mapping: SecretMapping | None) -> SecretPlaceholderValue:
     """
     Resolve a single secret placeholder name to its value.
 
@@ -37,7 +43,7 @@ def _resolve_single_placeholder(var_name: str, secret_mapping: Optional[Dict[str
     )
 
 
-def _replace_in_string(text: str, secret_mapping: Optional[Dict[str, Any]]) -> Any:
+def _replace_in_string(text: str, secret_mapping: SecretMapping | None) -> SecretPlaceholderValue | str:
     full_match = _ENV_PATTERN.fullmatch(text)
     if full_match:
         return _resolve_single_placeholder(full_match.group(1), secret_mapping)
@@ -50,7 +56,7 @@ def _replace_in_string(text: str, secret_mapping: Optional[Dict[str, Any]]) -> A
     return _ENV_PATTERN.sub(_repl, text)
 
 
-def replace_secret_placeholders(value: Any, secret_mapping: Optional[Dict[str, Any]] = None) -> Any:
+def replace_secret_placeholders(value: Any, secret_mapping: SecretMapping | None = None) -> Any:
     """
     Recursively replace secret placeholders in strings within common Python containers.
 

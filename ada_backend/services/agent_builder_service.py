@@ -2,6 +2,7 @@ import logging
 from typing import Any, Optional
 from uuid import UUID
 
+from pydantic import SecretStr
 from sqlalchemy.orm import Session
 
 from ada_backend.context import set_current_project_id
@@ -336,7 +337,7 @@ async def instantiate_component(
         ) from e
 
     # Resolve secret placeholders for any parameter in input_params.
-    key_to_secret: dict[str, Any] | None = None
+    key_to_secret: dict[str, SecretStr] | None = None
     if project_id:
         secrets = get_organization_secrets_from_project_id(session, project_id)
         key_to_secret = {s.key: s.secret for s in secrets}
