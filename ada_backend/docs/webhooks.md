@@ -39,15 +39,15 @@ Called by the webhook worker after consuming from the Redis stream:
 | Endpoint | Purpose |
 |---|---|
 | `POST /internal/webhooks/{webhook_id}/execute` | Resolve triggers, prepare input, run workflows |
-| `POST /internal/webhooks/projects/{project_id}/envs/{env}/run` | Enqueue workflow run (202). Accepts optional `run_id` query param to reuse a pre-created run; body may include `cron_id` for scheduler correlation and `cron_run_id` for top-level scheduler-owned executions |
+| `POST /internal/webhooks/projects/{project_id}/envs/{env}/run` | Enqueue workflow run to durable Redis run queue (202). Accepts optional `run_id` query param to reuse a pre-created run; body may include `cron_id` for scheduler correlation and `cron_run_id` for top-level scheduler-owned executions. The RunQueueWorker picks up and executes the run with heartbeat-based orphan recovery. |
 | `PATCH /internal/webhooks/projects/{project_id}/runs/{run_id}/fail` | Mark a pre-created run as FAILED (called by worker on dead-letter). Validates project ownership. |
 
 Authenticated via `X-Webhook-API-Key` (internal service key).
 
-For scheduler-triggered calls, always pass `cron_id` (job id) in the body so the API process keeps the cron correlation in
-logs and traces. Pass `cron_run_id` (execution id) only for the top-level scheduler-owned execution whose background task is
-responsible for CronRun state transitions. Endpoint-polling fan-out runs forward `cron_id` without reusing the parent
-`cron_run_id`.
+For scheduler-triggered calls, always pass `cron_id` (job id) in the body so the `RunQueueWorker` keeps the cron correlation
+in tracing context. Pass `cron_run_id` (execution id) only for the top-level scheduler-owned execution; the `RunQueueWorker`
+handles CronRun state transitions (QUEUED→RUNNING→COMPLETED/ERROR). Endpoint-polling fan-out runs forward `cron_id` without
+reusing the parent `cron_run_id`.
 
 `WebhookExecuteResult.run_id` is a UUID (nullable), serialized as a UUID string in JSON responses.
 
@@ -79,7 +79,8 @@ API user → POST /webhooks/trigger/{project_id}/envs/{env}
   → Webhook Worker picks up
   → Subprocess calls POST /internal/webhooks/projects/{project_id}/envs/{env}/run?run_id=...
     → Reuses existing Run row
-    → API executes run as FastAPI background task (same behavior as main baseline)
+    → API enqueues run to durable Redis run queue (RunQueueWorker)
+    → RunQueueWorker picks up → PENDING→RUNNING→COMPLETED/FAILED with heartbeat-based orphan recovery
     → Worker still marks run FAILED via /fail on dead-letter before execution starts
   → If dead-lettered: PATCH /internal/webhooks/projects/{project_id}/runs/{run_id}/fail → Run marked FAILED
 ```
