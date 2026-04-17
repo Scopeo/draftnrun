@@ -132,13 +132,13 @@ async def get_chunks_from_docx(
     docx_parser: Callable[[str], str],
     chunk_size: int = CHUNK_SIZE,
     chunk_overlap: int = CHUNK_OVERLAP,
-    get_file_url: Optional[Callable[[str], str | None]] = None,
+    get_presigned_url: Optional[Callable[[str], str | None]] = None,
     **kwargs,
 ) -> list[FileChunk]:
     try:
-        file_url = get_file_url(document.id) if get_file_url else None
-        if file_url:
-            markdown_text = await docx_parser(file_url, **kwargs)
+        if get_presigned_url:
+            presigned_url = get_presigned_url(document.id)
+            markdown_text = await docx_parser(presigned_url, **kwargs)
         else:
             content_to_process = get_file_content(document.id)
             suffix = document.type.value if document.type.value in (".doc", ".docx") else ".docx"

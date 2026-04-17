@@ -1,6 +1,6 @@
 import logging
 import uuid
-from typing import Optional
+from typing import Callable, Optional
 from uuid import UUID
 
 import pandas as pd
@@ -72,6 +72,12 @@ def load_embedding_service():
             model_name="text-embedding-3-large",
             trace_manager=TraceManager(project_name="ingestion"),
         )
+
+
+def _resolve_presigned_url_getter(folder_manager: FolderManager) -> Optional[Callable[[str], str | None]]:
+    if settings.USE_PRESIGNED_URLS:
+        return folder_manager.get_file_presigned_url
+    return None
 
 
 async def _ensure_qdrant_indexes(
@@ -371,7 +377,7 @@ async def _ingest_folder_source(
                 overlapping_size=chunk_overlap,
                 llamaparse_api_key=llamaparse_api_key,
                 mistral_ocr_api_key=mistral_ocr_api_key,
-                get_file_url_func=folder_manager.get_file_presigned_url,
+                get_presigned_url_func=_resolve_presigned_url_getter(folder_manager),
             )
         except Exception as e:
             error_msg = f"Failed to chunk documents: {str(e)}, PDF reading mode: {document_reading_mode}"

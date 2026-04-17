@@ -18,16 +18,14 @@ async def get_chunks_from_document_with_mistral_ocr(
     mistral_ocr_api_key: str,
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
-    get_file_url: Optional[Callable[[str], str | None]] = None,
+    get_presigned_url: Optional[Callable[[str], str | None]] = None,
     **kwargs,
 ) -> list[FileChunk]:
     if not mistral_ocr_api_key:
         raise ValueError("mistral_ocr_api_key is required for MISTRAL_OCR mode")
 
-    presigned_url = get_file_url(document.id) if get_file_url else None
-
-    if presigned_url:
-        file_data_url = presigned_url
+    if get_presigned_url:
+        file_data_url = get_presigned_url(document.id)
     else:
         content_bytes = get_file_content(document.id)
         if isinstance(content_bytes, str):

@@ -19,30 +19,22 @@ async def create_chunks_from_excel_file_with_llamaparse(
     llamaparse_api_key: str,
     chunk_size: Optional[int] = None,
     chunk_overlap: int = EXCEL_CHUNK_OVERLAP,
-    get_file_url: Optional[Callable[[str], str | None]] = None,
+    get_presigned_url: Optional[Callable[[str], str | None]] = None,
     **kwargs,
 ) -> list[FileChunk]:
     try:
-        file_url = get_file_url(document.id) if get_file_url else None
-        if file_url:
-            try:
-                markdown_documents = await _parse_document_with_llamaparse(
-                    "presigned_url_input", llamaparse_api_key, split_by_page=True, file_url=file_url
-                )
-            except Exception as e:
-                LOGGER.error(f"Error parsing Excel file {document.file_name}: {e}", exc_info=True)
-                raise Exception(f"Error parsing Excel file {document.file_name}") from e
+        if get_presigned_url:
+            presigned_url = get_presigned_url(document.id)
+            markdown_documents = await _parse_document_with_llamaparse(
+                presigned_url, llamaparse_api_key, split_by_page=True
+            )
         else:
             content_to_process = get_file_content_func(document.id)
             suffix = Path(document.file_name).suffix or document.type.value
             with content_as_temporary_file_path(content_to_process, suffix=suffix) as file_path:
-                try:
-                    markdown_documents = await _parse_document_with_llamaparse(
-                        file_path, llamaparse_api_key, split_by_page=True
-                    )
-                except Exception as e:
-                    LOGGER.error(f"Error parsing Excel file {document.file_name}: {e}", exc_info=True)
-                    raise Exception(f"Error parsing Excel file {document.file_name}") from e
+                markdown_documents = await _parse_document_with_llamaparse(
+                    file_path, llamaparse_api_key, split_by_page=True
+                )
         result_chunks = []
         for markdown_content, _ in markdown_documents:
             page_chunks = chunk_markdown(

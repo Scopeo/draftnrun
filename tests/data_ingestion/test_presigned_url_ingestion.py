@@ -1,12 +1,15 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from botocore.exceptions import ClientError
 
 from data_ingestion.document.excel_ingestion import create_chunks_from_excel_file_with_llamaparse
 from data_ingestion.document.folder_management.folder_management import FileDocument, FileDocumentType, FolderManager
 from data_ingestion.document.folder_management.s3_folder_management import S3FolderManager
 from data_ingestion.document.mistral_ocr_ingestion import get_chunks_from_document_with_mistral_ocr
 from data_ingestion.document.pdf_ingestion import create_chunks_from_pdf_document
+from ingestion_script import ingest_folder_source as ingest_folder_source_module
+from ingestion_script.ingest_folder_source import _resolve_presigned_url_getter
 
 
 @pytest.fixture
@@ -106,10 +109,92 @@ class TestS3FolderManagerPresignedUrl:
         )
         assert manager.get_file_presigned_url("f1") is None
 
+    @patch("data_ingestion.document.folder_management.s3_folder_management.get_s3_boto3_client")
+    def test_raises_when_custom_endpoint_and_presigned_required(self, mock_get_client, monkeypatch):
+        monkeypatch.setattr(
+            "data_ingestion.document.folder_management.s3_folder_management.settings.USE_PRESIGNED_URLS", True
+        )
+        mock_get_client.return_value = MagicMock()
+        manager = S3FolderManager(
+            folder_payload=[{"path": "f1", "name": "f1.pdf", "s3_path": "org/f1.pdf"}],
+            bucket_name="test-bucket",
+            s3_url_endpoint="http://localhost:8333",
+            s3_access_key_id="key",
+            s3_secret_access_key="secret",
+            s3_region_name="us-east-1",
+        )
+
+        with pytest.raises(ValueError, match="USE_PRESIGNED_URLS is enabled"):
+            manager.get_file_presigned_url("f1")
+
+    @patch("data_ingestion.document.folder_management.s3_folder_management.get_s3_boto3_client")
+    def test_raises_when_no_s3_path_and_presigned_required(self, mock_get_client, monkeypatch):
+        monkeypatch.setattr(
+            "data_ingestion.document.folder_management.s3_folder_management.settings.USE_PRESIGNED_URLS", True
+        )
+        mock_get_client.return_value = MagicMock()
+        manager = S3FolderManager(
+            folder_payload=[{"path": "f1", "name": "f1.pdf", "s3_path": None}],
+            bucket_name="test-bucket",
+            s3_url_endpoint="",
+            s3_access_key_id="key",
+            s3_secret_access_key="secret",
+            s3_region_name="us-east-1",
+        )
+
+        with pytest.raises(ValueError, match="Missing s3_path"):
+            manager.get_file_presigned_url("f1")
+
+    @patch("data_ingestion.document.folder_management.s3_folder_management.get_s3_boto3_client")
+    def test_raises_when_presigned_generation_fails_and_required(self, mock_get_client, monkeypatch):
+        monkeypatch.setattr(
+            "data_ingestion.document.folder_management.s3_folder_management.settings.USE_PRESIGNED_URLS", True
+        )
+        mock_s3 = MagicMock()
+        mock_s3.generate_presigned_url.side_effect = ClientError(
+            error_response={"Error": {"Code": "403", "Message": "forbidden"}},
+            operation_name="get_object",
+        )
+        mock_get_client.return_value = mock_s3
+        manager = S3FolderManager(
+            folder_payload=[{"path": "f1", "name": "f1.pdf", "s3_path": "org/f1.pdf"}],
+            bucket_name="test-bucket",
+            s3_url_endpoint="",
+            s3_access_key_id="key",
+            s3_secret_access_key="secret",
+            s3_region_name="us-east-1",
+        )
+
+        with pytest.raises(RuntimeError, match="Failed to generate presigned URL"):
+            manager.get_file_presigned_url("f1")
+
+
+class TestPresignedUrlFlagGating:
+    class DummyFolderManager:
+        def get_file_presigned_url(self, _: str) -> str:
+            return "https://example.com/file.pdf"
+
+    def test_returns_none_when_flag_disabled(self, monkeypatch):
+        monkeypatch.setattr(ingest_folder_source_module.settings, "USE_PRESIGNED_URLS", False)
+        folder_manager = self.DummyFolderManager()
+
+        get_presigned_url_func = _resolve_presigned_url_getter(folder_manager)
+
+        assert get_presigned_url_func is None
+
+    def test_returns_getter_when_flag_enabled(self, monkeypatch):
+        monkeypatch.setattr(ingest_folder_source_module.settings, "USE_PRESIGNED_URLS", True)
+        folder_manager = self.DummyFolderManager()
+
+        get_presigned_url_func = _resolve_presigned_url_getter(folder_manager)
+
+        assert get_presigned_url_func is not None
+        assert get_presigned_url_func("f1") == "https://example.com/file.pdf"
+
 
 class TestMistralOcrPresignedUrl:
     @pytest.mark.asyncio
-    async def test_uses_presigned_url_when_available(self, pdf_document):
+    async def test_uses_presigned_url_when_getter_provided(self, pdf_document):
         mock_get_content = MagicMock(return_value=b"pdf bytes")
         mock_get_url = MagicMock(return_value="https://s3.amazonaws.com/bucket/file.pdf?sig=abc")
 
@@ -123,7 +208,7 @@ class TestMistralOcrPresignedUrl:
                 document=pdf_document,
                 get_file_content=mock_get_content,
                 mistral_ocr_api_key="test-key",
-                get_file_url=mock_get_url,
+                get_presigned_url=mock_get_url,
             )
 
         mock_get_url.assert_called_once_with("org/test.pdf")
@@ -131,7 +216,7 @@ class TestMistralOcrPresignedUrl:
         assert len(result) >= 1
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_base64_when_no_url(self, pdf_document):
+    async def test_uses_base64_when_no_getter(self, pdf_document):
         mock_get_content = MagicMock(return_value=b"pdf bytes")
 
         ocr_json = '{"pages": [{"markdown": "# Hello World"}]}'
@@ -144,28 +229,7 @@ class TestMistralOcrPresignedUrl:
                 document=pdf_document,
                 get_file_content=mock_get_content,
                 mistral_ocr_api_key="test-key",
-                get_file_url=None,
-            )
-
-        mock_get_content.assert_called_once_with("org/test.pdf")
-        assert len(result) >= 1
-
-    @pytest.mark.asyncio
-    async def test_falls_back_to_base64_when_url_returns_none(self, pdf_document):
-        mock_get_content = MagicMock(return_value=b"pdf bytes")
-        mock_get_url = MagicMock(return_value=None)
-
-        ocr_json = '{"pages": [{"markdown": "# Hello World"}]}'
-        with patch("data_ingestion.document.mistral_ocr_ingestion.OCRService") as MockOCR:
-            mock_ocr_instance = MagicMock()
-            mock_ocr_instance.get_ocr_text_async = AsyncMock(return_value=ocr_json)
-            MockOCR.return_value = mock_ocr_instance
-
-            result = await get_chunks_from_document_with_mistral_ocr(
-                document=pdf_document,
-                get_file_content=mock_get_content,
-                mistral_ocr_api_key="test-key",
-                get_file_url=mock_get_url,
+                get_presigned_url=None,
             )
 
         mock_get_content.assert_called_once_with("org/test.pdf")
@@ -174,7 +238,7 @@ class TestMistralOcrPresignedUrl:
 
 class TestPdfIngestionPresignedUrl:
     @pytest.mark.asyncio
-    async def test_uses_presigned_url_skips_download(self, pdf_document):
+    async def test_uses_presigned_url_when_getter_provided(self, pdf_document):
         mock_get_content = MagicMock(return_value=b"pdf bytes")
         mock_get_url = MagicMock(return_value="https://s3.amazonaws.com/bucket/test.pdf?sig=abc")
         mock_parser = AsyncMock(return_value="# Parsed content")
@@ -183,18 +247,16 @@ class TestPdfIngestionPresignedUrl:
             document=pdf_document,
             get_file_content=mock_get_content,
             pdf_parser=mock_parser,
-            get_file_url=mock_get_url,
+            get_presigned_url=mock_get_url,
         )
 
         mock_get_url.assert_called_once_with("org/test.pdf")
         mock_get_content.assert_not_called()
-        mock_parser.assert_called_once()
-        call_kwargs = mock_parser.call_args
-        assert call_kwargs.kwargs["file_url"] == "https://s3.amazonaws.com/bucket/test.pdf?sig=abc"
+        mock_parser.assert_called_once_with("https://s3.amazonaws.com/bucket/test.pdf?sig=abc")
         assert len(result) >= 1
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_temp_file_when_no_url(self, pdf_document):
+    async def test_downloads_content_when_no_getter(self, pdf_document):
         mock_get_content = MagicMock(return_value=b"%PDF-1.4 fake content")
         mock_parser = AsyncMock(return_value="# Parsed content")
 
@@ -206,7 +268,7 @@ class TestPdfIngestionPresignedUrl:
                 document=pdf_document,
                 get_file_content=mock_get_content,
                 pdf_parser=mock_parser,
-                get_file_url=None,
+                get_presigned_url=None,
             )
 
         mock_get_content.assert_called_once_with("org/test.pdf")
@@ -215,7 +277,7 @@ class TestPdfIngestionPresignedUrl:
 
 class TestExcelIngestionPresignedUrl:
     @pytest.mark.asyncio
-    async def test_uses_presigned_url_skips_download(self, excel_document):
+    async def test_uses_presigned_url_when_getter_provided(self, excel_document):
         mock_get_content = MagicMock(return_value=b"excel bytes")
         mock_get_url = MagicMock(return_value="https://s3.amazonaws.com/bucket/test.xlsx?sig=abc")
 
@@ -227,21 +289,20 @@ class TestExcelIngestionPresignedUrl:
                 document=excel_document,
                 get_file_content_func=mock_get_content,
                 llamaparse_api_key="test-key",
-                get_file_url=mock_get_url,
+                get_presigned_url=mock_get_url,
             )
 
         mock_get_url.assert_called_once_with("org/test.xlsx")
         mock_get_content.assert_not_called()
         mock_parse.assert_called_once_with(
-            "presigned_url_input",
+            "https://s3.amazonaws.com/bucket/test.xlsx?sig=abc",
             "test-key",
             split_by_page=True,
-            file_url="https://s3.amazonaws.com/bucket/test.xlsx?sig=abc",
         )
         assert len(result) >= 1
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_temp_file_when_no_url(self, excel_document):
+    async def test_downloads_content_when_no_getter(self, excel_document):
         mock_get_content = MagicMock(return_value=b"excel bytes")
 
         mock_path = "data_ingestion.document.excel_ingestion._parse_document_with_llamaparse"
@@ -256,7 +317,7 @@ class TestExcelIngestionPresignedUrl:
                     document=excel_document,
                     get_file_content_func=mock_get_content,
                     llamaparse_api_key="test-key",
-                    get_file_url=None,
+                    get_presigned_url=None,
                 )
 
         mock_get_content.assert_called_once_with("org/test.xlsx")
