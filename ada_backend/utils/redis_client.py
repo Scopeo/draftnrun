@@ -361,6 +361,24 @@ def push_webhook_event(
         return False
 
 
+def _push_to_redis_queue(client: redis.Redis, queue_name: str, payload: dict, task_desc: str) -> bool:
+    try:
+        json_payload = json.dumps(payload)
+        result = client.rpush(queue_name, json_payload)
+        if result:
+            LOGGER.info("Pushed %s to Redis queue %s (queue length: %s)", task_desc, queue_name, result)
+            return True
+        LOGGER.warning("Redis returned %s when pushing %s to queue %s", result, task_desc, queue_name)
+        return False
+    except _RECONNECT_ERRORS as e:
+        LOGGER.error("Redis connection error pushing %s to queue: %s", task_desc, e)
+        reset_redis_client()
+        return False
+    except Exception as e:
+        LOGGER.error("Failed to push %s to Redis queue: %s", task_desc, e)
+        return False
+
+
 def push_run_task(
     run_id: UUID,
     project_id: UUID,
@@ -379,35 +397,16 @@ def push_run_task(
         LOGGER.error("Redis client unavailable. Cannot push run task %s", run_id)
         return False
 
-    try:
-        payload = {
-            "run_id": str(run_id),
-            "project_id": str(project_id),
-            "env": env,
-            "input_data": input_data,
-            "trigger": trigger,
-            "response_format": response_format,
-            "graph_runner_id": str(graph_runner_id) if graph_runner_id else None,
-        }
-        json_payload = json.dumps(payload)
-        result = client.rpush(settings.REDIS_RUNS_QUEUE_NAME, json_payload)
-        if result:
-            LOGGER.info(
-                "Pushed run %s to Redis queue %s (queue length: %s)",
-                run_id,
-                settings.REDIS_RUNS_QUEUE_NAME,
-                result,
-            )
-            return True
-        LOGGER.warning("Redis returned %s when pushing to queue %s", result, settings.REDIS_RUNS_QUEUE_NAME)
-        return False
-    except _RECONNECT_ERRORS as e:
-        LOGGER.error("Redis connection error pushing run %s to queue: %s", run_id, e)
-        reset_redis_client()
-        return False
-    except Exception as e:
-        LOGGER.error("Failed to push run %s to Redis queue: %s", run_id, e)
-        return False
+    payload = {
+        "run_id": str(run_id),
+        "project_id": str(project_id),
+        "env": env,
+        "input_data": input_data,
+        "trigger": trigger,
+        "response_format": response_format,
+        "graph_runner_id": str(graph_runner_id) if graph_runner_id else None,
+    }
+    return _push_to_redis_queue(client, settings.REDIS_RUNS_QUEUE_NAME, payload, f"run {run_id}")
 
 
 def push_qa_task(
@@ -421,32 +420,13 @@ def push_qa_task(
         LOGGER.error("Redis client unavailable. Cannot push QA task for session %s", session_id)
         return False
 
-    try:
-        payload = {
-            "session_id": str(session_id),
-            "project_id": str(project_id),
-            "dataset_id": str(dataset_id),
-            "run_request": run_request_data,
-        }
-        json_payload = json.dumps(payload)
-        result = client.rpush(settings.REDIS_QA_QUEUE_NAME, json_payload)
-        if result:
-            LOGGER.info(
-                "Pushed QA task (session %s) to Redis queue %s (queue length: %s)",
-                session_id,
-                settings.REDIS_QA_QUEUE_NAME,
-                result,
-            )
-            return True
-        LOGGER.warning("Redis returned %s when pushing to queue %s", result, settings.REDIS_QA_QUEUE_NAME)
-        return False
-    except _RECONNECT_ERRORS as e:
-        LOGGER.error("Redis connection error pushing QA task %s to queue: %s", session_id, e)
-        reset_redis_client()
-        return False
-    except Exception as e:
-        LOGGER.error("Failed to push QA task %s to Redis queue: %s", session_id, e)
-        return False
+    payload = {
+        "session_id": str(session_id),
+        "project_id": str(project_id),
+        "dataset_id": str(dataset_id),
+        "run_request": run_request_data,
+    }
+    return _push_to_redis_queue(client, settings.REDIS_QA_QUEUE_NAME, payload, f"QA task (session {session_id})")
 
 
 _GIT_SYNC_DEDUP_TTL_SECONDS = 3600
@@ -470,19 +450,12 @@ def push_git_sync_task(config_id: UUID, commit_sha: str) -> bool:
             return True
 
         payload = {"config_id": str(config_id), "commit_sha": commit_sha}
-        json_payload = json.dumps(payload)
-        result = client.rpush(settings.REDIS_GIT_SYNC_QUEUE_NAME, json_payload)
-        if result:
-            LOGGER.info(
-                "Pushed git sync task (config %s) to Redis queue %s (queue length: %s)",
-                config_id,
-                settings.REDIS_GIT_SYNC_QUEUE_NAME,
-                result,
-            )
-            return True
-        LOGGER.warning("Redis returned %s when pushing to queue %s", result, settings.REDIS_GIT_SYNC_QUEUE_NAME)
-        client.delete(dedup_key)
-        return False
+        pushed = _push_to_redis_queue(
+            client, settings.REDIS_GIT_SYNC_QUEUE_NAME, payload, f"git sync task (config {config_id})"
+        )
+        if not pushed:
+            client.delete(dedup_key)
+        return pushed
     except _RECONNECT_ERRORS as e:
         LOGGER.error("Redis connection error pushing git sync task %s to queue: %s", config_id, e)
         reset_redis_client()
