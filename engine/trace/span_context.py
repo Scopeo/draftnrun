@@ -34,11 +34,8 @@ _tracing_context: ContextVar[Optional[TracingSpanParams]] = ContextVar("_tracing
 
 _SPAN_FIELDS = {f.name for f in dataclasses.fields(TracingSpanParams)}
 
-# Mapping of TracingSpanParams attribute name → Sentry tag/attribute key.
-# Keys must exist on TracingSpanParams. Values are the key used on Sentry's
-# isolation scope (tags and attributes). `environment` is remapped to `env` to
-# avoid shadowing Sentry's native `environment` tag (which identifies staging vs.
-# prod). All other fields keep the same name on both sides.
+# Maps TracingSpanParams fields to Sentry tag keys; 'environment' becomes 'env' to avoid conflicts.
+# All other fields use their original names.
 SENTRY_TAG_FIELDS: dict[str, str] = {
     "run_id": "run_id",
     "cron_id": "cron_id",
@@ -54,8 +51,7 @@ SENTRY_TAG_FIELDS: dict[str, str] = {
 _invalid_sentry_fields = set(SENTRY_TAG_FIELDS) - _SPAN_FIELDS
 if _invalid_sentry_fields:
     raise RuntimeError(
-        f"SENTRY_TAG_FIELDS contains attributes not defined on TracingSpanParams: "
-        f"{sorted(_invalid_sentry_fields)}"
+        f"SENTRY_TAG_FIELDS contains attributes not defined on TracingSpanParams: " f"{sorted(_invalid_sentry_fields)}"
     )
 
 
