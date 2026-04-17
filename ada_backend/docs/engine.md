@@ -137,29 +137,12 @@ In ingestion workers, `ingestion_script.ingest_db_source.upload_db_source()` sho
 
 **File**: `engine/trace/span_context.py`
 
-`set_tracing_span(**kwargs)` is the canonical place to mutate tracing context. It merges partial updates into the
-existing `ContextVar` entry and then synchronizes selected fields to Sentry through `_sync_to_sentry`.
+`set_tracing_span(**kwargs)` merges partial updates into the `ContextVar` and synchronizes selected fields to Sentry's isolation scope (both tags and attributes). `reset_tracing_span()` wipes the context and Sentry tags for top-level boundaries (e.g., `RunQueueWorker`) to prevent leakage between independent runs.
 
-- `SENTRY_TAG_FIELDS` maps `TracingSpanParams` attributes to Sentry keys. Searchable fields currently include
-  `run_id`, `cron_id`, `trace_id`, `project_id`, `organization_id`, `call_type`, `graph_runner_id`, `tag_name`, and
-  `environment` mapped to `env` so it does not shadow Sentry's native deployment `environment`.
-- Sync happens on the isolation scope for both tags and attributes; `None` clears both sides to avoid stale values
-  across runs on the same thread.
-- When adding a new searchable field, add it to `TracingSpanParams` and `SENTRY_TAG_FIELDS`. `span_context` validates
-  that the mapping only references real tracing fields.
-
-Avoid mutating `TracingSpanParams` directly in normal code paths; use `set_tracing_span(...)` so Sentry stays in sync.
-`GraphRunner.run()` is the only exception: it preserves `trace_id` across root span isolation before calling
-`set_tracing_span(trace_id=...)`.
-
-`run_id` is injected at run boundaries: sync runs in `run_with_tracking()`, async enqueue paths before
-`push_run_task(...)`, and worker execution in `RunQueueWorker.process_payload()`.
-
-`reset_tracing_span()` wipes the `ContextVar` and removes the `SENTRY_TAG_FIELDS` tags/attributes from the current
-isolation scope. It is intended for top-level boundaries where a single thread or task is reused across independent
-runs, and is currently called only at the start of `RunQueueWorker.process_payload()` (inside its
-`sentry_sdk.isolation_scope()`). Do not use it inside a single logical run — normal propagation (e.g. `cron_id` set
-upstream) must keep flowing via `set_tracing_span`'s merge semantics.
+- `SENTRY_TAG_FIELDS` maps `TracingSpanParams` attributes to Sentry keys (e.g., `environment` -> `env`).
+- Sync handles `None` by clearing tags/attributes to avoid stale values.
+- `run_id` is injected at run boundaries (`run_with_tracking`, async enqueue, worker processing).
+- Avoid mutating `TracingSpanParams` directly; always use the helper functions.
 
 ## Key Files
 
