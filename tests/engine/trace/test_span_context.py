@@ -3,7 +3,13 @@ from unittest.mock import Mock, call, patch
 import pytest
 
 from engine.trace import span_context
-from engine.trace.span_context import TracingSpanParams, get_tracing_span, set_tracing_span
+from engine.trace.span_context import (
+    SENTRY_TAG_FIELDS,
+    TracingSpanParams,
+    get_tracing_span,
+    reset_tracing_span,
+    set_tracing_span,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -62,37 +68,52 @@ class TestSetTracingSpan:
         assert params is not None
         assert isinstance(params, TracingSpanParams)
 
-    def test_set_tracing_span_syncs_tags_to_sentry(self):
-        with patch("engine.trace.span_context.sentry_sdk.set_tag") as mock_set_tag:
+    def test_set_tracing_span_syncs_tags_to_isolation_scope(self):
+        mock_scope = Mock()
+        with patch("engine.trace.span_context.sentry_sdk.get_isolation_scope", return_value=mock_scope):
             set_tracing_span(
                 project_id="proj",
                 organization_id="org",
                 organization_llm_providers=["openai"],
                 cron_id="cron-123",
+                run_id="run-123",
+                trace_id="trace-123",
             )
 
-        mock_set_tag.assert_has_calls(
-            [
-                call("cron_id", "cron-123"),
-                call("project_id", "proj"),
-                call("organization_id", "org"),
-            ],
-            any_order=True,
-        )
+        expected = [
+            call("run_id", "run-123"),
+            call("cron_id", "cron-123"),
+            call("trace_id", "trace-123"),
+            call("project_id", "proj"),
+            call("organization_id", "org"),
+        ]
+        mock_scope.set_tag.assert_has_calls(expected, any_order=True)
+        mock_scope.set_attribute.assert_has_calls(expected, any_order=True)
 
-    def test_none_fields_not_sent_to_sentry(self):
+    def test_none_fields_not_sent_to_isolation_scope(self):
         mock_scope = Mock()
-        with (
-            patch("engine.trace.span_context.sentry_sdk.get_isolation_scope", return_value=mock_scope),
-            patch("engine.trace.span_context.sentry_sdk.set_tag") as mock_set_tag,
-        ):
+        with patch("engine.trace.span_context.sentry_sdk.get_isolation_scope", return_value=mock_scope):
             set_tracing_span(project_id="proj", organization_id="org", organization_llm_providers=[], cron_id=None)
 
-        assert all(args.args[0] != "cron_id" for args in mock_set_tag.call_args_list)
+        assert all(args.args[0] != "cron_id" for args in mock_scope.set_tag.call_args_list)
+        assert all(args.args[0] != "cron_id" for args in mock_scope.set_attribute.call_args_list)
         mock_scope.remove_tag.assert_any_call("cron_id")
+        mock_scope.remove_attribute.assert_any_call("cron_id")
+
+    def test_run_id_removal_clears_tag_from_isolation_scope(self):
+        mock_scope = Mock()
+        with patch("engine.trace.span_context.sentry_sdk.get_isolation_scope", return_value=mock_scope):
+            set_tracing_span(run_id="run-123")
+            set_tracing_span(run_id=None)
+
+        assert ("run_id", "run-123") in [args.args for args in mock_scope.set_tag.call_args_list]
+        assert ("run_id", "run-123") in [args.args for args in mock_scope.set_attribute.call_args_list]
+        mock_scope.remove_tag.assert_any_call("run_id")
+        mock_scope.remove_attribute.assert_any_call("run_id")
 
     def test_non_whitelisted_fields_not_sent(self):
-        with patch("engine.trace.span_context.sentry_sdk.set_tag") as mock_set_tag:
+        mock_scope = Mock()
+        with patch("engine.trace.span_context.sentry_sdk.get_isolation_scope", return_value=mock_scope):
             set_tracing_span(
                 project_id="proj",
                 organization_id="org",
@@ -101,18 +122,23 @@ class TestSetTracingSpan:
                 conversation_id="conv-1",
             )
 
-        sent_fields = {args.args[0] for args in mock_set_tag.call_args_list}
+        sent_fields = {args.args[0] for args in mock_scope.set_tag.call_args_list}
         assert "organization_llm_providers" not in sent_fields
         assert "shared_sandbox" not in sent_fields
         assert "uuid_for_temp_folder" not in sent_fields
+        sent_attribute_fields = {args.args[0] for args in mock_scope.set_attribute.call_args_list}
+        assert "organization_llm_providers" not in sent_attribute_fields
+        assert "shared_sandbox" not in sent_attribute_fields
+        assert "uuid_for_temp_folder" not in sent_attribute_fields
 
     def test_sentry_tag_fields_extensibility(self, monkeypatch):
         monkeypatch.setattr(
             span_context,
             "SENTRY_TAG_FIELDS",
-            (*span_context.SENTRY_TAG_FIELDS, "conversation_id"),
+            {**span_context.SENTRY_TAG_FIELDS, "conversation_id": "conversation_id"},
         )
-        with patch("engine.trace.span_context.sentry_sdk.set_tag") as mock_set_tag:
+        mock_scope = Mock()
+        with patch("engine.trace.span_context.sentry_sdk.get_isolation_scope", return_value=mock_scope):
             set_tracing_span(
                 project_id="proj",
                 organization_id="org",
@@ -120,4 +146,67 @@ class TestSetTracingSpan:
                 conversation_id="conv-1",
             )
 
-        assert ("conversation_id", "conv-1") in [args.args for args in mock_set_tag.call_args_list]
+        assert ("conversation_id", "conv-1") in [args.args for args in mock_scope.set_tag.call_args_list]
+        assert ("conversation_id", "conv-1") in [args.args for args in mock_scope.set_attribute.call_args_list]
+
+    def test_environment_is_remapped_to_env_sentry_key(self):
+        from ada_backend.database.models import EnvType
+
+        mock_scope = Mock()
+        with patch("engine.trace.span_context.sentry_sdk.get_isolation_scope", return_value=mock_scope):
+            set_tracing_span(environment=EnvType.DRAFT)
+
+        tag_keys = {args.args[0] for args in mock_scope.set_tag.call_args_list}
+        attr_keys = {args.args[0] for args in mock_scope.set_attribute.call_args_list}
+        assert "env" in tag_keys
+        assert "env" in attr_keys
+        assert "environment" not in tag_keys
+        assert "environment" not in attr_keys
+
+    def test_environment_removal_uses_env_sentry_key(self):
+        from ada_backend.database.models import EnvType
+
+        mock_scope = Mock()
+        with patch("engine.trace.span_context.sentry_sdk.get_isolation_scope", return_value=mock_scope):
+            set_tracing_span(environment=EnvType.DRAFT)
+            set_tracing_span(environment=None)
+
+        mock_scope.remove_tag.assert_any_call("env")
+        mock_scope.remove_attribute.assert_any_call("env")
+
+
+class TestResetTracingSpan:
+    def test_reset_clears_context(self):
+        set_tracing_span(cron_id="cron-123", project_id="proj")
+        assert get_tracing_span() is not None
+
+        reset_tracing_span()
+
+        assert get_tracing_span() is None
+
+    def test_reset_does_not_leak_cron_id_into_next_run(self):
+        set_tracing_span(cron_id="cron-123", project_id="proj-old")
+        reset_tracing_span()
+        set_tracing_span(run_id="run-new")
+
+        params = get_tracing_span()
+        defaults = TracingSpanParams()
+        assert params is not None
+        assert params.run_id == "run-new"
+        assert params.cron_id is None
+        assert params.project_id == defaults.project_id
+
+    def test_reset_removes_all_sentry_tags_and_attributes(self):
+        mock_scope = Mock()
+        with patch("engine.trace.span_context.sentry_sdk.get_isolation_scope", return_value=mock_scope):
+            reset_tracing_span()
+
+        expected_keys = set(SENTRY_TAG_FIELDS.values())
+        removed_tags = {call_args.args[0] for call_args in mock_scope.remove_tag.call_args_list}
+        removed_attrs = {call_args.args[0] for call_args in mock_scope.remove_attribute.call_args_list}
+        assert expected_keys.issubset(removed_tags)
+        assert expected_keys.issubset(removed_attrs)
+
+    def test_reset_is_safe_when_context_is_already_empty(self):
+        reset_tracing_span()
+        assert get_tracing_span() is None

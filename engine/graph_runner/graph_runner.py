@@ -18,7 +18,7 @@ from engine.graph_runner.port_management import get_target_field_type
 from engine.graph_runner.runnable import Runnable
 from engine.graph_runner.types import Task, TaskState
 from engine.trace.serializer import serialize_to_json
-from engine.trace.span_context import get_tracing_span
+from engine.trace.span_context import get_tracing_span, set_tracing_span
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -109,7 +109,9 @@ class GraphRunner:
             params = get_tracing_span()
             if params:
                 span_json = json.loads(span.to_json())
-                params.trace_id = span_json["context"]["trace_id"]
+                trace_id = span_json["context"]["trace_id"]
+                params.trace_id = trace_id
+                set_tracing_span(trace_id=trace_id)
 
             trace_input = serialize_to_json(input_data, shorten_string=True)
             span.set_attributes({

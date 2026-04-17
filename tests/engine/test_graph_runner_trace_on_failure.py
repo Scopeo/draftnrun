@@ -2,6 +2,7 @@
 
 import asyncio
 import uuid
+from unittest.mock import patch
 
 import networkx as nx
 import pytest
@@ -74,9 +75,14 @@ class TestTraceIdSetOnFailure:
             trace_manager=tm,
         )
 
-        with pytest.raises(RuntimeError, match="simulated component failure"):
-            asyncio.run(gr.run({"input": "hello"}, is_root_execution=True))
+        with patch(
+            "engine.graph_runner.graph_runner.set_tracing_span",
+            wraps=set_tracing_span,
+        ) as mock_set_tracing_span:
+            with pytest.raises(RuntimeError, match="simulated component failure"):
+                asyncio.run(gr.run({"input": "hello"}, is_root_execution=True))
 
         params = get_tracing_span()
         assert params is not None
         assert params.trace_id is not None, "trace_id should be set even when execution fails"
+        assert any(call.kwargs.get("trace_id") == params.trace_id for call in mock_set_tracing_span.call_args_list)

@@ -26,32 +26,46 @@ class TracingSpanParams:
     graph_runner_id: Optional[UUID] = None
     tag_name: Optional[str] = None
     cron_id: Optional[str] = None
+    run_id: Optional[str] = None
     shared_sandbox: Optional["AsyncSandbox"] = None
 
 
 _tracing_context: ContextVar[Optional[TracingSpanParams]] = ContextVar("_tracing_context", default=None)
 
 _SPAN_FIELDS = {f.name for f in dataclasses.fields(TracingSpanParams)}
-SENTRY_TAG_FIELDS = (
-    "cron_id",
-    "trace_id",
-    "project_id",
-    "organization_id",
-    "environment",
-    "call_type",
-    "graph_runner_id",
-    "tag_name",
-)
+
+# Maps TracingSpanParams fields to Sentry tag keys; 'environment' becomes 'env' to avoid conflicts.
+# All other fields use their original names.
+SENTRY_TAG_FIELDS: dict[str, str] = {
+    "run_id": "run_id",
+    "cron_id": "cron_id",
+    "trace_id": "trace_id",
+    "project_id": "project_id",
+    "organization_id": "organization_id",
+    "environment": "env",
+    "call_type": "call_type",
+    "graph_runner_id": "graph_runner_id",
+    "tag_name": "tag_name",
+}
+
+_invalid_sentry_fields = set(SENTRY_TAG_FIELDS) - _SPAN_FIELDS
+if _invalid_sentry_fields:
+    raise RuntimeError(
+        f"SENTRY_TAG_FIELDS contains attributes not defined on TracingSpanParams: " f"{sorted(_invalid_sentry_fields)}"
+    )
 
 
 def _sync_to_sentry(params: TracingSpanParams) -> None:
     isolation_scope = sentry_sdk.get_isolation_scope()
-    for field_name in SENTRY_TAG_FIELDS:
-        field_value = getattr(params, field_name)
+    for attr_name, sentry_key in SENTRY_TAG_FIELDS.items():
+        field_value = getattr(params, attr_name)
         if field_value is None:
-            isolation_scope.remove_tag(field_name)
+            isolation_scope.remove_tag(sentry_key)
+            isolation_scope.remove_attribute(sentry_key)
             continue
-        sentry_sdk.set_tag(field_name, str(field_value))
+        str_value = str(field_value)
+        isolation_scope.set_tag(sentry_key, str_value)
+        isolation_scope.set_attribute(sentry_key, str_value)
 
 
 def set_tracing_span(**kwargs) -> None:
@@ -71,6 +85,21 @@ def set_tracing_span(**kwargs) -> None:
         params = TracingSpanParams(**kwargs)
     _tracing_context.set(params)
     _sync_to_sentry(params)
+
+
+def reset_tracing_span() -> None:
+    """Clear the tracing context and matching Sentry tags/attributes on the current isolation scope.
+
+    Intended for top-level execution boundaries where a thread or task is reused across
+    independent runs (e.g. `RunQueueWorker.process_payload`). Do not call this inside a
+    single logical run: normal code should rely on `set_tracing_span`'s merge semantics
+    so that upstream fields (cron_id, project_id, ...) keep propagating.
+    """
+    _tracing_context.set(None)
+    isolation_scope = sentry_sdk.get_isolation_scope()
+    for sentry_key in SENTRY_TAG_FIELDS.values():
+        isolation_scope.remove_tag(sentry_key)
+        isolation_scope.remove_attribute(sentry_key)
 
 
 def get_tracing_span() -> Optional[TracingSpanParams]:

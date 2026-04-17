@@ -28,7 +28,7 @@ from ada_backend.schemas.project_schema import (
     ProjectWithGraphRunnersSchema,
 )
 from ada_backend.schemas.run_schema import AsyncRunAcceptedSchema
-from ada_backend.services.agent_runner_service import run_agent, run_env_agent
+from ada_backend.services.agent_runner_service import run_agent, run_env_agent, setup_tracing_context
 from ada_backend.services.api_key_service import verify_project_access
 from ada_backend.services.charts_service import get_charts_by_projects
 from ada_backend.services.errors import (
@@ -59,6 +59,7 @@ from engine.components.errors import (
     MissingKeyPromptTemplateError,
     NoMatchingRouteError,
 )
+from engine.trace.span_context import set_tracing_span
 
 LOGGER = logging.getLogger(__name__)
 
@@ -502,6 +503,8 @@ async def chat_async(
             project_id=project_id,
             trigger=CallType.SANDBOX,
         )
+        setup_tracing_context(session=session, project_id=project_id)
+        set_tracing_span(run_id=str(run.id))
         pushed = push_run_task(
             run_id=run.id,
             project_id=project_id,
