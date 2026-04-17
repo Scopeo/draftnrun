@@ -54,3 +54,18 @@ def test_serialize_to_json_masks_secret_values():
     assert "**********" in result
     assert "https://example.com" in result
     assert "public" in result
+
+
+def test_serialize_to_json_redacts_plaintext_sensitive_fields_best_effort():
+    payload = {
+        "authorization": "Bearer leaked-token-123",
+        "nested": {"api_key": "sk-live-123"},
+        "public": "ok",
+    }
+
+    result = serialize_to_json(payload)
+
+    assert "leaked-token-123" not in result
+    assert "sk-live-123" not in result
+    assert "[REDACTED]" in result
+    assert "ok" in result

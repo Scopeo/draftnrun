@@ -114,8 +114,8 @@ class GraphRunner:
                 set_tracing_span(trace_id=trace_id)
 
             # TODO(security): `input_data` is the raw run payload (ctx + user inputs).
-            # serialize_to_json masks SecretStr only — plaintext secrets coming from clients
-            # need catalog-level "sensitive port" metadata to be redacted here.
+            # `serialize_to_json` applies heuristic redaction, but plaintext secrets
+            # under non-sensitive keys still require catalog-level sensitive metadata.
             trace_input = serialize_to_json(input_data, shorten_string=True)
             span.set_attributes({
                 SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,

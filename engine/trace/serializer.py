@@ -4,6 +4,7 @@ from typing import Any, Optional
 from pydantic import SecretStr
 
 from engine.components.utils import shorten_base64_string
+from engine.log_redaction import redact_sensitive
 
 
 # TODO : when observability will handle json display, change the default indent to 0
@@ -21,6 +22,7 @@ def serialize_to_json(obj: Any, indent: int = 2, shorten_string: bool = False) -
         JSON string representation of the object
     """
     serialized_obj = _serialize_object(obj, shorten_string=shorten_string)
+    serialized_obj = redact_sensitive(serialized_obj)
     return json.dumps(serialized_obj, indent=indent)
 
 

@@ -14,6 +14,7 @@ from engine.components.types import (
     ToolDescription,
 )
 from engine.components.utils import load_str_to_json
+from engine.log_redaction import redact_sensitive
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -224,7 +225,8 @@ class APICallTool(Component):
                 "status_code": api_response.get("status_code"),
                 "response_body": api_response.get("response_body"),
             }
-            content = f"API call failed: {json.dumps(error_details, indent=2)}"
+            redacted_error_details = redact_sensitive(error_details)
+            content = f"API call failed: {json.dumps(redacted_error_details, indent=2)}"
             response_body = api_response.get("response_body")
             if isinstance(response_body, dict):
                 data = response_body
