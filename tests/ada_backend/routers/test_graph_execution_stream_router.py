@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 from uuid import uuid4
 
-from ada_backend.routers.graph_execution_stream_router import _get_running_runs
+from ada_backend.services.graph_execution_stream_service import get_running_runs
 
 
 class TestGetRunningRuns:
@@ -18,7 +18,7 @@ class TestGetRunningRuns:
         session = MagicMock()
         session.query.return_value.filter.return_value.all.return_value = [mock_run1, mock_run2]
 
-        result = _get_running_runs(session, project_id)
+        result = get_running_runs(session, project_id)
 
         assert len(result) == 2
         assert result[0]["type"] == "run.active"
@@ -31,5 +31,5 @@ class TestGetRunningRuns:
         session = MagicMock()
         session.query.return_value.filter.return_value.all.return_value = []
 
-        result = _get_running_runs(session, project_id)
+        result = get_running_runs(session, project_id)
         assert result == []
