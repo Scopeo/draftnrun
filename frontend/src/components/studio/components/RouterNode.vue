@@ -2,7 +2,7 @@
 import { useAbility } from '@casl/vue'
 import type { NodeProps } from '@vue-flow/core'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
-import { computed, inject, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Icon } from '@iconify/vue'
 import { isProviderLogo } from '../utils/node-factory.utils'
 import { isValidRouterConnection } from '../utils/connectionValidation'
@@ -10,8 +10,6 @@ import type { Parameter } from '../types/node.types'
 import { parseRoutes } from '@/utils/routeHelpers'
 import { truncateString } from '@/utils/formatters'
 import type { Route } from '@/types/router'
-import type { NodeExecutionState } from '@/types/graphExecutionStream'
-import { GRAPH_EXECUTION_KEY } from '@/composables/useGraphExecutionStream'
 
 interface RouterNodeProps extends NodeProps {
   isDraftMode: boolean
@@ -27,11 +25,6 @@ const props = defineProps<RouterNodeProps>()
 const emit = defineEmits(['delete'])
 const ability = useAbility()
 const { edges } = useVueFlow()
-
-const graphExecution = inject(GRAPH_EXECUTION_KEY, null)
-const graphExecutionState = computed<NodeExecutionState>(() => {
-  return graphExecution?.nodeStates.value.get(props.id) ?? 'idle'
-})
 
 const data = computed(() => props.data || {})
 const canDelete = computed(() => props.isDraftMode)
@@ -131,11 +124,6 @@ const showLeftRightHandles = computed(() => {
       :elevation="1"
       color="surface"
       class="router-card"
-      :class="{
-        'router-card--running': graphExecutionState === 'running',
-        'router-card--completed': graphExecutionState === 'completed',
-        'router-card--failed': graphExecutionState === 'failed',
-      }"
     >
       <!-- Header -->
       <div class="router-header">
@@ -376,36 +364,4 @@ const showLeftRightHandles = computed(() => {
   box-shadow: 0 0 12px rgba(var(--v-theme-success), 0.6);
 }
 
-.router-card--running {
-  border-color: rgb(var(--v-theme-primary));
-  box-shadow: 0 0 12px rgba(var(--v-theme-primary), 0.4);
-  animation: router-pulse 1.5s ease-in-out infinite;
-}
-
-.router-card--completed {
-  border-color: rgb(var(--v-theme-success));
-  box-shadow: 0 0 10px rgba(var(--v-theme-success), 0.35);
-  transition:
-    border-color 0.3s ease,
-    box-shadow 0.3s ease;
-}
-
-.router-card--failed {
-  border-color: rgb(var(--v-theme-error));
-  box-shadow: 0 0 10px rgba(var(--v-theme-error), 0.35);
-  transition:
-    border-color 0.3s ease,
-    box-shadow 0.3s ease;
-}
-
-@keyframes router-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 8px rgba(var(--v-theme-primary), 0.25);
-  }
-
-  50% {
-    box-shadow: 0 0 18px rgba(var(--v-theme-primary), 0.55);
-  }
-}
 </style>

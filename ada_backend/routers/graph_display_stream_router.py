@@ -1,9 +1,3 @@
-"""
-WebSocket endpoint to stream graph execution events for a project.
-Subscribes to Redis Pub/Sub channel project-runs:{project_id} and relays:
-  run.active, node.started, node.completed, run.completed, run.failed
-"""
-
 import json
 import logging
 from uuid import UUID
@@ -18,16 +12,15 @@ from ada_backend.routers.auth_router import (
     get_user_from_supabase_token,
     user_has_access_to_project_dependency,
 )
-from ada_backend.services.graph_execution_stream_service import (
-    get_running_runs,
+from ada_backend.services.graph_display_stream_service import (
     stream_events,
-    subscribe_to_project_stream,
+    subscribe_to_graph_updates,
 )
 from ada_backend.utils.websocket_auth import get_bearer_token_from_websocket
 
 LOGGER = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/ws", tags=["Graph execution stream"])
+router = APIRouter(prefix="/ws", tags=["Graph display stream"])
 
 
 async def _verify_ws_auth(websocket: WebSocket, project_id: UUID, session: Session) -> bool:
@@ -65,8 +58,8 @@ async def _verify_ws_auth(websocket: WebSocket, project_id: UUID, session: Sessi
     return True
 
 
-@router.websocket("/projects/{project_id}/graph-execution")
-async def websocket_graph_execution_stream(
+@router.websocket("/projects/{project_id}/graph-updates")
+async def websocket_graph_display_stream(
     websocket: WebSocket,
     project_id: UUID,
 ):
@@ -76,25 +69,20 @@ async def websocket_graph_execution_stream(
             return
         await websocket.accept()
 
-        catchup_events = get_running_runs(session, project_id)
-
-    subscription = await subscribe_to_project_stream(project_id)
+    subscription = await subscribe_to_graph_updates(project_id)
     if not subscription:
-        LOGGER.warning("WebSocket project_id=%s graph-execution: Redis unavailable", project_id)
+        LOGGER.warning("WebSocket project_id=%s graph-updates: Redis unavailable", project_id)
         await websocket.send_text(json.dumps({"type": "error", "message": "Redis unavailable"}))
         await websocket.close(code=4510, reason="Redis unavailable")
         return
 
     try:
-        for event in catchup_events:
-            await websocket.send_text(json.dumps(event))
-
         async for message in stream_events(subscription.queue):
             await websocket.send_text(message)
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        LOGGER.exception("WebSocket project_id=%s graph-execution error: %s", project_id, e)
+        LOGGER.exception("WebSocket project_id=%s graph-updates error: %s", project_id, e)
     finally:
         subscription.stop()
         try:

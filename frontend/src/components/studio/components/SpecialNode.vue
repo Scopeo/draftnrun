@@ -2,13 +2,11 @@
 import { useAbility } from '@casl/vue'
 import type { NodeProps } from '@vue-flow/core'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
-import { computed, inject, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import { isProviderLogo } from '../utils/node-factory.utils'
 import type { Parameter } from '../types/node.types'
 import { logger } from '@/utils/logger'
-import type { NodeExecutionState } from '@/types/graphExecutionStream'
-import { GRAPH_EXECUTION_KEY } from '@/composables/useGraphExecutionStream'
 
 interface SpecialNodeProps extends NodeProps {
   isDraftMode: boolean
@@ -21,11 +19,6 @@ const props = defineProps<SpecialNodeProps>()
 const emit = defineEmits(['delete', 'add-tool'])
 const ability = useAbility()
 const { edges } = useVueFlow()
-
-const graphExecution = inject(GRAPH_EXECUTION_KEY, null)
-const executionState = computed<NodeExecutionState>(() => {
-  return graphExecution?.nodeStates.value.get(props.id) ?? 'idle'
-})
 
 const data = computed(() => props.data || {})
 const isWorker = computed(() => props.type === 'worker')
@@ -273,12 +266,7 @@ watch(
       :elevation="1"
       color="surface"
       class="node-card"
-      :class="{
-        'worker-card': isWorker,
-        'node-card--running': executionState === 'running',
-        'node-card--completed': executionState === 'completed',
-        'node-card--failed': executionState === 'failed',
-      }"
+      :class="{ 'worker-card': isWorker }"
     >
       <div class="node-content">
         <div class="node-icon-wrapper">
@@ -530,36 +518,4 @@ watch(
   background: rgb(var(--v-theme-secondary));
 }
 
-.node-card--running {
-  border-color: rgb(var(--v-theme-primary));
-  box-shadow: 0 0 12px rgba(var(--v-theme-primary), 0.4);
-  animation: execution-pulse 1.5s ease-in-out infinite;
-}
-
-.node-card--completed {
-  border-color: rgb(var(--v-theme-success));
-  box-shadow: 0 0 10px rgba(var(--v-theme-success), 0.35);
-  transition:
-    border-color 0.3s ease,
-    box-shadow 0.3s ease;
-}
-
-.node-card--failed {
-  border-color: rgb(var(--v-theme-error));
-  box-shadow: 0 0 10px rgba(var(--v-theme-error), 0.35);
-  transition:
-    border-color 0.3s ease,
-    box-shadow 0.3s ease;
-}
-
-@keyframes execution-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 8px rgba(var(--v-theme-primary), 0.25);
-  }
-
-  50% {
-    box-shadow: 0 0 18px rgba(var(--v-theme-primary), 0.55);
-  }
-}
 </style>

@@ -17,7 +17,7 @@ globs:
 
 ## WebSocket Router Pattern
 
-WebSocket endpoints (`run_stream_router.py`, `graph_execution_stream_router.py`, `qa_stream_router.py`) follow a shared pattern:
+WebSocket endpoints (`run_stream_router.py`, `graph_display_stream_router.py`, `qa_stream_router.py`) follow a shared pattern:
 
 - Auth via `get_bearer_token_from_websocket()` from `ada_backend/utils/websocket_auth.py` (JWT from `Authorization` header or `?token=` query param). Browser WebSocket APIs don't support custom headers, so the frontend passes the JWT as a query parameter.
 - Redis Pub/Sub subscriber runs in a background `threading.Thread`; messages are bridged to an `asyncio.Queue` via `loop.call_soon_threadsafe()`.

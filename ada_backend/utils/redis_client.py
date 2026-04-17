@@ -497,8 +497,8 @@ def publish_run_event(run_id: UUID, event: Dict[str, Any]) -> bool:
     return publish_event("run", run_id, event)
 
 
-def publish_project_run_event(project_id: UUID, event: Dict[str, Any]) -> bool:
-    return publish_event("project-runs", project_id, event)
+def publish_graph_update_event(project_id: UUID, event: Dict[str, Any]) -> bool:
+    return publish_event("graph-updates", project_id, event)
 
 
 def publish_qa_event(session_id: UUID, event: Dict[str, Any]) -> bool:

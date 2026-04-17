@@ -28,7 +28,7 @@ from ada_backend.routers.cron_router import router as cron_router
 from ada_backend.routers.git_sync_router import org_router as git_sync_org_router
 from ada_backend.routers.git_sync_router import webhook_router as git_sync_webhook_router
 from ada_backend.routers.global_secret_router import router as global_secret_router
-from ada_backend.routers.graph_execution_stream_router import router as graph_execution_stream_router
+from ada_backend.routers.graph_display_stream_router import router as graph_display_stream_router
 from ada_backend.routers.graph_router import router as graph_router
 from ada_backend.routers.graph_router_v2 import router as graph_router_v2
 from ada_backend.routers.ingestion_database_router import router as ingestion_database_router
@@ -252,7 +252,7 @@ app.include_router(project_router)
 app.include_router(run_router)
 app.include_router(run_org_router)
 app.include_router(run_stream_router)
-app.include_router(graph_execution_stream_router)
+app.include_router(graph_display_stream_router)
 app.include_router(variables_router)
 app.include_router(agent_router)
 app.include_router(integration_router)

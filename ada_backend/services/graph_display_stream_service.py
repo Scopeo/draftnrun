@@ -6,9 +6,6 @@ from dataclasses import dataclass, field
 from typing import AsyncGenerator
 from uuid import UUID
 
-from sqlalchemy.orm import Session
-
-from ada_backend.database.models import Run, RunStatus
 from ada_backend.utils.redis_client import get_redis_client
 
 LOGGER = logging.getLogger(__name__)
@@ -16,7 +13,7 @@ PING_TIMEOUT_SECONDS = 25
 
 
 @dataclass
-class GraphExecutionSubscription:
+class GraphDisplaySubscription:
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)
     stop_event: threading.Event = field(default_factory=threading.Event)
     _thread: threading.Thread | None = field(default=None, init=False, repr=False)
@@ -25,11 +22,6 @@ class GraphExecutionSubscription:
         self.stop_event.set()
         if self._thread:
             self._thread.join(timeout=2.0)
-
-
-def get_running_runs(session: Session, project_id: UUID) -> list[dict]:
-    runs = session.query(Run).filter(Run.project_id == project_id, Run.status == RunStatus.RUNNING).all()
-    return [{"type": "run.active", "run_id": str(r.id), "graph_runner_id": None} for r in runs]
 
 
 def _redis_subscriber_loop(
@@ -49,7 +41,7 @@ def _redis_subscriber_loop(
         )
         return
     pubsub = client.pubsub()
-    channel = f"project-runs:{project_id}"
+    channel = f"graph-updates:{project_id}"
     pubsub.subscribe(channel)
     subscribed_event.set()
     try:
@@ -67,11 +59,11 @@ def _redis_subscriber_loop(
             LOGGER.debug("PubSub cleanup for %s: %s", channel, e)
 
 
-async def subscribe_to_project_stream(project_id: UUID) -> GraphExecutionSubscription | None:
+async def subscribe_to_graph_updates(project_id: UUID) -> GraphDisplaySubscription | None:
     if not get_redis_client():
         return None
 
-    sub = GraphExecutionSubscription()
+    sub = GraphDisplaySubscription()
     subscribed_event = threading.Event()
     loop = asyncio.get_event_loop()
 

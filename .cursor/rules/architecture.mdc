@@ -50,15 +50,15 @@ Free-form string tags on projects via `project_tags` table (many-to-many). Tags 
 - Ingestion worker: Redis Stream consumer, separate process.
 - Scheduler: APScheduler + PostgreSQL job store, separate process. Registry-based cron types in `ada_backend/services/cron/`. See `ada_backend/services/cron/Readme.md`.
 
-### Live Graph Execution Streaming
+### Live Graph Display Streaming
 
 Three WebSocket endpoints stream real-time events via Redis Pub/Sub:
 
 - **Per-run** (`/ws/runs/{run_id}`, `run_stream_router.py`): streams `node.started`, `node.completed`, `run.completed`, `run.failed` for a single run. Channel: `run:{run_id}`.
-- **Per-project graph execution** (`/ws/projects/{project_id}/graph-execution`, `graph_execution_stream_router.py`): streams all run + node events for a project so the frontend graph canvas can show live execution overlays. Channel: `project-runs:{project_id}`. Sends catch-up `run.active` events for currently RUNNING runs on connect.
+- **Graph display** (`/ws/projects/{project_id}/graph-updates`, `graph_display_stream_router.py`): streams `graph.changed` events when the graph structure is modified (component CRUD, topology changes, V1 full-graph updates). Channel: `graph-updates:{project_id}`. The frontend debounces and re-fetches the graph on each event.
 - **QA session** (`/ws/qa/{project_id}/{session_id}`, `qa_stream_router.py`): streams QA entry progress. Channel: `qa:{session_id}`.
 
-`RunQueueWorker` dual-publishes every event to both `run:{run_id}` (per-run subscribers) and `project-runs:{project_id}` (graph overlay subscribers). Project-level events include `run_id` in every payload. All WS endpoints share the same pattern: JWT auth via `websocket_auth.py`, Redis Pub/Sub subscriber in a background thread, asyncio queue relay, 25s ping keepalive.
+Graph mutations publish `graph.changed` events from `graph_mutation_helpers.py` (V2 endpoints) and `update_graph_service.py` (V1 endpoint) via `publish_graph_update_event()`. All WS endpoints share the same pattern: JWT auth via `websocket_auth.py`, Redis Pub/Sub subscriber in a background thread, asyncio queue relay, 25s ping keepalive.
 
 ### Run Failure Alerting
 

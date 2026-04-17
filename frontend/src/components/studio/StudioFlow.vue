@@ -21,7 +21,7 @@ import { useAgentsQuery } from '@/composables/queries/useAgentsQuery'
 import SaveDeployButtons from '@/components/shared/SaveDeployButtons.vue'
 import { useStudioGraph } from '@/composables/useStudioGraph'
 import { useStudioBreadcrumbs } from '@/composables/useStudioBreadcrumbs'
-import { useGraphExecutionStream } from '@/composables/useGraphExecutionStream'
+import { useGraphDisplayStream } from '@/composables/useGraphDisplayStream'
 
 const emit = defineEmits<{
   openCronModal: []
@@ -49,9 +49,6 @@ const selectedNode = ref<GraphNode | null>(null)
 const showComponentDialog = ref(false)
 const dialogMode = ref<'component' | 'tool'>('component')
 
-// ─── Graph execution overlay (provides nodeStates to child nodes via inject) ─
-const { hasActiveRun } = useGraphExecutionStream(projectId)
-
 // ─── Graph composable ────────────────────────────────────────────────
 const graph = useStudioGraph({
   projectId,
@@ -65,6 +62,9 @@ const graph = useStudioGraph({
   refreshProjectData,
   selectedNode,
 })
+
+// ─── Graph display stream (auto-refreshes canvas on external changes) ─
+useGraphDisplayStream(projectId, () => graph.loadGraphData(projectId.value), graph.hasUnsavedChanges)
 
 // ─── Breadcrumb composable ───────────────────────────────────────────
 const crumbs = useStudioBreadcrumbs({
@@ -341,11 +341,6 @@ const { breadcrumbs, handleBreadcrumbClick, goToOverviewAndClearHistory, resetVi
       </VBtn>
     </div>
 
-    <div v-if="hasActiveRun" class="execution-indicator">
-      <VIcon icon="tabler-player-play" size="14" class="execution-indicator__icon" />
-      <span class="text-caption font-weight-medium">Run in progress</span>
-    </div>
-
     <EditSidebar
       v-model="showEditDrawer"
       :component-data="selectedNode ? { id: selectedNode.id, ...selectedNode.data } : null"
@@ -501,33 +496,4 @@ const { breadcrumbs, handleBreadcrumbClick, goToOverviewAndClearHistory, resetVi
   cursor: default !important;
 }
 
-.execution-indicator {
-  position: absolute;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  border-radius: var(--dnr-radius-md);
-  background: rgb(var(--v-theme-success));
-  color: #fff;
-  box-shadow: var(--dnr-elevation-2);
-  inset-block-start: 12px;
-  inset-inline-end: 12px;
-
-  &__icon {
-    animation: indicator-pulse 1.2s ease-in-out infinite;
-  }
-}
-
-@keyframes indicator-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.4;
-  }
-}
 </style>
