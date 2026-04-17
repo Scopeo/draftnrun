@@ -52,7 +52,6 @@ from ada_backend.services.project_service import (
 from ada_backend.services.run_service import create_run, run_with_tracking, update_run_status
 from ada_backend.services.tag_service import compose_tag_name
 from ada_backend.utils.redis_client import push_run_task
-from engine.trace.span_context import set_tracing_span
 from engine.components.errors import (
     CategorizationError,
     KeyTypePromptTemplateError,
@@ -60,6 +59,7 @@ from engine.components.errors import (
     MissingKeyPromptTemplateError,
     NoMatchingRouteError,
 )
+from engine.trace.span_context import set_tracing_span
 
 LOGGER = logging.getLogger(__name__)
 

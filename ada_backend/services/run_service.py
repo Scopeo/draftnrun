@@ -15,8 +15,8 @@ from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.run_input_repository import get_run_input
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.run_schema import AsyncRunAcceptedSchema, RunResponseSchema
-from ada_backend.services.alerting.alert_service import maybe_send_run_failure_alert
 from ada_backend.services.agent_runner_service import setup_tracing_context
+from ada_backend.services.alerting.alert_service import maybe_send_run_failure_alert
 from ada_backend.services.errors import (
     InvalidRunStatusTransition,
     ProjectNotFound,
