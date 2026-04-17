@@ -13,6 +13,7 @@ from ada_backend.scheduler.service import (
     start_scheduler,
     stop_scheduler,
 )
+from engine.log_redaction import scrub_sentry_event
 from engine.trace.trace_context import set_trace_manager
 from logger import setup_logging
 from settings import settings
@@ -60,8 +61,6 @@ async def run_scheduler():
     setup_logging(process_name="apscheduler")
 
     if settings.SENTRY_DSN:
-        from engine.log_redaction import scrub_sentry_event
-
         sentry_sdk.init(
             dsn=settings.SENTRY_DSN,
             environment=settings.SENTRY_ENVIRONMENT,
