@@ -1,3 +1,4 @@
+import json
 import logging
 from contextlib import nullcontext
 from types import SimpleNamespace
@@ -213,13 +214,35 @@ def test_graph_runner_set_from_expression_does_not_log_evaluated_value():
     assert "(type={type(evaluated_value).__name__})" in module_src
 
 
-def test_ai_agent_tool_call_log_format_is_keys_only():
+@pytest.mark.asyncio
+async def test_ai_agent_tool_call_log_format_is_keys_only(caplog):
     import engine.components.ai_agent as ai_agent_module
 
-    with open(ai_agent_module.__file__, "r", encoding="utf-8") as handle:
-        module_src = handle.read()
-    assert "Calling tool %s with argument keys=%s" in module_src
-    assert "Calling tool {tool_function_name} with arguments:" not in module_src
+    class FakeTool:
+        async def run(self, **kwargs):
+            return ai_agent_module.AgentPayload(messages=[ai_agent_module.ChatMessage(role="assistant", content="ok")])
+
+    agent = object.__new__(ai_agent_module.AIAgent)
+    agent._tool_registry = {"search_docs": (FakeTool(), None, {})}
+
+    tool_call = SimpleNamespace(
+        id="call_123",
+        function=SimpleNamespace(
+            name="search_docs",
+            arguments=json.dumps({"api_key": LEAK_MARKER, "query": "hello"}),
+        ),
+    )
+
+    with caplog.at_level(logging.DEBUG):
+        tool_call_id, tool_output = await agent._run_tool_call(tool_call=tool_call, ctx={"request_id": "req_1"})
+
+    assert tool_call_id == "call_123"
+    assert tool_output.messages[0].content == "ok"
+    assert LEAK_MARKER not in caplog.text
+    assert "argument keys" in caplog.text
+    assert "api_key" in caplog.text
+    assert "query" in caplog.text
+    assert '"api_key":' not in caplog.text
 
 
 def test_trace_service_error_log_does_not_include_input_data(caplog, monkeypatch):
@@ -248,15 +271,43 @@ def test_trace_service_error_log_does_not_include_input_data(caplog, monkeypatch
         assert LEAK_MARKER not in record.getMessage()
 
 
-def test_redis_client_payload_log_is_keys_only():
+def test_redis_client_payload_log_is_keys_only(monkeypatch, caplog):
     import ada_backend.utils.redis_client as redis_client_module
 
-    with open(redis_client_module.__file__, "r", encoding="utf-8") as handle:
-        module_src = handle.read()
-    assert "Prepared ingestion payload for Redis stream: source_id=%s keys=%s" in module_src
-    assert "Prepared webhook payload for Redis stream: keys=%s payload_keys=%s" in module_src
-    assert "Prepared payload for Redis stream: {safe_payload}" not in module_src
-    assert "Prepared webhook payload for Redis stream: {safe_payload}" not in module_src
+    class FakeRedisClient:
+        def xadd(self, stream_name, payload):
+            return "1-0"
+
+    class FakeSourceAttributes:
+        def model_dump(self):
+            return {"api_key": LEAK_MARKER, "public": "ok"}
+
+    monkeypatch.setattr(redis_client_module, "get_redis_client", lambda: FakeRedisClient())
+
+    with caplog.at_level(logging.DEBUG):
+        assert redis_client_module.push_ingestion_task(
+            ingestion_id="ing_1",
+            source_name="Secret Source",
+            source_type="api",
+            organization_id="org_1",
+            task_id="task_1",
+            source_attributes=FakeSourceAttributes(),
+            source_id="source_1",
+        )
+        assert redis_client_module.push_webhook_event(
+            webhook_id=uuid4(),
+            provider="github",
+            payload={"authorization": f"Bearer {LEAK_MARKER}", "public": "ok"},
+            event_id="evt_1",
+        )
+
+    assert LEAK_MARKER not in caplog.text
+    assert "Prepared ingestion payload for Redis stream" in caplog.text
+    assert "source_id=source_1" in caplog.text
+    assert "keys=['ingestion_id'" in caplog.text
+    assert "Prepared webhook payload for Redis stream" in caplog.text
+    assert "payload_keys=['authorization', 'public']" in caplog.text
+    assert f"Bearer {LEAK_MARKER}" not in caplog.text
 
 
 def test_mcp_tool_parameters_span_attribute_masks_secretstr_and_sensitive_keys():
