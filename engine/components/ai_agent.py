@@ -323,10 +323,7 @@ class AIAgent(Component):
         tool_function_name = tool_call.function.name
         tool_arguments = json.loads(tool_call.function.arguments)
         LOGGER.info(
-            "Tool call: %s (id=%s) with argument keys=%s",
-            tool_function_name,
-            tool_call_id,
-            list(tool_arguments.keys()),
+            f"Tool call: {tool_function_name} (id={tool_call_id}) with argument keys={list(tool_arguments.keys())}"
         )
 
         tool_entry = self._tool_registry.get(tool_function_name)
@@ -339,15 +336,11 @@ class AIAgent(Component):
         # Merge pre-configured literal inputs with LLM-provided arguments; LLM args win.
         merged_arguments = {**pre_configured, **tool_arguments}
         try:
-            LOGGER.debug(
-                "Calling tool %s with argument keys=%s",
-                tool_function_name,
-                list(merged_arguments.keys()),
-            )
+            LOGGER.debug(f"Calling tool {tool_function_name} with argument keys={list(merged_arguments.keys())}")
             tool_output = await tool_to_use.run(ctx=ctx, **merged_arguments)
-            LOGGER.debug("Tool %s returned (type=%s)", tool_function_name, type(tool_output).__name__)
+            LOGGER.debug(f"Tool {tool_function_name} returned (type={type(tool_output).__name__})")
         except Exception as e:
-            LOGGER.error("Error running tool %s: %s", tool_function_name, type(e).__name__, exc_info=True)
+            LOGGER.error(f"Error running tool {tool_function_name}: {type(e).__name__}", exc_info=True)
             tool_output = AgentPayload(messages=[ChatMessage(role="assistant", content=str(e))], error=str(e))
         return tool_call_id, tool_output
 

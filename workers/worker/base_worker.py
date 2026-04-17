@@ -24,7 +24,7 @@ logging.basicConfig(
 )
 
 dotenv_path = Path(__file__).parent.parent / ".env"
-logger.info("loading_env_vars path=%s", dotenv_path)
+logger.info(f"loading_env_vars path={dotenv_path}")
 load_dotenv(dotenv_path=dotenv_path)
 
 if settings.SENTRY_DSN_REDIS:
@@ -78,17 +78,12 @@ def _xgroup_create_if_not_exists(stream_name: str, group_name: str) -> None:
     """Create a consumer group on the stream, creating the stream if absent."""
     try:
         redis_client.xgroup_create(stream_name, group_name, id="0", mkstream=True)
-        logger.info("consumer_group_created stream=%s group=%s", stream_name, group_name)
+        logger.info(f"consumer_group_created stream={stream_name} group={group_name}")
     except redis.exceptions.ResponseError as e:
         if "BUSYGROUP" in str(e):
-            logger.debug("consumer_group_already_exists stream=%s group=%s", stream_name, group_name)
+            logger.debug(f"consumer_group_already_exists stream={stream_name} group={group_name}")
         else:
-            logger.error(
-                "consumer_group_create_failed stream=%s group=%s error=%s",
-                stream_name,
-                group_name,
-                str(e),
-            )
+            logger.error(f"consumer_group_create_failed stream={stream_name} group={group_name} error={str(e)}")
             raise
 
 
@@ -152,16 +147,12 @@ class BaseWorker:
             redis_client.xadd(dl_stream, dl_entry)
             redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
             logger.error(
-                "message_dead_lettered stream=%s message_id=%s delivery_count=%s reason=%s dead_letter_stream=%s",
-                self.stream_name,
-                message_id,
-                delivery_count,
-                reason,
-                dl_stream,
+                f"message_dead_lettered stream={self.stream_name} message_id={message_id} "
+                f"delivery_count={delivery_count} reason={reason} dead_letter_stream={dl_stream}"
             )
         except Exception as e:
             # Last resort: ACK anyway to stop the crash loop
-            logger.error("dead_letter_failed_forcing_ack message_id=%s error=%s", message_id, str(e))
+            logger.error(f"dead_letter_failed_forcing_ack message_id={message_id} error={str(e)}")
             try:
                 redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
             except Exception:
@@ -208,19 +199,15 @@ class BaseWorker:
                 # Filter out any messages we just dead-lettered
                 safe_messages = [(mid, fields) for mid, fields in messages if mid not in poison_ids]
                 if safe_messages:
-                    logger.info(
-                        "reclaimed_pending_messages stream=%s count=%s",
-                        self.stream_name,
-                        len(safe_messages),
-                    )
+                    logger.info(f"reclaimed_pending_messages stream={self.stream_name} count={len(safe_messages)}")
                     for message_id, fields in safe_messages:
                         self._dispatch(message_id, fields, consumer_name)
         except redis.exceptions.ResponseError as e:
             # Stream or group may not exist yet on a completely fresh deployment.
             if "ERR" in str(e) or "NOGROUP" in str(e):
-                logger.debug("xautoclaim_skipped stream=%s error=%s", self.stream_name, str(e))
+                logger.debug(f"xautoclaim_skipped stream={self.stream_name} error={str(e)}")
             else:
-                logger.error("xautoclaim_failed stream=%s error=%s", self.stream_name, str(e))
+                logger.error(f"xautoclaim_failed stream={self.stream_name} error={str(e)}")
 
     def _get_delivery_count(self, message_id: str) -> int:
         try:
@@ -235,12 +222,7 @@ class BaseWorker:
                 return 1
             return int(pending_entries[0].get("times_delivered", 1))
         except Exception as e:
-            logger.error(
-                "xpending_range_failed stream=%s message_id=%s error=%s",
-                self.stream_name,
-                message_id,
-                str(e),
-            )
+            logger.error(f"xpending_range_failed stream={self.stream_name} message_id={message_id} error={str(e)}")
             return _MAX_DELIVERY_ATTEMPTS
 
     def _resolve_process_outcome(self, payload: Dict[str, Any], message_id: str, fields: Dict[str, str]) -> None:
@@ -254,10 +236,7 @@ class BaseWorker:
             outcome = result
         except Exception as e:
             logger.error(
-                "worker_process_task_exception stream=%s message_id=%s error=%s",
-                self.stream_name,
-                message_id,
-                str(e),
+                f"worker_process_task_exception stream={self.stream_name} message_id={message_id} error={str(e)}",
                 exc_info=True,
             )
             outcome = ProcessTaskOutcome.FAIL_RETRY
@@ -266,17 +245,17 @@ class BaseWorker:
         if outcome == ProcessTaskOutcome.SUCCESS_ACK:
             try:
                 redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
-                logger.info("message_ack_success stream=%s message_id=%s", self.stream_name, message_id)
+                logger.info(f"message_ack_success stream={self.stream_name} message_id={message_id}")
             except Exception as e:
-                logger.error("xack_failed stream=%s message_id=%s error=%s", self.stream_name, message_id, str(e))
+                logger.error(f"xack_failed stream={self.stream_name} message_id={message_id} error={str(e)}")
             return
 
         if outcome == ProcessTaskOutcome.FAIL_FATAL_ACK:
             try:
                 redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
-                logger.info("message_ack_fatal stream=%s message_id=%s", self.stream_name, message_id)
+                logger.info(f"message_ack_fatal stream={self.stream_name} message_id={message_id}")
             except Exception as e:
-                logger.error("xack_failed stream=%s message_id=%s error=%s", self.stream_name, message_id, str(e))
+                logger.error(f"xack_failed stream={self.stream_name} message_id={message_id} error={str(e)}")
             self._on_fatal_ack(message_id, fields, reason=retry_reason)
             return
 
@@ -289,14 +268,9 @@ class BaseWorker:
 
         delay = min(_RETRY_BASE_DELAY_S * (2 ** (delivery_count - 1)), _RETRY_MAX_DELAY_S)
         logger.warning(
-            "message_retry_scheduled stream=%s message_id=%s delivery_count=%s max_attempts=%s "
-            "backoff_seconds=%.1f reason=%s",
-            self.stream_name,
-            message_id,
-            delivery_count,
-            _MAX_DELIVERY_ATTEMPTS,
-            delay,
-            retry_reason,
+            f"message_retry_scheduled stream={self.stream_name} message_id={message_id} "
+            f"delivery_count={delivery_count} max_attempts={_MAX_DELIVERY_ATTEMPTS} "
+            f"backoff_seconds={delay:.1f} reason={retry_reason}"
         )
         self._retry_queue.append(_ScheduledRetry(message_id, fields, time.monotonic() + delay))
 
@@ -306,12 +280,12 @@ class BaseWorker:
         try:
             payload = json.loads(raw)
         except json.JSONDecodeError as e:
-            logger.error("invalid_json error=%s stream=%s message_id=%s", str(e), self.stream_name, message_id)
+            logger.error(f"invalid_json error={str(e)} stream={self.stream_name} message_id={message_id}")
             redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
             return
 
         if not self._validate_payload(payload, self.get_required_fields()):
-            logger.error("invalid_payload_format stream=%s message_id=%s", self.stream_name, message_id)
+            logger.error(f"invalid_payload_format stream={self.stream_name} message_id={message_id}")
             redis_client.xack(self.stream_name, CONSUMER_GROUP, message_id)
             return
 
@@ -359,10 +333,7 @@ class BaseWorker:
                 )
             except Exception as e:
                 logger.error(
-                    "retry_xclaim_failed stream=%s message_id=%s error=%s",
-                    self.stream_name,
-                    entry.message_id,
-                    str(e),
+                    f"retry_xclaim_failed stream={self.stream_name} message_id={entry.message_id} error={str(e)}"
                 )
                 self._retry_queue.append(
                     _ScheduledRetry(entry.message_id, entry.fields, time.monotonic() + _RETRY_BASE_DELAY_S)
@@ -370,9 +341,7 @@ class BaseWorker:
                 continue
             if not claimed:
                 logger.info(
-                    "retry_message_no_longer_pending stream=%s message_id=%s",
-                    self.stream_name,
-                    entry.message_id,
+                    f"retry_message_no_longer_pending stream={self.stream_name} message_id={entry.message_id}"
                 )
                 continue
             self._dispatch(entry.message_id, entry.fields, consumer_name)
@@ -381,10 +350,7 @@ class BaseWorker:
         """Main worker loop — crash-safe via Redis Streams consumer groups."""
         consumer_name = self._consumer_name()
         logger.info(
-            "worker_starting stream=%s consumer=%s group=%s",
-            self.stream_name,
-            consumer_name,
-            CONSUMER_GROUP,
+            f"worker_starting stream={self.stream_name} consumer={consumer_name} group={CONSUMER_GROUP}"
         )
 
         self._reclaim_pending(consumer_name)
@@ -419,10 +385,10 @@ class BaseWorker:
                 self._dispatch(message_id, fields, consumer_name)
 
             except redis.ConnectionError:
-                logger.warning("redis_connection_error stream=%s retry_in_seconds=%s", self.stream_name, 5)
+                logger.warning(f"redis_connection_error stream={self.stream_name} retry_in_seconds={5}")
                 time.sleep(5)
             except Exception as e:
-                logger.error("unexpected_error error=%s stream=%s", str(e), self.stream_name)
+                logger.error(f"unexpected_error error={str(e)} stream={self.stream_name}")
                 time.sleep(1)
 
     def get_required_fields(self) -> list[str]:
@@ -445,4 +411,4 @@ class BaseWorker:
         The message remains unacknowledged in the PEL and will be reclaimed on
         the next worker restart (or by another idle consumer).
         """
-        logger.info("task_deferred_pending_capacity stream=%s", self.stream_name)
+        logger.info(f"task_deferred_pending_capacity stream={self.stream_name}")

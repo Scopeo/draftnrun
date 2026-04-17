@@ -151,7 +151,7 @@ def _resolve_literal_field_expressions(
                     expr_ast, ipi.name, tasks={}, variables=variables
                 )
             except Exception as exc:
-                LOGGER.warning("Failed to evaluate field expression for port %s: %s", ipi.name, exc)
+                LOGGER.warning(f"Failed to evaluate field expression for port {ipi.name}: {exc}")
 
     # 2. Resolve from ToolPortConfiguration.expression_json (custom ports + overrides)
     for config in configs:
@@ -177,7 +177,7 @@ def _resolve_literal_field_expressions(
             try:
                 resolved_values[port_name] = evaluate_expression(expr_ast, port_name, tasks={}, variables=variables)
             except Exception as exc:
-                LOGGER.warning("Failed to evaluate field expression for port %s: %s", port_name, exc)
+                LOGGER.warning(f"Failed to evaluate field expression for port {port_name}: {exc}")
     return resolved_values
 
 
@@ -215,7 +215,7 @@ async def instantiate_component(
         project_id=project_id,
     )
 
-    LOGGER.debug("Loaded component input param names: %s", list(input_params.keys()))
+    LOGGER.debug(f"Loaded component input param names: {list(input_params.keys())}")
 
     component_integration = get_integration_from_component(session, component_instance.component_version_id)
 
@@ -294,10 +294,10 @@ async def instantiate_component(
                 },
             )
             raise ValueError(error_msg) from e
-    LOGGER.debug("Resolved sub-component parameter names: %s", list(grouped_sub_components.keys()))
+    LOGGER.debug(f"Resolved sub-component parameter names: {list(grouped_sub_components.keys())}")
     # Merge grouped sub-components into input parameters
     for parameter_name, sub_component_list in grouped_sub_components.items():
-        LOGGER.debug("Merging %d sub-component(s) for parameter '%s'", len(sub_component_list), parameter_name)
+        LOGGER.debug(f"Merging {len(sub_component_list)} sub-component(s) for parameter '{parameter_name}'")
         if not any(order is not None for order, _ in sub_component_list):
             # All sub-components have order=None, treat as singleton if only one
             if len(sub_component_list) == 1:
@@ -309,7 +309,7 @@ async def instantiate_component(
             input_params[parameter_name] = [
                 instance for _, instance in sorted(sub_component_list, key=lambda x: x[0] or 0)
             ]
-    LOGGER.debug("Merged input parameter names: %s", list(input_params.keys()))
+    LOGGER.debug(f"Merged input parameter names: {list(input_params.keys())}")
 
     # Apply global component parameters (non-overridable, invisible to UI)
     try:
@@ -329,10 +329,7 @@ async def instantiate_component(
                 input_params[pname] = gparam.get_value()
         for pname, values in grouped_globals.items():
             input_params[pname] = [v for _, v in sorted(values, key=lambda x: x[0])]
-        LOGGER.debug(
-            "Input parameter names after applying global component parameters: %s",
-            list(input_params.keys()),
-        )
+        LOGGER.debug(f"Input parameter names after applying global component parameters: {list(input_params.keys())}")
     except Exception as e:
         raise ValueError(
             f"Failed to apply global component parameters for instance {component_instance.ref}: {e}"

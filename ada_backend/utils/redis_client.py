@@ -255,9 +255,8 @@ def push_ingestion_task(
         # TODO(security): the raw `payload` is serialized to the Redis stream via client.xadd
         # below; durable persistence of secrets is still open.
         LOGGER.debug(
-            "Prepared ingestion payload for Redis stream: source_id=%s keys=%s",
-            payload.get("source_id"),
-            list(payload.keys()),
+            f"Prepared ingestion payload for Redis stream: source_id={payload.get('source_id')} "
+            f"keys={list(payload.keys())}"
         )
 
         message_id = client.xadd(settings.REDIS_INGESTION_STREAM, {"data": json.dumps(payload)})
@@ -338,10 +337,12 @@ def push_webhook_event(
 
         # TODO(security): the raw `queue_payload` is serialized to the Redis stream via xadd
         # below; durable persistence of secrets is still open.
+        payload_keys = (
+            list(queue_payload.get("payload", {}).keys()) if isinstance(queue_payload.get("payload"), dict) else None
+        )
         LOGGER.debug(
-            "Prepared webhook payload for Redis stream: keys=%s payload_keys=%s",
-            list(queue_payload.keys()),
-            list(queue_payload.get("payload", {}).keys()) if isinstance(queue_payload.get("payload"), dict) else None,
+            f"Prepared webhook payload for Redis stream: keys={list(queue_payload.keys())} "
+            f"payload_keys={payload_keys}"
         )
 
         message_id = client.xadd(settings.REDIS_WEBHOOK_STREAM, {"data": json.dumps(queue_payload)})
@@ -442,7 +443,7 @@ _GIT_SYNC_DEDUP_TTL_SECONDS = 3600
 def push_git_sync_task(config_id: UUID, commit_sha: str) -> bool:
     client = get_redis_client()
     if not client:
-        LOGGER.error("Redis client unavailable. Cannot push git sync task for config %s", config_id)
+        LOGGER.error(f"Redis client unavailable. Cannot push git sync task for config {config_id}")
         return False
 
     dedup_key = f"git_sync_dedup:{config_id}:{commit_sha}"
@@ -450,9 +451,7 @@ def push_git_sync_task(config_id: UUID, commit_sha: str) -> bool:
         was_set = client.set(dedup_key, "1", nx=True, ex=_GIT_SYNC_DEDUP_TTL_SECONDS)
         if not was_set:
             LOGGER.info(
-                "Git sync task for config %s at %s already enqueued — skipping duplicate",
-                config_id,
-                commit_sha[:8],
+                f"Git sync task for config {config_id} at {commit_sha[:8]} already enqueued — skipping duplicate"
             )
             return True
 
@@ -464,11 +463,11 @@ def push_git_sync_task(config_id: UUID, commit_sha: str) -> bool:
             client.delete(dedup_key)
         return pushed
     except _RECONNECT_ERRORS as e:
-        LOGGER.error("Redis connection error pushing git sync task %s to queue: %s", config_id, e)
+        LOGGER.error(f"Redis connection error pushing git sync task {config_id} to queue: {e}")
         reset_redis_client()
         return False
     except Exception as e:
-        LOGGER.error("Failed to push git sync task %s to Redis queue: %s", config_id, e)
+        LOGGER.error(f"Failed to push git sync task {config_id} to Redis queue: {e}")
         return False
 
 

@@ -46,10 +46,9 @@ def get_attributes_with_messages(span_kind: str, row: pd.Series, filter_to_last_
             input = input_data
     except Exception as e:
         LOGGER.error(
-            "Error extracting last user message: %s (input_data type=%s, len=%s)",
-            type(e).__name__,
-            type(input_data).__name__,
-            len(input_data) if hasattr(input_data, "__len__") else "n/a",
+            f"Error extracting last user message: {type(e).__name__} "
+            f"(input_data type={type(input_data).__name__}, "
+            f"len={len(input_data) if hasattr(input_data, '__len__') else 'n/a'})"
         )
         input = input_data
     output = _safe_json_loads(row["output_content"])
@@ -224,8 +223,10 @@ def get_root_traces_by_project(
         end_time=end_time,
     )
     track_monitoring_loaded(user_id, project_count=1, organization_id=organization_id)
-    LOGGER.info("Querying root spans for project %s with duration=%s start_time=%s end_time=%s",
-                project_id, duration, start_time, end_time)
+    LOGGER.info(
+        f"Querying root spans for project {project_id} with duration={duration} "
+        f"start_time={start_time} end_time={end_time}"
+    )
 
     traces = build_root_spans(rows)
     return PaginatedRootTracesResponse(

@@ -239,16 +239,16 @@ async def resolve_oauth_access_token(
         variables = get_run_variables()
         LOGGER.debug("Set run variables available for OAuth resolution")
         if variables and definition.name in variables:
-            LOGGER.debug("Using set run variables for %s", definition.name)
+            LOGGER.debug(f"Using set run variables for {definition.name}")
             raw_connection_id = variables[definition.name]
             if isinstance(raw_connection_id, SecretStr):
                 raw_connection_id = raw_connection_id.get_secret_value()
             connection_uuid = UUID(raw_connection_id)
         elif definition.default_value:
-            LOGGER.debug("Using default value for %s", definition.name)
+            LOGGER.debug(f"Using default value for {definition.name}")
             connection_uuid = UUID(definition.default_value)
         else:
-            LOGGER.debug("No connection found for %s", definition.name)
+            LOGGER.debug(f"No connection found for {definition.name}")
             return None
 
         return await get_oauth_access_token(

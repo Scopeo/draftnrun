@@ -183,10 +183,8 @@ class APICallTool(Component):
             # returned by misbehaving upstream APIs. Deep redaction of third-party payloads
             # requires a broader policy.
             LOGGER.error(
-                "API request failed: %s | status=%s | response_body_type=%s",
-                type(e).__name__,
-                status_code,
-                type(response_body).__name__,
+                f"API request failed: {type(e).__name__} | status={status_code} "
+                f"| response_body_type={type(response_body).__name__}"
             )
             return {
                 "status_code": status_code or 0,

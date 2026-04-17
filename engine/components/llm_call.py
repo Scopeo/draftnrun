@@ -205,7 +205,7 @@ class LLMCallAgent(Component):
         return []
 
     async def _run_without_io_trace(self, inputs: LLMCallInputs, ctx: Optional[dict] = None) -> LLMCallOutputs:
-        LOGGER.debug("Running LLM call agent for %s", self.component_attributes.component_instance_name)
+        LOGGER.debug(f"Running LLM call agent for {self.component_attributes.component_instance_name}")
         prompt_template = inputs.prompt_template or ""
         output_format = inputs.output_format
         if isinstance(output_format, dict):

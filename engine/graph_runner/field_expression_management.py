@@ -114,12 +114,12 @@ def evaluate_expression(
     match expression:
         case VarNode() as var:
             result = evaluate_var(var)
-            LOGGER.debug("Evaluated variable expression for %s (type=%s)", target_field_name, type(result).__name__)
+            LOGGER.debug(f"Evaluated variable expression for {target_field_name} (type={type(result).__name__})")
             return result
 
         case RefNode() as ref:
             result = evaluate_ref_as_object(ref)
-            LOGGER.debug("Evaluated ref expression for %s (type=%s)", target_field_name, type(result).__name__)
+            LOGGER.debug(f"Evaluated ref expression for {target_field_name} (type={type(result).__name__})")
             return result
 
         case JsonBuildNode(template=template, refs=ref_nodes):
@@ -137,10 +137,10 @@ def evaluate_expression(
         # TODO: duplicate of the RefNode case above, never reached — remove.
         case RefNode() as ref:
             result = evaluate_ref_as_object(ref)
-            LOGGER.debug("Evaluated ref expression for %s (type=%s)", target_field_name, type(result).__name__)
+            LOGGER.debug(f"Evaluated ref expression for {target_field_name} (type={type(result).__name__})")
             return result
 
         case _:
             result = evaluate_node(expression)
-            LOGGER.debug("Evaluated expression for %s", target_field_name)
+            LOGGER.debug(f"Evaluated expression for {target_field_name}")
             return result
