@@ -116,25 +116,15 @@ Merge order: **defaults → set_ids[0] → set_ids[1] → ...**
 4. Secret values are returned as `SecretStr` objects from `pydantic` (masked by `str()`/`repr()`)
 5. Returns `dict[str, Any]` consumed by `VarNode` expression evaluation
 
-`SecretStr` instances must be explicitly unwrapped at execution boundaries that require plaintext
-(for example prompt templating, component input validation, and external SDK/client construction).
-The trace serializer (`engine/trace/serializer.py`) recognises `SecretStr` and emits the masked string instead of
-the real value, preventing secret leakage into span attributes persisted via `SQLSpanExporter`.
+Keep values as `SecretStr` through resolution/evaluation. Unwrap only at explicit execution boundaries that require
+plaintext (for example prompt rendering or external client construction). The trace serializer
+(`engine/trace/serializer.py`) masks `SecretStr` values before span export.
 
 ### Secret Redaction
 
-The primary boundary for secrets is `SecretStr` typing + explicit unwrap at the execution boundary. The serializer
-masks any `SecretStr` that reaches a span or log.
-
-For the cases where `SecretStr` cannot apply — arbitrary exception messages and externally-supplied MCP tool
-arguments — `engine/log_redaction.py` provides a best-effort name-based scrubber (`redact_sensitive`,
-`scrub_sentry_event`). It is wired as `before_send*` on Sentry (API, scheduler, Redis worker, MCP server) and on
-the MCP `TOOL_PARAMETERS` span attribute. Treat it as defense-in-depth only; prefer typing new fields as
-`SecretStr` instead of adding call sites.
-
-Open follow-ups (tagged `TODO(security)` in code): plaintext secrets in component `INPUT_VALUE`/`OUTPUT_VALUE`
-spans and the graph root span, durable persistence (`run_inputs`, Redis stream payloads), FastMCP
-`ValidationError` logs, and deep redaction of third-party `response_body` in the API-call tool.
+Primary boundary: typed `SecretStr` + explicit unwrap at boundaries.
+`engine/log_redaction.py` (`redact_sensitive`, `scrub_sentry_event`) is best-effort defense-in-depth for untyped
+inputs/events where `SecretStr` cannot be applied directly.
 
 ## Legacy Compatibility
 
@@ -158,12 +148,11 @@ In ingestion workers, `ingestion_script.ingest_db_source.upload_db_source()` sho
 
 **File**: `engine/trace/span_context.py`
 
-`set_tracing_span(**kwargs)` merges partial updates into the `ContextVar` and synchronizes selected fields to Sentry's isolation scope (both tags and attributes). `reset_tracing_span()` wipes the context and Sentry tags for top-level boundaries (e.g., `RunQueueWorker`) to prevent leakage between independent runs.
+`set_tracing_span(**kwargs)` is the canonical way to update tracing context and sync searchable fields to Sentry.
+`reset_tracing_span()` clears context at top-level boundaries between independent runs.
 
-- `SENTRY_TAG_FIELDS` maps `TracingSpanParams` attributes to Sentry keys (e.g., `environment` -> `env`).
-- Sync handles `None` by clearing tags/attributes to avoid stale values.
-- `run_id` is injected at run boundaries (`run_with_tracking`, async enqueue, worker processing).
-- Avoid mutating `TracingSpanParams` directly; always use the helper functions.
+- Keep searchable field mapping in `SENTRY_TAG_FIELDS`.
+- Avoid mutating `TracingSpanParams` directly; use helper functions.
 
 ## Key Files
 

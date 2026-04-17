@@ -12,7 +12,7 @@ globs:
 - Secrets: encrypted with Fernet before storage, decrypted on read via `ada_backend/utils/encryption.py`.
 - Runtime secret values passed toward the engine should use `SecretStr` (`pydantic.SecretStr`) until an explicit execution boundary requires plaintext.
 - When passing constructor params to engine factories or placeholder/template resolvers, unwrap secrets explicitly and as late as possible.
-- Never log full parameter dicts after `replace_secret_placeholders()` — log only parameter names (`list(params.keys())`). The same rule applies to structured `extra=` logger kwargs: pass lists of key names, not the raw dicts. Durable persistence of run payloads in Postgres (`run_inputs`) and Redis streams is tracked as `TODO(security)` in the code.
+- Never log full parameter dicts after `replace_secret_placeholders()`; log only parameter names (`list(params.keys())`). Apply the same rule to structured `extra=` logger kwargs.
 - Prefer UUID-typed identifiers in service-facing schemas and payload models; only stringify UUIDs at API/JSON boundaries.
 - Prefer typed schemas/models for service return payloads; avoid untyped `dict` returns when a stable shape exists.
 - See `ada_backend/docs/` for domain-specific documentation.
