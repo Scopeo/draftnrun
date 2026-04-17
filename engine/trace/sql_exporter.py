@@ -297,7 +297,11 @@ class SQLSpanExporter(SpanExporter):
         session.add(
             SpanMessage(
                 span_id=span_row.span_id,
-                input_content=sanitize_json_string(json.dumps(input)) if input is not None else None,
-                output_content=sanitize_json_string(json.dumps(output)) if output is not None else None,
+                input_content=sanitize_json_string(json.dumps(input, ensure_ascii=False))
+                if input is not None
+                else None,
+                output_content=sanitize_json_string(json.dumps(output, ensure_ascii=False))
+                if output is not None
+                else None,
             )
         )

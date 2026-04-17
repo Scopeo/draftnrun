@@ -92,6 +92,10 @@ def query_trace_duration(
     return df
 
 
+def _escape_ilike(value: str) -> str:
+    return value.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+
+
 def query_root_trace_duration(
     project_id: UUID,
     duration_days: Optional[int] = None,
@@ -138,13 +142,26 @@ def query_root_trace_duration(
         filters += f"\n        AND graph_runner_id = '{graph_runner_id}'"
 
     if search is not None:
-        filters += """
+        escaped = _escape_ilike(search)
+        json_escaped = json.dumps(search, ensure_ascii=True)[1:-1]
+        if json_escaped != search:
+            json_escaped_like = _escape_ilike(json_escaped)
+            filters += """
         AND EXISTS (
             SELECT 1 FROM traces.span_messages m_s
             WHERE m_s.span_id = traces.spans.span_id
-            AND m_s.input_content ILIKE :search
+            AND (m_s.input_content ILIKE :search ESCAPE '!'
+                 OR m_s.input_content ILIKE :search_escaped ESCAPE '!')
         )"""
-        params["search"] = f"%{search}%"
+            params["search_escaped"] = f"%{json_escaped_like}%"
+        else:
+            filters += """
+        AND EXISTS (
+            SELECT 1 FROM traces.span_messages m_s
+            WHERE m_s.span_id = traces.spans.span_id
+            AND m_s.input_content ILIKE :search ESCAPE '!'
+        )"""
+        params["search"] = f"%{escaped}%"
 
     query = f"""
     WITH total AS (
