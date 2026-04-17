@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import SecretStr
 
 from engine.llm_services.providers.base_provider import BaseProvider
+from engine.secret_utils import unwrap_secret
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -16,8 +17,7 @@ def create_provider(
     base_url: Optional[str] = None,
     **kwargs,
 ) -> BaseProvider:
-    if isinstance(api_key, SecretStr):
-        api_key = api_key.get_secret_value()
+    api_key = unwrap_secret(api_key)
 
     if api_key is None:
         match provider:

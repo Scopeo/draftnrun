@@ -9,11 +9,10 @@ type coercion, and input resolution for field expressions.
 import logging
 from typing import Any, Callable
 
-from pydantic import SecretStr
-
 from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode, VarNode
 from engine.field_expressions.errors import FieldExpressionError
 from engine.graph_runner.types import Task
+from engine.secret_utils import unwrap_secret
 
 LOGGER = logging.getLogger(__name__)
 
@@ -87,9 +86,7 @@ def evaluate_expression(
         return variables[var.name]
 
     def to_runtime_string(value: Any) -> str:
-        if isinstance(value, SecretStr):
-            return value.get_secret_value()
-        return to_string(value)
+        return to_string(unwrap_secret(value))
 
     def evaluate_node(node: ExpressionNode) -> str:
         """Evaluate node to string (for concat/ref/literal)."""

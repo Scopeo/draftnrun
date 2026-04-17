@@ -37,7 +37,7 @@ from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import ToolDescription
 from engine.llm_services.llm_service import CompletionService, EmbeddingService, OCRService, WebSearchService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
-from engine.secret_utils import unwrap_secrets
+from engine.secret_utils import unwrap_secret, unwrap_secrets
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_context import get_trace_manager
 
@@ -240,9 +240,7 @@ async def resolve_oauth_access_token(
         LOGGER.debug("Set run variables available for OAuth resolution")
         if variables and definition.name in variables:
             LOGGER.debug(f"Using set run variables for {definition.name}")
-            raw_connection_id = variables[definition.name]
-            if isinstance(raw_connection_id, SecretStr):
-                raw_connection_id = raw_connection_id.get_secret_value()
+            raw_connection_id = unwrap_secret(variables[definition.name])
             connection_uuid = UUID(raw_connection_id)
         elif definition.default_value:
             LOGGER.debug(f"Using default value for {definition.name}")
@@ -887,8 +885,7 @@ def build_db_service_processor(target_name: str = "db_service") -> ParameterProc
         engine_url = params.pop("engine_url", None)
         if not engine_url:
             return params
-        if isinstance(engine_url, SecretStr):
-            engine_url = engine_url.get_secret_value()
+        engine_url = unwrap_secret(engine_url)
 
         try:
             db_service_instance = SQLLocalService(engine_url=engine_url)
@@ -1190,8 +1187,7 @@ def _pop_and_validate_parameter(params: dict, parameter_name: str, expected_type
     if parameter_value is None:
         raise ValueError(f"{error_message}: parameter '{parameter_name}' cannot be None")
 
-    if isinstance(parameter_value, SecretStr):
-        parameter_value = parameter_value.get_secret_value()
+    parameter_value = unwrap_secret(parameter_value)
 
     if expected_type is str:
         if not isinstance(parameter_value, str):

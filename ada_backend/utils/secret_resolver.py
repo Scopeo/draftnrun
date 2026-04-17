@@ -2,8 +2,7 @@ import logging
 import re
 from typing import Any, Dict, Optional
 
-from pydantic import SecretStr
-
+from engine.secret_utils import unwrap_secret
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -46,9 +45,7 @@ def _replace_in_string(text: str, secret_mapping: Optional[Dict[str, Any]]) -> A
     def _repl(match: re.Match) -> str:
         var_name = match.group(1)
         value = _resolve_single_placeholder(var_name, secret_mapping)
-        if isinstance(value, SecretStr):
-            return value.get_secret_value()
-        return str(value)
+        return str(unwrap_secret(value))
 
     return _ENV_PATTERN.sub(_repl, text)
 

@@ -118,7 +118,6 @@ Merge order: **defaults → set_ids[0] → set_ids[1] → ...**
 
 `SecretStr` instances must be explicitly unwrapped at execution boundaries that require plaintext
 (for example prompt templating, component input validation, and external SDK/client construction).
-
 The trace serializer (`engine/trace/serializer.py`) recognises `SecretStr` and emits the masked string instead of
 the real value, preventing secret leakage into span attributes persisted via `SQLSpanExporter`.
 

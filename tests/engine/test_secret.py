@@ -1,6 +1,6 @@
 from pydantic import SecretStr
 
-from engine.secret_utils import unwrap_secrets
+from engine.secret_utils import unwrap_secret, unwrap_secrets
 from engine.trace.serializer import serialize_to_json
 
 
@@ -17,6 +17,14 @@ def test_secret_str_truthiness_and_length():
 
     assert bool(secret)
     assert len(secret) == 6
+
+
+def test_unwrap_secret_unwraps_secretstr_and_keeps_plain_values():
+    secret = SecretStr("abc123")
+
+    assert unwrap_secret(secret) == "abc123"
+    assert unwrap_secret("plain-value") == "plain-value"
+    assert unwrap_secret(None) is None
 
 
 def test_unwrap_secrets_recursively():
