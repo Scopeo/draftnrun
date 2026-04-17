@@ -206,8 +206,8 @@ def add_tags_endpoint(
 ):
     try:
         return add_tags_to_project_service(session, project_id, body.tags)
-    except ProjectNotFound:
-        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+    except ProjectNotFound as e:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found") from e
     except Exception as e:
         LOGGER.error(f"Failed to add tags to project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -225,8 +225,8 @@ def remove_tag_endpoint(
 ):
     try:
         return remove_tag_from_project_service(session, project_id, tag)
-    except ProjectNotFound:
-        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+    except ProjectNotFound as e:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found") from e
     except Exception as e:
         LOGGER.error(f"Failed to remove tag from project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

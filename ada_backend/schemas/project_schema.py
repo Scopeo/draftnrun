@@ -80,4 +80,4 @@ class ProjectDeleteResponse(BaseModel):
 
 
 class ProjectTagsInput(BaseModel):
-    tags: list[str] = Field(default_factory=list, min_length=1)
+    tags: list[str] = Field(min_length=1)

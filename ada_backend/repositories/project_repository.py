@@ -245,8 +245,9 @@ def insert_project(
         raise ValueError(f"Invalid project_type: {project_type!r}")
     session.add(project)
     if tags:
-        for tag in tags:
-            session.add(db.ProjectTag(project_id=project_id, tag=tag.lower().strip()))
+        normalized_tags = {t.lower().strip() for t in tags if t.strip()}
+        for tag in normalized_tags:
+            session.add(db.ProjectTag(project_id=project_id, tag=tag))
     session.commit()
     session.refresh(project)
     return project
@@ -275,8 +276,9 @@ def update_project(
         project.icon_color = icon_color
     if tags is not None:
         session.query(db.ProjectTag).filter(db.ProjectTag.project_id == project_id).delete()
-        for tag in tags:
-            session.add(db.ProjectTag(project_id=project_id, tag=tag.lower().strip()))
+        normalized_tags = {t.lower().strip() for t in tags if t.strip()}
+        for tag in normalized_tags:
+            session.add(db.ProjectTag(project_id=project_id, tag=tag))
     session.commit()
     session.refresh(project)
     return project

@@ -6,10 +6,12 @@ import { useRouter } from 'vue-router'
 import ProjectCard from './ProjectCard.vue'
 import TemplateCard from './TemplateCard.vue'
 import { logger } from '@/utils/logger'
+import { tagColor } from '@/utils/tagColor'
 import {
   fetchProject,
   useDeleteProjectMutation,
   useDuplicateProjectMutation,
+  useOrgTagsQuery,
   useProjectsQuery,
 } from '@/composables/queries/useProjectsQuery'
 import { fetchAgentDetail, useDeleteAgentMutation } from '@/composables/queries/useAgentsQuery'
@@ -31,6 +33,7 @@ interface Project {
   graph_runners?: GraphRunner[]
   project_type?: 'AGENT' | 'WORKFLOW'
   is_template?: boolean
+  tags?: string[]
 }
 
 interface Props {
@@ -58,15 +61,19 @@ const duplicateProjectMutation = useDuplicateProjectMutation()
 const deleteProjectMutation = useDeleteProjectMutation()
 const deleteAgentMutation = useDeleteAgentMutation()
 
-// Use TanStack Query for caching and data fetching
 const projectType = computed(() => props.type)
+const selectedTags = ref<string[]>([])
+
+const { data: orgTags } = useOrgTagsQuery(selectedOrgId)
+
+const selectedTagsRef = computed(() => (selectedTags.value.length > 0 ? selectedTags.value : undefined))
 
 const {
   data: allProjects,
   isLoading: loading,
   error: queryError,
   refetch,
-} = useProjectsQuery(selectedOrgId, projectType, true)
+} = useProjectsQuery(selectedOrgId, projectType, true, selectedTagsRef)
 
 const projects = ref<Project[]>([])
 const templates = ref<Project[]>([])
@@ -495,14 +502,43 @@ defineExpose({
       </div>
 
       <!-- Projects Grid -->
-      <div v-if="projects.length > 0">
+      <div v-if="projects.length > 0 || selectedTags.length > 0">
         <span
           class="text-body-2 text-medium-emphasis font-weight-medium text-uppercase d-block mb-3"
           style="letter-spacing: 0.05em"
         >
           Your {{ type === 'AGENT' ? 'agents' : 'workflows' }}
         </span>
-        <div class="projects-grid">
+        <VAutocomplete
+          v-if="orgTags && orgTags.length > 0"
+          v-model="selectedTags"
+          :items="orgTags"
+          placeholder="Filter by tags…"
+          variant="solo-filled"
+          flat
+          density="compact"
+          multiple
+          chips
+          closable-chips
+          hide-details
+          clearable
+          single-line
+          class="tags-filter mb-4"
+        >
+          <template #prepend-inner>
+            <VIcon icon="tabler-filter" size="14" class="me-1 text-medium-emphasis" />
+          </template>
+          <template #chip="{ props: chipProps, item }">
+            <VChip v-bind="chipProps" size="x-small" variant="tonal" :color="tagColor(item.raw)" label closable>
+              {{ item.raw }}
+            </VChip>
+          </template>
+        </VAutocomplete>
+
+        <div v-if="projects.length === 0 && selectedTags.length > 0" class="text-body-2 text-medium-emphasis pa-4">
+          No {{ type === 'AGENT' ? 'agents' : 'workflows' }} match the selected tags.
+        </div>
+        <div v-else class="projects-grid">
           <ProjectCard
             v-for="project in projects"
             :key="project.project_id"
@@ -586,6 +622,24 @@ defineExpose({
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.tags-filter {
+  max-inline-size: 220px;
+
+  :deep(.v-field) {
+    --v-field-padding-start: 8px;
+    --v-field-padding-end: 4px;
+    --v-input-padding-top: 4px;
+    min-block-size: 32px;
+    font-size: 0.8125rem;
+    border-radius: 8px;
+  }
+
+  :deep(.v-field__input) {
+    padding-block: 2px;
+    min-block-size: unset;
+  }
 }
 
 .create-blank-card {

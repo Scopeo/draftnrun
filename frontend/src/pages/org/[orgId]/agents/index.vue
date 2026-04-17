@@ -6,6 +6,7 @@ import { useCreateAgentMutation } from '@/composables/queries/useAgentsQuery'
 import { useSelectedOrg } from '@/composables/useSelectedOrg'
 import { useProjectEntityEditor } from '@/composables/useProjectEntityEditor'
 import { DEFAULT_PROJECT_ICON } from '@/composables/useProjectDefaults'
+import { tagColor } from '@/utils/tagColor'
 
 const { selectedOrgId } = useSelectedOrg()
 
@@ -20,6 +21,8 @@ const {
   editedName: editedAgentName,
   editedDescription: editedAgentDescription,
   editedIconSelection,
+  editedTags,
+  orgTags,
   isUpdating: isUpdatingAgent,
   isCreating,
   editError,
@@ -93,6 +96,25 @@ definePage({
         />
 
         <IconPicker v-model="editedIconSelection" />
+
+        <VCombobox
+          v-model="editedTags"
+          :items="orgTags || []"
+          label="Tags"
+          variant="outlined"
+          multiple
+          chips
+          closable-chips
+          class="mt-4"
+          placeholder="Type to add a tag…"
+          hide-details
+        >
+          <template #chip="{ props: chipProps, item }">
+            <VChip v-bind="chipProps" size="small" variant="tonal" :color="tagColor(item.raw)" label closable>
+              {{ item.raw }}
+            </VChip>
+          </template>
+        </VCombobox>
       </VCardText>
 
       <VCardActions class="justify-end pa-4">

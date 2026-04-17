@@ -203,7 +203,7 @@ def create_new_agent_service(
         user_id, organization_id, project.id, project.name, from_template=agent_data.template is not None,
     )
 
-    tags = sorted(pt.tag for pt in project.tags) if project.tags else []
+    tags = sorted(pt.tag for pt in project.tags)
     return ProjectWithGraphRunnersSchema(
         project_id=project.id,
         project_name=project.name,

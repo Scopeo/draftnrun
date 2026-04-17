@@ -10,7 +10,12 @@ import ModificationHistoryDialog from '@/components/shared/ModificationHistoryDi
 import SharedTabContent from '@/components/shared/SharedTabContent.vue'
 import VersionSelectorContainer from '@/components/shared/VersionSelectorContainer.vue'
 import { useComponentDefinitionsQuery } from '@/composables/queries/useComponentDefinitionsQuery'
-import { useCurrentProject, useProjectQuery, useUpdateProjectMutation } from '@/composables/queries/useProjectsQuery'
+import {
+  useCurrentProject,
+  useOrgTagsQuery,
+  useProjectQuery,
+  useUpdateProjectMutation,
+} from '@/composables/queries/useProjectsQuery'
 import { getCurrentOrgReleaseStage, useOrgReleaseStagesQuery } from '@/composables/queries/useReleaseStagesQuery'
 import { useSelectedOrg } from '@/composables/useSelectedOrg'
 import { PANEL_SIZES } from '@/config/panelSizes'
@@ -48,6 +53,7 @@ const {
 } = useCurrentProject()
 
 const updateProjectMutation = useUpdateProjectMutation()
+const { data: orgTags } = useOrgTagsQuery(selectedOrgId)
 
 // Modification history dialog props
 const historyProjectId = computed(() => project.value?.project_id)
@@ -105,14 +111,18 @@ watch(orgChangeCounter, () => {
 })
 
 // Manual save function for EditEntityModal
-const manualSave = async (projectId: string, data: { name?: string; description?: string }) => {
+const manualSave = async (
+  projectId: string,
+  data: { name?: string; description?: string; tags?: string[] }
+) => {
   await updateProjectMutation.mutateAsync({ projectId, data })
 }
 
-const handleProjectUpdate = (data: { name: string; description: string }) => {
+const handleProjectUpdate = (data: { name: string; description: string; tags: string[] }) => {
   if (project.value) {
     project.value.project_name = data.name
     project.value.description = data.description
+    project.value.tags = data.tags
   }
 }
 
@@ -324,6 +334,8 @@ definePage({
         :entity-id="project.project_id"
         :entity-name="project.project_name"
         :entity-description="project.description"
+        :entity-tags="project.tags || []"
+        :available-tags="orgTags || []"
         entity-type="project"
         :save-function="manualSave"
         @updated="handleProjectUpdate"

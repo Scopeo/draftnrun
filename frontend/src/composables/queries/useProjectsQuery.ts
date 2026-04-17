@@ -24,7 +24,8 @@ export interface Project {
   is_template?: boolean
   created_at?: string
   updated_at?: string
-  graph_runners?: GraphRunner[] // Optional: only present when fetching individual project details
+  graph_runners?: GraphRunner[]
+  tags?: string[]
 }
 
 // Interface for project creation data
@@ -59,14 +60,15 @@ const playgroundConfig = ref<{
 async function fetchProjects(
   organizationId: string,
   type?: 'AGENT' | 'WORKFLOW',
-  includeTemplates?: boolean
+  includeTemplates?: boolean,
+  tags?: string[]
 ): Promise<Project[]> {
   logNetworkCall(
-    ['projects', organizationId, type, includeTemplates],
+    ['projects', organizationId, type, includeTemplates, tags],
     `/projects/org/${organizationId}?type=${type}&include_templates=${includeTemplates}`
   )
 
-  const data = await scopeoApi.projects.getByOrgId(organizationId, type, includeTemplates)
+  const data = await scopeoApi.projects.getByOrgId(organizationId, type, includeTemplates, tags)
   return data || []
 }
 
@@ -89,7 +91,8 @@ export async function fetchProject(projectId: string): Promise<Project> {
 export function useProjectsQuery(
   orgId: Ref<string | undefined>,
   type?: Ref<'AGENT' | 'WORKFLOW' | undefined> | 'AGENT' | 'WORKFLOW',
-  includeTemplates?: Ref<boolean | undefined> | boolean
+  includeTemplates?: Ref<boolean | undefined> | boolean,
+  tags?: Ref<string[] | undefined>
 ) {
   const typeValue = computed(() => (typeof type === 'object' ? type.value : type))
 
@@ -97,7 +100,15 @@ export function useProjectsQuery(
     typeof includeTemplates === 'object' ? includeTemplates.value : includeTemplates
   )
 
-  const queryKey = computed(() => ['projects', orgId.value, typeValue.value, includeTemplatesValue.value])
+  const tagsValue = computed(() => tags?.value)
+
+  const queryKey = computed(() => [
+    'projects',
+    orgId.value,
+    typeValue.value,
+    includeTemplatesValue.value,
+    tagsValue.value,
+  ])
 
   logQueryStart(queryKey.value, 'useProjectsQuery')
 
@@ -105,12 +116,27 @@ export function useProjectsQuery(
     queryKey,
     queryFn: () => {
       if (!orgId.value) throw new Error('No organization ID provided')
-      return fetchProjects(orgId.value, typeValue.value, includeTemplatesValue.value)
+      return fetchProjects(orgId.value, typeValue.value, includeTemplatesValue.value, tagsValue.value)
     },
     enabled: computed(() => !!orgId.value),
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
     refetchOnMount: true,
+  })
+}
+
+/**
+ * Fetch all distinct tags for an organization (autocomplete)
+ */
+export function useOrgTagsQuery(orgId: Ref<string | undefined>) {
+  return useQuery({
+    queryKey: computed(() => ['org-tags', orgId.value]),
+    queryFn: () => {
+      if (!orgId.value) throw new Error('No organization ID provided')
+      return scopeoApi.projects.getOrgTags(orgId.value)
+    },
+    enabled: computed(() => !!orgId.value),
+    staleTime: 1000 * 60 * 2,
   })
 }
 
@@ -248,7 +274,7 @@ export function useUpdateProjectMutation() {
       data,
     }: {
       projectId: string
-      data: { name?: string; description?: string; icon?: string; icon_color?: string }
+      data: { name?: string; description?: string; icon?: string; icon_color?: string; tags?: string[] }
     }) => {
       const updateData: any = {}
       if (data.name !== undefined) {
@@ -263,11 +289,13 @@ export function useUpdateProjectMutation() {
       if (data.icon_color !== undefined) {
         updateData.icon_color = data.icon_color
       }
+      if (data.tags !== undefined) {
+        updateData.tags = data.tags
+      }
 
       logNetworkCall(['update-project', projectId], `/projects/${projectId}`)
       await scopeoApi.projects.updateProject(projectId, updateData)
 
-      // Update the current project if it matches
       if (currentProject.value?.project_id === projectId) {
         if (data.name !== undefined) {
           currentProject.value.project_name = data.name
@@ -281,13 +309,18 @@ export function useUpdateProjectMutation() {
         if (data.icon_color !== undefined) {
           currentProject.value.icon_color = data.icon_color
         }
+        if (data.tags !== undefined) {
+          currentProject.value.tags = data.tags
+        }
       }
     },
     onSuccess: (_data, variables) => {
-      // Invalidate both the single project and projects list
       queryClient.invalidateQueries({ queryKey: ['project', variables.projectId] })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       queryClient.invalidateQueries({ queryKey: ['agents'] })
+      if (variables.data.tags !== undefined) {
+        queryClient.invalidateQueries({ queryKey: ['org-tags'] })
+      }
     },
   })
 }
