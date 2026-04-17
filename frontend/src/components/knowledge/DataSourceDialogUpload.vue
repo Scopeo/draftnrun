@@ -35,7 +35,7 @@ const documentReadingModeOptions = [
     value: 'mistral_ocr',
     title: 'Mistral OCR',
     description:
-      'Mistral-powered OCR — delivers high-accuracy text extraction from scanned documents and images within PDF and DOCX files',
+      'Mistral-powered OCR — delivers high-accuracy text extraction from scanned documents and images within PDF, DOCX, and Excel files',
   },
 ]
 
@@ -53,7 +53,7 @@ const toDocumentReadingMode = (value: unknown): DocumentReadingMode => {
 }
 
 const getFileExtensionsByMode = (mode: DocumentReadingMode) => {
-  if (mode === 'llamaparse') return ['.pdf', '.docx', '.xls', '.xlsx', '.xlsm']
+  if (mode === 'llamaparse' || mode === 'mistral_ocr') return ['.pdf', '.docx', '.xls', '.xlsx', '.xlsm']
   return ['.pdf', '.docx']
 }
 
@@ -88,7 +88,7 @@ const close = () => {
 
 const onReadingModeChange = (newMode: DocumentReadingMode) => {
   documentReadingMode.value = newMode
-  if (newMode !== 'llamaparse' && files.value.length > 0) {
+  if (newMode === 'standard' && files.value.length > 0) {
     const allowed = getFileExtensionsByMode(newMode)
 
     const valid = files.value.filter(f => {
@@ -149,7 +149,9 @@ const getFileIcon = (fileName: string) => {
     case 'doc':
     case 'docx':
       return 'tabler-file-type-doc'
+    case 'xls':
     case 'xlsx':
+    case 'xlsm':
       return 'tabler-file-type-xls'
     case 'ppt':
     case 'pptx':
