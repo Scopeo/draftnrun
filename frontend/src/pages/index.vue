@@ -3,12 +3,38 @@ import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as Sentry from '@sentry/vue'
 import { logger } from '@/utils/logger'
+import { useAuthStore } from '@/stores/auth'
 import { useOrgStore } from '@/stores/org'
 import { logout } from '@/services/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const orgStore = useOrgStore()
 const noOrg = ref(false)
+
+const WAIT_FOR_ORG_LOAD_MS = 5000
+
+async function waitForOrgStoreToSettle() {
+  if (!orgStore.isLoading || orgStore.selectedOrgId) return
+
+  await new Promise<void>(resolve => {
+    const stop = watch(
+      () => orgStore.isLoading,
+      loading => {
+        if (!loading) {
+          stop()
+          resolve()
+        }
+      },
+      { immediate: true }
+    )
+
+    setTimeout(() => {
+      stop()
+      resolve()
+    }, WAIT_FOR_ORG_LOAD_MS)
+  })
+}
 
 onMounted(async () => {
   logger.info('[Index] Mounted', {
@@ -17,37 +43,21 @@ onMounted(async () => {
     orgCount: orgStore.organizations.length,
   })
 
-  // Wait for org store to finish loading if it's in progress
-  if (orgStore.isLoading && !orgStore.selectedOrgId) {
-    logger.info('[Index] Org store still loading, waiting...')
-    await new Promise<void>(resolve => {
-      const stop = watch(
-        () => orgStore.isLoading,
-        loading => {
-          if (!loading) {
-            stop()
-            resolve()
-          }
-        },
-        { immediate: true }
-      )
+  await waitForOrgStoreToSettle()
 
-      // Safety timeout
-      setTimeout(() => {
-        stop()
-        resolve()
-      }, 5000)
-    })
+  // Final fallback for races between the SIGNED_IN fetch and post-signup org creation.
+  if (!orgStore.selectedOrgId && authStore.isAuthenticated && authStore.userData?.id) {
+    await orgStore.fetchOrganizations(authStore.userData.id, true)
   }
 
   if (orgStore.selectedOrgId) {
     router.replace(`/org/${orgStore.selectedOrgId}/projects`)
-  } else {
-    logger.warn('[Index] No org found after loading', { orgCount: orgStore.organizations.length })
-
-    Sentry.addBreadcrumb({ category: 'auth', message: 'index: no org found, showing setup incomplete' })
-    noOrg.value = true
+    return
   }
+
+  logger.warn('[Index] No org found after loading', { orgCount: orgStore.organizations.length })
+  Sentry.addBreadcrumb({ category: 'auth', message: 'index: no org found, showing setup incomplete' })
+  noOrg.value = true
 })
 
 const handleLogout = async () => {
