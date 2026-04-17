@@ -95,15 +95,16 @@ class S3FolderManager(FolderManager):
         return get_content_from_file(self.s3_client, self._bucket_name, s3_path_to_file)
 
     def get_file_presigned_url(self, file_path: str, expiration: int = 3600) -> Optional[str]:
+        if settings.USE_PRESIGNED_URLS:
+            return self._get_cloud_presigned_url(file_path, expiration)
+        return self._get_local_presigned_url(file_path)
+
+    def _get_cloud_presigned_url(self, file_path: str, expiration: int) -> str:
         if self._s3_url_endpoint:
-            if settings.USE_PRESIGNED_URLS:
-                raise ValueError("USE_PRESIGNED_URLS is enabled, but S3_ENDPOINT_URL is configured")
-            return None
+            raise ValueError("USE_PRESIGNED_URLS is enabled, but S3_ENDPOINT_URL is configured")
         s3_path_to_file = self._files[file_path]["s3_path"]
         if not s3_path_to_file:
-            if settings.USE_PRESIGNED_URLS:
-                raise ValueError(f"Missing s3_path for file: {file_path}")
-            return None
+            raise ValueError(f"Missing s3_path for file: {file_path}")
         try:
             return self.s3_client.generate_presigned_url(
                 ClientMethod="get_object",
@@ -111,10 +112,11 @@ class S3FolderManager(FolderManager):
                 ExpiresIn=expiration,
             )
         except ClientError as e:
-            if settings.USE_PRESIGNED_URLS:
-                raise RuntimeError(f"Failed to generate presigned URL for {s3_path_to_file}") from e
-            LOGGER.warning(f"Failed to generate presigned URL for {s3_path_to_file}: {e}")
-            return None
+            raise RuntimeError(f"Failed to generate presigned URL for {s3_path_to_file}") from e
+
+    def _get_local_presigned_url(self, file_path: str) -> None:
+        self._files[file_path]
+        return None
 
     def clean_bucket(self) -> None:
         """Delete all files in the S3 bucket."""

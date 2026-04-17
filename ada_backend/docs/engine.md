@@ -173,7 +173,10 @@ Folder-source ingestion can optionally force presigned URL usage for S3-backed f
 `USE_PRESIGNED_URLS` in environment settings:
 
 - `USE_PRESIGNED_URLS = False` (default): ingestion never requests presigned URLs and always reads file content directly.
+  `S3FolderManager.get_file_presigned_url()` returns `None` in this mode and does not attempt URL generation.
+  Use this for local/dev and custom `S3_ENDPOINT_URL` setups (for example MinIO/LocalStack).
 - `USE_PRESIGNED_URLS = True`: ingestion passes a presigned URL getter into document chunking for supported parsers.
+  This mode is intended for cloud AWS S3 deployments where generated presigned URLs are externally reachable.
 - When enabled, missing S3 metadata (`s3_path`), custom endpoint configuration (`S3_ENDPOINT_URL`), or presigned URL
   generation failures are treated as hard errors instead of silently falling back.
 

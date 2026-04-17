@@ -74,7 +74,10 @@ class TestS3FolderManagerPresignedUrl:
         assert manager.get_file_presigned_url("f1") is None
 
     @patch("data_ingestion.document.folder_management.s3_folder_management.get_s3_boto3_client")
-    def test_returns_presigned_url_when_aws(self, mock_get_client):
+    def test_returns_none_when_presigned_flag_disabled(self, mock_get_client, monkeypatch):
+        monkeypatch.setattr(
+            "data_ingestion.document.folder_management.s3_folder_management.settings.USE_PRESIGNED_URLS", False
+        )
         mock_s3 = MagicMock()
         mock_s3.generate_presigned_url.return_value = "https://bucket.s3.amazonaws.com/org/f1.pdf?X-Amz-Signature=abc"
         mock_get_client.return_value = mock_s3
@@ -88,13 +91,8 @@ class TestS3FolderManagerPresignedUrl:
             s3_region_name="us-east-1",
         )
         url = manager.get_file_presigned_url("f1")
-        assert url is not None
-        assert "X-Amz-Signature" in url
-        mock_s3.generate_presigned_url.assert_called_once_with(
-            ClientMethod="get_object",
-            Params={"Bucket": "test-bucket", "Key": "org/f1.pdf"},
-            ExpiresIn=3600,
-        )
+        assert url is None
+        mock_s3.generate_presigned_url.assert_not_called()
 
     @patch("data_ingestion.document.folder_management.s3_folder_management.get_s3_boto3_client")
     def test_returns_none_when_no_s3_path(self, mock_get_client):
