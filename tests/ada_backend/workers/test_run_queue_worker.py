@@ -245,6 +245,10 @@ class TestProcessPayloadTracing:
             observed["organization_id"] = params.organization_id
             raise Exception("boom")
 
+        @contextmanager
+        def fake_isolation_scope():
+            yield
+
         with (
             patch.object(worker, "_ensure_trace_manager"),
             patch("ada_backend.workers.run_queue_worker.get_db_session", side_effect=fake_db_session),
@@ -252,6 +256,7 @@ class TestProcessPayloadTracing:
             patch("ada_backend.workers.run_queue_worker.update_run_status"),
             patch("ada_backend.workers.run_queue_worker.publish_run_event"),
             patch("ada_backend.workers.run_queue_worker.save_run_input"),
+            patch("ada_backend.workers.run_queue_worker.sentry_sdk.isolation_scope", side_effect=fake_isolation_scope),
             patch("ada_backend.workers.run_queue_worker.run_env_agent", side_effect=fake_run_env_agent),
         ):
             mock_run_repo.get_run.return_value = mock_run

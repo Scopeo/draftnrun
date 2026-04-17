@@ -190,10 +190,11 @@ class TestResetTracingSpan:
         set_tracing_span(run_id="run-new")
 
         params = get_tracing_span()
+        defaults = TracingSpanParams()
         assert params is not None
         assert params.run_id == "run-new"
         assert params.cron_id is None
-        assert params.project_id == ""
+        assert params.project_id == defaults.project_id
 
     def test_reset_removes_all_sentry_tags_and_attributes(self):
         mock_scope = Mock()
