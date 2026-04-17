@@ -74,7 +74,7 @@ def test_serialize_to_json_masks_secret_values_in_nested_payload():
 
     assert LEAK_MARKER not in serialized
     assert "another-secret" not in serialized
-    assert '"**********"' in serialized
+    assert '"[REDACTED]"' in serialized
     assert "ok" in serialized
 
 
