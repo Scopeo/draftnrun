@@ -113,6 +113,64 @@ def test_search_traces_by_keyword():
             session.commit()
 
 
+def test_search_traces_with_special_characters():
+    now = datetime.now()
+    project_id = uuid4()
+
+    trace_utf8_id, span_utf8_id = uuid4(), uuid4()
+    trace_escaped_id, span_escaped_id = uuid4(), uuid4()
+    trace_plain_id, span_plain_id = uuid4(), uuid4()
+
+    with get_db_session() as session:
+        span_utf8 = _create_root_span(project_id, trace_utf8_id, span_utf8_id, now - timedelta(hours=1))
+        span_escaped = _create_root_span(project_id, trace_escaped_id, span_escaped_id, now - timedelta(hours=2))
+        span_plain = _create_root_span(project_id, trace_plain_id, span_plain_id, now - timedelta(hours=3))
+        session.add_all([span_utf8, span_escaped, span_plain])
+        session.commit()
+
+        msg_utf8 = _create_span_message(
+            span_utf8_id,
+            json.dumps([{"messages": [{"role": "user", "content": "Bonjour résumé"}]}], ensure_ascii=False),
+        )
+        msg_escaped = _create_span_message(
+            span_escaped_id,
+            json.dumps([{"messages": [{"role": "user", "content": "Bonjour résumé"}]}], ensure_ascii=True),
+        )
+        msg_plain = _create_span_message(
+            span_plain_id,
+            json.dumps([{"messages": [{"role": "user", "content": "Hello world 100% done"}]}]),
+        )
+        session.add_all([msg_utf8, msg_escaped, msg_plain])
+        session.commit()
+
+        all_span_ids = [str(span_utf8_id), str(span_escaped_id), str(span_plain_id)]
+        all_trace_ids = [str(trace_utf8_id), str(trace_escaped_id), str(trace_plain_id)]
+
+        try:
+            rows_accent, _ = query_root_trace_duration(project_id, duration_days=1, search="résumé")
+            assert len(rows_accent) == 2
+            trace_ids = {row["trace_rowid"] for row in rows_accent}
+            assert str(trace_utf8_id) in trace_ids
+            assert str(trace_escaped_id) in trace_ids
+
+            rows_percent, _ = query_root_trace_duration(project_id, duration_days=1, search="100%")
+            assert len(rows_percent) == 1
+            assert rows_percent[0]["trace_rowid"] == str(trace_plain_id)
+
+            rows_bare_percent, _ = query_root_trace_duration(project_id, duration_days=1, search="%")
+            assert len(rows_bare_percent) == 1
+            assert rows_bare_percent[0]["trace_rowid"] == str(trace_plain_id)
+
+        finally:
+            session.query(SpanMessage).filter(
+                SpanMessage.span_id.in_(all_span_ids)
+            ).delete(synchronize_session=False)
+            session.query(Span).filter(
+                Span.trace_rowid.in_(all_trace_ids)
+            ).delete(synchronize_session=False)
+            session.commit()
+
+
 def test_filter_traces_by_date_range():
     now = datetime.now()
     project_id = uuid4()
