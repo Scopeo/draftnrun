@@ -2,7 +2,7 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
@@ -12,8 +12,6 @@ from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.run_schema import (
     AsyncRunAcceptedSchema,
     RunCreateSchema,
-    RunListPagination,
-    RunListResponse,
     RunResponseSchema,
     RunRetrySchema,
     RunUpdateStatusSchema,
@@ -29,7 +27,6 @@ from ada_backend.services.run_service import (
     create_run,
     get_run,
     get_run_result,
-    get_runs,
     retry_run,
     update_run_status,
 )
@@ -37,40 +34,6 @@ from ada_backend.services.run_service import (
 LOGGER = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/projects", tags=["Runs"])
-
-
-@router.get(
-    "/{project_id}/runs",
-    response_model=RunListResponse,
-)
-def list_runs_endpoint(
-    project_id: UUID,
-    user: Annotated[
-        SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
-    ],
-    session: Session = Depends(get_db),
-    page: int = Query(1, ge=1, description="Page number (1-based)"),
-    page_size: int = Query(50, ge=1, le=100, description="Number of runs per page"),
-) -> RunListResponse:
-    """List runs for a project, newest first, with pagination."""
-    try:
-        runs, total = get_runs(session, project_id=project_id, page=page, page_size=page_size)
-        total_pages = (total + page_size - 1) // page_size if page_size else 0
-        return RunListResponse(
-            runs=runs,
-            pagination=RunListPagination(
-                page=page,
-                page_size=page_size,
-                total_items=total,
-                total_pages=total_pages,
-            ),
-        )
-    except ProjectNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception("Failed to list runs for project %s", project_id)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post(

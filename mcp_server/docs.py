@@ -112,7 +112,8 @@ document content, or file outputs.
 
 ## Important Constraints
 
-- `list_runs` caps `page_size` at 100
+- `list_runs` is org-scoped (requires active org context), caps `page_size` at 100, \
+and supports optional filters: `project_id`, `status` (mapped to `statuses`), `trigger`, `date_from`, `date_to`
 - `get_org_charts`, `get_org_kpis`, and `list_traces` clamp `duration` to 1–90 days. \
 `list_traces` also accepts `start_time`/`end_time` (ISO 8601) for precise date range \
 filtering; when provided, `duration` is ignored
@@ -864,7 +865,7 @@ Call `get_run_result(project_id, run_id)` to retrieve the final output.
 
 ## Inspect a Run
 
-1. `list_runs(project_id)` → find the run
+1. `list_runs()` or `list_runs(project_id=...)` → find the run (org-scoped)
 2. `get_run(project_id, run_id)` → status and metadata
 3. `get_run_result(project_id, run_id)` → output data
 4. `list_traces(project_id, duration=30)` or \
@@ -892,7 +893,7 @@ To retrieve the original input for a run:
 When a run completes but produces unexpected results (wrong output, empty data, tool errors), \
 the most effective debugging path is:
 
-1. `list_runs(project_id)` → find the run and extract its `trace_id`
+1. `list_runs(project_id=...)` → find the run and extract its `trace_id`
 2. `get_trace_tree(trace_id)` → inspect every span: LLM calls, tool invocations, exact \
 inputs/outputs, and token counts
 

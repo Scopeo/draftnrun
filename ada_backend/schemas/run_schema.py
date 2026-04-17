@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ada_backend.database.models import CallType, EnvType, RunStatus
 
@@ -41,6 +41,13 @@ class RunResponseSchema(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @field_validator("error", mode="before")
+    @classmethod
+    def _coerce_error(cls, v: object) -> object:
+        if isinstance(v, str):
+            return {"message": v}
+        return v
+
 
 class RunListPagination(BaseModel):
     """Pagination metadata for run list."""
@@ -51,18 +58,40 @@ class RunListPagination(BaseModel):
     total_pages: int = Field(description="Total number of pages")
 
 
-class RunListResponse(BaseModel):
-    """Paginated response for listing runs of a project."""
-
-    runs: list[RunResponseSchema]
-    pagination: RunListPagination
-
-
 class AsyncRunAcceptedSchema(BaseModel):
     """Response when an async run is accepted (202)."""
 
     run_id: UUID
     status: str = "pending"
+
+
+class OrgRunResponseSchema(BaseModel):
+    id: UUID
+    project_id: UUID
+    project_name: str
+    status: RunStatus
+    trigger: CallType
+    trace_id: Optional[str] = None
+    error: Optional[dict] = None
+    retry_group_id: Optional[UUID] = None
+    attempt_number: int = Field(default=1, ge=1)
+    attempt_count: int = Field(default=1, ge=1)
+    input_available: bool = False
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    created_at: datetime
+
+    @field_validator("error", mode="before")
+    @classmethod
+    def _coerce_error(cls, v: object) -> object:
+        if isinstance(v, str):
+            return {"message": v}
+        return v
+
+
+class OrgRunListResponse(BaseModel):
+    runs: list[OrgRunResponseSchema]
+    pagination: RunListPagination
 
 
 class RunRetrySchema(BaseModel):

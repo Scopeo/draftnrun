@@ -164,6 +164,16 @@ export const initializeNavItems = async () => {
     })
 
     currentNavs.push({
+      title: 'Runs',
+      icon: { icon: 'tabler-player-play' },
+      to: { name: 'org-org-id-runs', params: { orgId: selectedOrgId.value } },
+      action: 'read',
+      subject: 'Project',
+      group: 'observe',
+      alwaysShow: true,
+    })
+
+    currentNavs.push({
       title: 'Monitoring',
       icon: { icon: 'tabler-chart-line' },
       to: { name: 'org-org-id-monitoring', params: { orgId: selectedOrgId.value } },

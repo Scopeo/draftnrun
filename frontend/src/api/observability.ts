@@ -10,6 +10,16 @@ export interface TracesListParams {
   search?: string
 }
 
+export interface OrgRunsParams {
+  page?: number
+  page_size?: number
+  statuses?: string[]
+  project_ids?: string[]
+  trigger?: string
+  date_from?: string
+  date_to?: string
+}
+
 export interface ObservabilityApi {
   getTraces: (projectId: string, params: { duration: number; call_type?: string }) => Promise<any>
   getTracesList: (projectId: string, params: TracesListParams) => Promise<any>
@@ -24,6 +34,8 @@ export interface ObservabilityApi {
     organizationId: string,
     params: { duration: number; call_type?: string; project_ids: string[] }
   ) => Promise<any>
+  getOrgRuns: (organizationId: string, params: OrgRunsParams) => Promise<any>
+  getOrgRunInput: (organizationId: string, runId: string) => Promise<any>
 }
 
 export const observabilityApi: ObservabilityApi = {
@@ -46,4 +58,10 @@ export const observabilityApi: ObservabilityApi = {
 
   getOrgKpis: (organizationId: string, params: { duration: number; call_type?: string; project_ids: string[] }) =>
     $api(`/monitor/org/${organizationId}/kpis`, { query: params }),
+
+  getOrgRuns: (organizationId: string, params: OrgRunsParams) =>
+    $api(`/monitor/org/${organizationId}/runs`, { query: params }),
+
+  getOrgRunInput: (organizationId: string, runId: string) =>
+    $api(`/monitor/org/${organizationId}/runs/${runId}/input`),
 }

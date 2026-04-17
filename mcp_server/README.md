@@ -85,7 +85,7 @@ All domain content lives in `docs.py` (single source of truth).
 | Agent Config | 3 | `configure_agent`, `add_tool_to_agent`, `remove_tool_from_agent` |
 | Graphs | 13 | `get_graph`, `get_graph_v2`, `get_draft_graph` (auto-resolves draft runner), `update_graph`, `create_component_v2`, `update_component_v2`, `delete_component_v2`, `update_graph_topology_v2`, `update_component_parameters`, `save_graph_version`, `publish_to_production`, `promote_version_to_env`, `get_graph_history` |
 | Components | 2 | `list_components` (auto-filtered by release stage), `search_components` |
-| Runs | 5 | `run` (payload dict, async + polling), `list_runs`, `get_run`, `get_run_result`, `retry_run` |
+| Runs | 5 | `run` (payload dict, async + polling), `list_runs` (org-scoped, filterable), `get_run`, `get_run_result`, `retry_run` |
 | API Keys | 6 | Project + org level keys |
 | Variables | 9 | Admin only — definitions, sets, secrets |
 | Knowledge | 9 | `create_source` (website/database), sources, documents, chunks |
@@ -133,7 +133,7 @@ Custom tools (validation, multi-step, client-side logic) are still defined as `@
 | Component search | `search_components` rejects blank or whitespace-only queries. |
 | Release stage | Component catalog auto-filtered by org tier. Cannot be overridden by the AI. |
 | Agent name | `create_agent` rejects empty/whitespace names. |
-| Pagination | `list_runs` caps page_size at 100. |
+| Pagination | `list_runs` caps page_size at 100. Org-scoped with optional filters: `project_id` (single, mapped to `project_ids`), `status` (single, mapped to `statuses`), `trigger`, `date_from`, `date_to`. |
 | Monitoring | Duration clamped 1–90 days. `list_traces` also accepts `start_time`/`end_time` (ISO 8601) for date range filtering. |
 | Response size | Responses > 50KB are trimmed by default. `ToolSpec.trim=False` disables trimming per tool (e.g. `get_graph`, `list_components` for round-trip safety). |
 | Session diagnostics | `get_current_context` includes `session.session_id` and `session.storage_backend` ("redis" or "memory"). |
