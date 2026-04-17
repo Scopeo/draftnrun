@@ -14,7 +14,7 @@ from ada_backend.services.run_service import _upload_result_to_s3, update_run_st
 from ada_backend.services.tag_service import compose_tag_name
 from ada_backend.utils.redis_client import publish_run_event
 from ada_backend.workers.base_queue_worker import BaseQueueWorker
-from engine.trace.span_context import set_tracing_span
+from engine.trace.span_context import reset_tracing_span, set_tracing_span
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -55,6 +55,7 @@ class RunQueueWorker(BaseQueueWorker):
         trigger_str = payload.get("trigger", CallType.API.value)
 
         with sentry_sdk.isolation_scope():
+            reset_tracing_span()
             set_tracing_span(run_id=str(run_id))
             try:
                 try:

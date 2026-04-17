@@ -155,6 +155,12 @@ Avoid mutating `TracingSpanParams` directly in normal code paths; use `set_traci
 `run_id` is injected at run boundaries: sync runs in `run_with_tracking()`, async enqueue paths before
 `push_run_task(...)`, and worker execution in `RunQueueWorker.process_payload()`.
 
+`reset_tracing_span()` wipes the `ContextVar` and removes the `SENTRY_TAG_FIELDS` tags/attributes from the current
+isolation scope. It is intended for top-level boundaries where a single thread or task is reused across independent
+runs, and is currently called only at the start of `RunQueueWorker.process_payload()` (inside its
+`sentry_sdk.isolation_scope()`). Do not use it inside a single logical run — normal propagation (e.g. `cron_id` set
+upstream) must keep flowing via `set_tracing_span`'s merge semantics.
+
 ## Key Files
 
 | Concept | File |

@@ -7,7 +7,7 @@ import pytest
 
 from ada_backend.database.models import RunStatus
 from ada_backend.workers.run_queue_worker import RunQueueWorker
-from engine.trace.span_context import get_tracing_span
+from engine.trace.span_context import get_tracing_span, set_tracing_span
 
 
 @pytest.fixture
@@ -211,3 +211,53 @@ class TestProcessPayloadTracing:
 
         assert observed["entered_scope"] is True
         assert observed["run_id"] == str(run_id)
+
+    def test_resets_stale_context_from_previous_run(self, worker, loop):
+        set_tracing_span(cron_id="cron-stale", project_id="proj-stale", organization_id="org-stale")
+
+        run_id = uuid4()
+        project_id = uuid4()
+
+        payload = {
+            "run_id": str(run_id),
+            "project_id": str(project_id),
+            "env": "production",
+            "input_data": {"text": "hello"},
+            "trigger": "api",
+        }
+
+        mock_run = MagicMock()
+        mock_run.status = "pending"
+        mock_run.retry_group_id = None
+        mock_run.id = run_id
+
+        observed = {"cron_id": "not-set", "project_id": "not-set", "organization_id": "not-set"}
+
+        @contextmanager
+        def fake_db_session():
+            yield MagicMock()
+
+        async def fake_run_env_agent(**kwargs):
+            params = get_tracing_span()
+            assert params is not None
+            observed["cron_id"] = params.cron_id
+            observed["project_id"] = params.project_id
+            observed["organization_id"] = params.organization_id
+            raise Exception("boom")
+
+        with (
+            patch.object(worker, "_ensure_trace_manager"),
+            patch("ada_backend.workers.run_queue_worker.get_db_session", side_effect=fake_db_session),
+            patch("ada_backend.workers.run_queue_worker.run_repository") as mock_run_repo,
+            patch("ada_backend.workers.run_queue_worker.update_run_status"),
+            patch("ada_backend.workers.run_queue_worker.publish_run_event"),
+            patch("ada_backend.workers.run_queue_worker.save_run_input"),
+            patch("ada_backend.workers.run_queue_worker.run_env_agent", side_effect=fake_run_env_agent),
+        ):
+            mock_run_repo.get_run.return_value = mock_run
+
+            worker.process_payload(payload, loop)
+
+        assert observed["cron_id"] is None
+        assert observed["project_id"] == ""
+        assert observed["organization_id"] == ""

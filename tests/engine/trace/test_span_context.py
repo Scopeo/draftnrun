@@ -3,7 +3,13 @@ from unittest.mock import Mock, call, patch
 import pytest
 
 from engine.trace import span_context
-from engine.trace.span_context import TracingSpanParams, get_tracing_span, set_tracing_span
+from engine.trace.span_context import (
+    SENTRY_TAG_FIELDS,
+    TracingSpanParams,
+    get_tracing_span,
+    reset_tracing_span,
+    set_tracing_span,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -167,3 +173,39 @@ class TestSetTracingSpan:
 
         mock_scope.remove_tag.assert_any_call("env")
         mock_scope.remove_attribute.assert_any_call("env")
+
+
+class TestResetTracingSpan:
+    def test_reset_clears_context(self):
+        set_tracing_span(cron_id="cron-123", project_id="proj")
+        assert get_tracing_span() is not None
+
+        reset_tracing_span()
+
+        assert get_tracing_span() is None
+
+    def test_reset_does_not_leak_cron_id_into_next_run(self):
+        set_tracing_span(cron_id="cron-123", project_id="proj-old")
+        reset_tracing_span()
+        set_tracing_span(run_id="run-new")
+
+        params = get_tracing_span()
+        assert params is not None
+        assert params.run_id == "run-new"
+        assert params.cron_id is None
+        assert params.project_id == ""
+
+    def test_reset_removes_all_sentry_tags_and_attributes(self):
+        mock_scope = Mock()
+        with patch("engine.trace.span_context.sentry_sdk.get_isolation_scope", return_value=mock_scope):
+            reset_tracing_span()
+
+        expected_keys = set(SENTRY_TAG_FIELDS.values())
+        removed_tags = {call_args.args[0] for call_args in mock_scope.remove_tag.call_args_list}
+        removed_attrs = {call_args.args[0] for call_args in mock_scope.remove_attribute.call_args_list}
+        assert expected_keys.issubset(removed_tags)
+        assert expected_keys.issubset(removed_attrs)
+
+    def test_reset_is_safe_when_context_is_already_empty(self):
+        reset_tracing_span()
+        assert get_tracing_span() is None

@@ -87,6 +87,21 @@ def set_tracing_span(**kwargs) -> None:
     _sync_to_sentry(params)
 
 
+def reset_tracing_span() -> None:
+    """Clear the tracing context and matching Sentry tags/attributes on the current isolation scope.
+
+    Intended for top-level execution boundaries where a thread or task is reused across
+    independent runs (e.g. `RunQueueWorker.process_payload`). Do not call this inside a
+    single logical run: normal code should rely on `set_tracing_span`'s merge semantics
+    so that upstream fields (cron_id, project_id, ...) keep propagating.
+    """
+    _tracing_context.set(None)
+    isolation_scope = sentry_sdk.get_isolation_scope()
+    for sentry_key in SENTRY_TAG_FIELDS.values():
+        isolation_scope.remove_tag(sentry_key)
+        isolation_scope.remove_attribute(sentry_key)
+
+
 def get_tracing_span() -> Optional[TracingSpanParams]:
     """Retrieve the current tracing context, if any."""
     return _tracing_context.get()

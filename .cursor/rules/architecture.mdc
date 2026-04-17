@@ -68,6 +68,11 @@ sync. `GraphRunner.run()` is the only exception: it preserves `trace_id` across 
 Inject `run_id` at run boundaries (`run_with_tracking()`, `RunQueueWorker.process_payload()`, and async enqueue paths
 before `push_run_task(...)`) so logs and Sentry events keep the run context.
 
+Call `reset_tracing_span()` only at top-level execution boundaries where a thread/task is reused across independent
+runs (currently only `RunQueueWorker.process_payload()` inside its `sentry_sdk.isolation_scope()`). Never call it
+inside a single logical run: propagated fields (`cron_id`, `project_id`, ...) must keep flowing via
+`set_tracing_span`'s merge semantics.
+
 ### MCP Server
 
 `mcp_server/`: standalone pod calling the backend over HTTP + Supabase directly. See `mcp_server/README.md`.
