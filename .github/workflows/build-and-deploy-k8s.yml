@@ -3,6 +3,8 @@ name: Build and Deploy to K8s
 on:
   push:
     branches: [staging, main]
+    paths-ignore:
+      - "frontend/**"
   workflow_dispatch:
     inputs:
       environment:
