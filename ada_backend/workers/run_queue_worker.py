@@ -59,9 +59,9 @@ class RunQueueWorker(BaseQueueWorker):
             try:
                 try:
                     env = EnvType(env_str) if env_str else None
-                except ValueError as e:
+                except ValueError:
                     LOGGER.warning("Invalid env in run %s: %s", run_id, env_str)
-                    raise e
+                    raise
 
                 try:
                     call_type = CallType(trigger_str)
