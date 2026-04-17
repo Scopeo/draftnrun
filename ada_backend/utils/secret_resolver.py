@@ -1,7 +1,6 @@
 import logging
 import re
-from collections.abc import Mapping
-from typing import Any, TypeAlias
+from typing import Any, Mapping, Optional
 
 from pydantic import SecretStr
 
@@ -10,14 +9,15 @@ from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
-SecretPlaceholderValue: TypeAlias = str | SecretStr
-SecretMapping: TypeAlias = Mapping[str, SecretPlaceholderValue]
-
 
 _ENV_PATTERN = re.compile(r"@\{ENV:([A-Za-z_][A-Za-z0-9_]*)\}")
 
+# TODO(security): ideally we'd propagate a hybrid "string + SecretStr" value through the pipeline
+# (e.g. a concatenable wrapper) so that embedded placeholders like "Bearer @{ENV:API_TOKEN}" stay
+# redacted until the true execution boundary. Needs some reflection.
 
-def _resolve_single_placeholder(var_name: str, secret_mapping: SecretMapping | None) -> SecretPlaceholderValue:
+
+def _resolve_single_placeholder(var_name: str, secret_mapping: Optional[Mapping[str, str | SecretStr]]) -> str:
     """
     Resolve a single secret placeholder name to its value.
 
@@ -29,34 +29,31 @@ def _resolve_single_placeholder(var_name: str, secret_mapping: SecretMapping | N
     """
     if secret_mapping is not None and var_name in secret_mapping:
         LOGGER.debug("Secret resolved from organization configuration")
-        return secret_mapping[var_name]
+        return str(unwrap_secret(secret_mapping[var_name]))
 
     env_val = getattr(settings, var_name, None)
     if env_val is not None:
         LOGGER.debug("Secret resolved from global settings")
-        return env_val
+        return str(unwrap_secret(env_val))
 
-    # Only log variable name in debug mode, use generic message in production
     LOGGER.error("Secret placeholder resolution failed: variable not found in available sources")
     raise ValueError(
         f"Secret placeholder '@{{ENV:{var_name}}}' cannot be resolved: missing in organization secrets and settings",
     )
 
 
-def _replace_in_string(text: str, secret_mapping: SecretMapping | None) -> SecretPlaceholderValue | str:
-    full_match = _ENV_PATTERN.fullmatch(text)
-    if full_match:
-        return _resolve_single_placeholder(full_match.group(1), secret_mapping)
-
+def _replace_in_string(text: str, secret_mapping: Optional[Mapping[str, str | SecretStr]]) -> str:
     def _repl(match: re.Match) -> str:
         var_name = match.group(1)
-        value = _resolve_single_placeholder(var_name, secret_mapping)
-        return str(unwrap_secret(value))
+        return _resolve_single_placeholder(var_name, secret_mapping)
 
     return _ENV_PATTERN.sub(_repl, text)
 
 
-def replace_secret_placeholders(value: Any, secret_mapping: SecretMapping | None = None) -> Any:
+def replace_secret_placeholders(
+    value: Any,
+    secret_mapping: Optional[Mapping[str, str | SecretStr]] = None,
+) -> Any:
     """
     Recursively replace secret placeholders in strings within common Python containers.
 
