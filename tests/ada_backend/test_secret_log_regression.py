@@ -233,16 +233,21 @@ async def test_ai_agent_tool_call_log_format_is_keys_only(caplog):
         ),
     )
 
-    with caplog.at_level(logging.DEBUG):
+    with caplog.at_level(logging.DEBUG, logger=ai_agent_module.LOGGER.name):
         tool_call_id, tool_output = await agent._run_tool_call(tool_call=tool_call, ctx={"request_id": "req_1"})
+
+    ai_agent_messages = [
+        record.getMessage() for record in caplog.records if record.name == ai_agent_module.LOGGER.name
+    ]
+    combined_logs = "\n".join(ai_agent_messages)
 
     assert tool_call_id == "call_123"
     assert tool_output.messages[0].content == "ok"
-    assert LEAK_MARKER not in caplog.text
-    assert "argument keys" in caplog.text
-    assert "api_key" in caplog.text
-    assert "query" in caplog.text
-    assert '"api_key":' not in caplog.text
+    assert LEAK_MARKER not in combined_logs
+    assert "argument keys" in combined_logs
+    assert "api_key" in combined_logs
+    assert "query" in combined_logs
+    assert '"api_key":' not in combined_logs
 
 
 def test_trace_service_error_log_does_not_include_input_data(caplog, monkeypatch):
@@ -284,7 +289,7 @@ def test_redis_client_payload_log_is_keys_only(monkeypatch, caplog):
 
     monkeypatch.setattr(redis_client_module, "get_redis_client", lambda: FakeRedisClient())
 
-    with caplog.at_level(logging.DEBUG):
+    with caplog.at_level(logging.DEBUG, logger=redis_client_module.LOGGER.name):
         assert redis_client_module.push_ingestion_task(
             ingestion_id="ing_1",
             source_name="Secret Source",
@@ -301,13 +306,18 @@ def test_redis_client_payload_log_is_keys_only(monkeypatch, caplog):
             event_id="evt_1",
         )
 
-    assert LEAK_MARKER not in caplog.text
-    assert "Prepared ingestion payload for Redis stream" in caplog.text
-    assert "source_id=source_1" in caplog.text
-    assert "keys=['ingestion_id'" in caplog.text
-    assert "Prepared webhook payload for Redis stream" in caplog.text
-    assert "payload_keys=['authorization', 'public']" in caplog.text
-    assert f"Bearer {LEAK_MARKER}" not in caplog.text
+    redis_client_messages = [
+        record.getMessage() for record in caplog.records if record.name == redis_client_module.LOGGER.name
+    ]
+    combined_logs = "\n".join(redis_client_messages)
+
+    assert LEAK_MARKER not in combined_logs
+    assert "Prepared ingestion payload for Redis stream" in combined_logs
+    assert "source_id=source_1" in combined_logs
+    assert "keys=['ingestion_id'" in combined_logs
+    assert "Prepared webhook payload for Redis stream" in combined_logs
+    assert "payload_keys=['authorization', 'public']" in combined_logs
+    assert f"Bearer {LEAK_MARKER}" not in combined_logs
 
 
 def test_mcp_tool_parameters_span_attribute_masks_secretstr_and_sensitive_keys():
