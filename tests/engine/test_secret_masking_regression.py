@@ -46,9 +46,15 @@ def test_b1_redact_sensitive_false_positives_on_token_usage():
     redacted = redact_sensitive(payload)
 
     assert redacted["model"] == "gpt-4", "non-sensitive field must not be redacted"
-    assert redacted["token_usage"] == REDACTED_PLACEHOLDER, "KNOWN FALSE POSITIVE: token_usage redacted (contains 'token')"
-    assert redacted["secret_count"] == REDACTED_PLACEHOLDER, "KNOWN FALSE POSITIVE: secret_count redacted (contains 'secret')"
-    assert redacted["cookie_policy"] == REDACTED_PLACEHOLDER, "KNOWN FALSE POSITIVE: cookie_policy redacted (contains 'cookie')"
+    assert redacted["token_usage"] == REDACTED_PLACEHOLDER, (
+        "KNOWN FALSE POSITIVE: token_usage redacted (contains 'token')"
+    )
+    assert redacted["secret_count"] == REDACTED_PLACEHOLDER, (
+        "KNOWN FALSE POSITIVE: secret_count redacted (contains 'secret')"
+    )
+    assert redacted["cookie_policy"] == REDACTED_PLACEHOLDER, (
+        "KNOWN FALSE POSITIVE: cookie_policy redacted (contains 'cookie')"
+    )
 
 
 # ---------------------------------------------------------------------------
