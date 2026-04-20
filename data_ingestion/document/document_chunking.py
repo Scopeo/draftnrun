@@ -96,6 +96,7 @@ def document_chunking_mapping(
         )
         pdf_processor = mistral_ocr_processor
         docx_processor = mistral_ocr_processor
+        excel_processor = mistral_ocr_processor
         LOGGER.info("Using Mistral OCR for PDF and DOCX processing")
 
     else:
