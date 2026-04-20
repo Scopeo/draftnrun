@@ -501,5 +501,13 @@ def publish_graph_update_event(project_id: UUID, event: Dict[str, Any]) -> bool:
     return publish_event("graph-updates", project_id, event)
 
 
+def notify_graph_changed(project_id: UUID, graph_runner_id: UUID, action: str) -> bool:
+    return publish_graph_update_event(project_id, {
+        "type": "graph.changed",
+        "graph_runner_id": str(graph_runner_id),
+        "action": action,
+    })
+
+
 def publish_qa_event(session_id: UUID, event: Dict[str, Any]) -> bool:
     return publish_event("qa", session_id, event)

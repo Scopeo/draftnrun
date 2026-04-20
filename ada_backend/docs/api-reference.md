@@ -70,12 +70,13 @@ Complete endpoint reference for the Draft'n Run backend.
 
 Run input data is persisted in the `run_inputs` table (keyed by `retry_group_id` via a unique constraint) so async workflows can recover canonical input from Postgres instead of relying only on ephemeral Redis payloads. New runs always initialize a dedicated `retry_group_id` on first attempt (distinct from `run.id`), and retries reuse that same group id. `created_at` is non-null and indexed to support retention cleanup scans. The retry endpoint enqueues a new run attempt in the same retry group using this persisted input.
 
-## WebSocket (`run_stream_router.py`, `graph_display_stream_router.py`)
+## WebSocket
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| WS | `/ws/runs/{run_id}` | JWT | Stream run events (per-run) |
-| WS | `/ws/projects/{project_id}/graph-updates` | JWT(Member) | Stream graph structure change notifications (auto-refresh canvas) |
+| Method | Path | Auth | Router | Description |
+|---|---|---|---|---|
+| WS | `/ws/runs/{run_id}` | JWT | `run_stream_router.py` | Stream run execution events (per-run) |
+| WS | `/ws/projects/{project_id}/graph-updates` | JWT(Member) | `graph_display_stream_router.py` | Stream graph structure change notifications (auto-refresh canvas when MCP or another client modifies the graph) |
+| WS | `/ws/qa/{project_id}/{session_id}` | JWT(Member) | `qa_stream_router.py` | Stream QA evaluation entry progress |
 
 ## Agents (`agent_router.py`)
 

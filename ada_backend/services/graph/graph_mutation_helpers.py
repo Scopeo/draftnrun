@@ -18,7 +18,7 @@ from ada_backend.services.graph.component_instance_v2_service import (
 )
 from ada_backend.services.graph.graph_topology_v2_service import check_optimistic_lock, sync_graph_topology
 from ada_backend.services.graph.update_graph_service import validate_graph_is_draft
-from ada_backend.utils.redis_client import publish_graph_update_event
+from ada_backend.utils.redis_client import notify_graph_changed
 
 
 def record_modification_history(session: Session, graph_runner_id: UUID, user_id: UUID):
@@ -36,11 +36,7 @@ def create_component_v2(
     validate_graph_is_draft(session, graph_runner_id)
     instance_id = create_component_in_graph(session, graph_runner_id, project_id, payload)
     history = record_modification_history(session, graph_runner_id, user_id=user_id)
-    publish_graph_update_event(project_id, {
-        "type": "graph.changed",
-        "graph_runner_id": str(graph_runner_id),
-        "action": "component.created",
-    })
+    notify_graph_changed(project_id, graph_runner_id, "component.created")
     return ComponentV2Response(
         instance_id=instance_id,
         label=payload.label,
@@ -61,11 +57,7 @@ def update_component_v2(
     validate_graph_is_draft(session, graph_runner_id)
     update_single_component(session, graph_runner_id, project_id, instance_id, payload)
     history = record_modification_history(session, graph_runner_id, user_id=user_id)
-    publish_graph_update_event(project_id, {
-        "type": "graph.changed",
-        "graph_runner_id": str(graph_runner_id),
-        "action": "component.updated",
-    })
+    notify_graph_changed(project_id, graph_runner_id, "component.updated")
 
     nodes = get_component_nodes(session, graph_runner_id)
     node = next((n for n in nodes if n.id == instance_id), None)
@@ -88,11 +80,7 @@ def delete_component_v2(
     validate_graph_is_draft(session, graph_runner_id)
     delete_component_from_graph(session, graph_runner_id, instance_id)
     record_modification_history(session, graph_runner_id, user_id=user_id)
-    publish_graph_update_event(project_id, {
-        "type": "graph.changed",
-        "graph_runner_id": str(graph_runner_id),
-        "action": "component.deleted",
-    })
+    notify_graph_changed(project_id, graph_runner_id, "component.deleted")
 
 
 def save_graph_topology_v2(
@@ -112,11 +100,7 @@ def save_graph_topology_v2(
         relationships=payload.relationships,
     )
     history = record_modification_history(session, graph_runner_id, user_id=user_id)
-    publish_graph_update_event(project_id, {
-        "type": "graph.changed",
-        "graph_runner_id": str(graph_runner_id),
-        "action": "topology.updated",
-    })
+    notify_graph_changed(project_id, graph_runner_id, "topology.updated")
     return GraphUpdateResponse(
         graph_id=graph_runner_id,
         last_edited_time=history.created_at if history else None,

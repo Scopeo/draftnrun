@@ -37,15 +37,11 @@ class TestGraphMutationPublishesEvents:
             patch(f"{P}.validate_graph_is_draft"),
             patch(f"{P}.create_component_in_graph", return_value=uuid4()),
             patch(f"{P}.record_modification_history", return_value=_mock_history()),
-            patch(f"{P}.publish_graph_update_event") as mock_pub,
+            patch(f"{P}.notify_graph_changed") as mock_notify,
         ):
             create_component_v2(session, graph_runner_id, project_id, user_id, payload)
 
-            mock_pub.assert_called_once()
-            event = mock_pub.call_args.args[1]
-            assert event["type"] == "graph.changed"
-            assert event["action"] == "component.created"
-            assert event["graph_runner_id"] == str(graph_runner_id)
+            mock_notify.assert_called_once_with(project_id, graph_runner_id, "component.created")
 
     def test_update_component_publishes_graph_changed(self):
         session = MagicMock()
@@ -61,15 +57,12 @@ class TestGraphMutationPublishesEvents:
             patch(f"{P}.validate_graph_is_draft"),
             patch(f"{P}.update_single_component"),
             patch(f"{P}.record_modification_history", return_value=_mock_history()),
-            patch(f"{P}.publish_graph_update_event") as mock_pub,
+            patch(f"{P}.notify_graph_changed") as mock_notify,
             patch(f"{P}.get_component_nodes", return_value=[]),
         ):
             update_component_v2(session, graph_runner_id, project_id, instance_id, user_id, payload)
 
-            mock_pub.assert_called_once()
-            event = mock_pub.call_args.args[1]
-            assert event["type"] == "graph.changed"
-            assert event["action"] == "component.updated"
+            mock_notify.assert_called_once_with(project_id, graph_runner_id, "component.updated")
 
     def test_delete_component_publishes_graph_changed(self):
         session = MagicMock()
@@ -82,14 +75,11 @@ class TestGraphMutationPublishesEvents:
             patch(f"{P}.validate_graph_is_draft"),
             patch(f"{P}.delete_component_from_graph"),
             patch(f"{P}.record_modification_history", return_value=_mock_history()),
-            patch(f"{P}.publish_graph_update_event") as mock_pub,
+            patch(f"{P}.notify_graph_changed") as mock_notify,
         ):
             delete_component_v2(session, graph_runner_id, project_id, instance_id, user_id)
 
-            mock_pub.assert_called_once()
-            event = mock_pub.call_args.args[1]
-            assert event["type"] == "graph.changed"
-            assert event["action"] == "component.deleted"
+            mock_notify.assert_called_once_with(project_id, graph_runner_id, "component.deleted")
 
     def test_save_topology_publishes_graph_changed(self):
         session = MagicMock()
@@ -107,11 +97,8 @@ class TestGraphMutationPublishesEvents:
             patch(f"{P}.check_optimistic_lock"),
             patch(f"{P}.sync_graph_topology"),
             patch(f"{P}.record_modification_history", return_value=_mock_history()),
-            patch(f"{P}.publish_graph_update_event") as mock_pub,
+            patch(f"{P}.notify_graph_changed") as mock_notify,
         ):
             save_graph_topology_v2(session, graph_runner_id, project_id, user_id, payload)
 
-            mock_pub.assert_called_once()
-            event = mock_pub.call_args.args[1]
-            assert event["type"] == "graph.changed"
-            assert event["action"] == "topology.updated"
+            mock_notify.assert_called_once_with(project_id, graph_runner_id, "topology.updated")
