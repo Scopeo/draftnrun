@@ -315,7 +315,13 @@ def get_org_runs(
         date_from=date_from,
         date_to=date_to,
     )
-    return rows, total
+    items = [
+        OrgRunResponseSchema.model_validate(r, from_attributes=True)
+        if not isinstance(r, OrgRunResponseSchema)
+        else r
+        for r in rows
+    ]
+    return items, total
 
 
 def get_org_run_input(session: Session, run_id: UUID, organization_id: UUID) -> Optional[dict]:

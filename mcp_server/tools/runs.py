@@ -109,7 +109,7 @@ def register(mcp: FastMCP) -> None:
             params["date_from"] = date_from
         if date_to is not None:
             params["date_to"] = date_to
-        return await api.get(f"/monitor/org/{org['org_id']}/runs", jwt, **params)
+        return await api.get(f"/org/{org['org_id']}/runs", jwt, **params)
 
     @mcp.tool()
     async def retry_run(

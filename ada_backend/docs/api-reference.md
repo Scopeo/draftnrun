@@ -63,8 +63,8 @@ Complete endpoint reference for the Draft'n Run backend.
 | GET | `.../runs/{run_id}/result` | JWT(Member) | Get run result |
 | PATCH | `.../runs/{run_id}` | JWT(Member) | Update run status |
 | POST | `.../runs/{run_id}/retry` | JWT(Member) | Retry a specific run (202) |
-| GET | `/monitor/org/{organization_id}/runs` | JWT(Member) | List runs for org (paginated, filterable). Filters: `statuses` (list), `project_ids` (list), `trigger`, `date_from`, `date_to` |
-| GET | `/monitor/org/{organization_id}/runs/{run_id}/input` | JWT(Member) | Get run input data (if available) |
+| GET | `/org/{organization_id}/runs` | JWT(Member) | List runs for org (paginated, filterable). Filters: `statuses` (list), `project_ids` (list), `trigger`, `date_from`, `date_to` |
+| GET | `/org/{organization_id}/runs/{run_id}/input` | JWT(Member) | Get run input data (if available) |
 
 ### Run Retry
 
@@ -164,8 +164,6 @@ Run input data is persisted in the `run_inputs` table (keyed by `retry_group_id`
 |---|---|---|---|
 | GET | `/monitor/org/{organization_id}/charts` | JWT(Member) | Org charts |
 | GET | `/monitor/org/{organization_id}/kpis` | JWT(Member) | Org KPIs |
-| GET | `/monitor/org/{organization_id}/runs` | JWT(Member) | Org runs (paginated, filterable) |
-| GET | `/monitor/org/{organization_id}/runs/{run_id}/input` | JWT(Member) | Run input data |
 | GET | `/projects/{project_id}/traces` | JWT(Member) | List traces. Filters: `duration` (days lookback), `start_time`/`end_time` (ISO 8601 date range), `search`, `environment`, `call_type`, `graph_runner_id`. Requires `duration` or at least one of `start_time`/`end_time`. **Precedence:** if `start_time` or `end_time` is provided, `duration` is ignored (explicit bounds override the lookback window). |
 | GET | `/traces/{trace_id}/tree` | JWT | Trace span tree |
 

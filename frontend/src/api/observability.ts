@@ -60,8 +60,8 @@ export const observabilityApi: ObservabilityApi = {
     $api(`/monitor/org/${organizationId}/kpis`, { query: params }),
 
   getOrgRuns: (organizationId: string, params: OrgRunsParams) =>
-    $api(`/monitor/org/${organizationId}/runs`, { query: params }),
+    $api(`/org/${organizationId}/runs`, { query: params }),
 
   getOrgRunInput: (organizationId: string, runId: string) =>
-    $api(`/monitor/org/${organizationId}/runs/${runId}/input`),
+    $api(`/org/${organizationId}/runs/${runId}/input`),
 }
