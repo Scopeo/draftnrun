@@ -882,10 +882,13 @@ def build_db_service_processor(target_name: str = "db_service") -> ParameterProc
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        # TODO(security): `engine_url` is stored as `ParameterType.STRING` but typically
+        # contains a connection string with inline credentials (e.g.
+        # `postgresql://user:password@host/db`). It should be promoted to a secret type
+        # so it is masked in logs/traces and wrapped as SecretStr through the pipeline.
         engine_url = params.pop("engine_url", None)
         if not engine_url:
             return params
-        engine_url = unwrap_secret(engine_url)
 
         try:
             db_service_instance = SQLLocalService(engine_url=engine_url)
