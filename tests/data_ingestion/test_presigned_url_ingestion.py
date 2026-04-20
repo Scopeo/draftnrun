@@ -76,7 +76,7 @@ class TestS3FolderManagerPresignedUrl:
     @patch("data_ingestion.document.folder_management.s3_folder_management.get_s3_boto3_client")
     def test_returns_none_when_presigned_flag_disabled(self, mock_get_client, monkeypatch):
         monkeypatch.setattr(
-            "data_ingestion.document.folder_management.s3_folder_management.settings.USE_PRESIGNED_URLS", False
+            "data_ingestion.document.folder_management.s3_folder_management.settings.IS_CLOUD_S3", False
         )
         mock_s3 = MagicMock()
         mock_s3.generate_presigned_url.return_value = "https://bucket.s3.amazonaws.com/org/f1.pdf?X-Amz-Signature=abc"
@@ -110,7 +110,7 @@ class TestS3FolderManagerPresignedUrl:
     @patch("data_ingestion.document.folder_management.s3_folder_management.get_s3_boto3_client")
     def test_raises_when_custom_endpoint_and_presigned_required(self, mock_get_client, monkeypatch):
         monkeypatch.setattr(
-            "data_ingestion.document.folder_management.s3_folder_management.settings.USE_PRESIGNED_URLS", True
+            "data_ingestion.document.folder_management.s3_folder_management.settings.IS_CLOUD_S3", True
         )
         mock_get_client.return_value = MagicMock()
         manager = S3FolderManager(
@@ -122,13 +122,13 @@ class TestS3FolderManagerPresignedUrl:
             s3_region_name="us-east-1",
         )
 
-        with pytest.raises(ValueError, match="USE_PRESIGNED_URLS is enabled"):
+        with pytest.raises(ValueError, match="IS_CLOUD_S3 is enabled"):
             manager.get_file_presigned_url("f1")
 
     @patch("data_ingestion.document.folder_management.s3_folder_management.get_s3_boto3_client")
     def test_raises_when_no_s3_path_and_presigned_required(self, mock_get_client, monkeypatch):
         monkeypatch.setattr(
-            "data_ingestion.document.folder_management.s3_folder_management.settings.USE_PRESIGNED_URLS", True
+            "data_ingestion.document.folder_management.s3_folder_management.settings.IS_CLOUD_S3", True
         )
         mock_get_client.return_value = MagicMock()
         manager = S3FolderManager(
@@ -146,7 +146,7 @@ class TestS3FolderManagerPresignedUrl:
     @patch("data_ingestion.document.folder_management.s3_folder_management.get_s3_boto3_client")
     def test_raises_when_presigned_generation_fails_and_required(self, mock_get_client, monkeypatch):
         monkeypatch.setattr(
-            "data_ingestion.document.folder_management.s3_folder_management.settings.USE_PRESIGNED_URLS", True
+            "data_ingestion.document.folder_management.s3_folder_management.settings.IS_CLOUD_S3", True
         )
         mock_s3 = MagicMock()
         mock_s3.generate_presigned_url.side_effect = ClientError(
@@ -173,7 +173,7 @@ class TestPresignedUrlFlagGating:
             return "https://example.com/file.pdf"
 
     def test_returns_none_when_flag_disabled(self, monkeypatch):
-        monkeypatch.setattr(ingest_folder_source_module.settings, "USE_PRESIGNED_URLS", False)
+        monkeypatch.setattr(ingest_folder_source_module.settings, "IS_CLOUD_S3", False)
         folder_manager = self.DummyFolderManager()
 
         get_presigned_url_func = _resolve_presigned_url_getter(folder_manager)
@@ -181,7 +181,7 @@ class TestPresignedUrlFlagGating:
         assert get_presigned_url_func is None
 
     def test_returns_getter_when_flag_enabled(self, monkeypatch):
-        monkeypatch.setattr(ingest_folder_source_module.settings, "USE_PRESIGNED_URLS", True)
+        monkeypatch.setattr(ingest_folder_source_module.settings, "IS_CLOUD_S3", True)
         folder_manager = self.DummyFolderManager()
 
         get_presigned_url_func = _resolve_presigned_url_getter(folder_manager)

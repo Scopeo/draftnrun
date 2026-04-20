@@ -75,7 +75,7 @@ def load_embedding_service():
 
 
 def _resolve_presigned_url_getter(folder_manager: FolderManager) -> Optional[Callable[[str], str | None]]:
-    if settings.USE_PRESIGNED_URLS:
+    if settings.IS_CLOUD_S3:
         return folder_manager.get_file_presigned_url
     return None
 
