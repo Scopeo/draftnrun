@@ -24,11 +24,11 @@ async def websocket_qa_stream(
     project_id: UUID,
     session_id: UUID,
 ):
+    await websocket.accept()
     with get_db_session() as session:
         auth_ok = await verify_project_ws_auth(websocket, project_id, session)
         if not auth_ok:
             return
-        await websocket.accept()
 
         qa_session = get_validated_qa_session(session, session_id, project_id)
         if not qa_session:

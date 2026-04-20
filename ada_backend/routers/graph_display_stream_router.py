@@ -21,11 +21,11 @@ async def websocket_graph_display_stream(
     websocket: WebSocket,
     project_id: UUID,
 ):
+    await websocket.accept()
     with get_db_session() as session:
         auth_ok = await verify_project_ws_auth(websocket, project_id, session)
         if not auth_ok:
             return
-        await websocket.accept()
 
     subscription = await subscribe_to_graph_updates(project_id)
     if not subscription:
