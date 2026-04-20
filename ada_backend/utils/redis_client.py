@@ -387,6 +387,8 @@ def push_run_task(
     trigger: str = "api",
     response_format: Optional[str] = None,
     graph_runner_id: Optional[UUID] = None,
+    cron_id: Optional[UUID] = None,
+    cron_run_id: Optional[UUID] = None,
 ) -> bool:
     """
     Push an async run task to the Redis runs queue.
@@ -405,6 +407,8 @@ def push_run_task(
         "trigger": trigger,
         "response_format": response_format,
         "graph_runner_id": str(graph_runner_id) if graph_runner_id else None,
+        "cron_id": str(cron_id) if cron_id else None,
+        "cron_run_id": str(cron_run_id) if cron_run_id else None,
     }
     return _push_to_redis_queue(client, settings.REDIS_RUNS_QUEUE_NAME, payload, f"run {run_id}")
 

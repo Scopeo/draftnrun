@@ -1,15 +1,13 @@
 import json
 import logging
-from datetime import datetime, timezone
 from typing import Annotated, Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import CallType, CronStatus, EnvType
-from ada_backend.database.setup_db import get_db, get_db_session
-from ada_backend.repositories.cron_repository import update_cron_run
+from ada_backend.database.models import CallType, EnvType, RunStatus
+from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import (
     verify_webhook_api_key_dependency,
     verify_webhook_or_scheduler_api_key_dependency,
@@ -29,12 +27,12 @@ from ada_backend.services.errors import (
     MissingIntegrationError,
     RunNotFound,
 )
-from ada_backend.services.run_service import create_run, fail_pending_run, run_with_tracking
+from ada_backend.services.run_service import create_run, fail_pending_run, run_with_tracking, update_run_status
 from ada_backend.services.webhooks.webhook_service import (
     execute_webhook,
     get_webhook_triggers_service,
 )
-from engine.trace.span_context import set_tracing_span
+from ada_backend.utils.redis_client import push_run_task
 
 router = APIRouter(prefix="/internal/webhooks", tags=["Webhooks Internal"])
 LOGGER = logging.getLogger(__name__)
@@ -87,98 +85,10 @@ async def get_webhook_triggers_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-async def _execute_run(
-    run_id: UUID,
-    project_id: UUID,
-    env: EnvType,
-    input_data: Dict[str, Any],
-    trigger: CallType,
-    cron_id: UUID | None = None,
-) -> tuple[bool, str | None]:
-    """
-    Execute a workflow run and update its status (RUNNING -> COMPLETED/FAILED).
-    Returns (success, error_msg) where error_msg is set when success is False.
-    """
-    if cron_id:
-        set_tracing_span(cron_id=str(cron_id))
-
-    try:
-        await run_with_tracking(
-            project_id=project_id,
-            trigger=trigger,
-            runner_coro=run_env_agent(
-                project_id=project_id,
-                input_data=input_data,
-                env=env,
-                call_type=trigger,
-            ),
-            run_id=run_id,
-        )
-        return True, None
-    except EnvironmentNotFound as e:
-        LOGGER.error(f"Environment not found for project {project_id} env={env}: {str(e)}", exc_info=True)
-        return False, str(e)
-    except MissingDataSourceError as e:
-        LOGGER.error(f"Data source not found for project {project_id} env={env}: {str(e)}", exc_info=True)
-        return False, str(e)
-    except MissingIntegrationError as e:
-        LOGGER.error(f"Missing integration for project {project_id} env={env}: {str(e)}", exc_info=True)
-        return False, str(e)
-    except Exception as e:
-        LOGGER.error(f"Failed to run workflow for project {project_id} env={env}: {str(e)}", exc_info=True)
-        return False, str(e)
-
-
-async def _execute_cron_run(
-    run_id: UUID,
-    project_id: UUID,
-    env: EnvType,
-    input_data: Dict[str, Any],
-    trigger: CallType,
-    cron_id: UUID | None,
-    cron_run_id: UUID,
-) -> None:
-    """
-    Cron wrapper around _execute_run: transitions CronRun QUEUED->RUNNING at start
-    then injects the final COMPLETED/ERROR status on completion.
-    """
-    with get_db_session() as session:
-        try:
-            update_cron_run(session=session, run_id=cron_run_id, status=CronStatus.RUNNING)
-        except Exception as e:
-            LOGGER.error(f"Failed to set CronRun {cron_run_id} to RUNNING: {e}", exc_info=True)
-            raise
-
-    succeeded, error_msg = await _execute_run(
-        run_id,
-        project_id,
-        env,
-        input_data,
-        trigger,
-        cron_id=cron_id,
-    )
-
-    with get_db_session() as session:
-        try:
-            update_cron_run(
-                session=session,
-                run_id=cron_run_id,
-                status=CronStatus.COMPLETED if succeeded else CronStatus.ERROR,
-                finished_at=datetime.now(timezone.utc),
-                error=error_msg,
-            )
-            LOGGER.info(
-                f"CronRun {cron_run_id} marked {'COMPLETED' if succeeded else 'ERROR'} after run {run_id} finished"
-            )
-        except Exception as e:
-            LOGGER.error(f"Failed to update CronRun {cron_run_id} after run {run_id}: {e}", exc_info=True)
-
-
 @router.post("/projects/{project_id}/envs/{env}/run", status_code=202)
 async def run_project_internal(
     project_id: UUID,
     env: EnvType,
-    background_tasks: BackgroundTasks,
     body: RunProjectBody = Body(...),
     run_id: Optional[UUID] = Query(None, description="Pre-created run ID to reuse instead of creating a new one"),
     event_id: Optional[str] = Query(None, description="Webhook event ID for run tracking"),
@@ -186,10 +96,9 @@ async def run_project_internal(
     verified_key: Annotated[str, Depends(verify_webhook_or_scheduler_api_key_dependency)] = None,
 ) -> dict:
     """
-    Enqueue a workflow/agent run for a project at a given environment.
-    Returns 202 immediately with run_id; execution runs in background.
-    When cron_run_id is present, the cron wrapper is used so the scheduler
-    receives the real outcome status without polling.
+    Enqueue a workflow/agent run to the durable Redis run queue.
+    Returns 202 immediately with run_id; the RunQueueWorker picks up and executes
+    the run with heartbeat-based orphan recovery.
     Internal endpoint called by the webhook worker or the scheduler.
     Requires X-Webhook-API-Key or X-Scheduler-API-Key.
 
@@ -206,26 +115,26 @@ async def run_project_internal(
         )
         run_id = run.id
 
-    if body.cron_run_id:
-        background_tasks.add_task(
-            _execute_cron_run,
+    pushed = push_run_task(
+        run_id=run_id,
+        project_id=project_id,
+        env=env.value,
+        input_data=body.input_data,
+        trigger=trigger.value,
+        cron_id=body.cron_id,
+        cron_run_id=body.cron_run_id,
+    )
+    if not pushed:
+        update_run_status(
+            session,
             run_id=run_id,
             project_id=project_id,
-            env=env,
-            input_data=body.input_data,
-            trigger=trigger,
-            cron_id=body.cron_id,
-            cron_run_id=body.cron_run_id,
+            status=RunStatus.FAILED,
+            error={"message": "Failed to enqueue run; Redis unavailable.", "type": "EnqueueError"},
         )
-    else:
-        background_tasks.add_task(
-            _execute_run,
-            run_id=run_id,
-            project_id=project_id,
-            env=env,
-            input_data=body.input_data,
-            trigger=trigger,
-            cron_id=body.cron_id,
+        raise HTTPException(
+            status_code=503,
+            detail="Run created but could not be enqueued. Try again later.",
         )
 
     return {"status": "accepted", "run_id": str(run_id)}

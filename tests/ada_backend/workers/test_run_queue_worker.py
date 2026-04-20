@@ -5,9 +5,18 @@ from uuid import uuid4
 
 import pytest
 
-from ada_backend.database.models import RunStatus
+from ada_backend.database.models import CronStatus, RunStatus
 from ada_backend.workers.run_queue_worker import RunQueueWorker
 from engine.trace.span_context import get_tracing_span, set_tracing_span
+
+
+@pytest.fixture(autouse=True)
+def reset_tracing_context():
+    from engine.trace.span_context import _tracing_context
+
+    token = _tracing_context.set(None)
+    yield
+    _tracing_context.reset(token)
 
 
 @pytest.fixture
@@ -25,13 +34,12 @@ def loop():
     lp.close()
 
 
-@pytest.fixture(autouse=True)
-def reset_tracing_context():
-    from engine.trace.span_context import _tracing_context
-
-    token = _tracing_context.set(None)
-    yield
-    _tracing_context.reset(token)
+def _make_pending_run(run_id, retry_group_id=None):
+    mock_run = MagicMock()
+    mock_run.status = "pending"
+    mock_run.retry_group_id = retry_group_id
+    mock_run.id = run_id
+    return mock_run
 
 
 class TestProcessPayloadGraphRunnerNotFound:
@@ -266,3 +274,265 @@ class TestProcessPayloadTracing:
         assert observed["cron_id"] is None
         assert observed["project_id"] == ""
         assert observed["organization_id"] == ""
+
+
+class TestProcessPayloadCronHandling:
+    def test_sets_cron_id_in_tracing_context(self, worker, loop):
+        run_id = uuid4()
+        cron_id = uuid4()
+        captured = {}
+
+        async def fake_agent(**kwargs):
+            span = get_tracing_span()
+            captured["cron_id"] = span.cron_id if span else None
+            result = MagicMock()
+            result.trace_id = "trace-123"
+            return result
+
+        payload = {
+            "run_id": str(run_id),
+            "project_id": str(uuid4()),
+            "env": "production",
+            "input_data": {"text": "hello"},
+            "trigger": "cron",
+            "cron_id": str(cron_id),
+        }
+
+        @contextmanager
+        def fake_db_session():
+            yield MagicMock()
+
+        with (
+            patch.object(worker, "_ensure_trace_manager"),
+            patch("ada_backend.workers.run_queue_worker.get_db_session", side_effect=fake_db_session),
+            patch("ada_backend.workers.run_queue_worker.run_repository") as mock_run_repo,
+            patch("ada_backend.workers.run_queue_worker.update_run_status"),
+            patch("ada_backend.workers.run_queue_worker.publish_run_event"),
+            patch("ada_backend.workers.run_queue_worker.save_run_input"),
+            patch("ada_backend.workers.run_queue_worker._upload_result_to_s3", return_value="s3-key"),
+            patch("ada_backend.workers.run_queue_worker.run_env_agent", side_effect=fake_agent),
+        ):
+            mock_run_repo.get_run.return_value = _make_pending_run(run_id)
+            worker.process_payload(payload, loop)
+
+        assert captured["cron_id"] == str(cron_id)
+
+    def test_updates_cron_run_status_on_success(self, worker, loop):
+        run_id = uuid4()
+        cron_run_id = uuid4()
+
+        payload = {
+            "run_id": str(run_id),
+            "project_id": str(uuid4()),
+            "env": "production",
+            "input_data": {"text": "hello"},
+            "trigger": "cron",
+            "cron_id": str(uuid4()),
+            "cron_run_id": str(cron_run_id),
+        }
+
+        async def fake_agent(**kwargs):
+            result = MagicMock()
+            result.trace_id = "trace-123"
+            return result
+
+        @contextmanager
+        def fake_db_session():
+            yield MagicMock()
+
+        with (
+            patch.object(worker, "_ensure_trace_manager"),
+            patch("ada_backend.workers.run_queue_worker.get_db_session", side_effect=fake_db_session),
+            patch("ada_backend.workers.run_queue_worker.run_repository") as mock_run_repo,
+            patch("ada_backend.workers.run_queue_worker.update_run_status"),
+            patch("ada_backend.workers.run_queue_worker.publish_run_event"),
+            patch("ada_backend.workers.run_queue_worker.save_run_input"),
+            patch("ada_backend.workers.run_queue_worker._upload_result_to_s3", return_value="s3-key"),
+            patch("ada_backend.workers.run_queue_worker.run_env_agent", side_effect=fake_agent),
+            patch("ada_backend.workers.run_queue_worker.update_cron_run") as mock_cron,
+        ):
+            mock_run_repo.get_run.return_value = _make_pending_run(run_id)
+            worker.process_payload(payload, loop)
+
+        running_call = mock_cron.call_args_list[0]
+        assert running_call.kwargs["status"] == CronStatus.RUNNING
+
+        completed_call = mock_cron.call_args_list[1]
+        assert completed_call.kwargs["status"] == CronStatus.COMPLETED
+        assert completed_call.kwargs["error"] is None
+
+    def test_updates_cron_run_status_on_failure(self, worker, loop):
+        run_id = uuid4()
+        cron_run_id = uuid4()
+
+        payload = {
+            "run_id": str(run_id),
+            "project_id": str(uuid4()),
+            "env": "production",
+            "input_data": {"text": "hello"},
+            "trigger": "cron",
+            "cron_id": str(uuid4()),
+            "cron_run_id": str(cron_run_id),
+        }
+
+        @contextmanager
+        def fake_db_session():
+            yield MagicMock()
+
+        with (
+            patch.object(worker, "_ensure_trace_manager"),
+            patch("ada_backend.workers.run_queue_worker.get_db_session", side_effect=fake_db_session),
+            patch("ada_backend.workers.run_queue_worker.run_repository") as mock_run_repo,
+            patch("ada_backend.workers.run_queue_worker.update_run_status"),
+            patch("ada_backend.workers.run_queue_worker.publish_run_event"),
+            patch("ada_backend.workers.run_queue_worker.save_run_input"),
+            patch("ada_backend.workers.run_queue_worker.run_env_agent", side_effect=Exception("agent crashed")),
+            patch("ada_backend.workers.run_queue_worker.update_cron_run") as mock_cron,
+        ):
+            mock_run_repo.get_run.return_value = _make_pending_run(run_id)
+            worker.process_payload(payload, loop)
+
+        error_call = mock_cron.call_args_list[1]
+        assert error_call.kwargs["status"] == CronStatus.ERROR
+        assert "agent crashed" in error_call.kwargs["error"]
+
+    def test_finalizes_cron_when_run_not_found(self, worker, loop):
+        cron_run_id = uuid4()
+
+        payload = {
+            "run_id": str(uuid4()),
+            "project_id": str(uuid4()),
+            "env": "production",
+            "input_data": {"text": "hello"},
+            "trigger": "cron",
+            "cron_run_id": str(cron_run_id),
+        }
+
+        @contextmanager
+        def fake_db_session():
+            yield MagicMock()
+
+        with (
+            patch.object(worker, "_ensure_trace_manager"),
+            patch("ada_backend.workers.run_queue_worker.get_db_session", side_effect=fake_db_session),
+            patch("ada_backend.workers.run_queue_worker.run_repository") as mock_run_repo,
+            patch("ada_backend.workers.run_queue_worker.update_cron_run") as mock_cron,
+        ):
+            mock_run_repo.get_run.return_value = None
+            worker.process_payload(payload, loop)
+
+        assert mock_cron.call_count == 1
+        assert mock_cron.call_args_list[0].kwargs["status"] == CronStatus.ERROR
+
+    def test_finalizes_cron_when_run_already_completed(self, worker, loop):
+        run_id = uuid4()
+        cron_run_id = uuid4()
+
+        payload = {
+            "run_id": str(run_id),
+            "project_id": str(uuid4()),
+            "env": "production",
+            "input_data": {"text": "hello"},
+            "trigger": "cron",
+            "cron_run_id": str(cron_run_id),
+        }
+
+        completed_run = MagicMock()
+        completed_run.status = RunStatus.COMPLETED
+        completed_run.id = run_id
+
+        @contextmanager
+        def fake_db_session():
+            yield MagicMock()
+
+        with (
+            patch.object(worker, "_ensure_trace_manager"),
+            patch("ada_backend.workers.run_queue_worker.get_db_session", side_effect=fake_db_session),
+            patch("ada_backend.workers.run_queue_worker.run_repository") as mock_run_repo,
+            patch("ada_backend.workers.run_queue_worker.update_cron_run") as mock_cron,
+        ):
+            mock_run_repo.get_run.return_value = completed_run
+            worker.process_payload(payload, loop)
+
+        assert mock_cron.call_count == 1
+        error_call = mock_cron.call_args_list[0]
+        assert error_call.kwargs["status"] == CronStatus.ERROR
+        assert "already" in error_call.kwargs["error"]
+
+
+class TestFinalizeCronRunTerminalGuard:
+    def test_skips_finalize_when_cron_run_already_completed(self):
+        cron_run_id = uuid4()
+        mock_cron_run = MagicMock()
+        mock_cron_run.status = CronStatus.COMPLETED
+
+        @contextmanager
+        def fake_db_session():
+            s = MagicMock()
+            s.query.return_value.filter.return_value.first.return_value = mock_cron_run
+            yield s
+
+        with (
+            patch("ada_backend.workers.run_queue_worker.get_db_session", side_effect=fake_db_session),
+            patch("ada_backend.workers.run_queue_worker.update_cron_run") as mock_update,
+        ):
+            RunQueueWorker._finalize_cron_run(cron_run_id, False, "some error")
+
+        mock_update.assert_not_called()
+
+    def test_skips_finalize_when_cron_run_already_errored(self):
+        cron_run_id = uuid4()
+        mock_cron_run = MagicMock()
+        mock_cron_run.status = CronStatus.ERROR
+
+        @contextmanager
+        def fake_db_session():
+            s = MagicMock()
+            s.query.return_value.filter.return_value.first.return_value = mock_cron_run
+            yield s
+
+        with (
+            patch("ada_backend.workers.run_queue_worker.get_db_session", side_effect=fake_db_session),
+            patch("ada_backend.workers.run_queue_worker.update_cron_run") as mock_update,
+        ):
+            RunQueueWorker._finalize_cron_run(cron_run_id, True, None)
+
+        mock_update.assert_not_called()
+
+    def test_proceeds_when_cron_run_is_running(self):
+        cron_run_id = uuid4()
+        mock_cron_run = MagicMock()
+        mock_cron_run.status = CronStatus.RUNNING
+
+        @contextmanager
+        def fake_db_session():
+            s = MagicMock()
+            s.query.return_value.filter.return_value.first.return_value = mock_cron_run
+            yield s
+
+        with (
+            patch("ada_backend.workers.run_queue_worker.get_db_session", side_effect=fake_db_session),
+            patch("ada_backend.workers.run_queue_worker.update_cron_run") as mock_update,
+        ):
+            RunQueueWorker._finalize_cron_run(cron_run_id, True, None)
+
+        mock_update.assert_called_once()
+        assert mock_update.call_args.kwargs["status"] == CronStatus.COMPLETED
+
+    def test_proceeds_when_cron_run_not_found(self):
+        cron_run_id = uuid4()
+
+        @contextmanager
+        def fake_db_session():
+            s = MagicMock()
+            s.query.return_value.filter.return_value.first.return_value = None
+            yield s
+
+        with (
+            patch("ada_backend.workers.run_queue_worker.get_db_session", side_effect=fake_db_session),
+            patch("ada_backend.workers.run_queue_worker.update_cron_run") as mock_update,
+        ):
+            RunQueueWorker._finalize_cron_run(cron_run_id, False, "run not found")
+
+        mock_update.assert_called_once()
+        assert mock_update.call_args.kwargs["status"] == CronStatus.ERROR
