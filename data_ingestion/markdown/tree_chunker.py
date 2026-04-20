@@ -104,8 +104,11 @@ class TreeChunker:
             elif self._count_tokens(current_chunk.content) + self._count_tokens(last_chunk.content) > self._chunk_size:
                 first_chunks.append(last_chunk)
             else:
-                current_chunk += last_chunk
-                first_chunks[-1] = current_chunk
+                combined = current_chunk + last_chunk
+                if self._count_tokens(combined.content) > self._chunk_size:
+                    first_chunks += self._split_text(combined)
+                else:
+                    first_chunks[-1] = combined
             return first_chunks
 
     def _fetch_ancestors_to_level(self, ancestors: list[TreeChunk], level: MarkdownLevel) -> list[TreeChunk]:
