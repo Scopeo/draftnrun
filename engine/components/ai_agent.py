@@ -336,9 +336,8 @@ class AIAgent(Component):
         # Merge pre-configured literal inputs with LLM-provided arguments; LLM args win.
         merged_arguments = {**pre_configured, **tool_arguments}
         try:
-            LOGGER.info(f"Calling tool {tool_function_name} with argument keys={list(merged_arguments.keys())}")
+            LOGGER.debug(f"Calling tool {tool_function_name} with argument keys={list(merged_arguments.keys())}")
             tool_output = await tool_to_use.run(ctx=ctx, **merged_arguments)
-            LOGGER.info(f"Tool {tool_function_name} returned (type={type(tool_output).__name__})")
         except Exception as e:
             LOGGER.error(f"Error running tool {tool_function_name}: {type(e).__name__}", exc_info=True)
             tool_output = AgentPayload(messages=[ChatMessage(role="assistant", content=str(e))], error=str(e))

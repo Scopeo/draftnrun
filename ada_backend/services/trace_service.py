@@ -223,7 +223,7 @@ def get_root_traces_by_project(
         end_time=end_time,
     )
     track_monitoring_loaded(user_id, project_count=1, organization_id=organization_id)
-    LOGGER.info(
+    LOGGER.debug(
         "Querying root spans for project %s with duration=%s start_time=%s end_time=%s",
         project_id,
         duration,
