@@ -101,12 +101,10 @@ class TreeChunker:
             last_chunk = chunks[-1]
             if self._count_tokens(last_chunk.content) > self._chunk_size:
                 first_chunks += self._split_text(last_chunk)
-            elif self._count_tokens(current_chunk.content) + self._count_tokens(last_chunk.content) > self._chunk_size:
-                first_chunks.append(last_chunk)
             else:
                 combined = current_chunk + last_chunk
                 if self._count_tokens(combined.content) > self._chunk_size:
-                    first_chunks += self._split_text(combined)
+                    first_chunks.append(last_chunk)
                 else:
                     first_chunks[-1] = combined
             return first_chunks
