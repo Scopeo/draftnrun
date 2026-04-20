@@ -6,8 +6,6 @@ on:
   pull_request:
     branches:
       - main
-    paths-ignore:
-      - "frontend/**"
 
 permissions:
   contents: read
@@ -21,6 +19,7 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
+      has-backend-changes: ${{ steps.filter.outputs.backend }}
       migration-or-seed-changed: ${{ steps.filter.outputs.migration-or-seed }}
       mixpanel-changed: ${{ steps.filter.outputs.mixpanel }}
       traces-schema-touched: ${{ steps.traces-schema-check.outputs.traces-schema-touched }}
@@ -37,6 +36,9 @@ jobs:
         id: filter
         with:
           filters: |
+            backend:
+              - '**'
+              - '!frontend/**'
             migration-or-seed:
               - 'ada_backend/database/**'
             mixpanel:
@@ -169,6 +171,7 @@ jobs:
 
   ci-pipeline:
     needs: detect-changes
+    if: needs.detect-changes.outputs.has-backend-changes == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
