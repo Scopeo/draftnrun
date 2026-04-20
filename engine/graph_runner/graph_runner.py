@@ -282,7 +282,7 @@ class GraphRunner:
                 )
                 evaluated_value = coerced
         input_data[field_name] = evaluated_value
-        LOGGER.debug(f"Set {node_id}.{field_name} from {log_prefix} (type={type(evaluated_value).__name__})")
+        LOGGER.debug(f"Set {node_id}.{field_name} from {log_prefix}")
 
     def _gather_inputs(self, node_id: str) -> dict[str, Any]:
         """Assemble input data for a node by evaluating all field expressions.

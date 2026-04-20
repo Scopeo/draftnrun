@@ -44,11 +44,11 @@ def get_attributes_with_messages(span_kind: str, row: pd.Series, filter_to_last_
                 input.append({**input_data[0], "messages": [user_msgs[-1]]})
         if not input:
             input = input_data
-    except Exception as e:
+    except Exception:
         LOGGER.error(
-            f"Error extracting last user message: {type(e).__name__} "
-            f"(input_data type={type(input_data).__name__}, "
-            f"len={len(input_data) if hasattr(input_data, '__len__') else 'n/a'})"
+            "Error extracting last user message (input_data_len=%s)",
+            len(input_data),
+            exc_info=True,
         )
         input = input_data
     output = _safe_json_loads(row["output_content"])
