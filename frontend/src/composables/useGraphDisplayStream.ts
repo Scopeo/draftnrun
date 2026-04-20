@@ -22,6 +22,8 @@ export function useGraphDisplayStream(
   hasUnsavedChanges: Ref<boolean>,
 ) {
   const isConnected = ref(false)
+  const wsDisconnected = ref(false)
+  const refreshing = ref(false)
   let wsClose: (() => void) | null = null
   let reloadTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -30,7 +32,7 @@ export function useGraphDisplayStream(
     reloadTimer = setTimeout(() => {
       reloadTimer = null
       if (hasUnsavedChanges.value) {
-        logger.debug('Graph display stream: skipping reload — unsaved local changes')
+        logger.info('Graph display stream: skipping reload — unsaved local changes')
         return
       }
       reloadGraph()
@@ -50,6 +52,7 @@ export function useGraphDisplayStream(
 
   async function connect() {
     disconnect()
+    wsDisconnected.value = false
 
     const {
       data: { session },
@@ -58,12 +61,14 @@ export function useGraphDisplayStream(
     const token = session?.access_token
     if (!token) {
       logger.warn('Graph display stream: no auth token')
+      wsDisconnected.value = true
       return
     }
 
     const wsBaseUrl = getWsBaseUrl()
     if (!wsBaseUrl) {
       logger.warn('Graph display stream: no WS base URL')
+      wsDisconnected.value = true
       return
     }
 
@@ -75,6 +80,7 @@ export function useGraphDisplayStream(
         delay: 2000,
         onFailed() {
           isConnected.value = false
+          wsDisconnected.value = true
           logger.warn('Graph display stream: reconnect failed after 5 retries')
         },
       },
@@ -85,6 +91,7 @@ export function useGraphDisplayStream(
       },
       onConnected() {
         isConnected.value = true
+        wsDisconnected.value = false
       },
       onMessage(_ws: WebSocket, event: MessageEvent) {
         try {
@@ -123,6 +130,17 @@ export function useGraphDisplayStream(
     isConnected.value = false
   }
 
+  async function manualRefresh() {
+    refreshing.value = true
+    try {
+      await reloadGraph()
+    } catch (e) {
+      logger.error('Graph display stream: manual refresh failed', { error: e })
+    } finally {
+      refreshing.value = false
+    }
+  }
+
   watch(
     projectId,
     (newId: string, oldId: string | undefined) => {
@@ -138,5 +156,5 @@ export function useGraphDisplayStream(
     if (reloadTimer) clearTimeout(reloadTimer)
   })
 
-  return { isConnected }
+  return { isConnected, wsDisconnected, refreshing, manualRefresh }
 }

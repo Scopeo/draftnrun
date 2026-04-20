@@ -64,7 +64,11 @@ const graph = useStudioGraph({
 })
 
 // ─── Graph display stream (auto-refreshes canvas on external changes) ─
-useGraphDisplayStream(projectId, () => graph.loadGraphData(projectId.value), graph.hasUnsavedChanges)
+const { wsDisconnected, refreshing: streamRefreshing, manualRefresh } = useGraphDisplayStream(
+  projectId,
+  () => graph.loadGraphData(projectId.value),
+  graph.hasUnsavedChanges,
+)
 
 // ─── Breadcrumb composable ───────────────────────────────────────────
 const crumbs = useStudioBreadcrumbs({
@@ -241,6 +245,16 @@ const { breadcrumbs, handleBreadcrumbClick, goToOverviewAndClearHistory, resetVi
         :on-schedule-click="() => emit('openCronModal')"
         :on-endpoint-polling-click="() => emit('openEndpointPollingModal')"
       />
+      <VBtn
+        icon
+        variant="text"
+        size="x-small"
+        :loading="streamRefreshing"
+        @click="manualRefresh"
+      >
+        <VIcon icon="tabler-refresh" size="18" />
+        <VTooltip activator="parent">Refresh graph</VTooltip>
+      </VBtn>
     </template>
 
     <VueFlow
