@@ -1,4 +1,5 @@
 import asyncio
+import json
 from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -6,6 +7,12 @@ from uuid import uuid4
 import pytest
 
 from ada_backend.database.models import CronStatus, RunStatus
+from ada_backend.workers.base_queue_worker import (
+    _HEARTBEAT_TTL,
+    _MAX_ORPHAN_FOLLOW_UPS,
+    _ORPHAN_FOLLOW_UP_DELAY,
+    BaseQueueWorker,
+)
 from ada_backend.workers.run_queue_worker import RunQueueWorker
 from engine.trace.span_context import get_tracing_span, set_tracing_span
 
@@ -536,3 +543,147 @@ class TestFinalizeCronRunTerminalGuard:
 
         mock_update.assert_called_once()
         assert mock_update.call_args.kwargs["status"] == CronStatus.ERROR
+
+
+class TestPeriodicOrphanRecovery:
+    """Regression: startup scan misses dead workers whose heartbeat hasn't expired yet.
+    The periodic scan (after _ORPHAN_SCAN_INTERVAL) must recover them."""
+
+    def test_periodic_scan_recovers_orphan_after_heartbeat_expires(self):
+        queue_name = "test_queue"
+        dead_worker_id = "dead-worker-aaa"
+        processing_key = BaseQueueWorker._processing_queue_key(queue_name, dead_worker_id)
+        heartbeat_key = BaseQueueWorker._heartbeat_key(queue_name, dead_worker_id)
+        orphan_payload = json.dumps({
+            "run_id": str(uuid4()),
+            "project_id": str(uuid4()),
+            "env": "production",
+            "input_data": {},
+        })
+
+        client = MagicMock()
+
+        heartbeat_alive = True
+
+        def fake_exists(key):
+            if key == heartbeat_key:
+                return heartbeat_alive
+            return False
+
+        client.exists.side_effect = fake_exists
+        client.scan.return_value = (0, [processing_key])
+        client.rpoplpush.side_effect = [orphan_payload.encode(), None]
+
+        with patch.object(RunQueueWorker, "__init__", lambda self: None):
+            w = RunQueueWorker.__new__(RunQueueWorker)
+            w.queue_name = queue_name
+            w.worker_label = "test"
+
+        own_processing = BaseQueueWorker._processing_queue_key(queue_name, "live-worker")
+
+        w._recover_orphaned_processing_queues(client, own_processing)
+        client.rpoplpush.assert_not_called()
+
+        heartbeat_alive = False
+        client.scan.return_value = (0, [processing_key])
+        client.rpoplpush.side_effect = [orphan_payload.encode(), None]
+
+        w._recover_orphaned_processing_queues(client, own_processing)
+        client.rpoplpush.assert_called()
+
+    def test_worker_loop_triggers_periodic_scan(self):
+        queue_name = "test_queue"
+        scan_call_count = 0
+
+        with patch.object(RunQueueWorker, "__init__", lambda self: None):
+            w = RunQueueWorker.__new__(RunQueueWorker)
+            w.queue_name = queue_name
+            w.worker_label = "test"
+            w._trace_manager = None
+            w._trace_project_name = "test"
+            w._drain_requested = MagicMock()
+
+        drain_calls = [False, False, False, True]
+        w._drain_requested.is_set = MagicMock(side_effect=drain_calls)
+
+        client = MagicMock()
+        client.brpoplpush.return_value = None
+        client.rpoplpush.return_value = None
+
+        def counting_recover(self_inner, cl, own_pq):
+            nonlocal scan_call_count
+            scan_call_count += 1
+
+        t0 = 1000.0
+
+        with (
+            patch("ada_backend.workers.base_queue_worker.get_redis_client", return_value=client),
+            patch.object(
+                BaseQueueWorker,
+                "_recover_orphaned_processing_queues",
+                counting_recover,
+            ),
+            patch("ada_backend.workers.base_queue_worker.time") as mock_time,
+            patch("ada_backend.workers.base_queue_worker.threading") as mock_threading,
+        ):
+            mock_time.monotonic = MagicMock(
+                side_effect=[
+                    t0,
+                    t0 + _ORPHAN_FOLLOW_UP_DELAY + 1,
+                    t0 + _ORPHAN_FOLLOW_UP_DELAY + 2,
+                ]
+            )
+            mock_threading.Event.return_value = MagicMock()
+            mock_threading.Thread.return_value = MagicMock()
+
+            w._worker_loop()
+
+        assert scan_call_count >= 2
+
+    def test_follow_up_scans_stop_after_cap(self):
+        queue_name = "test_queue"
+        scan_call_count = 0
+
+        with patch.object(RunQueueWorker, "__init__", lambda self: None):
+            w = RunQueueWorker.__new__(RunQueueWorker)
+            w.queue_name = queue_name
+            w.worker_label = "test"
+            w._trace_manager = None
+            w._trace_project_name = "test"
+            w._drain_requested = MagicMock()
+
+        iterations = _MAX_ORPHAN_FOLLOW_UPS + 3
+        drain_calls = [False] * iterations + [True]
+        w._drain_requested.is_set = MagicMock(side_effect=drain_calls)
+
+        client = MagicMock()
+        client.brpoplpush.return_value = None
+        client.rpoplpush.return_value = None
+
+        def counting_recover(self_inner, cl, own_pq):
+            nonlocal scan_call_count
+            scan_call_count += 1
+
+        t0 = 1000.0
+        timestamps = [t0] + [t0 + _ORPHAN_FOLLOW_UP_DELAY * (i + 1) for i in range(iterations)]
+
+        with (
+            patch("ada_backend.workers.base_queue_worker.get_redis_client", return_value=client),
+            patch.object(
+                BaseQueueWorker,
+                "_recover_orphaned_processing_queues",
+                counting_recover,
+            ),
+            patch("ada_backend.workers.base_queue_worker.time") as mock_time,
+            patch("ada_backend.workers.base_queue_worker.threading") as mock_threading,
+        ):
+            mock_time.monotonic = MagicMock(side_effect=timestamps)
+            mock_threading.Event.return_value = MagicMock()
+            mock_threading.Thread.return_value = MagicMock()
+
+            w._worker_loop()
+
+        assert scan_call_count == 1 + _MAX_ORPHAN_FOLLOW_UPS
+
+    def test_follow_up_delay_covers_heartbeat_ttl(self):
+        assert _ORPHAN_FOLLOW_UP_DELAY >= _HEARTBEAT_TTL

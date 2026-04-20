@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import threading
+import time
 from abc import ABC, abstractmethod
 from uuid import uuid4
 
@@ -13,6 +14,8 @@ LOGGER = logging.getLogger(__name__)
 
 _HEARTBEAT_TTL = 60
 _HEARTBEAT_INTERVAL = 20
+_ORPHAN_FOLLOW_UP_DELAY = _HEARTBEAT_TTL
+_MAX_ORPHAN_FOLLOW_UPS = 2
 
 
 class BaseQueueWorker(ABC):
@@ -163,6 +166,8 @@ class BaseQueueWorker(ABC):
         heartbeat_thread.start()
 
         self._recover_orphaned_processing_queues(client, processing_queue_name)
+        last_orphan_scan = time.monotonic()
+        orphan_follow_ups_done = 0
 
         LOGGER.info(
             "[%s] Worker started (id=%s), listening on %s (processing list: %s)",
@@ -181,6 +186,12 @@ class BaseQueueWorker(ABC):
                     if self._drain_requested.is_set():
                         break
                     if raw is None:
+                        if orphan_follow_ups_done < _MAX_ORPHAN_FOLLOW_UPS:
+                            now = time.monotonic()
+                            if now - last_orphan_scan >= _ORPHAN_FOLLOW_UP_DELAY:
+                                self._recover_orphaned_processing_queues(client, processing_queue_name)
+                                last_orphan_scan = now
+                                orphan_follow_ups_done += 1
                         continue
                     data = raw
                     try:
@@ -225,6 +236,10 @@ class BaseQueueWorker(ABC):
                     LOGGER.exception("[%s] Worker error: %s", self.worker_label, e)
         finally:
             stop_heartbeat.set()
+            try:
+                client.delete(hb_key)
+            except Exception:
+                pass
             try:
                 while True:
                     item = client.rpoplpush(processing_queue_name, self.queue_name)
