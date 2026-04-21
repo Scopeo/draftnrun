@@ -13,7 +13,6 @@ import redis
 import sentry_sdk
 from dotenv import load_dotenv
 
-from ada_backend.utils.log_redaction import scrub_sentry_event
 from settings import settings
 
 logger = logging.getLogger(__name__)
@@ -35,9 +34,6 @@ if settings.SENTRY_DSN_REDIS:
         send_default_pii=False,
         enable_logs=True,
         traces_sample_rate=0.1,
-        before_send=lambda event, hint: scrub_sentry_event(event),
-        before_send_log=lambda log, hint: scrub_sentry_event(log),
-        before_send_transaction=lambda event, hint: scrub_sentry_event(event),
     )
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
