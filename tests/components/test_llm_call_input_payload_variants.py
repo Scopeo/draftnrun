@@ -236,7 +236,9 @@ def test_file_url_as_tool_property(get_span_mock, agent_calls_mock):
         document_url = "https://example.com/report.pdf"
         fn = SimpleNamespace(
             name="AnalyzeDocument",
-            arguments=f'{{"messages": [], "prompt_template": "Analyze this document.", "document_url": "{document_url}"}}',
+            arguments=(
+                f'{{"messages": [], "prompt_template": "Analyze this document.", "document_url": "{document_url}"}}'
+            ),
         )
         tool_call = SimpleNamespace(id="call_1", function=fn)
 

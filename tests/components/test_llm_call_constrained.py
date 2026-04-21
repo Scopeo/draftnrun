@@ -158,11 +158,6 @@ async def test_chat_completion_to_response(llm_call_with_output_format, input_pa
     response = await llm_call_with_output_format._run_without_io_trace(inputs, ctx={})
     assert isinstance(response.output, str)
 
-    mock_service = llm_call_with_output_format._run_without_io_trace  # grab actual call
-    # Retrieve the messages from the mock_service call
-    svc_mock = llm_call_with_output_format._capability_resolver  # need to get actual service
-    # The CompletionService is created inline, so we access the mock via monkeypatch
-    # Instead, reconstruct the expected conversion from the known input format
     expected_messages = [
         {
             "role": "user",
