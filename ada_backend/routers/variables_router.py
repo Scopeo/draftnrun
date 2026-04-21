@@ -28,7 +28,13 @@ from ada_backend.schemas.variable_schemas import (
     VariableSetResponse,
     VariableSetUpsertRequest,
 )
-from ada_backend.services.errors import OAuthSetProtectedError, VariableDefinitionNotFound, VariableSetNotFound
+from ada_backend.services.errors import (
+    OAuthSetProtectedError,
+    ProjectNotFound,
+    ProjectNotInOrganization,
+    VariableDefinitionNotFound,
+    VariableSetNotFound,
+)
 from ada_backend.services.variables_service import (
     delete_definition_service,
     delete_set_service,
@@ -89,9 +95,8 @@ def upsert_org_variable_definition(
 ):
     try:
         return upsert_definition_service(session, organization_id, name, body)
-    except ValueError as e:
-        LOGGER.error(f"Failed to upsert variable definition {name} for org {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    except (ProjectNotFound, ProjectNotInOrganization) as e:
+        raise HTTPException(status_code=404, detail="Project not found") from e
     except IntegrityError as e:
         LOGGER.error(
             f"Integrity error upserting variable definition {name} for org {organization_id}: {str(e)}",
@@ -142,6 +147,8 @@ def get_set_ids(
 ):
     try:
         return get_set_ids_service(session, organization_id, project_id)
+    except (ProjectNotFound, ProjectNotInOrganization) as e:
+        raise HTTPException(status_code=404, detail="Project not found") from e
     except Exception as e:
         LOGGER.error(f"Failed to get set ids for org {organization_id} project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

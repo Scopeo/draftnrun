@@ -32,7 +32,13 @@ from ada_backend.schemas.variable_schemas import (
     VariableSetListResponse,
     VariableSetResponse,
 )
-from ada_backend.services.errors import OAuthSetProtectedError, VariableDefinitionNotFound, VariableSetNotFound
+from ada_backend.services.errors import (
+    OAuthSetProtectedError,
+    ProjectNotFound,
+    ProjectNotInOrganization,
+    VariableDefinitionNotFound,
+    VariableSetNotFound,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -40,8 +46,10 @@ LOGGER = logging.getLogger(__name__)
 def _validate_project_ids_belong_to_org(session: Session, organization_id: UUID, project_ids: list[UUID]) -> None:
     for project_id in project_ids:
         project = get_project(session, project_id=project_id)
-        if not project or project.organization_id != organization_id:
-            raise ValueError(f"Project {project_id} does not belong to organization {organization_id}")
+        if not project:
+            raise ProjectNotFound(project_id)
+        if project.organization_id != organization_id:
+            raise ProjectNotInOrganization(project_id, organization_id)
 
 
 def definition_to_response(
@@ -163,6 +171,7 @@ def get_set_ids_service(
     organization_id: UUID,
     project_id: UUID,
 ) -> SetIdsResponse:
+    _validate_project_ids_belong_to_org(session, organization_id, [project_id])
     set_ids = list_set_ids_for_project(session, organization_id, project_id)
     return SetIdsResponse(set_ids=set_ids)
 
