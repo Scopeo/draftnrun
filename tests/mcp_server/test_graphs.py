@@ -378,7 +378,7 @@ async def test_update_component_parameters_preserves_json_build_expressions(monk
         {"initial_prompt": "Updated prompt"},
     )
 
-    assert f"/v2/" in put_path
+    assert "/v2/" in put_path
     assert f"/components/{FAKE_INSTANCE_ID}" in put_path
 
     assert "component_instances" not in put_payload
