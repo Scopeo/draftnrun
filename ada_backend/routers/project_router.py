@@ -32,16 +32,7 @@ from ada_backend.schemas.run_schema import AsyncRunAcceptedSchema
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent, setup_tracing_context
 from ada_backend.services.api_key_service import verify_project_access
 from ada_backend.services.charts_service import get_charts_by_projects
-from ada_backend.services.errors import (
-    ApiKeyAccessDenied,
-    EnvironmentNotFound,
-    InvalidApiKey,
-    MissingDataSourceError,
-    MissingIntegrationError,
-    OrganizationLimitExceededError,
-    ProjectNotFound,
-    RunError,
-)
+from ada_backend.services.errors import RunError
 from ada_backend.services.metrics.monitor_kpis_service import get_monitoring_kpis_by_projects
 from ada_backend.services.project_service import (
     add_tags_to_project_service,
@@ -96,12 +87,6 @@ def get_projects_by_organization_endpoint(
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to list workflows for organization {organization_id} user_id={auth.user_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/org/{organization_id}/tags", response_model=List[str], tags=["Projects"])
@@ -141,14 +126,9 @@ def get_workflow_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return get_project_service(session, project_id)
-    except ProjectNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(f"Failed to get workflow {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to get workflow {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete("/{project_id}", response_model=ProjectDeleteResponse, tags=["Projects"])
@@ -167,9 +147,6 @@ def delete_project_endpoint(
     except ValueError as e:
         LOGGER.error(f"Failed to delete project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to delete project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.patch("/{project_id}", response_model=ProjectSchema, tags=["Projects"])
@@ -189,9 +166,6 @@ def update_project_endpoint(
     except ValueError as e:
         LOGGER.error(f"Failed to update project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to update project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/{project_id}/tags", response_model=List[str], tags=["Projects"])
@@ -250,9 +224,6 @@ def create_workflow_endpoint(
     except ValueError as e:
         LOGGER.error(f"Failed to create workflow in organization {organization_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to create workflow in organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/{project_id}/{env}/run", response_model=ChatResponse)
@@ -298,21 +269,6 @@ async def run_env_agent_endpoint(
                 response_format=response_format,
             ),
         )
-    except ApiKeyAccessDenied as e:
-        LOGGER.error(f"API key access denied: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except InvalidApiKey as e:
-        LOGGER.error(f"Invalid API key: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=401, detail=str(e)) from e
-    except ProjectNotFound as e:
-        LOGGER.error(f"Project not found: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except EnvironmentNotFound as e:
-        LOGGER.error(f"Environment not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except MissingDataSourceError as e:
-        LOGGER.error(f"Data source not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except MissingKeyPromptTemplateError as e:
         LOGGER.error(
             f"Missing key from prompt template for project {project_id} in environment {env}: {str(e)}", exc_info=True
@@ -323,9 +279,6 @@ async def run_env_agent_endpoint(
             f"Key type error in prompt template for project {project_id} in environment {env}: {str(e)}",
             exc_info=True,
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except MissingIntegrationError as e:
-        LOGGER.error(f"Missing integration for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except LLMProviderError as e:
         LOGGER.warning("LLM provider error for project %s env %s: %s", project_id, env, e.provider_message)
@@ -344,9 +297,6 @@ async def run_env_agent_endpoint(
     except ValueError as e:
         LOGGER.error(f"Failed to run agent for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to run agent for project {project_id} in environment {env}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{project_id}/charts", response_model=ChartsResponse, tags=["Metrics"], deprecated=True)
@@ -373,11 +323,6 @@ async def get_project_charts(
             f"Failed to get charts for project {project_id} with duration {duration}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to get charts for project {project_id} with duration {duration}: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{project_id}/kpis", response_model=KPISResponse, tags=["Metrics"], deprecated=True)
@@ -398,9 +343,6 @@ async def get_project_monitoring_kpi(
     except ValueError as e:
         LOGGER.error(f"Failed to get KPIs for project {project_id} with duration {duration}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to get KPIs for project {project_id} with duration {duration}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/{project_id}/graphs/{graph_runner_id}/chat", response_model=ChatResponse, tags=["Projects"])
@@ -454,18 +396,6 @@ async def chat(
                 response_format=ResponseFormat.S3_KEY,
             ),
         )
-    except OrganizationLimitExceededError as e:
-        LOGGER.warning(
-            f"Organization limit exceeded for project {project_id}, graph runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=402, detail=str(e)) from e
-    except MissingDataSourceError as e:
-        LOGGER.error(
-            f"Data source not found for project {project_id} for graph runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except MissingKeyPromptTemplateError as e:
         LOGGER.error(
             f"Missing key from prompt template for project {project_id} for graph runner {graph_runner_id}: {str(e)}",
@@ -517,12 +447,6 @@ async def chat(
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}") from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to run agent chat for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post(
@@ -565,48 +489,35 @@ async def chat_async(
             detail=f"Graph runner {graph_runner_id} is not bound to project {project_id}",
         )
     environment = project_env_binding.environment
-    try:
-        run = create_run(
+    run = create_run(
+        session,
+        project_id=project_id,
+        trigger=CallType.SANDBOX,
+    )
+    setup_tracing_context(session=session, project_id=project_id)
+    set_tracing_span(run_id=str(run.id))
+    pushed = push_run_task(
+        run_id=run.id,
+        project_id=project_id,
+        env=environment.value if environment else None,
+        input_data=input_data,
+        trigger=CallType.SANDBOX.value,
+        response_format=ResponseFormat.S3_KEY.value,
+        graph_runner_id=graph_runner_id,
+    )
+    if not pushed:
+        update_run_status(
             session,
-            project_id=project_id,
-            trigger=CallType.SANDBOX,
-        )
-        setup_tracing_context(session=session, project_id=project_id)
-        set_tracing_span(run_id=str(run.id))
-        pushed = push_run_task(
             run_id=run.id,
             project_id=project_id,
-            env=environment.value if environment else None,
-            input_data=input_data,
-            trigger=CallType.SANDBOX.value,
-            response_format=ResponseFormat.S3_KEY.value,
-            graph_runner_id=graph_runner_id,
+            status=RunStatus.FAILED,
+            error={"message": "Failed to enqueue run; Redis unavailable.", "type": "EnqueueError"},
         )
-        if not pushed:
-            update_run_status(
-                session,
-                run_id=run.id,
-                project_id=project_id,
-                status=RunStatus.FAILED,
-                error={"message": "Failed to enqueue run; Redis unavailable.", "type": "EnqueueError"},
-            )
-            raise HTTPException(
-                status_code=503,
-                detail="Run created but could not be enqueued. Try again or use sync endpoint.",
-            )
-        return AsyncRunAcceptedSchema(run_id=run.id, status="pending")
-    except HTTPException:
-        raise
-    except ProjectNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception(
-            "Failed to enqueue async run for project %s graph_runner %s: %s",
-            project_id,
-            graph_runner_id,
-            e,
+        raise HTTPException(
+            status_code=503,
+            detail="Run created but could not be enqueued. Try again or use sync endpoint.",
         )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return AsyncRunAcceptedSchema(run_id=run.id, status="pending")
 
 
 @router.post("/{project_id}/{env}/chat", response_model=ChatResponse, tags=["Projects"])
@@ -644,18 +555,6 @@ async def chat_env(
                 response_format=ResponseFormat.S3_KEY,
             ),
         )
-    except OrganizationLimitExceededError as e:
-        LOGGER.warning(
-            f"Organization limit exceeded for project {project_id} in environment {env}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=402, detail=str(e)) from e
-    except EnvironmentNotFound as e:
-        LOGGER.error(f"Environment not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except MissingDataSourceError as e:
-        LOGGER.error(f"Data source not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except MissingKeyPromptTemplateError as e:
         LOGGER.error(
             f"Missing key from prompt template for project {project_id} in environment {env}: {str(e)}",
@@ -667,9 +566,6 @@ async def chat_env(
             f"Key type error in prompt template for project {project_id} in environment {env}: {str(e)}",
             exc_info=True,
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except MissingIntegrationError as e:
-        LOGGER.error(f"Missing integration for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except LLMProviderError as e:
         LOGGER.warning("LLM provider error for project %s env %s: %s", project_id, env, e.provider_message)
@@ -690,8 +586,3 @@ async def chat_env(
             f"Failed to run agent chat for project {project_id} in environment {env}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}") from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to run agent chat for project {project_id} in environment {env}: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e

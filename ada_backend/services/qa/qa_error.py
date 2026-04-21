@@ -1,8 +1,14 @@
 from typing import Optional
 from uuid import UUID
 
+from ada_backend.services.errors import ServiceError
 
-class CSVMissingDatasetColumnError(Exception):
+
+class QAServiceError(ServiceError):
+    status_code = 400
+
+
+class CSVMissingDatasetColumnError(QAServiceError):
     """Raised when required column is missing from CSV header."""
 
     def __init__(self, column: str, found_columns: list[str], required_columns: list[str]):
@@ -15,14 +21,14 @@ class CSVMissingDatasetColumnError(Exception):
         )
 
 
-class CSVInvalidJSONError(Exception):
+class CSVInvalidJSONError(QAServiceError):
     """Raised when input column contains invalid JSON."""
 
     def __init__(self, row_number: Optional[int] = None):
         super().__init__(f"Invalid JSON in 'input' column. Expected a JSON object at row {row_number}")
 
 
-class CSVInvalidPositionError(Exception):
+class CSVInvalidPositionError(QAServiceError):
     """Raised when position column contains invalid integer."""
 
     def __init__(self, row_number: Optional[int] = None):
@@ -32,7 +38,7 @@ class CSVInvalidPositionError(Exception):
         )
 
 
-class CSVNonUniquePositionError(Exception):
+class CSVNonUniquePositionError(QAServiceError):
     """Raised when position column contains non-unique values."""
 
     def __init__(self, duplicate_positions: list[int]):
@@ -42,34 +48,36 @@ class CSVNonUniquePositionError(Exception):
         )
 
 
-class CSVEmptyFileError(Exception):
+class CSVEmptyFileError(QAServiceError):
     """Raised when CSV file is empty."""
 
     def __init__(self):
         super().__init__("CSV file is empty")
 
 
-class CSVExportError(Exception):
-    """Raised when CSV export fails."""
+class CSVExportError(QAServiceError):
+    """Raised when CSV export fails (empty dataset, oversized output, etc.)."""
+
+    status_code = 404
 
     def __init__(self, dataset_id: UUID, message: str):
         self.dataset_id = dataset_id
         super().__init__(f"Failed to export CSV for dataset {dataset_id}: {message}")
 
 
-class UnknownEvaluationTypeError(Exception):
+class UnknownEvaluationTypeError(QAServiceError):
     def __init__(self, evaluation_type: str):
         self.evaluation_type = evaluation_type
         super().__init__(f"Unknown evaluation_type: {evaluation_type}")
 
 
-class VersionOutputEmptyError(Exception):
+class VersionOutputEmptyError(QAServiceError):
     def __init__(self, version_output_id: UUID):
         self.version_output_id = version_output_id
         super().__init__(f"Version output {version_output_id} has no output to evaluate")
 
 
-class QADuplicatePositionError(Exception):
+class QADuplicatePositionError(QAServiceError):
     """Raised when duplicate positions are found in QA dataset entries."""
 
     def __init__(self, duplicate_positions: list[int]):
@@ -77,29 +85,34 @@ class QADuplicatePositionError(Exception):
         super().__init__(f"Duplicate positions found in QA dataset: {duplicate_positions}")
 
 
-class QAPartialPositionError(Exception):
+class QAPartialPositionError(QAServiceError):
     """Raised when partial positioning is detected (some entries have position, some don't)."""
 
     def __init__(self):
         super().__init__("Partial positioning is not allowed. Either provide positions for all entries or none.")
 
 
-class GroundtruthMissingError(Exception):
+class GroundtruthMissingError(QAServiceError):
     """Raised when groundtruth is missing for deterministic evaluation."""
 
     def __init__(self):
         super().__init__("No groundtruth provided for comparison")
 
 
-class InvalidFormatError(Exception):
+class InvalidFormatError(QAServiceError):
     """Raised when a field format is invalid for evaluation."""
 
     def __init__(self, field_name: str, expected_format: str = "JSON"):
         super().__init__(f"Invalid {expected_format} format in {field_name}")
 
 
-class QADatasetNotInProjectError(Exception):
-    """Raised when a dataset is not linked to the given project"""
+class QADatasetNotInProjectError(QAServiceError):
+    """Raised when a dataset is not linked to the given project.
+
+    Default status is 400 (inherited from ``QAServiceError``) to match the
+    historical contract of update/delete/column/import endpoints. The two
+    run endpoints remap this error to 404 locally in the router.
+    """
 
     def __init__(self, project_id: UUID, dataset_id: UUID):
         self.project_id = project_id
@@ -107,7 +120,9 @@ class QADatasetNotInProjectError(Exception):
         super().__init__(f"Dataset {dataset_id} not found in project {project_id}")
 
 
-class QAColumnNotFoundError(Exception):
+class QAColumnNotFoundError(QAServiceError):
+    status_code = 404
+
     def __init__(self, dataset_id: UUID, column_id: UUID):
         self.dataset_id = dataset_id
         self.column_id = column_id

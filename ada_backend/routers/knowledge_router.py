@@ -1,4 +1,3 @@
-import logging
 from typing import Annotated, List
 from uuid import UUID
 
@@ -16,15 +15,6 @@ from ada_backend.schemas.knowledge_schema import (
     KnowledgeDocumentsListResponse,
     KnowledgeDocumentWithChunks,
 )
-from ada_backend.services.knowledge.errors import (
-    KnowledgeEmptyChunkError,
-    KnowledgeMaxChunkSizeError,
-    KnowledgeServiceDBSourceConfigError,
-    KnowledgeServiceDocumentNotFoundError,
-    KnowledgeServiceQdrantConfigurationError,
-    KnowledgeServiceQdrantOperationError,
-    KnowledgeSourceNotFoundError,
-)
 from ada_backend.services.knowledge_service import (
     delete_chunk_service,
     delete_document_service,
@@ -32,8 +22,6 @@ from ada_backend.services.knowledge_service import (
     list_documents_service,
     update_document_chunks_service,
 )
-
-LOGGER = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/knowledge", tags=["Knowledge"])
@@ -52,19 +40,7 @@ def list_documents(
 ) -> KnowledgeDocumentsListResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        return list_documents_service(session, organization_id, source_id)
-    except KnowledgeSourceNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except KnowledgeServiceDBSourceConfigError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except KnowledgeServiceQdrantConfigurationError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to list files for source {source_id} in organization {organization_id}: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return list_documents_service(session, organization_id, source_id)
 
 
 @router.get(
@@ -82,30 +58,12 @@ def get_document(
 ) -> KnowledgeDocumentWithChunks:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        return get_document_with_chunks_service(
-            session,
-            organization_id,
-            source_id,
-            document_id,
-        )
-    except KnowledgeSourceNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except KnowledgeServiceDocumentNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except KnowledgeServiceDBSourceConfigError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except KnowledgeServiceQdrantConfigurationError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(
-            (
-                f"Failed to get document detail {document_id} for source {source_id} "
-                f"in organization {organization_id}: {str(e)}"
-            ),
-            exc_info=True,
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return get_document_with_chunks_service(
+        session,
+        organization_id,
+        source_id,
+        document_id,
+    )
 
 
 @router.put(
@@ -124,16 +82,7 @@ async def update_document(
 ) -> List[KnowledgeChunk]:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        return await update_document_chunks_service(session, organization_id, source_id, chunks)
-    except KnowledgeSourceNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except KnowledgeServiceDocumentNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except (KnowledgeEmptyChunkError, KnowledgeMaxChunkSizeError) as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except KnowledgeServiceDBSourceConfigError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return await update_document_chunks_service(session, organization_id, source_id, chunks)
 
 
 @router.delete("/organizations/{organization_id}/sources/{source_id}/documents/{document_id}")
@@ -148,25 +97,7 @@ def delete_document(
 ) -> Response:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        delete_document_service(session, organization_id, source_id, document_id)
-    except KnowledgeSourceNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except KnowledgeServiceDocumentNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except KnowledgeServiceDBSourceConfigError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except KnowledgeServiceQdrantConfigurationError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(
-            (
-                f"Failed to delete document {document_id} for source {source_id} "
-                f"in organization {organization_id}: {str(e)}"
-            ),
-            exc_info=True,
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    delete_document_service(session, organization_id, source_id, document_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -185,20 +116,5 @@ async def delete_chunk(
 ) -> Response:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        await delete_chunk_service(session, organization_id, source_id, chunk_id)
-    except KnowledgeSourceNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except KnowledgeServiceDBSourceConfigError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except KnowledgeServiceQdrantConfigurationError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except KnowledgeServiceQdrantOperationError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to delete chunk {chunk_id} for source {source_id} in organization {organization_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    await delete_chunk_service(session, organization_id, source_id, chunk_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

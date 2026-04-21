@@ -4,6 +4,13 @@ Complete endpoint reference for the Draft'n Run backend.
 
 **Auth legend**: JWT(Role) = Supabase JWT with role check · JWT|ApiKey(Role) = either JWT or `X-API-Key` · ApiKey = `X-API-Key` only · IngestionKey = `X-Ingestion-API-Key` · WebhookKey = `X-Webhook-API-Key` · SuperAdmin|AdminKey = JWT super-admin or `X-Admin-API-Key` · Public = no auth
 
+## Error Handling
+
+- Service/domain failures are represented by `ServiceError` subclasses in `ada_backend/services/errors.py` and related domain error modules.
+- Routers should generally allow those exceptions to propagate; `ada_backend/main.py` handles them globally and returns `{ "detail": ... }` with the exception status code.
+- Router-level `HTTPException` should be reserved for transport-specific validation (for example malformed query/body combinations) or provider-specific status passthrough cases.
+- Generic router-level `except Exception` blocks for `"Internal server error"` are intentionally avoided in favor of the global unhandled exception handler.
+
 ## Auth & API Keys (`auth_router.py`)
 
 | Method | Path | Auth | Description |

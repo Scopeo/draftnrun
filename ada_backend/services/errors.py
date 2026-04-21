@@ -1,31 +1,48 @@
 from uuid import UUID
 
 
-class CategoryNotFound(Exception):
+class ServiceError(Exception):
+    status_code: int = 500
+
+    @property
+    def detail(self) -> str:
+        return str(self)
+
+
+class CategoryNotFound(ServiceError):
+    status_code = 404
+
     def __init__(self, category_id: UUID):
         self.category_id = category_id
         super().__init__(f"Category not found: {category_id}")
 
 
-class DuplicateCategoryName(Exception):
+class DuplicateCategoryName(ServiceError):
+    status_code = 409
+
     def __init__(self, name: str):
         self.name = name
         super().__init__(f"Category with name '{name}' already exists")
 
 
-class InvalidCategoryUpdate(Exception):
+class InvalidCategoryUpdate(ServiceError):
+    status_code = 400
+
     def __init__(self):
         super().__init__("At least one field (name or description) must be provided for update")
 
 
-class ComponentNotFound(Exception):
+class ComponentNotFound(ServiceError):
+    status_code = 404
+
     def __init__(self, component_id):
         self.component_id = component_id
         super().__init__(f"Component not found: {component_id}")
 
 
-class EntityInUseDeletionError(Exception):
+class EntityInUseDeletionError(ServiceError):
     """Raised when attempting to delete an entity that is currently in use by instances."""
+    status_code = 409
 
     def __init__(self, entity_id: UUID, instance_count: int, entity_type: str = "entity"):
         self.entity_id = entity_id
@@ -36,7 +53,9 @@ class EntityInUseDeletionError(Exception):
         )
 
 
-class ComponentVersionMismatchError(Exception):
+class ComponentVersionMismatchError(ServiceError):
+    status_code = 400
+
     def __init__(self, component_version_id: UUID, expected_component_id: UUID, actual_component_id: UUID):
         self.component_version_id = component_version_id
         self.expected_component_id = expected_component_id
@@ -47,49 +66,59 @@ class ComponentVersionMismatchError(Exception):
         )
 
 
-class InvalidReleaseStageUpdate(Exception):
+class InvalidReleaseStageUpdate(ServiceError):
+    status_code = 400
+
     def __init__(self, component_id, message: str | None = None):
         detail = message or "Invalid release stage update request"
         self.component_id = component_id
         super().__init__(f"{detail} for component: {component_id}")
 
 
-class ProjectNotFound(Exception):
+class ProjectNotFound(ServiceError):
+    status_code = 404
+
     def __init__(self, project_id: UUID):
         self.project_id = project_id
         super().__init__(f"Project not found: {project_id}")
 
 
-class ProjectNotInOrganization(Exception):
+class ProjectNotInOrganization(ServiceError):
+    status_code = 404
+
     def __init__(self, project_id: UUID, organization_id: UUID):
         self.project_id = project_id
         self.organization_id = organization_id
         super().__init__(f"Project {project_id} does not belong to organization {organization_id}")
 
 
-class RunNotFound(Exception):
+class RunNotFound(ServiceError):
+    status_code = 404
     def __init__(self, run_id: UUID):
         self.run_id = run_id
         super().__init__(f"Run not found: {run_id}")
 
 
-class RunResultNotFound(Exception):
+class RunResultNotFound(ServiceError):
     """Raised when a run has no result (result_id missing or result not yet available)."""
+    status_code = 404
 
     def __init__(self, run_id: UUID):
         self.run_id = run_id
         super().__init__(f"Run has no result: {run_id}")
 
 
-class ResultsBucketNotConfigured(Exception):
+class ResultsBucketNotConfigured(ServiceError):
     """Raised when RESULTS_S3_BUCKET_NAME is not set but run result storage is required."""
+    status_code = 503
 
     def __init__(self):
         super().__init__("Results bucket not configured")
 
 
-class InvalidRunStatusTransition(Exception):
+class InvalidRunStatusTransition(ServiceError):
     """Raised when updating a run to a status that would go backwards (e.g. RUNNING -> PENDING)."""
+    status_code = 400
 
     def __init__(self, current_status: str, new_status: str):
         self.current_status = current_status
@@ -100,44 +129,58 @@ class InvalidRunStatusTransition(Exception):
         )
 
 
-class ApiKeyAccessDenied(Exception):
+class ApiKeyAccessDenied(ServiceError):
+    status_code = 403
+
     def __init__(self, resource_type: str = "resource"):
         self.resource_type = resource_type
         super().__init__(f"You don't have access to this {resource_type}")
 
 
-class InvalidApiKey(Exception):
+class InvalidApiKey(ServiceError):
+    status_code = 401
+
     def __init__(self):
         super().__init__("Invalid API key")
 
 
-class GraphNotFound(Exception):
+class GraphNotFound(ServiceError):
+    status_code = 404
+
     def __init__(self, graph_id: UUID):
         self.graph_id = graph_id
         super().__init__(f"Graph not found: {graph_id}")
 
 
-class EnvironmentNotFound(Exception):
+class EnvironmentNotFound(ServiceError):
+    status_code = 404
+
     def __init__(self, project_id: UUID, environment: str):
         self.project_id = project_id
         self.environment = environment
         super().__init__(f"Environment '{environment}' not found for project: {project_id}")
 
 
-class LLMJudgeNotFound(Exception):
+class LLMJudgeNotFound(ServiceError):
+    status_code = 404
+
     def __init__(self, judge_id: UUID, project_id: UUID):
         self.judge_id = judge_id
         self.project_id = project_id
         super().__init__(f"LLM judge {judge_id} not found in project {project_id}")
 
 
-class SourceNotFound(Exception):
+class SourceNotFound(ServiceError):
+    status_code = 404
+
     def __init__(self, source_id: UUID):
         self.source_id = source_id
         super().__init__(f"Source not found: {source_id}")
 
 
-class InvalidAgentTemplate(Exception):
+class InvalidAgentTemplate(ServiceError):
+    status_code = 400
+
     def __init__(self, template_project_id: UUID, template_graph_runner_id: UUID):
         self.template_project_id = template_project_id
         self.template_graph_runner_id = template_graph_runner_id
@@ -149,34 +192,43 @@ class InvalidAgentTemplate(Exception):
         )
 
 
-class ChunkSourceMismatchError(Exception):
+class ChunkSourceMismatchError(ServiceError):
+    status_code = 400
+
     def __init__(self, chunk_id: str, source_id: UUID):
         self.chunk_id = chunk_id
         self.source_id = source_id
         super().__init__(f"Chunk {chunk_id} does not belong to source {source_id}")
 
 
-class LLMModelNotFound(Exception):
+class LLMModelNotFound(ServiceError):
+    status_code = 404
+
     def __init__(self, llm_model_id: UUID):
         self.llm_model_id = llm_model_id
         super().__init__(f"LLM model not found: {llm_model_id}")
 
 
-class ComponentVersionCostNotFound(Exception):
+class ComponentVersionCostNotFound(ServiceError):
+    status_code = 404
+
     def __init__(self, component_version_id: UUID):
         self.component_version_id = component_version_id
         super().__init__(f"Component version cost not found: {component_version_id}")
 
 
-class OrganizationLimitNotFound(Exception):
+class OrganizationLimitNotFound(ServiceError):
+    status_code = 404
+
     def __init__(self, id: UUID, organization_id: UUID):
         self.id = id
         self.organization_id = organization_id
         super().__init__(f"Organization limit not found: {id} for organization {organization_id}")
 
 
-class OrganizationLimitExceededError(Exception):
+class OrganizationLimitExceededError(ServiceError):
     """Raised when an organization has reached or exceeded its monthly credit limit."""
+    status_code = 402
 
     def __init__(self, organization_id: UUID, limit: float, current_usage: float):
         self.organization_id = organization_id
@@ -188,8 +240,9 @@ class OrganizationLimitExceededError(Exception):
         )
 
 
-class MissingDataSourceError(Exception):
+class MissingDataSourceError(ServiceError):
     """Raised when a component requires a data source but none is configured."""
+    status_code = 400
 
     def __init__(self, component_name: str | None = None):
         self.component_name = component_name
@@ -206,8 +259,9 @@ class MissingDataSourceError(Exception):
         super().__init__(message)
 
 
-class GraphNotBoundToProjectError(Exception):
+class GraphNotBoundToProjectError(ServiceError):
     """Raised when a graph is not bound to the expected project."""
+    status_code = 403
 
     def __init__(
         self, graph_runner_id: UUID, bound_project_id: UUID | None = None, expected_project_id: UUID | None = None
@@ -224,8 +278,9 @@ class GraphNotBoundToProjectError(Exception):
         super().__init__(message)
 
 
-class GraphVersionSavingFromNonDraftError(Exception):
+class GraphVersionSavingFromNonDraftError(ServiceError):
     """Raised when attempting to save a version from a graph runner that is not in DRAFT environment."""
+    status_code = 400
 
     def __init__(self, graph_runner_id: UUID, current_environment: str):
         self.graph_runner_id = graph_runner_id
@@ -236,7 +291,9 @@ class GraphVersionSavingFromNonDraftError(Exception):
         )
 
 
-class WidgetNotFound(Exception):
+class WidgetNotFound(ServiceError):
+    status_code = 404
+
     def __init__(self, widget_id: UUID | None = None, widget_key: str | None = None):
         if widget_id:
             super().__init__(f"Widget with id {widget_id} not found")
@@ -246,20 +303,25 @@ class WidgetNotFound(Exception):
             super().__init__("Widget not found")
 
 
-class WidgetDisabled(Exception):
+class WidgetDisabled(ServiceError):
+    status_code = 403
+
     def __init__(self, widget_key: str):
         super().__init__(f"Widget {widget_key} is disabled")
 
 
-class GraphRunnerAlreadyInEnvironmentError(Exception):
+class GraphRunnerAlreadyInEnvironmentError(ServiceError):
+    status_code = 400
+
     def __init__(self, graph_runner_id: UUID, environment: str):
         self.graph_runner_id = graph_runner_id
         self.environment = environment
         super().__init__(f"Graph runner {graph_runner_id} is already in {environment}")
 
 
-class MissingIntegrationError(Exception):
+class MissingIntegrationError(ServiceError):
     """Raised when a component instance requires an integration but none is configured."""
+    status_code = 400
 
     def __init__(self, integration_name: str, integration_service: str, component_instance_name: str):
         self.integration_name = integration_name
@@ -271,8 +333,9 @@ class MissingIntegrationError(Exception):
         )
 
 
-class OAuthConnectionNotFoundError(Exception):
+class OAuthConnectionNotFoundError(ServiceError):
     """Raised when an OAuth connection is not found."""
+    status_code = 404
 
     def __init__(
         self,
@@ -292,8 +355,9 @@ class OAuthConnectionNotFoundError(Exception):
         super().__init__(message)
 
 
-class OAuthConnectionUnauthorizedError(Exception):
+class OAuthConnectionUnauthorizedError(ServiceError):
     """Raised when attempting to access an OAuth connection that doesn't belong to the organization."""
+    status_code = 403
 
     def __init__(self, connection_id: UUID, organization_id: UUID):
         self.connection_id = connection_id
@@ -301,8 +365,9 @@ class OAuthConnectionUnauthorizedError(Exception):
         super().__init__(f"OAuth connection {connection_id} does not belong to organization {organization_id}")
 
 
-class NangoConnectionNotFoundError(Exception):
+class NangoConnectionNotFoundError(ServiceError):
     """Raised when a connection is not found in Nango (OAuth flow incomplete)."""
+    status_code = 404
 
     def __init__(self, organization_id: UUID, provider: str):
         self.organization_id = organization_id
@@ -313,8 +378,9 @@ class NangoConnectionNotFoundError(Exception):
         )
 
 
-class NangoTokenMissingError(Exception):
+class NangoTokenMissingError(ServiceError):
     """Raised when access token is not found in Nango credentials."""
+    status_code = 400
 
     def __init__(self, connection_id: UUID):
         self.connection_id = connection_id
@@ -323,36 +389,44 @@ class NangoTokenMissingError(Exception):
         )
 
 
-class VariableDefinitionNotFound(Exception):
+class VariableDefinitionNotFound(ServiceError):
+    status_code = 404
+
     def __init__(self, name: str, organization_id: UUID):
         self.name = name
         self.organization_id = organization_id
         super().__init__(f"Variable definition '{name}' not found for organization {organization_id}")
 
 
-class VariableSetNotFound(Exception):
+class VariableSetNotFound(ServiceError):
+    status_code = 404
+
     def __init__(self, set_id: str, organization_id: UUID):
         self.set_id = set_id
         self.organization_id = organization_id
         super().__init__(f"Variable set '{set_id}' not found for organization {organization_id}")
 
 
-class OAuthSetProtectedError(Exception):
+class OAuthSetProtectedError(ServiceError):
+    status_code = 403
+
     def __init__(self, set_id: str):
         self.set_id = set_id
         super().__init__(f"OAuth set '{set_id}' is managed by OAuth and cannot be modified directly")
 
 
-class RunError(Exception):
+class RunError(ServiceError):
     """Raised when a graph execution fails, carrying the trace_id so callers can link the run to its trace."""
+    status_code = 400
 
     def __init__(self, message: str, trace_id: str | None = None):
         self.trace_id = trace_id
         super().__init__(message)
 
 
-class GraphConflictError(Exception):
+class GraphConflictError(ServiceError):
     """Raised when a graph update conflicts with a more recent modification."""
+    status_code = 409
 
     def __init__(self, graph_runner_id: UUID):
         self.graph_runner_id = graph_runner_id
@@ -362,7 +436,9 @@ class GraphConflictError(Exception):
         )
 
 
-class DuplicateAlertEmailError(Exception):
+class DuplicateAlertEmailError(ServiceError):
+    status_code = 409
+
     def __init__(self, email: str):
         self.email = email
         super().__init__(f"Email {email} is already configured for this project")

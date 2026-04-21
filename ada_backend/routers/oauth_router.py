@@ -27,11 +27,6 @@ from ada_backend.schemas.oauth_schemas import (
     UpdateOAuthConnectionRequest,
 )
 from ada_backend.services import integration_service
-from ada_backend.services.errors import (
-    NangoConnectionNotFoundError,
-    OAuthConnectionNotFoundError,
-    OAuthConnectionUnauthorizedError,
-)
 from ada_backend.services.nango_client import NangoClientError, get_nango_client
 from engine.integrations.providers import OAuthProvider
 
@@ -96,14 +91,9 @@ async def start_oauth_authorization(
             oauth_url=result.oauth_url,
             pending_connection_id=result.pending_connection_id,
         )
-    except (OAuthConnectionNotFoundError, NangoConnectionNotFoundError) as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
     except NangoClientError as e:
         LOGGER.exception("Failed to create OAuth connect session")
         raise HTTPException(status_code=e.status_code or 500, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception("Failed to generate OAuth URL")
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
 @router.post(
@@ -148,14 +138,9 @@ async def create_oauth_connection(
             name=connection.name,
             definition_id=definition_id,
         )
-    except NangoConnectionNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
     except NangoClientError as e:
         LOGGER.exception("OAuth connection confirmation failed")
         raise HTTPException(status_code=e.status_code or 500, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception("OAuth connection confirmation failed")
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
 @router.get(
@@ -238,19 +223,11 @@ async def delete_oauth_connection(
     session: Session = Depends(get_db),
 ) -> dict:
     """Revoke and delete an OAuth connection."""
-    try:
-        await integration_service.revoke_oauth_connection(
-            session=session,
-            organization_id=organization_id,
-            connection_id=connection_id,
-            provider_config_key=provider_config_key.value,
-        )
+    await integration_service.revoke_oauth_connection(
+        session=session,
+        organization_id=organization_id,
+        connection_id=connection_id,
+        provider_config_key=provider_config_key.value,
+    )
 
-        return {"success": True, "message": "Connection revoked"}
-    except OAuthConnectionNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except OAuthConnectionUnauthorizedError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception("OAuth revoke failed")
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+    return {"success": True, "message": "Connection revoked"}

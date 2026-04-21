@@ -29,11 +29,8 @@ from ada_backend.schemas.variable_schemas import (
     VariableSetUpsertRequest,
 )
 from ada_backend.services.errors import (
-    OAuthSetProtectedError,
     ProjectNotFound,
     ProjectNotInOrganization,
-    VariableDefinitionNotFound,
-    VariableSetNotFound,
 )
 from ada_backend.services.variables_service import (
     delete_definition_service,
@@ -71,11 +68,7 @@ def list_org_variable_definitions(
     project_id: Optional[UUID] = None,
     type: Annotated[VariableType | None, Query()] = None,
 ):
-    try:
-        return list_definitions_service(session, organization_id, project_id=project_id, var_type=type)
-    except Exception as e:
-        LOGGER.error(f"Failed to list variable definitions for org {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return list_definitions_service(session, organization_id, project_id=project_id, var_type=type)
 
 
 @org_router.put(
@@ -103,9 +96,6 @@ def upsert_org_variable_definition(
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail="Invalid project reference") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to upsert variable definition {name} for org {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @org_router.delete(
@@ -121,13 +111,7 @@ def delete_org_variable_definition(
     ],
     session: Session = Depends(get_db),
 ):
-    try:
-        delete_definition_service(session, organization_id, name)
-    except VariableDefinitionNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(f"Failed to delete variable definition {name} for org {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    delete_definition_service(session, organization_id, name)
     return {"detail": "deleted"}
 
 
@@ -149,9 +133,6 @@ def get_set_ids(
         return get_set_ids_service(session, organization_id, project_id)
     except (ProjectNotFound, ProjectNotInOrganization) as e:
         raise HTTPException(status_code=404, detail="Project not found") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to get set ids for org {organization_id} project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @org_router.get(
@@ -168,11 +149,7 @@ def list_org_variable_sets(
     session: Session = Depends(get_db),
     variable_type: Annotated[VariableType | None, Query()] = None,
 ):
-    try:
-        return list_sets_service(session, organization_id, variable_type=variable_type)
-    except Exception as e:
-        LOGGER.error(f"Failed to list variable sets for org {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return list_sets_service(session, organization_id, variable_type=variable_type)
 
 
 @org_router.get(
@@ -189,13 +166,7 @@ def get_org_variable_set(
     ],
     session: Session = Depends(get_db),
 ):
-    try:
-        return get_set_service(session, organization_id, set_id)
-    except VariableSetNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(f"Failed to get variable set {set_id} for org {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return get_set_service(session, organization_id, set_id)
 
 
 @org_router.put(
@@ -213,13 +184,7 @@ def upsert_org_variable_set(
     ],
     session: Session = Depends(get_db),
 ):
-    try:
-        return upsert_set_service(session, organization_id, set_id, body.values)
-    except OAuthSetProtectedError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(f"Failed to upsert variable set {set_id} for org {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return upsert_set_service(session, organization_id, set_id, body.values)
 
 
 @org_router.delete(
@@ -235,13 +200,5 @@ def delete_org_variable_set(
     ],
     session: Session = Depends(get_db),
 ):
-    try:
-        delete_set_service(session, organization_id, set_id)
-    except OAuthSetProtectedError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except VariableSetNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(f"Failed to delete variable set {set_id} for org {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    delete_set_service(session, organization_id, set_id)
     return {"detail": "deleted"}

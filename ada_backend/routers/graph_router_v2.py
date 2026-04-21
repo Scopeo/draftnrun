@@ -16,7 +16,6 @@ from ada_backend.schemas.pipeline.graph_schema import (
     GraphTopologySaveV2Schema,
     GraphUpdateResponse,
 )
-from ada_backend.services.errors import GraphConflictError, GraphNotBoundToProjectError, GraphNotFound
 from ada_backend.services.graph import graph_mutation_helpers
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.graph_v2_mapper_service import graph_get_to_graph_v2_response
@@ -40,20 +39,9 @@ def get_project_graph_v2(
         # TODO: replace get_graph_service (deprecated) with its successor
         graph = get_graph_service(session, project_id, graph_runner_id)
         return graph_get_to_graph_v2_response(graph)
-    except GraphNotFound:
-        LOGGER.warning("Graph not found: %s", graph_runner_id)
-        raise HTTPException(status_code=404, detail=f"Graph runner {graph_runner_id} not found")
-    except GraphNotBoundToProjectError:
-        LOGGER.warning("Graph runner %s not bound to project %s", graph_runner_id, project_id)
-        raise HTTPException(
-            status_code=403, detail=f"Graph runner {graph_runner_id} does not belong to project {project_id}"
-        )
     except ValueError as e:
         LOGGER.warning("Invalid v2 graph payload for runner %s: %s", graph_runner_id, e)
         raise HTTPException(status_code=400, detail="Invalid v2 graph payload")
-    except Exception as e:
-        LOGGER.error("Unexpected error while loading v2 graph", exc_info=True)
-        raise HTTPException(status_code=500, detail="Unexpected error while loading v2 graph") from e
 
 
 @router.post(
@@ -75,17 +63,9 @@ def create_component_v2(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return graph_mutation_helpers.create_component_v2(session, graph_runner_id, project_id, user.id, payload)
-    except GraphNotBoundToProjectError:
-        LOGGER.warning("Graph runner %s not bound to project %s", graph_runner_id, project_id)
-        raise HTTPException(
-            status_code=403, detail=f"Graph runner {graph_runner_id} does not belong to project {project_id}"
-        )
     except ValueError as e:
         LOGGER.warning("Invalid component payload for runner %s: %s", graph_runner_id, e)
         raise HTTPException(status_code=400, detail="Invalid component payload")
-    except Exception as e:
-        LOGGER.error("Unexpected error while creating component", exc_info=True)
-        raise HTTPException(status_code=500, detail="Unexpected error while creating component") from e
 
 
 @router.put(
@@ -109,17 +89,9 @@ def update_component_v2(
         return graph_mutation_helpers.update_component_v2(
             session, graph_runner_id, project_id, instance_id, user.id, payload
         )
-    except GraphNotBoundToProjectError:
-        LOGGER.warning("Graph runner %s not bound to project %s", graph_runner_id, project_id)
-        raise HTTPException(
-            status_code=403, detail=f"Graph runner {graph_runner_id} does not belong to project {project_id}"
-        )
     except ValueError as e:
         LOGGER.warning("Invalid component update payload for instance %s: %s", instance_id, e)
         raise HTTPException(status_code=400, detail="Invalid component update payload")
-    except Exception as e:
-        LOGGER.error("Unexpected error while updating component", exc_info=True)
-        raise HTTPException(status_code=500, detail="Unexpected error while updating component") from e
 
 
 @router.delete(
@@ -140,17 +112,9 @@ def delete_component_v2(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         graph_mutation_helpers.delete_component_v2(session, graph_runner_id, project_id, instance_id, user.id)
-    except GraphNotBoundToProjectError:
-        LOGGER.warning("Graph runner %s not bound to project %s", graph_runner_id, project_id)
-        raise HTTPException(
-            status_code=403, detail=f"Graph runner {graph_runner_id} does not belong to project {project_id}"
-        )
     except ValueError as e:
         LOGGER.warning("Invalid component deletion request for instance %s: %s", instance_id, e)
         raise HTTPException(status_code=400, detail="Invalid component deletion request")
-    except Exception as e:
-        LOGGER.error("Unexpected error while deleting component", exc_info=True)
-        raise HTTPException(status_code=500, detail="Unexpected error while deleting component") from e
 
 
 @router.put(
@@ -171,20 +135,6 @@ def update_graph_topology_v2(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return graph_mutation_helpers.save_graph_topology_v2(session, graph_runner_id, project_id, user.id, payload)
-    except GraphConflictError:
-        LOGGER.warning("Optimistic lock conflict on graph runner %s", graph_runner_id)
-        raise HTTPException(
-            status_code=409,
-            detail="The graph was modified by another client since your last fetch. Refresh the graph and retry.",
-        )
-    except GraphNotBoundToProjectError:
-        LOGGER.warning("Graph runner %s not bound to project %s", graph_runner_id, project_id)
-        raise HTTPException(
-            status_code=403, detail=f"Graph runner {graph_runner_id} does not belong to project {project_id}"
-        )
     except ValueError as e:
         LOGGER.warning("Invalid graph topology payload for runner %s: %s", graph_runner_id, e)
         raise HTTPException(status_code=400, detail="Invalid graph topology payload")
-    except Exception as e:
-        LOGGER.error("Unexpected error while updating graph topology", exc_info=True)
-        raise HTTPException(status_code=500, detail="Unexpected error while updating graph topology") from e

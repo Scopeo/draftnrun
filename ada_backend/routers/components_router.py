@@ -21,8 +21,6 @@ from ada_backend.services.components_service import (
     get_all_components_endpoint,
     get_all_components_global_endpoint,
 )
-from ada_backend.services.errors import EntityInUseDeletionError
-
 router = APIRouter(prefix="/components", tags=["Components"])
 LOGGER = logging.getLogger(__name__)
 
@@ -30,14 +28,10 @@ LOGGER = logging.getLogger(__name__)
 def _get_all_components_with_error_handling(
     session: Session, release_stage: Optional[ReleaseStage], log_context: str, use_global: bool = False
 ):
-    try:
-        if use_global:
-            return get_all_components_global_endpoint(session, release_stage)
-        else:
-            return get_all_components_endpoint(session, release_stage)
-    except Exception as e:
-        LOGGER.error(f"Failed to get components {log_context}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    if use_global:
+        return get_all_components_global_endpoint(session, release_stage)
+    else:
+        return get_all_components_endpoint(session, release_stage)
 
 
 @router.get("/fields/options", response_model=ComponentFieldsOptionsResponse)
@@ -46,14 +40,10 @@ async def get_component_fields_options(
     session: Session = Depends(get_db),
 ):
     """Get available options for component fields (release stages, categories). All authenticated users."""
-    try:
-        return ComponentFieldsOptionsResponse(
-            release_stages=[stage.value for stage in ReleaseStage],
-            categories=get_all_categories_service(session),
-        )
-    except Exception as e:
-        LOGGER.error(f"Failed to get component metadata options: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return ComponentFieldsOptionsResponse(
+        release_stages=[stage.value for stage in ReleaseStage],
+        categories=get_all_categories_service(session),
+    )
 
 
 @router.get("/{organization_id}", response_model=ComponentsResponse)
@@ -97,16 +87,5 @@ async def delete_component(
     session: Session = Depends(get_db),
 ):
     """Delete a component definition. Super admin only."""
-    try:
-        delete_component_service(session, component_id)
-        return None
-    except HTTPException:
-        raise
-    except EntityInUseDeletionError as e:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Cannot delete {e.entity_type}: it is currently used by {e.instance_count} instance(s)",
-        ) from e
-    except Exception as e:
-        LOGGER.error(f"Failed to delete component {component_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    delete_component_service(session, component_id)
+    return None

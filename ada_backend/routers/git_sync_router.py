@@ -22,8 +22,6 @@ from ada_backend.schemas.git_sync_schemas import (
     GitSyncImportResponse,
 )
 from ada_backend.services.git_sync_service import (
-    GitSyncConfigNotFound,
-    GraphJsonNotFound,
     InstallationOwnershipError,
     disconnect_sync,
     get_config,
@@ -117,31 +115,17 @@ async def create_git_sync(
     ],
     session: Session = Depends(get_db),
 ) -> GitSyncImportResponse:
-    try:
-        imported, skipped = await import_from_github(
-            session=session,
-            organization_id=organization_id,
-            user_id=auth.user_id,
-            github_owner=request.github_owner,
-            github_repo_name=request.github_repo_name,
-            branch=request.branch,
-            github_installation_id=request.github_installation_id,
-            project_type=request.project_type,
-        )
-        return GitSyncImportResponse(imported=imported, skipped=skipped)
-    except InstallationOwnershipError as e:
-        raise HTTPException(
-            status_code=404,
-            detail="GitHub installation not found",
-        ) from e
-    except GraphJsonNotFound as e:
-        raise HTTPException(
-            status_code=422,
-            detail=f"No graph.json found in {e.repo} on branch {e.branch}",
-        )
-    except Exception as e:
-        LOGGER.error("Unexpected error during git sync import", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to import from GitHub") from e
+    imported, skipped = await import_from_github(
+        session=session,
+        organization_id=organization_id,
+        user_id=auth.user_id,
+        github_owner=request.github_owner,
+        github_repo_name=request.github_repo_name,
+        branch=request.branch,
+        github_installation_id=request.github_installation_id,
+        project_type=request.project_type,
+    )
+    return GitSyncImportResponse(imported=imported, skipped=skipped)
 
 
 @org_router.get(
@@ -241,11 +225,8 @@ def get_git_sync_config(
     ],
     session: Session = Depends(get_db),
 ) -> GitSyncConfigResponse:
-    try:
-        config = get_config(session, config_id, organization_id)
-        return _to_response(config)
-    except GitSyncConfigNotFound:
-        raise HTTPException(status_code=404, detail=f"Git sync config {config_id} not found")
+    config = get_config(session, config_id, organization_id)
+    return _to_response(config)
 
 
 @org_router.delete(
@@ -261,14 +242,8 @@ def delete_git_sync_config(
     ],
     session: Session = Depends(get_db),
 ) -> dict:
-    try:
-        disconnect_sync(session, config_id, organization_id)
-        return {"success": True, "message": "Git sync disconnected"}
-    except GitSyncConfigNotFound:
-        raise HTTPException(status_code=404, detail=f"Git sync config {config_id} not found")
-    except Exception as e:
-        LOGGER.error("Unexpected error while disconnecting git sync", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to disconnect git sync") from e
+    disconnect_sync(session, config_id, organization_id)
+    return {"success": True, "message": "Git sync disconnected"}
 
 
 def _to_response(config) -> GitSyncConfigResponse:

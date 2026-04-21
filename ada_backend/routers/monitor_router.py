@@ -46,12 +46,6 @@ async def get_organization_charts(
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to get charts for organization {organization_id} with duration {duration}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/org/{organization_id}/kpis", response_model=KPISResponse, tags=["Metrics"])
@@ -85,9 +79,3 @@ async def get_organization_kpis(
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to get KPIs for organization {organization_id} with duration {duration}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e

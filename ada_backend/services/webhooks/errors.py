@@ -1,12 +1,14 @@
 from typing import Any, Dict
 
 from ada_backend.database.models import Webhook, WebhookProvider
+from ada_backend.services.errors import ServiceError
 
 
-class WebhookServiceError(Exception):
+class WebhookServiceError(ServiceError):
     """Base exception for webhook service errors."""
 
     code = "webhook_service_error"
+    status_code = 400
 
 
 class WebhookEmptyTokenError(WebhookServiceError):
@@ -32,6 +34,8 @@ class WebhookNotFoundError(WebhookServiceError):
 class WebhookProcessingError(WebhookServiceError):
     """Raised when there is an error processing a webhook."""
 
+    status_code = 500
+
     def __init__(self, webhook: Webhook, error: Exception):
         self.webhook = webhook
         self.error = error
@@ -52,6 +56,7 @@ class WebhookEventIdNotFoundError(WebhookServiceError):
 
 class WebhookQueueError(WebhookServiceError):
     """Raised when a webhook event fails to be queued in Redis."""
+    status_code = 500
 
     def __init__(self, webhook: Webhook, event_id: str, reason: str = "Failed to queue webhook event to Redis"):
         self.webhook = webhook
@@ -66,6 +71,8 @@ class WebhookQueueError(WebhookServiceError):
 class WebhookSignatureVerificationError(WebhookServiceError):
     """Raised when Svix signature verification fails."""
 
+    status_code = 401
+
     def __init__(self, message: str = "Invalid Svix signature"):
         self.message = message
         super().__init__(self.message)
@@ -73,6 +80,8 @@ class WebhookSignatureVerificationError(WebhookServiceError):
 
 class WebhookConfigurationError(WebhookServiceError):
     """Raised when webhook configuration is invalid or missing."""
+
+    status_code = 500
 
     def __init__(self, provider: WebhookProvider, message: str):
         self.provider = provider
