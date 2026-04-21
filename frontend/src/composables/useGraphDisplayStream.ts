@@ -21,8 +21,9 @@ export function useGraphDisplayStream(
   reloadGraph: () => Promise<void> | void,
   hasUnsavedChanges: Ref<boolean>,
 ) {
+  const isWsEnabled = import.meta.env.VITE_RUN_ASYNC_CREDENTIALS === 'true'
   const isConnected = ref(false)
-  const wsDisconnected = ref(false)
+  const wsDisconnected = ref(!isWsEnabled)
   const refreshing = ref(false)
   let wsClose: (() => void) | null = null
   let reloadTimer: ReturnType<typeof setTimeout> | null = null
@@ -141,20 +142,22 @@ export function useGraphDisplayStream(
     }
   }
 
-  watch(
-    projectId,
-    (newId: string, oldId: string | undefined) => {
-      if (newId && newId !== oldId) {
-        connect()
-      }
-    },
-    { immediate: true },
-  )
+  if (isWsEnabled) {
+    watch(
+      projectId,
+      (newId: string, oldId: string | undefined) => {
+        if (newId && newId !== oldId) {
+          connect()
+        }
+      },
+      { immediate: true },
+    )
 
-  onUnmounted(() => {
-    disconnect()
-    if (reloadTimer) clearTimeout(reloadTimer)
-  })
+    onUnmounted(() => {
+      disconnect()
+      if (reloadTimer) clearTimeout(reloadTimer)
+    })
+  }
 
   return { isConnected, wsDisconnected, refreshing, manualRefresh }
 }
