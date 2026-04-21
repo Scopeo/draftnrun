@@ -302,7 +302,6 @@ app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 async def service_error_handler(request: Request, exc: ServiceError) -> JSONResponse:
     if exc.status_code >= 500:
         LOGGER.error("Service error on %s %s: %s", request.method, request.url.path, exc, exc_info=True)
-        sentry_sdk.capture_exception(exc)
     else:
         LOGGER.error("Service error on %s %s: %s", request.method, request.url.path, exc)
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
@@ -318,7 +317,6 @@ async def sentry_http_exception_handler(request: Request, exc: HTTPException) ->
 @app.exception_handler(Exception)
 async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
     LOGGER.error("Unhandled error on %s %s", request.method, request.url.path, exc_info=True)
-    sentry_sdk.capture_exception(exc)
     return JSONResponse(status_code=500, content={"detail": "An unexpected server error occurred."})
 
 

@@ -51,22 +51,22 @@ async def test_service_error_handler_returns_client_error_without_sentry():
 
 
 @pytest.mark.asyncio
-async def test_service_error_handler_captures_server_error_in_sentry():
+async def test_service_error_handler_returns_server_error_without_explicit_sentry_capture():
     request = _build_request()
     error = DemoServerError("dependency unavailable")
     with patch("ada_backend.main.sentry_sdk.capture_exception") as capture_mock:
         response = await service_error_handler(request, error)
     assert response.status_code == 503
     assert json.loads(response.body) == {"detail": "dependency unavailable"}
-    capture_mock.assert_called_once_with(error)
+    capture_mock.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_unhandled_error_handler_returns_generic_500_and_captures_sentry():
+async def test_unhandled_error_handler_returns_generic_500_without_explicit_sentry_capture():
     request = _build_request()
     error = RuntimeError("boom")
     with patch("ada_backend.main.sentry_sdk.capture_exception") as capture_mock:
         response = await unhandled_error_handler(request, error)
     assert response.status_code == 500
     assert json.loads(response.body) == {"detail": "An unexpected server error occurred."}
-    capture_mock.assert_called_once_with(error)
+    capture_mock.assert_not_called()
