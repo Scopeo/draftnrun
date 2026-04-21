@@ -355,11 +355,14 @@ async def test_update_component_parameters_preserves_json_build_expressions(monk
     }
 
     put_payload = {}
+    put_path = None
 
     async def mock_get(path, token, *, trim=True, **params):
         return graph_response
 
     async def mock_put(path, token, *, json=None, **kwargs):
+        nonlocal put_path
+        put_path = path
         put_payload.update(json)
         return {"status": "ok"}
 
@@ -375,8 +378,17 @@ async def test_update_component_parameters_preserves_json_build_expressions(monk
         {"initial_prompt": "Updated prompt"},
     )
 
-    sent_instance = put_payload["component_instances"][0]
-    assert "field_expressions" not in sent_instance
-    ipis = sent_instance["input_port_instances"]
+    assert f"/v2/" in put_path
+    assert f"/components/{FAKE_INSTANCE_ID}" in put_path
+
+    assert "component_instances" not in put_payload
+    ipis = put_payload["input_port_instances"]
     headers_ipi = next(ipi for ipi in ipis if ipi["name"] == "headers")
     assert headers_ipi["field_expression"]["expression_json"] == json_build_expr
+
+    sent_params = put_payload["parameters"]
+    param_kinds = {p.get("kind", "parameter") for p in sent_params}
+    assert "input" not in param_kinds
+
+    updated_param = next(p for p in sent_params if p["name"] == "initial_prompt")
+    assert updated_param["value"] == "Updated prompt"
