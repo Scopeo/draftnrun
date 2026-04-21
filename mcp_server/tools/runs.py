@@ -15,6 +15,7 @@ from fastmcp import FastMCP
 from pydantic import Field
 
 from mcp_server.client import api
+from mcp_server.context import require_org_context
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
 from mcp_server.tools.context_tools import _get_auth
 
@@ -62,23 +63,53 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def list_runs(
-        project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
+        project_id: Annotated[
+            Optional[UUID],
+            Field(description="Filter by project ID. If omitted, returns runs across all projects in the org."),
+        ] = None,
+        status: Annotated[
+            Optional[str],
+            Field(description="Filter by status: 'pending', 'running', 'completed', or 'failed'."),
+        ] = None,
+        trigger: Annotated[
+            Optional[str],
+            Field(description="Filter by trigger type: 'api', 'sandbox', 'webhook', 'cron', or 'qa'."),
+        ] = None,
+        date_from: Annotated[
+            Optional[str],
+            Field(description="Start of date range filter (ISO 8601, e.g. '2025-06-01T00:00:00Z')."),
+        ] = None,
+        date_to: Annotated[
+            Optional[str],
+            Field(description="End of date range filter (ISO 8601, e.g. '2025-06-30T23:59:59Z')."),
+        ] = None,
         page: Annotated[int, Field(description="Page number (1-based).")] = 1,
         page_size: Annotated[int, Field(description="Results per page (max 100).")] = 50,
     ) -> dict:
-        """List runs for a project with pagination."""
-        if page < 1:
-            raise ValueError("Page must be greater than or equal to 1.")
-        if page_size < 1:
-            raise ValueError("Page size must be greater than or equal to 1.")
+        """List runs for the active organization with optional filters.
 
-        jwt, _ = _get_auth()
-        return await api.get(
-            f"/projects/{project_id}/runs",
-            jwt,
-            page=page,
-            page_size=min(page_size, 100),
-        )
+        Returns runs across all projects in the org. Each run includes
+        project_name, attempt_count, and input_available (whether retry is possible).
+        """
+        if page < 1:
+            raise ValueError("Page must be >= 1.")
+        if page_size < 1:
+            raise ValueError("Page size must be >= 1.")
+
+        jwt, user_id = _get_auth()
+        org = await require_org_context(user_id)
+        params: dict = {"page": page, "page_size": min(page_size, 100)}
+        if project_id is not None:
+            params["project_ids"] = str(project_id)
+        if status is not None:
+            params["statuses"] = status
+        if trigger is not None:
+            params["trigger"] = trigger
+        if date_from is not None:
+            params["date_from"] = date_from
+        if date_to is not None:
+            params["date_to"] = date_to
+        return await api.get(f"/org/{org['org_id']}/runs", jwt, **params)
 
     @mcp.tool()
     async def retry_run(

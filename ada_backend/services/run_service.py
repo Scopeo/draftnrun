@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Awaitable, Dict, List, Optional
+from typing import Any, AsyncIterator, Awaitable, Dict, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -14,7 +14,7 @@ from ada_backend.repositories import run_repository
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.run_input_repository import get_run_input
 from ada_backend.schemas.project_schema import ChatResponse
-from ada_backend.schemas.run_schema import AsyncRunAcceptedSchema, RunResponseSchema
+from ada_backend.schemas.run_schema import AsyncRunAcceptedSchema, OrgRunResponseSchema, RunResponseSchema
 from ada_backend.services.agent_runner_service import setup_tracing_context
 from ada_backend.services.alerting.alert_service import maybe_send_run_failure_alert
 from ada_backend.services.errors import (
@@ -283,20 +283,56 @@ def get_run_result(session: Session, run_id: UUID, project_id: UUID) -> ChatResp
     return ChatResponse.model_validate(data)
 
 
-def get_runs(
+def get_org_runs(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     page: int = 1,
     page_size: int = 50,
-) -> tuple[List[RunResponseSchema], int]:
-    project = get_project(session, project_id=project_id)
-    if not project:
-        raise ProjectNotFound(project_id)
-    total = run_repository.count_runs_by_project(session, project_id=project_id)
+    statuses: list[RunStatus] | None = None,
+    project_ids: list[UUID] | None = None,
+    trigger: CallType | None = None,
+    date_from=None,
+    date_to=None,
+) -> tuple[list[OrgRunResponseSchema], int]:
+    total = run_repository.count_runs_by_organization(
+        session,
+        organization_id=organization_id,
+        statuses=statuses,
+        project_ids=project_ids,
+        trigger=trigger,
+        date_from=date_from,
+        date_to=date_to,
+    )
     offset = (page - 1) * page_size
-    runs = run_repository.get_runs_by_project(session, project_id=project_id, limit=page_size, offset=offset)
-    items = [RunResponseSchema.model_validate(r, from_attributes=True) for r in runs]
+    rows = run_repository.get_runs_by_organization(
+        session,
+        organization_id=organization_id,
+        limit=page_size,
+        offset=offset,
+        statuses=statuses,
+        project_ids=project_ids,
+        trigger=trigger,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    items = [
+        OrgRunResponseSchema.model_validate(r, from_attributes=True)
+        if not isinstance(r, OrgRunResponseSchema)
+        else r
+        for r in rows
+    ]
     return items, total
+
+
+def get_org_run_input(session: Session, run_id: UUID, organization_id: UUID) -> Optional[dict]:
+    run = run_repository.get_run(session, run_id)
+    if not run:
+        raise RunNotFound(run_id)
+    project = get_project(session, project_id=run.project_id)
+    if not project or str(project.organization_id) != str(organization_id):
+        raise RunNotFound(run_id)
+    retry_group_id = run.retry_group_id or run.id
+    return get_run_input(session, retry_group_id=retry_group_id)
 
 
 def fail_pending_run(

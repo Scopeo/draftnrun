@@ -1,11 +1,13 @@
 """Runs tools coverage tests."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from mcp_server.tools import runs
 from tests.mcp_server.conftest import FAKE_PROJECT_ID, FAKE_RUN_ID, FAKE_RUNNER_ID
+
+FAKE_ORG = {"org_id": "org-1", "org_name": "Test Org"}
 
 
 class TestRunsSpecs:
@@ -25,7 +27,8 @@ async def test_list_runs_caps_page_size(fake_mcp, monkeypatch):
     monkeypatch.setattr(runs, "api", type("API", (), {"get": get_mock})())
 
     runs.register(fake_mcp)
-    await fake_mcp.tools["list_runs"](project_id=FAKE_PROJECT_ID, page_size=999)
+    with patch("mcp_server.tools.runs.require_org_context", new_callable=AsyncMock, return_value=FAKE_ORG):
+        await fake_mcp.tools["list_runs"](project_id=FAKE_PROJECT_ID, page_size=999)
 
     assert get_mock.call_args.kwargs["page_size"] == 100
 
@@ -35,7 +38,7 @@ async def test_list_runs_rejects_zero_page(fake_mcp, monkeypatch):
     monkeypatch.setattr(runs, "_get_auth", lambda: ("jwt", "uid-1"))
     runs.register(fake_mcp)
 
-    with pytest.raises(ValueError, match="Page must be greater"):
+    with pytest.raises(ValueError, match="Page must be >= 1"):
         await fake_mcp.tools["list_runs"](project_id=FAKE_PROJECT_ID, page=0)
 
 

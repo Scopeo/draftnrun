@@ -46,8 +46,3 @@ export const chatApi = {
     throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
   },
 }
-
-export const runsApi = {
-  getResult: (projectId: string, runId: string) =>
-    $api<Record<string, any>>(`/projects/${projectId}/runs/${encodeURIComponent(runId)}/result`),
-}

@@ -54,16 +54,17 @@ Complete endpoint reference for the Draft'n Run backend.
 | DELETE | `/v2/projects/{project_id}/graph/{graph_runner_id}/components/{instance_id}` | JWT(Developer) | Delete component instance + node + cascade edges/relationships |
 | PUT | `/v2/projects/{project_id}/graph/{graph_runner_id}/map` | JWT(Developer) | Update graph topology: edges, relationships, node metadata |
 
-## Runs (`run_router.py`)
+## Runs (`run_router.py`, `monitor_router.py`)
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/projects/{project_id}/runs` | JWT(Member) | List runs (paginated) |
 | POST | `/projects/{project_id}/runs` | JWT(Member) | Create run |
 | GET | `.../runs/{run_id}` | JWT(Member) | Get run |
 | GET | `.../runs/{run_id}/result` | JWT(Member) | Get run result |
 | PATCH | `.../runs/{run_id}` | JWT(Member) | Update run status |
 | POST | `.../runs/{run_id}/retry` | JWT(Member) | Retry a specific run (202) |
+| GET | `/org/{organization_id}/runs` | JWT(Member) | List runs for org (paginated, filterable). Filters: `statuses` (list), `project_ids` (list), `trigger`, `date_from`, `date_to` |
+| GET | `/org/{organization_id}/runs/{run_id}/input` | JWT(Member) | Get run input data (if available) |
 
 ### Run Retry
 
