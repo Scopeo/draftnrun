@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { logger } from '@/utils/logger'
+import { useNotifications } from '@/composables/useNotifications'
 import GenericConfirmDialog from '@/components/dialogs/GenericConfirmDialog.vue'
 import {
   type VariableDefinition,
@@ -9,10 +10,13 @@ import {
 import { useOAuthFlow } from '@/composables/useOAuthFlow'
 import { useSelectedOrg } from '@/composables/useSelectedOrg'
 import { scopeoApi } from '@/api'
+import type { GitHubRepo, GitSyncConfig } from '@/api/gitSync'
 
 const { selectedOrgId } = useSelectedOrg()
+const { notify } = useNotifications()
 
-// Query only oauth definitions
+// ─── OAuth integrations ───────────────────────────────────────
+
 const {
   data: orgDefinitions,
   isLoading,
@@ -21,7 +25,6 @@ const {
 
 const isRevoking = ref(false)
 
-// OAuth flow composable
 const {
   state: oauthState,
   errorMessage,
@@ -30,7 +33,6 @@ const {
   cancelFlow,
 } = useOAuthFlow(() => selectedOrgId.value)
 
-// Active connections: oauth variable definitions
 const activeConnections = computed(() => (orgDefinitions.value as VariableDefinition[] | undefined) ?? [])
 
 const AVAILABLE_INTEGRATIONS = [
@@ -44,15 +46,12 @@ const AVAILABLE_INTEGRATIONS = [
   { key: 'hubspot', name: 'HubSpot', icon: 'logos-hubspot', description: 'CRM and marketing automation' },
 ]
 
-// Connect state
 const selectedIntegration = ref<(typeof AVAILABLE_INTEGRATIONS)[0] | null>(null)
 const isConfirming = ref(false)
 
-// Delete state
 const deleteDialog = ref(false)
 const defToDelete = ref('')
 
-// Active connections table headers
 const headers = [
   { title: 'Connection Name', key: 'name', sortable: true },
   { title: 'Provider', key: 'provider', sortable: true },
@@ -106,8 +105,200 @@ async function doDelete() {
   }
 }
 
-// Show dialog when waiting for OAuth or on error
 const showDialog = computed(() => ['waiting_oauth', 'error'].includes(oauthState.value))
+
+// ─── GitHub / Git Sync ────────────────────────────────────────
+
+const githubAppInfo = ref<{ configured: boolean; install_url: string | null }>({ configured: false, install_url: null })
+const githubAppLoading = ref(true)
+const gitSyncConfigs = ref<GitSyncConfig[]>([])
+const gitSyncLoading = ref(false)
+const githubConnecting = ref(false)
+
+const pendingInstallationId = ref<number | null>(null)
+const importDialogVisible = ref(false)
+const importRepos = ref<GitHubRepo[]>([])
+const importReposLoading = ref(false)
+const selectedRepo = ref<GitHubRepo | null>(null)
+const importBranch = ref('main')
+const isImporting = ref(false)
+
+const disconnectDialog = ref(false)
+const configToDisconnect = ref<GitSyncConfig | null>(null)
+const isDisconnecting = ref(false)
+
+const gitSyncHeaders = [
+  { title: 'Repository', key: 'repo', sortable: true },
+  { title: 'Branch', key: 'branch', sortable: true },
+  { title: 'Folder', key: 'graph_folder', sortable: false },
+  { title: 'Last Sync', key: 'last_sync_status', sortable: false },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end' as const },
+]
+
+async function loadGitHubAppInfo() {
+  if (!selectedOrgId.value) return
+  githubAppLoading.value = true
+  try {
+    githubAppInfo.value = await scopeoApi.gitSync.getGitHubAppInfo(selectedOrgId.value)
+  } catch (error) {
+    logger.error('Failed to load GitHub App info', { error })
+  } finally {
+    githubAppLoading.value = false
+  }
+}
+
+async function loadGitSyncConfigs() {
+  if (!selectedOrgId.value) return
+  gitSyncLoading.value = true
+  try {
+    gitSyncConfigs.value = await scopeoApi.gitSync.listConfigs(selectedOrgId.value)
+  } catch (error) {
+    logger.error('Failed to load git sync configs', { error })
+  } finally {
+    gitSyncLoading.value = false
+  }
+}
+
+function handleGitHubMessage(event: MessageEvent) {
+  if (event.origin !== window.location.origin) return
+  if (event.data?.type !== 'github-app-installed') return
+
+  githubConnecting.value = false
+  const installationId = event.data.installation_id as number | undefined
+  if (!installationId) {
+    notify.error('GitHub App installation failed — no installation ID received.')
+    return
+  }
+
+  pendingInstallationId.value = installationId
+  openImportDialog(installationId)
+}
+
+function connectGitHub() {
+  if (!githubAppInfo.value.install_url) return
+
+  githubConnecting.value = true
+  const width = 1000
+  const height = 700
+  const left = window.screenX + (window.outerWidth - width) / 2
+  const top = window.screenY + (window.outerHeight - height) / 2
+
+  const popup = window.open(
+    githubAppInfo.value.install_url,
+    '_blank',
+    `width=${width},height=${height},left=${left},top=${top},popup=yes`,
+  )
+
+  if (!popup) {
+    githubConnecting.value = false
+    notify.error('Failed to open GitHub. Please allow popups for this site.')
+  }
+}
+
+async function openImportDialog(installationId: number) {
+  importDialogVisible.value = true
+  importReposLoading.value = true
+  selectedRepo.value = null
+  importBranch.value = 'main'
+
+  try {
+    importRepos.value = await scopeoApi.gitSync.listInstallationRepos(selectedOrgId.value!, installationId)
+  } catch (error) {
+    logger.error('Failed to list repos for installation', { error })
+    notify.error('Failed to list repositories from GitHub.')
+    importRepos.value = []
+  } finally {
+    importReposLoading.value = false
+  }
+}
+
+function onRepoSelected(repo: GitHubRepo | null) {
+  selectedRepo.value = repo
+  if (repo) {
+    importBranch.value = repo.default_branch
+  }
+}
+
+async function doImport() {
+  if (!selectedRepo.value || !pendingInstallationId.value || !selectedOrgId.value) return
+
+  isImporting.value = true
+  try {
+    const result = await scopeoApi.gitSync.importFromGitHub(selectedOrgId.value, {
+      github_owner: selectedRepo.value.owner,
+      github_repo_name: selectedRepo.value.name,
+      branch: importBranch.value,
+      github_installation_id: pendingInstallationId.value,
+    })
+
+    const count = result.imported.length
+    const skippedCount = result.skipped.length
+    let msg = `Imported ${count} project${count !== 1 ? 's' : ''} from GitHub.`
+    if (skippedCount > 0) {
+      msg += ` ${skippedCount} already linked.`
+    }
+    notify.success(msg)
+
+    importDialogVisible.value = false
+    pendingInstallationId.value = null
+    await loadGitSyncConfigs()
+  } catch (error) {
+    logger.error('GitHub import failed', { error })
+    notify.error(error instanceof Error ? error.message : 'Failed to import from GitHub.')
+  } finally {
+    isImporting.value = false
+  }
+}
+
+function cancelImport() {
+  importDialogVisible.value = false
+  pendingInstallationId.value = null
+}
+
+function confirmDisconnect(config: GitSyncConfig) {
+  configToDisconnect.value = config
+  disconnectDialog.value = true
+}
+
+async function doDisconnect() {
+  if (!configToDisconnect.value || !selectedOrgId.value) return
+  isDisconnecting.value = true
+  try {
+    await scopeoApi.gitSync.deleteConfig(selectedOrgId.value, configToDisconnect.value.id)
+    await loadGitSyncConfigs()
+    disconnectDialog.value = false
+    configToDisconnect.value = null
+    notify.success('Git sync disconnected.')
+  } catch (error) {
+    logger.error('Failed to disconnect git sync', { error })
+    notify.error('Failed to disconnect git sync.')
+  } finally {
+    isDisconnecting.value = false
+  }
+}
+
+function syncStatusColor(status: string | null): string {
+  if (status === 'success') return 'success'
+  if (status === 'fetch_failed') return 'warning'
+  if (status && status !== 'success') return 'error'
+  return 'default'
+}
+
+function syncStatusLabel(status: string | null): string {
+  if (!status) return 'Pending'
+  if (status === 'success') return 'Success'
+  return status.replace(/_/g, ' ')
+}
+
+onMounted(() => {
+  window.addEventListener('message', handleGitHubMessage)
+  loadGitHubAppInfo()
+  loadGitSyncConfigs()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('message', handleGitHubMessage)
+})
 
 definePage({
   meta: {
@@ -127,6 +318,37 @@ definePage({
         <VChip size="small" color="warning" variant="tonal">Beta</VChip>
       </template>
     </AppPageHeader>
+
+    <!-- Version Control -->
+    <div v-if="!githubAppLoading && githubAppInfo.configured" class="mb-6">
+      <h4 class="text-h6 mb-3">Version Control</h4>
+      <VRow>
+        <VCol cols="12" sm="6" md="4">
+          <VCard elevation="0" class="integration-card pa-4 h-100 d-flex flex-column">
+            <div class="d-flex align-center gap-3 mb-3">
+              <VAvatar size="40" rounded="lg" color="grey-100">
+                <VIcon icon="mdi-github" size="24" />
+              </VAvatar>
+              <span class="text-subtitle-1 font-weight-medium">GitHub</span>
+            </div>
+            <p class="text-body-2 text-medium-emphasis mb-4 flex-grow-1">
+              Sync workflows from a GitHub repository. Changes pushed to your branch are auto-deployed.
+            </p>
+            <VBtn
+              color="primary"
+              variant="tonal"
+              size="small"
+              prepend-icon="tabler-plug"
+              block
+              :loading="githubConnecting"
+              @click="connectGitHub"
+            >
+              Connect
+            </VBtn>
+          </VCard>
+        </VCol>
+      </VRow>
+    </div>
 
     <!-- Available Integrations -->
     <div class="mb-6">
@@ -159,7 +381,58 @@ definePage({
       </VRow>
     </div>
 
-    <!-- Active Connections -->
+    <!-- Git Sync Connections -->
+    <div v-if="gitSyncConfigs.length > 0 || gitSyncLoading" class="mb-6">
+      <h4 class="text-h6 mb-3">Auto-deploy settings</h4>
+
+      <VCard v-if="gitSyncLoading" class="pa-6 text-center" elevation="0">
+        <VProgressCircular indeterminate color="primary" />
+      </VCard>
+
+      <VDataTable
+        v-else
+        :headers="gitSyncHeaders"
+        :items="gitSyncConfigs"
+        :items-per-page="-1"
+        density="comfortable"
+        class="elevation-0"
+      >
+        <template #item.repo="{ item }">
+          <div class="d-flex align-center gap-2">
+            <VIcon icon="mdi-github" size="18" />
+            <a
+              :href="`https://github.com/${item.github_owner}/${item.github_repo_name}`"
+              target="_blank"
+              rel="noopener"
+              class="text-primary text-decoration-none"
+            >
+              {{ item.github_owner }}/{{ item.github_repo_name }}
+            </a>
+          </div>
+        </template>
+        <template #item.graph_folder="{ item }">
+          <code class="text-body-2">{{ item.graph_folder || '/' }}</code>
+        </template>
+        <template #item.last_sync_status="{ item }">
+          <VChip
+            size="small"
+            variant="tonal"
+            :color="syncStatusColor(item.last_sync_status)"
+          >
+            {{ syncStatusLabel(item.last_sync_status) }}
+          </VChip>
+        </template>
+        <template #item.actions="{ item }">
+          <VBtn icon variant="text" size="small" color="error" @click="confirmDisconnect(item)">
+            <VIcon icon="tabler-trash" size="18" />
+            <VTooltip activator="parent" location="top">Disconnect sync</VTooltip>
+          </VBtn>
+        </template>
+        <template #bottom />
+      </VDataTable>
+    </div>
+
+    <!-- Active OAuth Connections -->
     <div>
       <h4 class="text-h6 mb-3">Active Connections</h4>
 
@@ -200,7 +473,6 @@ definePage({
     <!-- OAuth Dialog (waiting / error) -->
     <VDialog :model-value="showDialog" max-width="var(--dnr-dialog-sm)" persistent>
       <VCard>
-        <!-- Waiting for OAuth -->
         <template v-if="oauthState === 'waiting_oauth'">
           <VCardTitle class="text-h6 d-flex align-center gap-2">
             <VIcon v-if="selectedIntegration" :icon="selectedIntegration.icon" size="22" />
@@ -227,7 +499,6 @@ definePage({
           </VCardActions>
         </template>
 
-        <!-- Error -->
         <template v-else-if="oauthState === 'error'">
           <VCardTitle class="text-h6">Connection Failed</VCardTitle>
 
@@ -245,7 +516,73 @@ definePage({
       </VCard>
     </VDialog>
 
-    <!-- Delete Confirmation -->
+    <!-- GitHub Import Dialog -->
+    <VDialog v-model="importDialogVisible" max-width="560" persistent>
+      <VCard>
+        <VCardTitle class="text-h6 d-flex align-center gap-2">
+          <VIcon icon="mdi-github" size="22" />
+          Import from GitHub
+        </VCardTitle>
+
+        <VCardText>
+          <p class="text-body-2 text-medium-emphasis mb-4">
+            Select a repository to sync. Draft'n Run will scan it for workflow definitions and auto-deploy on every push.
+          </p>
+
+          <div v-if="importReposLoading" class="text-center py-6">
+            <VProgressCircular indeterminate color="primary" />
+            <div class="text-body-2 text-medium-emphasis mt-2">Loading repositories…</div>
+          </div>
+
+          <template v-else>
+            <VAutocomplete
+              v-model="selectedRepo"
+              :items="importRepos"
+              :item-title="(r: GitHubRepo) => r.full_name"
+              label="Repository"
+              placeholder="Search repositories…"
+              return-object
+              variant="outlined"
+              density="compact"
+              class="mb-3"
+              @update:model-value="onRepoSelected"
+            >
+              <template #item="{ props: itemProps, item }">
+                <VListItem v-bind="itemProps">
+                  <template #prepend>
+                    <VIcon :icon="item.raw.private ? 'tabler-lock' : 'tabler-world'" size="18" class="me-2" />
+                  </template>
+                </VListItem>
+              </template>
+            </VAutocomplete>
+
+            <VTextField
+              v-model="importBranch"
+              label="Branch"
+              variant="outlined"
+              density="compact"
+              placeholder="main"
+            />
+          </template>
+        </VCardText>
+
+        <VCardActions>
+          <VSpacer />
+          <VBtn variant="text" @click="cancelImport">Cancel</VBtn>
+          <VBtn
+            color="primary"
+            variant="elevated"
+            :loading="isImporting"
+            :disabled="!selectedRepo || !importBranch"
+            @click="doImport"
+          >
+            Import
+          </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
+
+    <!-- Delete OAuth Connection Confirmation -->
     <GenericConfirmDialog
       :is-dialog-visible="deleteDialog"
       title="Delete Connection"
@@ -256,6 +593,21 @@ definePage({
       @update:is-dialog-visible="deleteDialog = $event"
       @confirm="doDelete"
       @cancel="deleteDialog = false"
+    />
+
+    <!-- Disconnect Git Sync Confirmation -->
+    <GenericConfirmDialog
+      :is-dialog-visible="disconnectDialog"
+      title="Disconnect Git Sync"
+      :message="configToDisconnect
+        ? `Are you sure you want to disconnect sync for <strong>${configToDisconnect.github_owner}/${configToDisconnect.github_repo_name}</strong>? The project will remain but will no longer auto-deploy on push.`
+        : ''"
+      confirm-text="Disconnect"
+      confirm-color="error"
+      :loading="isDisconnecting"
+      @update:is-dialog-visible="disconnectDialog = $event"
+      @confirm="doDisconnect"
+      @cancel="disconnectDialog = false"
     />
   </AppPage>
 </template>

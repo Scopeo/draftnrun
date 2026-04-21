@@ -14,6 +14,7 @@ from ada_backend.routers.auth_router import (
 )
 from ada_backend.schemas.auth_schema import AuthenticatedEntity
 from ada_backend.schemas.git_sync_schemas import (
+    GitHubAppInfoResponse,
     GitSyncConfigResponse,
     GitSyncImportRequest,
     GitSyncImportResponse,
@@ -26,7 +27,9 @@ from ada_backend.services.git_sync_service import (
     handle_github_push,
     import_from_github,
     list_configs_for_organization,
+    list_installation_repos_summary,
 )
+from ada_backend.services.github_client import GithubClientError
 from settings import settings
 
 webhook_router = APIRouter(tags=["Git Sync"])
@@ -147,6 +150,45 @@ def list_git_sync_configs(
 ) -> list[GitSyncConfigResponse]:
     configs = list_configs_for_organization(session, organization_id)
     return [_to_response(c) for c in configs]
+
+
+@org_router.get(
+    "/{organization_id}/git-sync/github-app",
+    response_model=GitHubAppInfoResponse,
+    summary="Get GitHub App installation info",
+)
+def get_github_app_info(
+    organization_id: UUID,
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.MEMBER.value)),
+    ],
+) -> GitHubAppInfoResponse:
+    if not settings.GITHUB_APP_SLUG:
+        return GitHubAppInfoResponse(configured=False)
+    return GitHubAppInfoResponse(
+        configured=True,
+        install_url=f"https://github.com/apps/{settings.GITHUB_APP_SLUG}/installations/new",
+    )
+
+
+@org_router.get(
+    "/{organization_id}/git-sync/installations/{installation_id}/repos",
+    summary="List repos accessible to a GitHub App installation",
+)
+async def list_repos_for_installation(
+    organization_id: UUID,
+    installation_id: int,
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+) -> list[dict]:
+    try:
+        return await list_installation_repos_summary(installation_id)
+    except GithubClientError:
+        LOGGER.warning("Failed to list repos for installation %s", installation_id)
+        raise HTTPException(status_code=502, detail="Failed to list repositories from GitHub")
 
 
 @org_router.get(

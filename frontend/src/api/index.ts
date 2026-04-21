@@ -21,6 +21,7 @@ import { adminToolsApi, categoriesApi, componentsApi, settingsSecretsApi } from 
 import { chatApi } from './chat'
 import { runsApi } from './runs'
 import { oauthConnectionsApi } from './oauth'
+import { gitSyncApi } from './gitSync'
 import { ingestionTaskApi, sourcesApi } from './sources'
 
 export { workflowsApi, templatesApi } from './workflows'
@@ -52,6 +53,8 @@ export type { RetryRunRequest } from './runs'
 export type { ChatAsyncAccepted, ChatAsyncResult } from './chat'
 export { oauthConnectionsApi } from './oauth'
 export type { OAuthConnectionListItem } from './oauth'
+export { gitSyncApi } from './gitSync'
+export type { GitHubAppInfo, GitHubRepo, GitSyncConfig, GitSyncImportResponse } from './gitSync'
 export { sourcesApi, ingestionTaskApi } from './sources'
 
 export const scopeoApi = {
@@ -81,6 +84,7 @@ export const scopeoApi = {
   widget: widgetApi,
   categories: categoriesApi,
   oauthConnections: oauthConnectionsApi,
+  gitSync: gitSyncApi,
   orgVariableDefinitions: orgVariableDefinitionsApi,
   variableSets: variableSetsApi,
   settingsSecrets: settingsSecretsApi,

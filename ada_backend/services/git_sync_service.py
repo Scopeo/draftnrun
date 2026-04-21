@@ -329,3 +329,18 @@ def get_config(
     if not config or config.organization_id != organization_id:
         raise GitSyncConfigNotFound(config_id)
     return config
+
+
+async def list_installation_repos_summary(installation_id: int) -> list[dict]:
+    """List repos accessible to a GitHub App installation, returning only the fields the front-end needs."""
+    repos = await github_client.list_installation_repos(installation_id)
+    return [
+        {
+            "full_name": r.get("full_name", ""),
+            "name": r.get("name", ""),
+            "owner": r.get("owner", {}).get("login", ""),
+            "default_branch": r.get("default_branch", "main"),
+            "private": r.get("private", False),
+        }
+        for r in repos
+    ]

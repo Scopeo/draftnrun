@@ -59,6 +59,11 @@ class GitSyncImportResponse(BaseModel):
     skipped: list[str] = Field(default_factory=list, description="Folders already linked to a project")
 
 
+class GitHubAppInfoResponse(BaseModel):
+    configured: bool
+    install_url: str | None = None
+
+
 class GitSyncConfigResponse(BaseModel):
     id: UUID
     organization_id: UUID
