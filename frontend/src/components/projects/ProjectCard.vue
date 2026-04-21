@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import ProjectAvatar from './ProjectAvatar.vue'
 import { useTextTruncated } from '@/composables/useTextTruncated'
+import { tagColor } from '@/utils/tagColor'
 
 interface GraphRunner {
   graph_runner_id: string
@@ -20,6 +21,7 @@ interface Project {
   graph_runners?: GraphRunner[]
   project_type?: 'AGENT' | 'WORKFLOW'
   is_template?: boolean
+  tags?: string[]
 }
 
 interface Props {
@@ -79,9 +81,20 @@ const versionCount = computed(() => {
 })
 
 const canDuplicate = computed(() => {
-  // Check projectType prop first, then fall back to project.project_type
   const type = props.projectType || props.project.project_type
   return props.canEdit && type === 'WORKFLOW'
+})
+
+const visibleTags = computed(() => {
+  const tags = props.project.tags
+  if (!tags || tags.length === 0) return []
+  return tags.slice(0, 3)
+})
+
+const hiddenTagCount = computed(() => {
+  const tags = props.project.tags
+  if (!tags) return 0
+  return Math.max(0, tags.length - 3)
 })
 </script>
 
@@ -158,8 +171,25 @@ const canDuplicate = computed(() => {
         </div>
       </div>
 
-      <div class="d-flex align-center justify-end">
-        <VChip size="x-small" variant="tonal" color="primary">
+      <div class="d-flex align-center justify-space-between gap-2">
+        <div v-if="visibleTags.length > 0" class="d-flex align-center gap-1 min-width-0 tags-row">
+          <VChip
+            v-for="tag in visibleTags"
+            :key="tag"
+            size="x-small"
+            variant="tonal"
+            :color="tagColor(tag)"
+            label
+            class="tag-chip"
+          >
+            {{ tag }}
+          </VChip>
+          <VChip v-if="hiddenTagCount > 0" size="x-small" variant="text" color="secondary" class="tag-chip">
+            +{{ hiddenTagCount }}
+          </VChip>
+        </div>
+        <VSpacer v-else />
+        <VChip size="x-small" variant="tonal" color="primary" class="flex-shrink-0">
           <VIcon icon="tabler-versions" size="12" class="me-1" />
           {{ versionCount }} {{ versionCount === 1 ? 'version' : 'versions' }}
         </VChip>
@@ -209,5 +239,18 @@ const canDuplicate = computed(() => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.tags-row {
+  overflow: hidden;
+}
+
+.tag-chip {
+  max-inline-size: 80px;
+  :deep(.v-chip__content) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 </style>

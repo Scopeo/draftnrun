@@ -68,8 +68,8 @@ This happens automatically on each webhook — no user interaction needed.
 2. The installation ID is provided to Draft'n Run (from the GitHub App install page or via API)
 3. User calls `POST /organizations/{org_id}/git-sync` (or MCP tool `configure_git_sync`) with `github_owner`, `github_repo_name`, `branch`, `github_installation_id`, and optionally `project_type`
 4. Backend scans the repo tree (Git Trees API, recursive) for all `graph.json` files
-5. For each folder containing a `graph.json` that doesn't already have a sync config, the backend creates a new project (named after the folder, or the repo name for root-level) and a `GitSyncConfig` row
-6. Backend enqueues an initial sync job for each new config — the existing graph payload is deployed immediately using the standard deploy flow (best-effort: if enqueue fails, subsequent pushes will trigger syncs normally)
+5. For each folder containing a `graph.json` that doesn't already have a sync config, the backend creates a new project (named after the folder, or the repo name for root-level) with a `"github"` tag and a `GitSyncConfig` row
+6. Backend enqueues an initial sync job for each new config — the existing `graph.json` is deployed immediately using the standard deploy flow (best-effort: if enqueue fails, subsequent pushes will trigger syncs normally)
 
 MCP tools: `configure_git_sync`, `list_git_sync_configs`, `get_git_sync_config`, `disconnect_git_sync` (see `docs://admin`).
 

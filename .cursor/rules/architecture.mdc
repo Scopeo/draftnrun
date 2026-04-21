@@ -36,6 +36,10 @@ DAG of ComponentInstances connected via FieldExpressions (JSON AST). See `ada_ba
 
 `draft` / `production` bound to specific GraphRunner versions via `ProjectEnvironmentBinding`.
 
+### Project Tags
+
+Free-form string tags on projects via `project_tags` table (many-to-many). Tags are lowercase, unique per project. Used for filtering/organizing projects in the UI. Git-synced projects automatically receive a `"github"` tag. Management endpoints: `POST /projects/{id}/tags`, `DELETE /projects/{id}/tags/{tag}`. List endpoint supports `?tags=foo&tags=bar` filter (AND semantics). Org-level autocomplete: `GET /projects/org/{org_id}/tags`.
+
 ### Workers
 
 - Queue workers share a `BaseQueueWorker` ABC in `ada_backend/workers/base_queue_worker.py` (heartbeat, per-worker processing list, orphan recovery with capped follow-up scans, drain). Orphan recovery runs at startup plus up to `_MAX_ORPHAN_FOLLOW_UPS` (2) follow-up scans spaced by `_ORPHAN_FOLLOW_UP_DELAY` (= heartbeat TTL) to catch dead workers whose heartbeat hadn't expired during the startup scan; after that, no more scans run. On graceful shutdown the heartbeat key is deleted eagerly before returning items to the main queue. Concrete subclasses only implement payload processing and entity recovery.

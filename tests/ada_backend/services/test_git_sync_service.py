@@ -388,6 +388,8 @@ class TestImportFromGithub:
         assert imported[0].status == "created"
         assert len(skipped) == 0
         create_proj_mock.assert_called_once()
+        _, kwargs = create_proj_mock.call_args
+        assert kwargs["tags"] == ["github"]
 
     @pytest.mark.asyncio
     async def test_imports_with_agent_project_type(self):
@@ -452,18 +454,10 @@ class TestImportFromGithub:
             "agent-b": self._make_config(org_id, uuid4(), "agent-b"),
         }
 
-        def fake_create(
-            session,
-            organization_id,
-            project_id,
-            project_name,
-            description,
-            project_type,
-            template,
-            graph_id,
-            add_input,
-        ):
-            return SimpleNamespace(id=project_id, name=project_name, organization_id=org_id), uuid4()
+        def fake_create(**kwargs):
+            return SimpleNamespace(
+                id=kwargs["project_id"], name=kwargs["project_name"], organization_id=org_id
+            ), uuid4()
 
         def fake_create_config(**kwargs):
             return configs[kwargs["graph_folder"]]

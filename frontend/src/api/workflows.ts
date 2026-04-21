@@ -3,12 +3,18 @@ import { $api } from '@/utils/api'
 export const workflowsApi = {
   getAll: () => $api('/projects'),
   getById: (projectId: string) => $api(`/projects/${projectId}`),
-  getByOrgId: (organizationId: string, type?: 'AGENT' | 'WORKFLOW', includeTemplates?: boolean) => {
+  getByOrgId: (
+    organizationId: string,
+    type?: 'AGENT' | 'WORKFLOW',
+    includeTemplates?: boolean,
+    tags?: string[]
+  ) => {
     const params: Record<string, any> = {}
     if (type) {
       params.type = type.toLowerCase()
     }
     if (includeTemplates !== undefined) params.include_templates = includeTemplates
+    if (tags && tags.length > 0) params.tags = tags
 
     return $api(`/projects/org/${organizationId}`, { query: params })
   },
@@ -22,9 +28,16 @@ export const workflowsApi = {
       companion_image_url?: string
       icon?: string
       icon_color?: string
+      tags?: string[]
     }
   ) => $api(`/projects/${projectId}`, { method: 'PATCH', body: data }),
   delete: (projectId: string) => $api(`/projects/${projectId}`, { method: 'DELETE' }),
+  getOrgTags: (organizationId: string): Promise<string[]> =>
+    $api(`/projects/org/${organizationId}/tags`),
+  addTags: (projectId: string, tags: string[]): Promise<string[]> =>
+    $api(`/projects/${projectId}/tags`, { method: 'POST', body: { tags } }),
+  removeTag: (projectId: string, tag: string): Promise<string[]> =>
+    $api(`/projects/${projectId}/tags/${encodeURIComponent(tag)}`, { method: 'DELETE' }),
 }
 
 export const templatesApi = {

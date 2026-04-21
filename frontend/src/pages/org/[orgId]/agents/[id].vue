@@ -20,6 +20,7 @@ import {
   useUpdateAgentMutation,
 } from '@/composables/queries/useAgentsQuery'
 import { useComponentDefinitionsQuery } from '@/composables/queries/useComponentDefinitionsQuery'
+import { useOrgTagsQuery } from '@/composables/queries/useProjectsQuery'
 import { clearAllChatStates } from '@/composables/usePlaygroundChat'
 import { useSaveVersion } from '@/composables/useSaveVersion'
 import { useSelectedOrg } from '@/composables/useSelectedOrg'
@@ -39,9 +40,8 @@ onMounted(() => {
 })
 
 const { selectedOrgId, orgChangeCounter } = useSelectedOrg()
+const { data: orgTags } = useOrgTagsQuery(selectedOrgId)
 
-// Get component definitions and categories - these are needed for graph rendering
-// They load in parallel with agent data and are cached for 5 minutes
 const {
   components: componentDefinitions,
   categories,
@@ -309,17 +309,24 @@ watch(orgChangeCounter, () => {
 })
 
 // Save agent name/description using the correct API endpoint
-const saveAgentNameAndDescription = async (agentId: string, data: { name: string; description: string }) => {
+const saveAgentNameAndDescription = async (
+  agentId: string,
+  data: { name: string; description: string; tags?: string[] }
+) => {
   if (!agent.value) return
 
-  // Use the projects API to update agent name and description (agents are projects in the backend)
-  await scopeoApi.projects.updateProject(agentId, {
+  const updatePayload: Record<string, any> = {
     project_name: data.name,
     description: data.description,
-  })
+  }
+  if (data.tags !== undefined) {
+    updatePayload.tags = data.tags
+  }
+
+  await scopeoApi.projects.updateProject(agentId, updatePayload)
 }
 
-const handleAgentUpdate = (data: { name: string; description: string }) => {
+const handleAgentUpdate = (data: { name: string; description: string; tags: string[] }) => {
   if (agent.value) {
     agent.value = { ...agent.value, name: data.name, description: data.description }
   }
@@ -518,6 +525,8 @@ definePage({
         :entity-id="(agent as any).project_id || agent.id"
         :entity-name="agent.name"
         :entity-description="agent.description"
+        :entity-tags="agent.tags || []"
+        :available-tags="orgTags || []"
         entity-type="agent"
         :save-function="saveAgentNameAndDescription"
         @updated="handleAgentUpdate"

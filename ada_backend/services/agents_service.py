@@ -186,6 +186,7 @@ def create_new_agent_service(
         add_input=False,
         icon=agent_data.icon,
         icon_color=agent_data.icon_color,
+        tags=agent_data.tags,
     )
 
     if agent_data.template is None:
@@ -202,6 +203,7 @@ def create_new_agent_service(
         user_id, organization_id, project.id, project.name, from_template=agent_data.template is not None,
     )
 
+    tags = sorted(pt.tag for pt in project.tags)
     return ProjectWithGraphRunnersSchema(
         project_id=project.id,
         project_name=project.name,
@@ -218,6 +220,7 @@ def create_new_agent_service(
                 env=db.EnvType.DRAFT,
             )
         ],
+        tags=tags,
     )
 
 

@@ -24,6 +24,7 @@ from ada_backend.schemas.project_schema import (
     ProjectCreateSchema,
     ProjectDeleteResponse,
     ProjectSchema,
+    ProjectTagsInput,
     ProjectUpdateSchema,
     ProjectWithGraphRunnersSchema,
 )
@@ -43,10 +44,13 @@ from ada_backend.services.errors import (
 )
 from ada_backend.services.metrics.monitor_kpis_service import get_monitoring_kpis_by_projects
 from ada_backend.services.project_service import (
+    add_tags_to_project_service,
     create_workflow,
     delete_project_service,
     get_project_service,
     get_projects_by_organization_with_details_service,
+    get_tags_for_organization_service,
+    remove_tag_from_project_service,
     update_project_service,
 )
 from ada_backend.services.run_service import create_run, run_with_tracking, update_run_status
@@ -80,9 +84,12 @@ def get_projects_by_organization_endpoint(
     session: Session = Depends(get_db),
     type: Optional[ProjectType] = ProjectType.WORKFLOW,
     include_templates: Optional[bool] = False,
+    tags: Optional[List[str]] = Query(None),
 ):
     try:
-        return get_projects_by_organization_with_details_service(session, organization_id, type, include_templates)
+        return get_projects_by_organization_with_details_service(
+            session, organization_id, type, include_templates, tags=tags
+        )
     except ValueError as e:
         LOGGER.error(
             f"Failed to list workflows for organization {organization_id} user_id={auth.user_id}: {str(e)}",
@@ -92,6 +99,29 @@ def get_projects_by_organization_endpoint(
     except Exception as e:
         LOGGER.error(
             f"Failed to list workflows for organization {organization_id} user_id={auth.user_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.get("/org/{organization_id}/tags", response_model=List[str], tags=["Projects"])
+def get_organization_tags_endpoint(
+    organization_id: UUID,
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(
+            user_has_access_to_organization_xor_verify_api_key(
+                allowed_roles=UserRights.MEMBER.value,
+            )
+        ),
+    ],
+    session: Session = Depends(get_db),
+):
+    try:
+        return get_tags_for_organization_service(session, organization_id)
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to list tags for organization {organization_id} user_id={auth.user_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -161,6 +191,44 @@ def update_project_endpoint(
         raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
         LOGGER.error(f"Failed to update project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post("/{project_id}/tags", response_model=List[str], tags=["Projects"])
+def add_tags_endpoint(
+    project_id: UUID,
+    body: ProjectTagsInput,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    try:
+        return add_tags_to_project_service(session, project_id, body.tags)
+    except ProjectNotFound as e:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found") from e
+    except Exception as e:
+        LOGGER.error(f"Failed to add tags to project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.delete("/{project_id}/tags/{tag}", response_model=List[str], tags=["Projects"])
+def remove_tag_endpoint(
+    project_id: UUID,
+    tag: str,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    try:
+        return remove_tag_from_project_service(session, project_id, tag)
+    except ProjectNotFound as e:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found") from e
+    except Exception as e:
+        LOGGER.error(f"Failed to remove tag from project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 

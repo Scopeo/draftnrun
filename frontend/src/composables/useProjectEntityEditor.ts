@@ -1,8 +1,10 @@
 import { type Ref, ref } from 'vue'
+import { useQueryClient } from '@tanstack/vue-query'
 import { useRouter } from 'vue-router'
 import { generateProjectNameAndAvatar } from '@/utils/randomNameGenerator'
 import { scopeoApi } from '@/api'
 import { DEFAULT_PROJECT_COLOR } from '@/composables/useProjectDefaults'
+import { useOrgTagsQuery } from '@/composables/queries/useProjectsQuery'
 import { logger } from '@/utils/logger'
 
 type ProjectListViewInstance = InstanceType<(typeof import('@/components/projects/ProjectListView.vue'))['default']>
@@ -13,6 +15,7 @@ export interface ProjectEntity {
   description?: string | null
   icon?: string
   icon_color?: string
+  tags?: string[]
   graph_runners?: Array<{ graph_runner_id: string; env: string | null; tag_name: string | null }>
 }
 
@@ -33,6 +36,7 @@ export interface UseProjectEntityEditorOptions {
 
 export function useProjectEntityEditor(options: UseProjectEntityEditorOptions) {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { entityType, defaultIcon, routePrefix, createMutation, projectListRef, selectedOrgId, onError } = options
 
   const isEditDialogVisible = ref(false)
@@ -40,10 +44,13 @@ export function useProjectEntityEditor(options: UseProjectEntityEditorOptions) {
   const editedName = ref('')
   const editedDescription = ref('')
   const editedIconSelection = ref<IconSelection>({ icon: defaultIcon, iconColor: DEFAULT_PROJECT_COLOR })
+  const editedTags = ref<string[]>([])
   const isUpdating = ref(false)
   const isCreating = ref(false)
   const editError = ref<string | null>(null)
   const createError = ref<string | null>(null)
+
+  const { data: orgTags } = useOrgTagsQuery(selectedOrgId)
 
   const showError = (message: string) => {
     createError.value = message
@@ -151,8 +158,15 @@ export function useProjectEntityEditor(options: UseProjectEntityEditorOptions) {
       icon: entity.icon || defaultIcon,
       iconColor: entity.icon_color || DEFAULT_PROJECT_COLOR,
     }
+    editedTags.value = [...(entity.tags || [])]
     editError.value = null
     isEditDialogVisible.value = true
+  }
+
+  const tagsChanged = () => {
+    const original = [...(entityToEdit.value?.tags || [])].sort()
+    const current = [...editedTags.value].sort()
+    return JSON.stringify(original) !== JSON.stringify(current)
   }
 
   const saveEntity = async () => {
@@ -161,12 +175,14 @@ export function useProjectEntityEditor(options: UseProjectEntityEditorOptions) {
       return
     }
 
-    if (
-      editedName.value === entityToEdit.value.project_name &&
-      editedDescription.value === (entityToEdit.value.description || '') &&
-      editedIconSelection.value.icon === entityToEdit.value.icon &&
-      editedIconSelection.value.iconColor === entityToEdit.value.icon_color
-    ) {
+    const hasChanges =
+      editedName.value !== entityToEdit.value.project_name ||
+      editedDescription.value !== (entityToEdit.value.description || '') ||
+      editedIconSelection.value.icon !== entityToEdit.value.icon ||
+      editedIconSelection.value.iconColor !== entityToEdit.value.icon_color ||
+      tagsChanged()
+
+    if (!hasChanges) {
       isEditDialogVisible.value = false
       return
     }
@@ -175,12 +191,19 @@ export function useProjectEntityEditor(options: UseProjectEntityEditorOptions) {
       isUpdating.value = true
       editError.value = null
 
+      const normalizedTags = [...new Set(editedTags.value.map(t => t.toLowerCase().trim()).filter(Boolean))]
+
       await scopeoApi.projects.updateProject(entityToEdit.value.project_id, {
         project_name: editedName.value.trim(),
         description: editedDescription.value.trim() || undefined,
         icon: editedIconSelection.value.icon,
         icon_color: editedIconSelection.value.iconColor,
+        tags: normalizedTags,
       })
+
+      if (tagsChanged()) {
+        queryClient.invalidateQueries({ queryKey: ['org-tags'] })
+      }
 
       isEditDialogVisible.value = false
       await projectListRef.value?.refreshProjects(true)
@@ -198,6 +221,8 @@ export function useProjectEntityEditor(options: UseProjectEntityEditorOptions) {
     editedName,
     editedDescription,
     editedIconSelection,
+    editedTags,
+    orgTags,
     isUpdating,
     isCreating,
     editError,

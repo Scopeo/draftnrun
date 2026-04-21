@@ -33,6 +33,7 @@ class ProjectSchema(BaseModel):
 
 class ProjectCreateSchema(ProjectSchema):
     template: Optional[InputTemplate] = None
+    tags: list[str] = Field(default_factory=list)
 
 
 class ProjectUpdateSchema(BaseModel):
@@ -40,12 +41,14 @@ class ProjectUpdateSchema(BaseModel):
     description: Optional[str] = None
     icon: Optional[str] = None
     icon_color: Optional[str] = None
+    tags: Optional[list[str]] = None
 
 
 class ProjectResponse(ProjectSchema):
     organization_id: UUID
     created_at: str
     updated_at: str
+    tags: list[str] = Field(default_factory=list)
 
 
 class GraphRunnerEnvDTO(BaseModel):
@@ -74,3 +77,7 @@ class ChatResponse(BaseModel):
 class ProjectDeleteResponse(BaseModel):
     project_id: UUID
     graph_runner_ids: list[UUID] = Field(default_factory=list)
+
+
+class ProjectTagsInput(BaseModel):
+    tags: list[str] = Field(min_length=1)
