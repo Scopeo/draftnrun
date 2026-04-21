@@ -46,6 +46,7 @@ export function useGraphDisplayStream(
         scheduleReload()
         break
       case 'ping':
+      case 'pong':
       case 'error':
         break
     }
@@ -88,7 +89,7 @@ export function useGraphDisplayStream(
       heartbeat: {
         message: 'ping',
         interval: 25_000,
-        pongTimeout: 10_000,
+        pongTimeout: 30_000,
       },
       onConnected() {
         isConnected.value = true

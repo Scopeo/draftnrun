@@ -8,12 +8,20 @@ export interface GraphDisplayPingPayload {
   type: 'ping'
 }
 
+export interface GraphDisplayPongPayload {
+  type: 'pong'
+}
+
 export interface GraphDisplayErrorPayload {
   type: 'error'
   message: string
 }
 
-export type GraphDisplayEvent = GraphChangedPayload | GraphDisplayPingPayload | GraphDisplayErrorPayload
+export type GraphDisplayEvent =
+  | GraphChangedPayload
+  | GraphDisplayPingPayload
+  | GraphDisplayPongPayload
+  | GraphDisplayErrorPayload
 
 export const GRAPH_DISPLAY_CLOSE_CODES = {
   UNAUTHORIZED: 4401,
