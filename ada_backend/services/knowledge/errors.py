@@ -11,12 +11,7 @@ class KnowledgeServiceError(ServiceError):
 
 
 class KnowledgeServiceQdrantConfigurationError(KnowledgeServiceError):
-    """Raised when Qdrant configuration is missing or invalid.
-
-    Defaults to 500 because a misconfigured data source is a server-side admin
-    issue the caller cannot fix on their end. Specific subclasses may override
-    (e.g. collection-not-found as 404).
-    """
+    """Raised when Qdrant configuration is missing or invalid."""
 
     code = "qdrant_configuration_error"
     status_code = 500
@@ -124,6 +119,7 @@ class KnowledgeServiceQdrantCollectionCheckError(KnowledgeServiceQdrantOperation
 
 class KnowledgeSourceNotFoundError(KnowledgeServiceError):
     """Raised when a data source is not found."""
+
     status_code = 404
 
     def __init__(self, source_id: str, organization_id: str):
@@ -134,6 +130,7 @@ class KnowledgeSourceNotFoundError(KnowledgeServiceError):
 
 class KnowledgeServiceDocumentNotFoundError(KnowledgeServiceError):
     """Raised when a document cannot be found for a given source."""
+
     status_code = 404
 
     def __init__(self, document_id: str, source_id: str):
@@ -144,6 +141,7 @@ class KnowledgeServiceDocumentNotFoundError(KnowledgeServiceError):
 
 class KnowledgeMaxChunkSizeError(KnowledgeServiceError):
     """Raised when a chunk size is too large."""
+
     status_code = 400
 
     def __init__(self, token_count: int, max_chunk_tokens: int):
@@ -157,6 +155,7 @@ class KnowledgeMaxChunkSizeError(KnowledgeServiceError):
 
 class KnowledgeEmptyChunkError(KnowledgeServiceError):
     """Raised when a chunk content is empty."""
+
     status_code = 400
 
     def __init__(self):
@@ -165,6 +164,7 @@ class KnowledgeEmptyChunkError(KnowledgeServiceError):
 
 class KnowledgeServiceDBError(KnowledgeServiceError):
     """Base exception for database-related errors in the knowledge service."""
+
     status_code = 500
 
 
