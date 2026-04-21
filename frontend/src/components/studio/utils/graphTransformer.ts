@@ -483,10 +483,9 @@ export const graphTransformer: GraphTransformerType = {
             (nodeData as any).field_expressions.length > 0 && {
               field_expressions: (nodeData as any).field_expressions,
             }),
-          // Include port_configurations only if they exist AND are not empty
+          // Include port_configurations even when empty so "discard all" persists
           ...((nodeData as any).port_configurations &&
-            Array.isArray((nodeData as any).port_configurations) &&
-            (nodeData as any).port_configurations.length > 0 && {
+            Array.isArray((nodeData as any).port_configurations) && {
               port_configurations: (nodeData as any).port_configurations,
             }),
           // Only include position if it was originally set by the user
