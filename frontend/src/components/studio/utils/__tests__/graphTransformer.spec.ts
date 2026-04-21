@@ -56,14 +56,30 @@ function createNode(portConfigurations?: PortConfiguration[]): TestNode {
 }
 
 describe('graphTransformer.fromFlow', () => {
-  it('keeps empty port_configurations arrays in the API payload', () => {
+  it('keeps explicit deactivated port_configurations in the API payload', () => {
+    const portConfigurations: PortConfiguration[] = [
+      {
+        component_instance_id: 'node-1',
+        parameter_id: 'parameter-1',
+        input_port_instance_id: null,
+        setup_mode: 'deactivated',
+        expression_json: null,
+        ai_name_override: null,
+        ai_description_override: null,
+        is_required_override: null,
+        custom_parameter_type: null,
+        custom_ui_component_properties: null,
+        json_schema_override: null,
+      },
+    ]
+
     const result = graphTransformer.fromFlow({
-      nodes: [createNode([])],
+      nodes: [createNode(portConfigurations)],
       edges: [] as Edge[],
     })
 
     expect(result.component_instances[0]).toHaveProperty('port_configurations')
-    expect(result.component_instances[0].port_configurations).toEqual([])
+    expect(result.component_instances[0].port_configurations).toEqual(portConfigurations)
   })
 
   it('keeps non-empty user_set and ai_filled port_configurations arrays in the API payload', () => {

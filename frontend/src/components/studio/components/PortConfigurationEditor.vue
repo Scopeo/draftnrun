@@ -50,7 +50,7 @@ const parameterTypes = [
 ]
 
 // Get all ports - Only show parameters with kind="input" and is_tool_input=true
-// If a parameter has no port configuration, it's "Discard" by default (user can activate it)
+// Backend read APIs synthesize missing tool-input configs as ai_filled defaults.
 const allPorts = computed(() => {
   // Filter parameters to only show those with kind="input" and is_tool_input=true
   const inputParameters = props.parameters.filter(param => param.kind === 'input' && param.is_tool_input === true)
@@ -87,7 +87,6 @@ const allPorts = computed(() => {
 })
 
 // Get configuration for a port (by parameter_id or by name for custom ports)
-// Returns undefined if no configuration exists (meaning "Discard")
 function getPortConfig(parameterId: string | null, portName: string, isCustom: boolean): PortConfiguration | undefined {
   if (isCustom) {
     // Custom port - identified by ai_name_override (backend does not use custom_port_name)
@@ -99,14 +98,18 @@ function getPortConfig(parameterId: string | null, portName: string, isCustom: b
   return undefined
 }
 
-// Create a new configuration for a port when activating it
-function createConfig(parameterId: string | null, portName: string, isCustom: boolean): PortConfiguration {
-  // Create new config when user activates a previously unused port
+// Create a new configuration for a port
+function createConfig(
+  parameterId: string | null,
+  portName: string,
+  isCustom: boolean,
+  setupMode: 'user_set' | 'ai_filled' | 'deactivated' = 'ai_filled'
+): PortConfiguration {
   const newConfig: PortConfiguration = {
     component_instance_id: props.componentInstanceId,
     parameter_id: parameterId,
     input_port_instance_id: null,
-    setup_mode: 'ai_filled', // Default to AI fills when activating
+    setup_mode: setupMode,
     field_expression_id: null,
     expression_json: null,
     ai_name_override: isCustom ? portName : null,
@@ -137,20 +140,23 @@ function updateConfigType(
   const existingConfig = getPortConfig(parameterId, portName, isCustom)
 
   if (type === 'deactivated') {
-    // Remove configuration if it exists - port becomes "Discard"
     if (existingConfig) {
-      const newConfigs = localConfigs.value.filter(c =>
-        isCustom ? !(c.ai_name_override === portName && c.parameter_id === null) : c.parameter_id !== parameterId
-      )
+      const updatedConfig: PortConfiguration = { ...existingConfig, setup_mode: 'deactivated' }
+      const newConfigs = localConfigs.value.map(c => {
+        const matches = isCustom ? c.ai_name_override === portName && c.parameter_id === null : c.parameter_id === parameterId
+
+        return matches ? updatedConfig : c
+      })
 
       emit('update:port-configurations', newConfigs)
+    } else {
+      createConfig(parameterId, portName, isCustom, 'deactivated')
     }
-    // If no config exists, port is already "Discard"
   } else {
     // Create or update configuration
     if (existingConfig) {
       // Update existing config
-      const updatedConfig = { ...existingConfig }
+      const updatedConfig: PortConfiguration = { ...existingConfig }
 
       updatedConfig.setup_mode = type
 
@@ -172,7 +178,7 @@ function updateConfigType(
       emit('update:port-configurations', newConfigs)
     } else {
       // Create new config
-      createConfig(parameterId, portName, isCustom)
+      createConfig(parameterId, portName, isCustom, type)
     }
   }
 }
@@ -400,17 +406,17 @@ function cancelEditing() {
               <VChip
                 :color="
                   getConfigTypeColor(
-                    getPortConfig(port.parameter_id, port.name, port.is_custom)?.setup_mode || 'deactivated'
+                    getPortConfig(port.parameter_id, port.name, port.is_custom)?.setup_mode || 'ai_filled'
                   )
                 "
                 size="x-small"
                 variant="tonal"
               >
                 {{
-                  (getPortConfig(port.parameter_id, port.name, port.is_custom)?.setup_mode || 'deactivated') ===
+                  (getPortConfig(port.parameter_id, port.name, port.is_custom)?.setup_mode || 'ai_filled') ===
                   'ai_filled'
                     ? 'AI'
-                    : (getPortConfig(port.parameter_id, port.name, port.is_custom)?.setup_mode || 'deactivated') ===
+                    : (getPortConfig(port.parameter_id, port.name, port.is_custom)?.setup_mode || 'ai_filled') ===
                         'user_set'
                       ? 'Set value'
                       : 'Discard'
@@ -479,7 +485,7 @@ function cancelEditing() {
 
               <!-- Configuration Type Selector -->
               <VRadioGroup
-                :model-value="getPortConfig(port.parameter_id, port.name, port.is_custom)?.setup_mode || 'deactivated'"
+                :model-value="getPortConfig(port.parameter_id, port.name, port.is_custom)?.setup_mode || 'ai_filled'"
                 :disabled="readonly"
                 @update:model-value="
                   (val: any) => updateConfigType(port.parameter_id, port.name, val, port.nullable, port.is_custom)
