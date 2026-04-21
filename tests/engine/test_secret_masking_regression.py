@@ -169,6 +169,11 @@ def test_b3_api_call_error_redacts_sensitive_key_in_response_body_but_preserves_
 # ---------------------------------------------------------------------------
 # B4. secret_resolver: always returns str (not SecretStr)
 # ---------------------------------------------------------------------------
+#
+# TODO(DRA-1255): These tests codify the current early-collapse behavior where
+# secret-bearing values become plain strings before downstream consumers see
+# them. If the follow-up ticket preserves taint longer (e.g. SecretStr /
+# SecretTemplate), these assertions should be inverted accordingly.
 
 
 def test_b4_replace_placeholders_full_match_returns_plain_str():
@@ -206,6 +211,9 @@ def test_b4_str_result_is_usable_by_downstream_consumers():
 # ---------------------------------------------------------------------------
 # B5. unwrap_secrets bridges SecretStr → str before component receives params
 # ---------------------------------------------------------------------------
+#
+# TODO(DRA-1255): Revisit this contract if the follow-up moves unwrap later in
+# the runtime to preserve secret taint across composed-string evaluation.
 
 
 def test_b5_unwrap_secrets_converts_secretstr_to_str_for_component_params():

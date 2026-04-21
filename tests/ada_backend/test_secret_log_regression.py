@@ -193,6 +193,9 @@ def test_evaluate_expression_varnode_logs_masked_secret(caplog):
 
 
 def test_evaluate_expression_concatnode_unwraps_for_runtime_without_log_leak(caplog):
+    # TODO(DRA-1255): Invert this expectation in the follow-up. The composed
+    # string should preserve secret taint long enough for child spans to stay
+    # masked, rather than returning plaintext here.
     expression = ConcatNode(parts=[LiteralNode(value="Bearer "), VarNode(name="api_key")])
 
     with caplog.at_level(logging.DEBUG):
