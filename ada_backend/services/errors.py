@@ -60,6 +60,13 @@ class ProjectNotFound(Exception):
         super().__init__(f"Project not found: {project_id}")
 
 
+class ProjectNotInOrganization(Exception):
+    def __init__(self, project_id: UUID, organization_id: UUID):
+        self.project_id = project_id
+        self.organization_id = organization_id
+        super().__init__(f"Project {project_id} does not belong to organization {organization_id}")
+
+
 class RunNotFound(Exception):
     def __init__(self, run_id: UUID):
         self.run_id = run_id

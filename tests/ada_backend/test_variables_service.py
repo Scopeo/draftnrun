@@ -8,6 +8,7 @@ import pytest
 from ada_backend.database import models as db
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.schemas.variable_schemas import VariableDefinitionUpsertRequest
+from ada_backend.services.errors import ProjectNotInOrganization
 from ada_backend.services.variables_service import (
     get_set_service,
     list_definitions_service,
@@ -110,7 +111,7 @@ def test_upsert_with_cross_org_project_id_raises():
         session.flush()
 
         body = VariableDefinitionUpsertRequest(type="string", project_ids=[other_pid])
-        with pytest.raises(ValueError, match="does not belong to organization"):
+        with pytest.raises(ProjectNotInOrganization, match="does not belong to organization"):
             upsert_definition_service(session, org_id, "test_var", body)
 
 
