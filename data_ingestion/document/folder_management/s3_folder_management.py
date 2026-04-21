@@ -100,8 +100,6 @@ class S3FolderManager(FolderManager):
         return self._get_local_presigned_url(file_path)
 
     def _get_cloud_presigned_url(self, file_path: str, expiration: int) -> str:
-        if self._s3_url_endpoint:
-            raise ValueError("IS_CLOUD_S3 is enabled, but S3_ENDPOINT_URL is configured")
         s3_path_to_file = self._files[file_path]["s3_path"]
         if not s3_path_to_file:
             raise ValueError(f"Missing s3_path for file: {file_path}")
