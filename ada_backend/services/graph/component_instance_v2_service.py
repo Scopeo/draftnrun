@@ -89,16 +89,17 @@ def update_single_component(
     if not existing:
         raise ValueError(f"Component instance {instance_id} not found")
 
-    node_ids = {node.id for node in get_component_nodes(session, graph_runner_id)}
-    if instance_id not in node_ids:
+    nodes = get_component_nodes(session, graph_runner_id)
+    current_node = next((n for n in nodes if n.id == instance_id), None)
+    if current_node is None:
         raise ValueError(f"Component instance {instance_id} does not belong to graph {graph_runner_id}")
 
     label = payload.label if payload.label is not None else existing.name
-    is_start_node = payload.is_start_node if payload.is_start_node is not None else existing.is_start_node
+    is_start_node = payload.is_start_node if payload.is_start_node is not None else current_node.is_start_node
 
     instance_schema = _to_component_instance_schema(
         instance_id=instance_id,
-        component_id=existing.component_id,
+        component_id=existing.component_version.component_id,
         component_version_id=existing.component_version_id,
         label=label,
         is_start_node=is_start_node,
