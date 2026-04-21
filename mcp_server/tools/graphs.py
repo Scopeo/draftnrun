@@ -479,10 +479,10 @@ def register(mcp: FastMCP) -> None:
     ) -> dict:
         """Update specific parameters on a single component instance within a graph.
 
-        Performs a server-side read-modify-write: fetches the current graph,
-        merges the provided parameters into the target component, and saves
-        the full graph back. Only the parameter keys you provide are changed —
-        all other parameters and the rest of the graph are preserved.
+        Fetches the current graph, merges the provided parameters into the
+        target component, and saves via the V2 single-component endpoint.
+        Only the parameter keys you provide are changed — all other parameters
+        and the rest of the graph are preserved.
 
         This is the recommended tool for single-parameter changes on workflow
         components (e.g. updating an AI Agent's ``initial_prompt`` or a
@@ -529,19 +529,22 @@ def register(mcp: FastMCP) -> None:
                 f"Available parameters: {available}"
             )
 
-        _convert_field_expressions_to_write_format(instances)
+        write_params = [p for p in existing_params if p.get("kind", "parameter") != "input"]
 
-        graph_data = {
-            "component_instances": instances,
-            "edges": graph.get("edges", []),
-            "relationships": graph.get("relationships", []),
+        _convert_field_expressions_to_write_format([target])
+        input_port_instances = target.get("input_port_instances", [])
+
+        component_data = {
+            "parameters": write_params,
+            "input_port_instances": input_port_instances,
         }
-        if graph.get("playground_input_schema") is not None:
-            graph_data["playground_input_schema"] = graph["playground_input_schema"]
-        if graph.get("playground_field_types") is not None:
-            graph_data["playground_field_types"] = graph["playground_field_types"]
+
+        v2_path = (
+            f"/v2/projects/{project_id}/graph/{graph_runner_id}"
+            f"/components/{component_instance_id}"
+        )
         try:
-            await api.put(f"/projects/{project_id}/graph/{graph_runner_id}", jwt, json=graph_data)
+            await api.put(v2_path, jwt, json=component_data)
         except ToolError as exc:
             raise ToolError(_enrich_graph_update_error(str(exc))) from exc
 

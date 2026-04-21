@@ -59,6 +59,7 @@ from ada_backend.services.graph.delete_graph_service import delete_component_ins
 from ada_backend.services.graph.output_port_instance_sync import sync_output_port_instances_from_schema
 from ada_backend.services.graph.playground_utils import extract_playground_configuration
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
+from ada_backend.utils.redis_client import notify_graph_changed
 from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.errors import FieldExpressionError, FieldExpressionParseError
 from engine.field_expressions.parser import parse_expression_flexible, unparse_expression
@@ -228,6 +229,7 @@ async def update_graph_with_history_service(
     if has_changed:
         modification_history = insert_modification_history(session, graph_runner_id, user_id, current_hash)
         LOGGER.info(f"Logged modification history for graph {graph_runner_id} by user {user_id or 'unknown'}")
+        notify_graph_changed(project_id, graph_runner_id, "graph.updated")
 
     if modification_history:
         graph_update_response.last_edited_time = modification_history.created_at

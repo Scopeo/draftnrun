@@ -127,10 +127,10 @@ async def websocket_run_stream(
     Auth: JWT (Authorization: Bearer header or ?token= for playground).
     Sends JSON messages: node.started, node.completed, run.completed, run.failed.
     """
+    await websocket.accept()
     auth = await _verify_ws_auth(websocket, run_id, session)
     if auth is None:
         return
-    await websocket.accept()
 
     if not get_redis_client():
         LOGGER.warning("WebSocket run_id=%s: Redis unavailable, closing", run_id)

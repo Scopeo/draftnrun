@@ -21,6 +21,7 @@ import { useAgentsQuery } from '@/composables/queries/useAgentsQuery'
 import SaveDeployButtons from '@/components/shared/SaveDeployButtons.vue'
 import { useStudioGraph } from '@/composables/useStudioGraph'
 import { useStudioBreadcrumbs } from '@/composables/useStudioBreadcrumbs'
+import { useGraphDisplayStream } from '@/composables/useGraphDisplayStream'
 
 const emit = defineEmits<{
   openCronModal: []
@@ -61,6 +62,13 @@ const graph = useStudioGraph({
   refreshProjectData,
   selectedNode,
 })
+
+// ─── Graph display stream (auto-refreshes canvas on external changes) ─
+const { wsDisconnected, refreshing: streamRefreshing, manualRefresh } = useGraphDisplayStream(
+  projectId,
+  () => graph.loadGraphData(projectId.value),
+  graph.hasUnsavedChanges,
+)
 
 // ─── Breadcrumb composable ───────────────────────────────────────────
 const crumbs = useStudioBreadcrumbs({
@@ -237,6 +245,16 @@ const { breadcrumbs, handleBreadcrumbClick, goToOverviewAndClearHistory, resetVi
         :on-schedule-click="() => emit('openCronModal')"
         :on-endpoint-polling-click="() => emit('openEndpointPollingModal')"
       />
+      <VBtn
+        icon
+        variant="text"
+        size="x-small"
+        :loading="streamRefreshing"
+        @click="manualRefresh"
+      >
+        <VIcon icon="tabler-refresh" size="18" />
+        <VTooltip activator="parent">Refresh graph</VTooltip>
+      </VBtn>
     </template>
 
     <VueFlow
@@ -491,4 +509,5 @@ const { breadcrumbs, handleBreadcrumbClick, goToOverviewAndClearHistory, resetVi
 .vue-flow.read-only .vue-flow__node {
   cursor: default !important;
 }
+
 </style>

@@ -262,7 +262,12 @@ watch(
       :is-valid-connection="isValidConnection"
     />
 
-    <VCard :elevation="1" color="surface" class="node-card" :class="{ 'worker-card': isWorker }">
+    <VCard
+      :elevation="1"
+      color="surface"
+      class="node-card"
+      :class="{ 'worker-card': isWorker }"
+    >
       <div class="node-content">
         <div class="node-icon-wrapper">
           <Icon v-if="isProviderLogo(data.icon)" :icon="data.icon" :width="20" :height="20" />
@@ -512,4 +517,5 @@ watch(
 .vertical-handle {
   background: rgb(var(--v-theme-secondary));
 }
+
 </style>

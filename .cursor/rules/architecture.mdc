@@ -50,6 +50,16 @@ Free-form string tags on projects via `project_tags` table (many-to-many). Tags 
 - Ingestion worker: Redis Stream consumer, separate process.
 - Scheduler: APScheduler + PostgreSQL job store, separate process. Registry-based cron types in `ada_backend/services/cron/`. See `ada_backend/services/cron/Readme.md`.
 
+### Live Graph Display Streaming
+
+Three WebSocket endpoints stream real-time events via Redis Pub/Sub:
+
+- **Per-run** (`/ws/runs/{run_id}`, `run_stream_router.py`): streams `node.started`, `node.completed`, `run.completed`, `run.failed` for a single run. Channel: `run:{run_id}`.
+- **Graph display** (`/ws/projects/{project_id}/graph-updates`, `graph_display_stream_router.py`): streams `graph.changed` events when the graph structure is modified (component CRUD, topology changes, V1 full-graph updates). Channel: `graph-updates:{project_id}`. The frontend debounces and re-fetches the graph on each event.
+- **QA session** (`/ws/qa/{project_id}/{session_id}`, `qa_stream_router.py`): streams QA entry progress. Channel: `qa:{session_id}`.
+
+Graph mutations publish `graph.changed` events from `graph_mutation_helpers.py` (V2 endpoints) and `update_graph_service.py` (V1 endpoint) via `publish_graph_update_event()`. All WS endpoints share the same pattern: JWT auth via `websocket_auth.py`, Redis Pub/Sub subscriber in a background thread, asyncio queue relay, 25s ping keepalive.
+
 ### Run Failure Alerting
 
 `ada_backend/services/alerting/`: sends email alerts via Resend when webhook- or cron-triggered runs fail. Hooked into `update_run_status()` and `fail_pending_run()` in `run_service.py`. Fires in a background thread (non-blocking). Recipients configured per project in `project_alert_emails` table, managed via `GET/POST/DELETE /projects/{project_id}/alert-emails`. Requires `RESEND_API_KEY` + `RESEND_FROM_EMAIL`; silently no-ops when unconfigured.

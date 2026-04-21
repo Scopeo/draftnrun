@@ -139,7 +139,7 @@ def delete_component_v2(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        graph_mutation_helpers.delete_component_v2(session, graph_runner_id, instance_id, user.id)
+        graph_mutation_helpers.delete_component_v2(session, graph_runner_id, project_id, instance_id, user.id)
     except GraphNotBoundToProjectError:
         LOGGER.warning("Graph runner %s not bound to project %s", graph_runner_id, project_id)
         raise HTTPException(
@@ -170,7 +170,7 @@ def update_graph_topology_v2(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return graph_mutation_helpers.save_graph_topology_v2(session, graph_runner_id, user.id, payload)
+        return graph_mutation_helpers.save_graph_topology_v2(session, graph_runner_id, project_id, user.id, payload)
     except GraphConflictError:
         LOGGER.warning("Optimistic lock conflict on graph runner %s", graph_runner_id)
         raise HTTPException(

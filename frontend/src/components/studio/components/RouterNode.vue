@@ -120,7 +120,11 @@ const showLeftRightHandles = computed(() => {
       :is-valid-connection="isValidRouterConnection"
     />
 
-    <VCard :elevation="1" color="surface" class="router-card">
+    <VCard
+      :elevation="1"
+      color="surface"
+      class="router-card"
+    >
       <!-- Header -->
       <div class="router-header">
         <div class="router-icon-wrapper">
@@ -359,4 +363,5 @@ const showLeftRightHandles = computed(() => {
   background: rgb(var(--v-theme-success));
   box-shadow: 0 0 12px rgba(var(--v-theme-success), 0.6);
 }
+
 </style>
