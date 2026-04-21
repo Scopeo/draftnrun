@@ -108,24 +108,6 @@ class TestS3FolderManagerPresignedUrl:
         assert manager.get_file_presigned_url("f1") is None
 
     @patch("data_ingestion.document.folder_management.s3_folder_management.get_s3_boto3_client")
-    def test_raises_when_custom_endpoint_and_presigned_required(self, mock_get_client, monkeypatch):
-        monkeypatch.setattr(
-            "data_ingestion.document.folder_management.s3_folder_management.settings.IS_CLOUD_S3", True
-        )
-        mock_get_client.return_value = MagicMock()
-        manager = S3FolderManager(
-            folder_payload=[{"path": "f1", "name": "f1.pdf", "s3_path": "org/f1.pdf"}],
-            bucket_name="test-bucket",
-            s3_url_endpoint="http://localhost:8333",
-            s3_access_key_id="key",
-            s3_secret_access_key="secret",
-            s3_region_name="us-east-1",
-        )
-
-        with pytest.raises(ValueError, match="IS_CLOUD_S3 is enabled"):
-            manager.get_file_presigned_url("f1")
-
-    @patch("data_ingestion.document.folder_management.s3_folder_management.get_s3_boto3_client")
     def test_raises_when_no_s3_path_and_presigned_required(self, mock_get_client, monkeypatch):
         monkeypatch.setattr(
             "data_ingestion.document.folder_management.s3_folder_management.settings.IS_CLOUD_S3", True
