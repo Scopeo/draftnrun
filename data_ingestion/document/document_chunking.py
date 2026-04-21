@@ -118,6 +118,7 @@ def document_chunking_mapping(
     document_chunking_mapping = {
         FileDocumentType.PDF.value: pdf_processor,
         FileDocumentType.DOCX.value: docx_processor,
+        FileDocumentType.DOC.value: docx_processor,
         FileDocumentType.MARKDOWN.value: partial(
             get_chunks_from_markdown,
             get_file_content_func=get_file_content_func,
