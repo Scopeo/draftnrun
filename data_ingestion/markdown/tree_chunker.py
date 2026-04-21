@@ -67,7 +67,7 @@ class TreeChunker:
     """Class to generate chunks of markdown content.
     Markdown node are combined into chunks of a maximum token size."""
 
-    def __init__(self, model_name: str = "gpt-4o-mini", chunk_size: int = 2048, chunk_overlap: int = 0):
+    def __init__(self, model_name: str = "text-embedding-3-large", chunk_size: int = 2048, chunk_overlap: int = 0):
         self._chunk_size = chunk_size
         self._chunk_overlap = chunk_overlap
         self._encoding = tiktoken.encoding_for_model(model_name)

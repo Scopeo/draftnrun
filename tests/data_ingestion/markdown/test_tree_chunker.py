@@ -15,7 +15,7 @@ def mock_encoding():
 
 @pytest.fixture
 def chunker(mock_encoding):
-    chunker = TreeChunker(model_name="gpt-4o-mini", chunk_size=80)
+    chunker = TreeChunker(chunk_size=80)
     chunker._encoding = mock_encoding
     return chunker
 
