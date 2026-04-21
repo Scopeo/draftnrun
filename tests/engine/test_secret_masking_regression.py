@@ -1,6 +1,6 @@
 """DRA-1225 regression surface: no over-redaction, no breakage.
 
-Validates that the heuristic redaction layer (engine/log_redaction.py) and the
+Validates that the heuristic redaction layer (ada_backend/utils/log_redaction.py) and the
 secret resolver simplification (secret_resolver.py always returns str) do not
 break legitimate data flows.
 """
@@ -12,9 +12,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
+from ada_backend.utils.log_redaction import REDACTED_PLACEHOLDER, redact_sensitive
 from engine.components.tools.api_call_tool import APICallTool, APICallToolInputs, APICallToolOutputs
 from engine.components.types import ComponentAttributes
-from engine.log_redaction import REDACTED_PLACEHOLDER, redact_sensitive
 from engine.secret_utils import unwrap_secret, unwrap_secrets
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager

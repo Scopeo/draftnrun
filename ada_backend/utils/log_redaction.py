@@ -1,18 +1,15 @@
 """Best-effort redaction helpers for Sentry events and untyped span attributes.
 
-This is **defense-in-depth only**. The primary boundary for secrets is
+This is defense-in-depth only. The primary boundary for secrets is
 ``pydantic.SecretStr`` typing + explicit unwrap at the execution boundary, with
 ``engine/trace/serializer.py`` masking any ``SecretStr`` that reaches a span or
-log. This helper is used in the narrow places where that boundary cannot apply:
+log.
 
-- ``before_send*`` hooks for Sentry (exception messages are arbitrary text).
-- The MCP ``TOOL_PARAMETERS`` span attribute, where arguments are provided by
-  external callers / the LLM and cannot be typed.
-
-TODO(security): the marker list below is a name-based heuristic. It will miss
-secrets stored under an unexpected key and will over-redact benign fields whose
-name contains a marker substring. Prefer typing new fields as ``SecretStr`` and
-avoid adding new call sites to this module.
+TODO(architecture): extract this module to a runtime-neutral shared package and
+ensure all worker/API images include it. It currently lives under
+``ada_backend.utils`` because the webhook worker image does not ship the
+``engine`` package, while the API, scheduler, ingestion worker, and engine code
+all already depend on ``ada_backend`` at runtime.
 """
 
 from __future__ import annotations
@@ -57,13 +54,7 @@ def is_sensitive_key(key: str | None) -> bool:
 
 
 def redact_sensitive(value: Any, key: str | None = None) -> Any:
-    """Recursively redact values whose key matches a sensitive marker.
-
-    Dicts, lists, tuples and sets are walked; strings are passed through the
-    ``Bearer ...`` regex so auth headers embedded in unstructured text are
-    replaced even when the surrounding key is not sensitive. ``SecretStr``
-    instances always render as their masked representation.
-    """
+    """Recursively redact values whose key matches a sensitive marker."""
     if isinstance(value, SecretStr):
         return REDACTED_PLACEHOLDER
 
@@ -95,12 +86,5 @@ def redact_mapping(mapping: dict[str, Any]) -> dict[str, Any]:
 
 
 def scrub_sentry_event(event: Any) -> Any:
-    """``before_send`` / ``before_send_log`` / ``before_send_transaction`` hook.
-
-    Returns the same event shape with sensitive values replaced. Wired into
-    ``ada_backend/main.py``, ``ada_backend/run_scheduler.py`` and
-    ``workers/worker/base_worker.py``. ``mcp_server/server.py`` keeps its own
-    historical scrubber with different key-based and bearer-token regex logic;
-    parity between the two implementations is not guaranteed.
-    """
+    """``before_send`` / ``before_send_log`` / ``before_send_transaction`` hook."""
     return redact_sensitive(event)

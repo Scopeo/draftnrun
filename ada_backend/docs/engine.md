@@ -123,8 +123,10 @@ plaintext (for example prompt rendering or external client construction). The tr
 ### Secret Redaction
 
 Primary boundary: typed `SecretStr` + explicit unwrap at boundaries.
-`engine/log_redaction.py` (`redact_sensitive`, `scrub_sentry_event`) is best-effort defense-in-depth for untyped
-inputs/events where `SecretStr` cannot be applied directly.
+`ada_backend/utils/log_redaction.py` (`redact_sensitive`, `scrub_sentry_event`) is best-effort defense-in-depth for
+untyped inputs/events where `SecretStr` cannot be applied directly. This currently lives under `ada_backend` because
+the webhook worker image does not ship `engine/`; extract it later to a runtime-neutral shared module once all worker
+images can include that package.
 
 ## Legacy Compatibility
 

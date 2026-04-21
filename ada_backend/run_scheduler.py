@@ -13,7 +13,7 @@ from ada_backend.scheduler.service import (
     start_scheduler,
     stop_scheduler,
 )
-from engine.log_redaction import scrub_sentry_event
+from ada_backend.utils.log_redaction import scrub_sentry_event
 from engine.trace.trace_context import set_trace_manager
 from logger import setup_logging
 from settings import settings

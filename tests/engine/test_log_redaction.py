@@ -1,6 +1,6 @@
 from pydantic import SecretStr
 
-from engine.log_redaction import (
+from ada_backend.utils.log_redaction import (
     REDACTED_PLACEHOLDER,
     is_sensitive_key,
     redact_sensitive,

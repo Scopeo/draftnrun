@@ -13,6 +13,7 @@ import redis
 import sentry_sdk
 from dotenv import load_dotenv
 
+from ada_backend.utils.log_redaction import scrub_sentry_event
 from settings import settings
 
 logger = logging.getLogger(__name__)
@@ -28,8 +29,6 @@ logger.info(f"loading_env_vars path={dotenv_path}")
 load_dotenv(dotenv_path=dotenv_path)
 
 if settings.SENTRY_DSN_REDIS:
-    from engine.log_redaction import scrub_sentry_event
-
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN_REDIS,
         environment=settings.SENTRY_ENVIRONMENT,

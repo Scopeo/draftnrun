@@ -8,13 +8,13 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field
 
 from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
+from ada_backend.utils.log_redaction import redact_sensitive
 from engine.components.component import Component
 from engine.components.types import (
     ComponentAttributes,
     ToolDescription,
 )
 from engine.components.utils import load_str_to_json
-from engine.log_redaction import redact_sensitive
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
