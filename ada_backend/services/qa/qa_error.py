@@ -56,7 +56,7 @@ class CSVEmptyFileError(QAServiceError):
 
 
 class CSVExportError(QAServiceError):
-    """Raised when CSV export fails (empty dataset, oversized output, etc.)."""
+    """Raised when CSV export fails."""
 
     status_code = 404
 
@@ -107,12 +107,7 @@ class InvalidFormatError(QAServiceError):
 
 
 class QADatasetNotInProjectError(QAServiceError):
-    """Raised when a dataset is not linked to the given project.
-
-    Default status is 400 (inherited from ``QAServiceError``) to match the
-    historical contract of update/delete/column/import endpoints. The two
-    run endpoints remap this error to 404 locally in the router.
-    """
+    """Raised when a dataset is not linked to the given project"""
 
     def __init__(self, project_id: UUID, dataset_id: UUID):
         self.project_id = project_id
