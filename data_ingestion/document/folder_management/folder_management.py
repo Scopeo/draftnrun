@@ -12,6 +12,7 @@ LOGGER = logging.getLogger(__name__)
 MIME_MAPPING = {
     "application/pdf": "PDF",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+    "application/msword": "DOC",
     "text/markdown": "MARKDOWN",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "EXCEL",
     "application/vnd.ms-excel": "XLS",
@@ -24,6 +25,7 @@ MIME_MAPPING = {
 class FileDocumentType(Enum):
     PDF = ".pdf"
     DOCX = ".docx"
+    DOC = ".doc"
     MARKDOWN = ".md"
     EXCEL = ".xlsx"
     XLS = ".xls"

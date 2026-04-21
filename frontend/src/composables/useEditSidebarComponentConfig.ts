@@ -98,7 +98,7 @@ export function useEditSidebarComponentConfig(
         component: VFileInput,
         props: {
           label: param.ui_component_properties?.label,
-          accept: param.ui_component_properties?.accept || '.docx',
+          accept: param.ui_component_properties?.accept || '.doc,.docx',
           multiple: param.ui_component_properties?.multiple || false,
           required: !param.nullable,
           showSize: true,

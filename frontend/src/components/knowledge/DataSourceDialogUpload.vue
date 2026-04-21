@@ -53,8 +53,9 @@ const toDocumentReadingMode = (value: unknown): DocumentReadingMode => {
 }
 
 const getFileExtensionsByMode = (mode: DocumentReadingMode) => {
-  if (mode === 'llamaparse') return ['.pdf', '.docx', '.xls', '.xlsx', '.xlsm']
-  return ['.pdf', '.docx']
+  if (mode === 'llamaparse') return ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.xlsm']
+  if (mode === 'mistral_ocr') return ['.pdf', '.docx']
+  return ['.pdf', '.doc', '.docx']
 }
 
 const allowedExtensions = computed(() => getFileExtensionsByMode(documentReadingMode.value))

@@ -1,5 +1,6 @@
 import logging
 import re
+import subprocess
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -11,6 +12,33 @@ from data_ingestion.utils import content_as_temporary_file_path, get_image_descr
 from engine.llm_services.llm_service import VisionService
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _convert_doc_to_docx(doc_path: str) -> str:
+    """Convert a legacy .doc file to .docx using LibreOffice headless.
+
+    Returns the path to the converted .docx file.
+    Raises RuntimeError if the conversion fails.
+    """
+    doc_path = Path(doc_path)
+    output_dir = doc_path.parent
+
+    result = subprocess.run(
+        ["libreoffice", "--headless", "--convert-to", "docx", str(doc_path), "--outdir", str(output_dir)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    docx_path = output_dir / f"{doc_path.stem}.docx"
+    if result.returncode != 0 or not docx_path.exists():
+        raise RuntimeError(
+            f"LibreOffice failed to convert {doc_path.name} to .docx: "
+            f"exit_code={result.returncode}, stderr={result.stderr}"
+        )
+
+    LOGGER.info(f"Converted {doc_path.name} -> {docx_path.name}")
+    return str(docx_path)
 
 
 def extract_sections_around_images(markdown_text: str) -> dict:
@@ -108,8 +136,13 @@ async def get_chunks_from_docx(
 ) -> list[FileChunk]:
     try:
         content_to_process = get_file_content(document.id)
-        with content_as_temporary_file_path(content_to_process, suffix=".docx") as file_path:
+        suffix = document.type.value if document.type.value in (".doc", ".docx") else ".docx"
+        with content_as_temporary_file_path(content_to_process, suffix=suffix) as file_path:
+            converted_docx_path = None
             try:
+                if suffix == ".doc":
+                    file_path = _convert_doc_to_docx(file_path)
+                    converted_docx_path = file_path
                 markdown_text = await docx_parser(file_path, **kwargs)
             except Exception as e:
                 LOGGER.error(
@@ -117,6 +150,9 @@ async def get_chunks_from_docx(
                     exc_info=True,
                 )
                 raise Exception(f"Error parsing DOCX {document.file_name}") from e
+            finally:
+                if converted_docx_path and Path(converted_docx_path).exists():
+                    Path(converted_docx_path).unlink()
         return chunk_markdown(
             document_to_process=document,
             content=markdown_text,
