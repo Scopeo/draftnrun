@@ -23,7 +23,6 @@ from ada_backend.services.knowledge_service import (
     update_document_chunks_service,
 )
 
-
 router = APIRouter(prefix="/knowledge", tags=["Knowledge"])
 
 

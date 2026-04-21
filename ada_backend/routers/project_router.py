@@ -32,7 +32,7 @@ from ada_backend.schemas.run_schema import AsyncRunAcceptedSchema
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent, setup_tracing_context
 from ada_backend.services.api_key_service import verify_project_access
 from ada_backend.services.charts_service import get_charts_by_projects
-from ada_backend.services.errors import RunError
+from ada_backend.services.errors import ProjectNotFound, RunError
 from ada_backend.services.metrics.monitor_kpis_service import get_monitoring_kpis_by_projects
 from ada_backend.services.project_service import (
     add_tags_to_project_service,

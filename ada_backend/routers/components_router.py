@@ -21,6 +21,7 @@ from ada_backend.services.components_service import (
     get_all_components_endpoint,
     get_all_components_global_endpoint,
 )
+
 router = APIRouter(prefix="/components", tags=["Components"])
 LOGGER = logging.getLogger(__name__)
 

@@ -94,6 +94,7 @@ class ProjectNotInOrganization(ServiceError):
 
 class RunNotFound(ServiceError):
     status_code = 404
+
     def __init__(self, run_id: UUID):
         self.run_id = run_id
         super().__init__(f"Run not found: {run_id}")
