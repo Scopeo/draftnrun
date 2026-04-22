@@ -3,9 +3,12 @@ from uuid import UUID
 
 class ServiceError(Exception):
     status_code: int = 500
+    _safe_detail: str | None = None
 
     @property
     def detail(self) -> str:
+        if self.status_code >= 500:
+            return self._safe_detail or "An internal error occurred."
         return str(self)
 
 
@@ -112,6 +115,7 @@ class RunResultNotFound(ServiceError):
 class ResultsBucketNotConfigured(ServiceError):
     """Raised when RESULTS_S3_BUCKET_NAME is not set but run result storage is required."""
     status_code = 503
+    _safe_detail = "Results bucket not configured"
 
     def __init__(self):
         super().__init__("Results bucket not configured")

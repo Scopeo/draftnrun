@@ -63,7 +63,26 @@ async def test_service_error_handler_returns_server_error():
     handler = _get_handlers()[ServiceError]
     response = await handler(_build_request(), DemoServerError("dependency unavailable"))
     assert response.status_code == 503
-    assert json.loads(response.body) == {"detail": "dependency unavailable"}
+    assert json.loads(response.body) == {"detail": "An internal error occurred."}
+
+
+@pytest.mark.asyncio
+async def test_service_error_5xx_with_safe_detail():
+    """5xx errors with _safe_detail expose the safe message instead of the generic one."""
+
+    class SafeServerError(ServiceError):
+        status_code = 503
+        _safe_detail = "Service temporarily unavailable"
+
+        def __init__(self):
+            super().__init__("internal: redis connection pool exhausted")
+
+    handler = _get_handlers()[ServiceError]
+    exc = SafeServerError()
+    assert str(exc) == "internal: redis connection pool exhausted"
+    response = await handler(_build_request(), exc)
+    assert response.status_code == 503
+    assert json.loads(response.body) == {"detail": "Service temporarily unavailable"}
 
 
 @pytest.mark.asyncio
