@@ -65,8 +65,8 @@ from ada_backend.workers.run_queue_worker import _request_drain, start_run_queue
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from logger import setup_logging
-from shared.log_redaction import scrub_sentry_event
 from settings import settings
+from shared.log_redaction import scrub_sentry_event
 
 setup_logging()
 

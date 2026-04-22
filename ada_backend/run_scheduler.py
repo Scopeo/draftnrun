@@ -15,8 +15,8 @@ from ada_backend.scheduler.service import (
 )
 from engine.trace.trace_context import set_trace_manager
 from logger import setup_logging
-from shared.log_redaction import scrub_sentry_event
 from settings import settings
+from shared.log_redaction import scrub_sentry_event
 
 LOGGER = logging.getLogger(__name__)
 
