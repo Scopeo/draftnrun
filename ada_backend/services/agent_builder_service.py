@@ -28,8 +28,8 @@ from ada_backend.services.registry import FACTORY_REGISTRY
 from ada_backend.services.tool_description_generator import generate_tool_description
 from ada_backend.utils.secret_resolver import replace_secret_placeholders
 from engine.components.component import Component as EngineComponent
-from engine.errors import EngineError
 from engine.components.types import ComponentAttributes
+from engine.errors import EngineError
 from engine.field_expressions.ast import ConcatNode, JsonBuildNode, LiteralNode, VarNode
 from engine.field_expressions.serializer import from_json as expression_from_json
 from engine.graph_runner.field_expression_management import evaluate_expression
