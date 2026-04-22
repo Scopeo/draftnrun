@@ -375,19 +375,22 @@ def test_sentry_init_registers_scrubbing_hooks(monkeypatch):
     before_send_log = sentry_kwargs["before_send_log"]
     before_send_transaction = sentry_kwargs["before_send_transaction"]
 
-    event = {
-        "message": "Authorization: Bearer super-secret-token",
-        "extra": {"api_key": "plain-secret", "public": "ok"},
-    }
+    def make_event_payload() -> dict:
+        return {
+            "message": "Authorization: Bearer super-secret-token",
+            "extra": {"api_key": "plain-secret", "public": "ok"},
+        }
 
-    scrubbed_event = before_send(event, None)
-    scrubbed_log = before_send_log(event, None)
-    scrubbed_transaction = before_send_transaction(event, None)
+    scrubbed_event = before_send(make_event_payload(), None)
+    scrubbed_log = before_send_log(make_event_payload(), None)
+    scrubbed_transaction = before_send_transaction(make_event_payload(), None)
 
     assert scrubbed_event["extra"]["api_key"] == REDACTED_PLACEHOLDER
     assert scrubbed_log["extra"]["api_key"] == REDACTED_PLACEHOLDER
     assert scrubbed_transaction["extra"]["api_key"] == REDACTED_PLACEHOLDER
     assert "super-secret-token" not in scrubbed_event["message"]
+    assert "super-secret-token" not in scrubbed_log["message"]
+    assert "super-secret-token" not in scrubbed_transaction["message"]
 
     importlib.reload(reloaded_module)
 
