@@ -58,6 +58,20 @@ function clearAllAuthAndOrgState() {
   }
 }
 
+// Derive project ref from the anon key JWT (works even with custom domain URLs)
+function getSupabaseProjectRef(): string {
+  try {
+    const jwt = import.meta.env.VITE_SUPABASE_ANON_KEY
+    if (jwt) {
+      const payload = JSON.parse(atob(jwt.split('.')[1]))
+      if (payload.ref) return payload.ref
+    }
+  } catch {
+    // fall through
+  }
+  return import.meta.env.VITE_SUPABASE_PROJECT_REF || 'unknown'
+}
+
 // Resolve quickly from localStorage; Supabase's onAuthStateChange may fire later
 setTimeout(() => {
   if (!initialAuthEventReceived) {
@@ -65,7 +79,7 @@ setTimeout(() => {
 
     let isLoggedIn = false
     try {
-      const storageKey = `sb-${import.meta.env.VITE_SUPABASE_PROJECT_REF}-auth-token`
+      const storageKey = `sb-${getSupabaseProjectRef()}-auth-token`
       const authData = localStorage.getItem(storageKey)
       if (authData) {
         isLoggedIn = !!JSON.parse(authData)?.access_token
@@ -391,7 +405,7 @@ export async function logout() {
     localStorage.setItem('explicitLogout', 'true')
 
     // Also clear Supabase localStorage to prevent session recovery
-    const supabaseStorageKey = `sb-${import.meta.env.VITE_SUPABASE_PROJECT_REF}-auth-token`
+    const supabaseStorageKey = `sb-${getSupabaseProjectRef()}-auth-token`
 
     localStorage.removeItem(supabaseStorageKey)
   }
@@ -485,17 +499,25 @@ export async function handleGoogleAuthCallback() {
     if (isNewUser) {
       logger.info('New Google user detected, setting up organization...')
 
-      // Call complete-user-setup to create organization
-      const setupResult = await completeUserSetup(user, session)
+      try {
+        const setupResult = await Promise.race([
+          completeUserSetup(user, session),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('User setup timed out')), 10_000)
+          ),
+        ])
 
-      if (setupResult.success) {
-        logger.info('Organization created for Google user', { data: setupResult.organization })
+        if (setupResult.success) {
+          logger.info('Organization created for Google user', { data: setupResult.organization })
 
-        // Auto-select the created organization
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('selectedOrgId', setupResult.organization.id)
-          localStorage.setItem('selectedOrgRole', 'admin')
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('selectedOrgId', setupResult.organization.id)
+            localStorage.setItem('selectedOrgRole', 'admin')
+          }
         }
+      } catch (setupErr) {
+        // Non-fatal: user is authenticated, org setup can be retried later
+        logger.warn('User setup failed or timed out, continuing login', { error: setupErr })
       }
     }
 
