@@ -14,6 +14,7 @@ import sentry_sdk
 from dotenv import load_dotenv
 
 from settings import settings
+from shared.log_redaction import scrub_sentry_event
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,9 @@ if settings.SENTRY_DSN_REDIS:
         send_default_pii=False,
         enable_logs=True,
         traces_sample_rate=0.1,
+        before_send=lambda event, hint: scrub_sentry_event(event),
+        before_send_log=lambda log, hint: scrub_sentry_event(log),
+        before_send_transaction=lambda event, hint: scrub_sentry_event(event),
     )
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
@@ -335,18 +339,14 @@ class BaseWorker:
                 )
                 continue
             if not claimed:
-                logger.info(
-                    f"retry_message_no_longer_pending stream={self.stream_name} message_id={entry.message_id}"
-                )
+                logger.info(f"retry_message_no_longer_pending stream={self.stream_name} message_id={entry.message_id}")
                 continue
             self._dispatch(entry.message_id, entry.fields, consumer_name)
 
     def run(self) -> None:
         """Main worker loop — crash-safe via Redis Streams consumer groups."""
         consumer_name = self._consumer_name()
-        logger.info(
-            f"worker_starting stream={self.stream_name} consumer={consumer_name} group={CONSUMER_GROUP}"
-        )
+        logger.info(f"worker_starting stream={self.stream_name} consumer={consumer_name} group={CONSUMER_GROUP}")
 
         self._reclaim_pending(consumer_name)
         last_reclaim_at = time.monotonic()
