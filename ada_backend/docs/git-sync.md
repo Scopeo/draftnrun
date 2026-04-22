@@ -113,11 +113,27 @@ File-based format with one file per component, all in the same folder:
 - No tokens stored in the database
 - Setup/management endpoints require DEVELOPER role via standard auth
 
+## Frontend Integration
+
+The Integrations page (`connections.vue`) includes a GitHub card when `GITHUB_APP_SLUG` is configured.
+
+Flow:
+1. User clicks "Connect" → popup opens to `https://github.com/apps/{slug}/installations/new`
+2. After installation, GitHub redirects to the app's Setup URL (must be configured to `{FRONTEND_URL}/github/callback`)
+3. The callback page posts the `installation_id` back to the opener via `postMessage`
+4. A repo-picker dialog appears listing accessible repos (`GET /organizations/{org_id}/git-sync/installations/{id}/repos`)
+5. User selects a repo → `POST /organizations/{org_id}/git-sync` imports matching graph payloads
+
+API endpoints added for the frontend:
+- `GET /organizations/{org_id}/git-sync/github-app` — returns `{ configured, install_url }` (requires `GITHUB_APP_SLUG`)
+- `GET /organizations/{org_id}/git-sync/installations/{installation_id}/repos` — proxies `list_installation_repos`
+
 ## Env Vars
 
 | Var | Description |
 | --- | --- |
 | `GITHUB_APP_ID` | App ID from the GitHub App settings page |
+| `GITHUB_APP_SLUG` | URL slug of the GitHub App (from `github.com/apps/{slug}`) |
 | `GITHUB_APP_PRIVATE_KEY` | PEM private key (contents, not file path) |
 | `GITHUB_APP_WEBHOOK_SECRET` | Webhook secret configured on the GitHub App |
 

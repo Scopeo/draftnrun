@@ -8,17 +8,18 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.database.models import ProjectType
 from ada_backend.mixpanel_analytics import track_deployed_to_production
-from ada_backend.repositories import git_sync_repository
+from ada_backend.repositories import git_sync_repository, github_app_installation_repository
 from ada_backend.repositories.graph_runner_repository import (
     insert_graph_runner_and_bind_to_project,
 )
-from ada_backend.schemas.git_sync_schemas import GitSyncImportResult
+from ada_backend.schemas.git_sync_schemas import GitHubRepoSummary, GitSyncImportResult
 from ada_backend.schemas.pipeline.graph_schema import GraphSaveV2Schema, GraphUpdateSchema
 from ada_backend.services import github_client
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.graph_v2_mapper_service import graph_save_v2_to_graph_update
 from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.services.project_service import create_project_with_graph_runner
+from ada_backend.utils.github_state import verify_install_state
 from ada_backend.utils.redis_client import push_git_sync_task
 
 LOGGER = logging.getLogger(__name__)
@@ -39,6 +40,42 @@ class GraphJsonNotFound(Exception):
         self.repo = repo
         self.branch = branch
         super().__init__(f"No graph.json found in {repo} on branch {branch}")
+
+
+class InstallationOwnershipError(Exception):
+    """Raised when a GitHub installation belongs to a different organization."""
+
+    def __init__(self, installation_id: int):
+        self.installation_id = installation_id
+        super().__init__(f"GitHub installation {installation_id} belongs to another organization")
+
+
+def register_installation_if_new(session: Session, installation_id: int, organization_id: UUID) -> None:
+    """Register a GitHub installation for the org, or raise if it belongs to another org."""
+    existing = github_app_installation_repository.get_by_installation_id(session, installation_id)
+    if existing:
+        if existing.organization_id != organization_id:
+            raise InstallationOwnershipError(installation_id)
+        return
+    try:
+        github_app_installation_repository.register_installation(session, installation_id, organization_id)
+    except IntegrityError:
+        session.rollback()
+        existing = github_app_installation_repository.get_by_installation_id(session, installation_id)
+        if existing is None:
+            raise
+        if existing.organization_id != organization_id:
+            raise InstallationOwnershipError(installation_id)
+
+
+def ensure_installation_owned(session: Session, installation_id: int, organization_id: UUID) -> None:
+    """Assert that *installation_id* is already registered and belongs to *organization_id*.
+
+    Unlike ``register_installation_if_new`` this never auto-registers.
+    """
+    existing = github_app_installation_repository.get_by_installation_id(session, installation_id)
+    if not existing or existing.organization_id != organization_id:
+        raise InstallationOwnershipError(installation_id)
 
 
 async def _fetch_graph_update_payload(config: db.GitSyncConfig, commit_sha: str) -> GraphUpdateSchema:
@@ -91,7 +128,11 @@ async def import_from_github(
 
     Returns (imported, skipped) where imported is a list of typed import results,
     and skipped is a list of folder names that already had a sync config.
+
+    Raises InstallationOwnershipError if the installation belongs to another org.
     """
+    ensure_installation_owned(session, github_installation_id, organization_id)
+
     github_repo = f"{github_owner}/{github_repo_name}"
     head_sha = await github_client.get_branch_head_sha(github_repo, branch, github_installation_id)
     github_folders = await github_client.find_graph_json_folders(
@@ -329,3 +370,47 @@ def get_config(
     if not config or config.organization_id != organization_id:
         raise GitSyncConfigNotFound(config_id)
     return config
+
+
+async def list_installation_repos_summary(
+    session: Session,
+    installation_id: int,
+    organization_id: UUID,
+    user_id: UUID,
+    install_state: str | None = None,
+) -> list[GitHubRepoSummary]:
+    """List repos accessible to a GitHub App installation, returning only the fields the front-end needs.
+
+    On first call for a new installation the caller must supply a valid *install_state*
+    token (produced by the ``/github-app`` endpoint) so we can prove the org/user that
+    initiated the GitHub App install flow is the same one registering the installation.
+
+    Raises InstallationOwnershipError if the installation belongs to another org or if
+    state validation fails for a new installation.
+    """
+    existing = github_app_installation_repository.get_by_installation_id(session, installation_id)
+    if existing:
+        if existing.organization_id != organization_id:
+            raise InstallationOwnershipError(installation_id)
+    else:
+        if not install_state:
+            LOGGER.warning("Missing install state for new installation %s (org %s)", installation_id, organization_id)
+            raise InstallationOwnershipError(installation_id)
+        try:
+            verify_install_state(install_state, organization_id, user_id)
+        except ValueError:
+            LOGGER.warning("Invalid install state for installation %s (org %s)", installation_id, organization_id)
+            raise InstallationOwnershipError(installation_id)
+        register_installation_if_new(session, installation_id, organization_id)
+
+    repos = await github_client.list_installation_repos(installation_id)
+    return [
+        GitHubRepoSummary(
+            full_name=r.get("full_name", ""),
+            name=r.get("name", ""),
+            owner=r.get("owner", {}).get("login", ""),
+            default_branch=r.get("default_branch", "main"),
+            private=r.get("private", False),
+        )
+        for r in repos
+    ]

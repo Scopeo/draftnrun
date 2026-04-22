@@ -2,9 +2,10 @@ import hashlib
 import hmac
 import logging
 from typing import Annotated
+from urllib.parse import urlencode
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
@@ -14,6 +15,8 @@ from ada_backend.routers.auth_router import (
 )
 from ada_backend.schemas.auth_schema import AuthenticatedEntity
 from ada_backend.schemas.git_sync_schemas import (
+    GitHubAppInfoResponse,
+    GitHubRepoSummary,
     GitSyncConfigResponse,
     GitSyncImportRequest,
     GitSyncImportResponse,
@@ -21,12 +24,16 @@ from ada_backend.schemas.git_sync_schemas import (
 from ada_backend.services.git_sync_service import (
     GitSyncConfigNotFound,
     GraphJsonNotFound,
+    InstallationOwnershipError,
     disconnect_sync,
     get_config,
     handle_github_push,
     import_from_github,
     list_configs_for_organization,
+    list_installation_repos_summary,
 )
+from ada_backend.services.github_client import GithubClientError
+from ada_backend.utils.github_state import create_install_state
 from settings import settings
 
 webhook_router = APIRouter(tags=["Git Sync"])
@@ -122,6 +129,11 @@ async def create_git_sync(
             project_type=request.project_type,
         )
         return GitSyncImportResponse(imported=imported, skipped=skipped)
+    except InstallationOwnershipError as e:
+        raise HTTPException(
+            status_code=404,
+            detail="GitHub installation not found",
+        ) from e
     except GraphJsonNotFound as e:
         raise HTTPException(
             status_code=422,
@@ -147,6 +159,72 @@ def list_git_sync_configs(
 ) -> list[GitSyncConfigResponse]:
     configs = list_configs_for_organization(session, organization_id)
     return [_to_response(c) for c in configs]
+
+
+@org_router.get(
+    "/{organization_id}/git-sync/github-app",
+    response_model=GitHubAppInfoResponse,
+    summary="Get GitHub App installation info",
+)
+def get_github_app_info(
+    organization_id: UUID,
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.MEMBER.value)),
+    ],
+) -> GitHubAppInfoResponse:
+    all_configured = all([
+        settings.GITHUB_APP_SLUG,
+        settings.GITHUB_APP_ID,
+        settings.GITHUB_APP_PRIVATE_KEY,
+        settings.GITHUB_APP_WEBHOOK_SECRET,
+    ])
+    if not all_configured:
+        return GitHubAppInfoResponse(configured=False)
+
+    base_url = f"https://github.com/apps/{settings.GITHUB_APP_SLUG}/installations/new"
+    if auth.user_id:
+        state = create_install_state(organization_id, auth.user_id)
+        install_url = f"{base_url}?{urlencode({'state': state})}"
+    else:
+        install_url = base_url
+
+    return GitHubAppInfoResponse(configured=True, install_url=install_url)
+
+
+@org_router.get(
+    "/{organization_id}/git-sync/installations/{installation_id}/repos",
+    summary="List repos accessible to a GitHub App installation",
+)
+async def list_repos_for_installation(
+    organization_id: UUID,
+    installation_id: int,
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+    session: Session = Depends(get_db),
+    state: Annotated[str | None, Query(description="Signed install state from the GitHub App redirect")] = None,
+) -> list[GitHubRepoSummary]:
+    try:
+        return await list_installation_repos_summary(
+            session,
+            installation_id,
+            organization_id,
+            user_id=auth.user_id,
+            install_state=state,
+        )
+    except InstallationOwnershipError:
+        raise HTTPException(
+            status_code=404,
+            detail="GitHub installation not found",
+        )
+    except GithubClientError:
+        LOGGER.warning("Failed to list repos for installation %s", installation_id)
+        raise HTTPException(status_code=502, detail="Failed to list repositories from GitHub")
+    except Exception as e:
+        LOGGER.error("Unexpected error listing repos for installation %s: %s", installation_id, e, exc_info=True)
+        raise HTTPException(status_code=502, detail="Failed to list repositories from GitHub") from e
 
 
 @org_router.get(

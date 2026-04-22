@@ -205,6 +205,7 @@ class BaseConfig(BaseSettings):
 
     # GitHub App (for git sync)
     GITHUB_APP_ID: Optional[str] = None
+    GITHUB_APP_SLUG: Optional[str] = None
     GITHUB_APP_PRIVATE_KEY: Optional[str] = None
     GITHUB_APP_WEBHOOK_SECRET: Optional[str] = None
 
