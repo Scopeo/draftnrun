@@ -13,26 +13,29 @@ from mcp_server.client import api
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
 from mcp_server.tools.context_tools import _get_auth
 
+_P_ORG = Param("organization_id", UUID, description="The organization ID (from select_organization).")
 _P_PROJECT = Param("project_id", UUID, description="The project ID (from list_projects or get_project_overview).")
 _P_DATASET = Param("dataset_id", UUID, description="The dataset ID (from list_datasets or create_dataset).")
 _P_JUDGE = Param("judge_id", UUID, description="The judge ID (from list_judges or create_judge).")
 
-_QA = "/projects/{project_id}/qa"
-_DS = f"{_QA}/datasets"
+_ORG_QA = "/organizations/{organization_id}/qa"
+_DS = f"{_ORG_QA}/datasets"
 _DS_ITEM = f"{_DS}/{{dataset_id}}"
 _ENTRIES = f"{_DS_ITEM}/entries"
 _CUSTOM_COLS = f"{_DS_ITEM}/custom-columns"
-_JUDGES = f"{_QA}/llm-judges"
+_JUDGES = f"{_ORG_QA}/llm-judges"
 _JUDGE_ITEM = f"{_JUDGES}/{{judge_id}}"
 
+_PROJ_QA = "/projects/{project_id}/qa"
+
 SPECS: list[ToolSpec] = [
-    # --- Datasets ---
+    # --- Datasets (org-scoped) ---
     ToolSpec(
         name="list_datasets",
-        description="List QA datasets for a project.",
+        description="List QA datasets for an organization.",
         method="get",
         path=_DS,
-        path_params=(_P_PROJECT,),
+        path_params=(_P_ORG,),
         return_annotation=list,
     ),
     ToolSpec(
@@ -44,7 +47,7 @@ SPECS: list[ToolSpec] = [
         ),
         method="post",
         path=_DS,
-        path_params=(_P_PROJECT,),
+        path_params=(_P_ORG,),
         body_param=Param(
             "dataset_data", dict,
             description="Dataset configuration. Required fields: datasets_name (list[str]).",
@@ -55,7 +58,7 @@ SPECS: list[ToolSpec] = [
         description="Rename a QA dataset.",
         method="patch",
         path=_DS_ITEM,
-        path_params=(_P_PROJECT, _P_DATASET),
+        path_params=(_P_ORG, _P_DATASET),
         query_params=(Param("dataset_name", str, description="New name for the dataset."),),
     ),
     ToolSpec(
@@ -63,10 +66,18 @@ SPECS: list[ToolSpec] = [
         description="Destructive. Delete one or more QA datasets.",
         method="delete",
         path=_DS,
-        path_params=(_P_PROJECT,),
+        path_params=(_P_ORG,),
         body_fields=(Param("dataset_ids", list, description="List of dataset IDs to delete."),),
     ),
-    # --- Entries ---
+    ToolSpec(
+        name="set_dataset_projects",
+        description="Set which projects a dataset is associated with (replaces existing associations).",
+        method="put",
+        path=f"{_DS_ITEM}/projects",
+        path_params=(_P_ORG, _P_DATASET),
+        body_fields=(Param("project_ids", list, description="List of project IDs to associate."),),
+    ),
+    # --- Entries (org-scoped) ---
     ToolSpec(
         name="list_entries",
         description=(
@@ -81,7 +92,7 @@ SPECS: list[ToolSpec] = [
         ),
         method="get",
         path=_ENTRIES,
-        path_params=(_P_PROJECT, _P_DATASET),
+        path_params=(_P_ORG, _P_DATASET),
         query_params=(
             Param("page", int, default=1, description="Page number (1-based)."),
             Param("page_size", int, default=100, description="Items per page (max 1000)."),
@@ -100,7 +111,7 @@ SPECS: list[ToolSpec] = [
         ),
         method="post",
         path=_ENTRIES,
-        path_params=(_P_PROJECT, _P_DATASET),
+        path_params=(_P_ORG, _P_DATASET),
         body_fields=(Param(
             "inputs_groundtruths", list,
             description="List of input/groundtruth objects.",
@@ -119,7 +130,7 @@ SPECS: list[ToolSpec] = [
         ),
         method="patch",
         path=_ENTRIES,
-        path_params=(_P_PROJECT, _P_DATASET),
+        path_params=(_P_ORG, _P_DATASET),
         body_fields=(Param(
             "inputs_groundtruths", list,
             description="List of input/groundtruth objects with their IDs and updated fields.",
@@ -130,7 +141,7 @@ SPECS: list[ToolSpec] = [
         description="Destructive. Delete entries from a QA dataset.",
         method="delete",
         path=_ENTRIES,
-        path_params=(_P_PROJECT, _P_DATASET),
+        path_params=(_P_ORG, _P_DATASET),
         body_fields=(
             Param(
                 "input_groundtruth_ids", list,
@@ -143,10 +154,10 @@ SPECS: list[ToolSpec] = [
         description="Save a trace execution as a QA dataset entry.",
         method="post",
         path=f"{_ENTRIES}/from-history",
-        path_params=(_P_PROJECT, _P_DATASET),
+        path_params=(_P_ORG, _P_DATASET),
         query_params=(Param("trace_id", UUID, description="The trace ID to save as a QA entry (from list_traces)."),),
     ),
-    # --- Custom Columns ---
+    # --- Custom Columns (org-scoped) ---
     ToolSpec(
         name="list_custom_columns",
         description=(
@@ -159,9 +170,10 @@ SPECS: list[ToolSpec] = [
         ),
         method="get",
         path=_CUSTOM_COLS,
-        path_params=(_P_PROJECT, _P_DATASET),
+        path_params=(_P_ORG, _P_DATASET),
         return_annotation=list,
     ),
+    # --- QA Runs (project-scoped) ---
     ToolSpec(
         name="run_qa",
         description=(
@@ -170,7 +182,7 @@ SPECS: list[ToolSpec] = [
             "`output`, `evaluations`, and `version_output_id` as stale."
         ),
         method="post",
-        path=f"{_DS_ITEM}/run",
+        path=f"{_PROJ_QA}/datasets/{{dataset_id}}/run",
         path_params=(_P_PROJECT, _P_DATASET),
         body_param=Param(
             "run_config", dict,
@@ -180,13 +192,13 @@ SPECS: list[ToolSpec] = [
             ),
         ),
     ),
-    # --- Judges ---
+    # --- Judges (org-scoped) ---
     ToolSpec(
         name="list_judges",
-        description="List LLM judges for a project.",
+        description="List LLM judges for an organization.",
         method="get",
         path=_JUDGES,
-        path_params=(_P_PROJECT,),
+        path_params=(_P_ORG,),
         return_annotation=list,
     ),
     ToolSpec(
@@ -203,7 +215,7 @@ SPECS: list[ToolSpec] = [
         ),
         method="post",
         path=_JUDGES,
-        path_params=(_P_PROJECT,),
+        path_params=(_P_ORG,),
         body_param=Param(
             "judge_data", dict,
             description=(
@@ -219,7 +231,7 @@ SPECS: list[ToolSpec] = [
         description="Update an LLM judge.",
         method="patch",
         path=_JUDGE_ITEM,
-        path_params=(_P_PROJECT, _P_JUDGE),
+        path_params=(_P_ORG, _P_JUDGE),
         body_param=Param("judge_data", dict, description="Updated judge fields."),
     ),
     ToolSpec(
@@ -227,9 +239,18 @@ SPECS: list[ToolSpec] = [
         description="Destructive. Delete one or more LLM judges.",
         method="delete",
         path=_JUDGES,
-        path_params=(_P_PROJECT,),
+        path_params=(_P_ORG,),
         body_param=Param("judge_ids", list, description="List of judge IDs to delete."),
     ),
+    ToolSpec(
+        name="set_judge_projects",
+        description="Set which projects a judge is associated with (replaces existing associations).",
+        method="put",
+        path=f"{_JUDGE_ITEM}/projects",
+        path_params=(_P_ORG, _P_JUDGE),
+        body_fields=(Param("project_ids", list, description="List of project IDs to associate."),),
+    ),
+    # --- Evaluations (project-scoped) ---
     ToolSpec(
         name="run_evaluation",
         description=(
@@ -239,7 +260,7 @@ SPECS: list[ToolSpec] = [
             "written for each output afterward."
         ),
         method="post",
-        path=f"{_JUDGE_ITEM}/evaluations/run",
+        path=f"{_PROJ_QA}/llm-judges/{{judge_id}}/evaluations/run",
         path_params=(_P_PROJECT, _P_JUDGE),
         body_fields=(
             Param(
@@ -253,7 +274,7 @@ SPECS: list[ToolSpec] = [
         name="get_evaluations",
         description="Get evaluation results for a version output.",
         method="get",
-        path=f"{_QA}/version-outputs/{{version_output_id}}/evaluations",
+        path=f"{_PROJ_QA}/version-outputs/{{version_output_id}}/evaluations",
         path_params=(
             _P_PROJECT,
             Param("version_output_id", UUID, description="The version output ID (from run_qa results)."),
@@ -268,7 +289,7 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def export_dataset_csv(
-        project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
+        organization_id: Annotated[UUID, Field(description="The organization ID (from select_organization).")],
         dataset_id: Annotated[UUID, Field(description="The dataset ID (from list_datasets or create_dataset).")],
     ) -> str:
         """Export all entries in a QA dataset as CSV text.
@@ -280,7 +301,7 @@ def register(mcp: FastMCP) -> None:
         jwt, _ = _get_auth()
 
         columns = await api.get(
-            f"/projects/{project_id}/qa/datasets/{dataset_id}/custom-columns",
+            f"/organizations/{organization_id}/qa/datasets/{dataset_id}/custom-columns",
             jwt, trim=False,
         )
         sorted_cols = sorted(columns, key=lambda c: c.get("column_display_position", 0))
@@ -289,7 +310,7 @@ def register(mcp: FastMCP) -> None:
         page = 1
         while True:
             resp = await api.get(
-                f"/projects/{project_id}/qa/datasets/{dataset_id}/entries",
+                f"/organizations/{organization_id}/qa/datasets/{dataset_id}/entries",
                 jwt, page=page, page_size=100, trim=False,
             )
             all_entries.extend(resp.get("inputs_groundtruths", []))
@@ -323,7 +344,7 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def import_dataset_csv(
-        project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
+        organization_id: Annotated[UUID, Field(description="The organization ID (from select_organization).")],
         dataset_id: Annotated[UUID, Field(description="The dataset ID (from list_datasets or create_dataset).")],
         csv_content: Annotated[str, Field(description="The full CSV text to import.")],
     ) -> dict:
@@ -342,7 +363,7 @@ def register(mcp: FastMCP) -> None:
         jwt, _ = _get_auth()
 
         return await api.post_file(
-            f"/projects/{project_id}/qa/datasets/{dataset_id}/import",
+            f"/organizations/{organization_id}/qa/datasets/{dataset_id}/import",
             jwt,
             file_content=csv_content.encode("utf-8"),
             filename="import.csv",

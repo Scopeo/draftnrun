@@ -6,7 +6,13 @@ from sqlalchemy import case, func, select, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import DatasetProject, InputGroundtruth, QADatasetMetadata, VersionOutput
+from ada_backend.database.models import (
+    DatasetProject,
+    DatasetProjectAssociation,
+    InputGroundtruth,
+    QADatasetMetadata,
+    VersionOutput,
+)
 from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate, InputGroundtruthUpdateList
 
 LOGGER = logging.getLogger(__name__)
@@ -314,7 +320,7 @@ def clear_version_outputs_for_input_ids(
     return updated_count
 
 
-# Dataset functions
+# Dataset functions (project-scoped — kept for backward compatibility, will be removed in a follow-up PR)
 def get_datasets_by_project(
     session: Session,
     project_id: UUID,
@@ -332,9 +338,27 @@ def get_datasets_by_project(
     )
 
 
+# Dataset functions (organization-scoped)
+def get_datasets_by_organization(
+    session: Session,
+    organization_id: UUID,
+    skip: int = 0,
+    limit: int = 100,
+) -> List[DatasetProject]:
+    """Get datasets for an organization with pagination."""
+    return (
+        session.query(DatasetProject)
+        .filter(DatasetProject.organization_id == organization_id)
+        .order_by(DatasetProject.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+
 def create_datasets(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     dataset_names: List[str],
 ) -> List[DatasetProject]:
     """Create multiple datasets."""
@@ -342,7 +366,7 @@ def create_datasets(
 
     for dataset_name in dataset_names:
         dataset = DatasetProject(
-            project_id=project_id,
+            organization_id=organization_id,
             dataset_name=dataset_name,
         )
         datasets.append(dataset)
@@ -350,11 +374,10 @@ def create_datasets(
     session.add_all(datasets)
     session.commit()
 
-    # Refresh all objects to get their IDs
     for dataset in datasets:
         session.refresh(dataset)
 
-    LOGGER.info(f"Created {len(datasets)} datasets for project {project_id}")
+    LOGGER.debug(f"Created {len(datasets)} datasets for organization {organization_id}")
     return datasets
 
 
@@ -362,12 +385,12 @@ def update_dataset(
     session: Session,
     dataset_id: UUID,
     dataset_name: Optional[str],
-    project_id: UUID,
+    organization_id: UUID,
 ) -> DatasetProject:
     """Update a dataset"""
     dataset = (
         session.query(DatasetProject)
-        .filter(DatasetProject.id == dataset_id, DatasetProject.project_id == project_id)
+        .filter(DatasetProject.id == dataset_id, DatasetProject.organization_id == organization_id)
         .first()
     )
 
@@ -376,35 +399,71 @@ def update_dataset(
 
     session.commit()
 
-    LOGGER.info(f"Updated dataset {dataset_id} with name '{dataset_name}' for project {project_id}")
+    LOGGER.debug(f"Updated dataset {dataset_id} with name '{dataset_name}' for organization {organization_id}")
     return dataset
 
 
 def delete_datasets(
     session: Session,
     dataset_ids: List[UUID],
-    project_id: UUID,
+    organization_id: UUID,
 ) -> int:
     """Delete multiple datasets."""
     deleted_count = (
         session.query(DatasetProject)
-        .filter(DatasetProject.id.in_(dataset_ids), DatasetProject.project_id == project_id)
+        .filter(DatasetProject.id.in_(dataset_ids), DatasetProject.organization_id == organization_id)
         .delete(synchronize_session=False)
     )
 
     session.commit()
 
-    LOGGER.info(f"Deleted {deleted_count} datasets for project {project_id}")
+    LOGGER.info(f"Deleted {deleted_count} datasets for organization {organization_id}")
     return deleted_count
+
+
+def check_dataset_belongs_to_organization(session: Session, organization_id: UUID, dataset_id: UUID) -> bool:
+    exists = session.query(
+        session.query(DatasetProject)
+        .filter(DatasetProject.id == dataset_id, DatasetProject.organization_id == organization_id)
+        .exists()
+    ).scalar()
+    return exists
 
 
 def check_dataset_belongs_to_project(session: Session, project_id: UUID, dataset_id: UUID) -> bool:
     exists = session.query(
-        session.query(DatasetProject)
-        .filter(DatasetProject.id == dataset_id, DatasetProject.project_id == project_id)
+        session.query(DatasetProjectAssociation)
+        .filter(DatasetProjectAssociation.dataset_id == dataset_id, DatasetProjectAssociation.project_id == project_id)
         .exists()
     ).scalar()
     return exists
+
+
+# Dataset-Project association functions
+def get_dataset_project_associations(session: Session, dataset_id: UUID) -> List[UUID]:
+    """Get project IDs associated with a dataset."""
+    return [
+        row[0]
+        for row in session.query(DatasetProjectAssociation.project_id)
+        .filter(DatasetProjectAssociation.dataset_id == dataset_id)
+        .all()
+    ]
+
+
+def set_dataset_project_associations(
+    session: Session,
+    dataset_id: UUID,
+    project_ids: List[UUID],
+) -> None:
+    """Replace all project associations for a dataset."""
+    session.query(DatasetProjectAssociation).filter(DatasetProjectAssociation.dataset_id == dataset_id).delete(
+        synchronize_session=False
+    )
+
+    for project_id in project_ids:
+        session.add(DatasetProjectAssociation(dataset_id=dataset_id, project_id=project_id))
+
+    session.commit()
 
 
 def get_qa_columns_by_dataset(session: Session, dataset_id: UUID) -> List[QADatasetMetadata]:

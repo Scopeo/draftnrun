@@ -1,8 +1,9 @@
 // Dataset types
 export interface QADataset {
   id: string
-  project_id: string
+  organization_id: string
   dataset_name: string
+  project_ids: string[]
   created_at: string
   updated_at: string
 }
@@ -135,7 +136,8 @@ export type EvaluationType = 'boolean' | 'score' | 'free_text' | 'json_equality'
 
 export interface LLMJudge {
   id: string
-  project_id: string
+  organization_id: string
+  project_ids: string[]
   name: string
   description?: string | null
   evaluation_type: EvaluationType

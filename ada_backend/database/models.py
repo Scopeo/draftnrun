@@ -1858,8 +1858,9 @@ class DatasetProject(Base):
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
     project_id = mapped_column(
-        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     dataset_name = mapped_column(String, nullable=False)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -1868,9 +1869,34 @@ class DatasetProject(Base):
     project = relationship("Project", back_populates="datasets")
     input_groundtruths = relationship("InputGroundtruth", back_populates="dataset", cascade="all, delete-orphan")
     qa_metadata = relationship("QADatasetMetadata", back_populates="dataset", cascade="all, delete-orphan")
+    project_associations = relationship(
+        "DatasetProjectAssociation", cascade="all, delete-orphan", lazy="selectin"
+    )
 
     def __str__(self):
         return f"DatasetProject(id={self.id}, name={self.dataset_name})"
+
+
+class DatasetProjectAssociation(Base):
+    __tablename__ = "dataset_project_associations"
+    __table_args__ = (
+        sa.UniqueConstraint("dataset_id", "project_id", name="uq_dataset_project_association"),
+        {"schema": "quality_assurance"},
+    )
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    dataset_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.dataset_project.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    project_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
 
 class QADatasetMetadata(Base):
@@ -1972,10 +1998,11 @@ class LLMJudge(Base):
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
     project_id = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("projects.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("projects.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     name = mapped_column(String, nullable=False)
     description = mapped_column(Text, nullable=True)
     evaluation_type = mapped_column(make_pg_enum(EvaluationType), nullable=False)
@@ -1987,9 +2014,34 @@ class LLMJudge(Base):
 
     project = relationship("Project")
     evaluations = relationship("JudgeEvaluation", back_populates="judge", cascade="all, delete-orphan")
+    project_associations = relationship(
+        "LLMJudgeProjectAssociation", cascade="all, delete-orphan", lazy="selectin"
+    )
 
     def __str__(self):
         return f"LLMJudge(id={self.id}, name={self.name}, evaluation_type={self.evaluation_type})"
+
+
+class LLMJudgeProjectAssociation(Base):
+    __tablename__ = "llm_judge_project_associations"
+    __table_args__ = (
+        sa.UniqueConstraint("judge_id", "project_id", name="uq_llm_judge_project_association"),
+        {"schema": "quality_assurance"},
+    )
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    judge_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.llm_judges.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    project_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
 
 class JudgeEvaluation(Base):

@@ -2,13 +2,28 @@
 
 The QA system enables testing workflows against datasets of input/groundtruth pairs, with LLM-based evaluation judges.
 
+## Scoping
+
+- **Datasets** and **LLM Judges** are **organization-scoped** — shared across all projects in an org.
+- **QA Test Runs** (sessions) remain **project-scoped** — they test specific project versions.
+- **Association tables** track which datasets/judges are used in which projects.
+
 ## Datasets
 
-Datasets belong to a project and contain input/groundtruth entries. Each dataset can have custom metadata columns.
+Datasets belong to an organization and contain input/groundtruth entries. Each dataset can have custom metadata columns. Datasets can be associated with multiple projects via the `dataset_project_associations` table.
 
-- **`DatasetProject`** (`quality_assurance.dataset_project`): `project_id`, `name`
+- **`DatasetProject`** (`quality_assurance.dataset_project`): `organization_id`, `name`
+- **`DatasetProjectAssociation`** (`quality_assurance.dataset_project_associations`): `dataset_id`, `project_id` (many-to-many)
 - **`InputGroundtruth`** (`quality_assurance.input_groundtruth`): `dataset_id`, `input_data`, `groundtruth`, `position`, custom column values
 - **`QADatasetMetadata`** (`quality_assurance.qa_dataset_metadata`): custom column definitions per dataset
+
+### CRUD Endpoints (Organization-scoped)
+
+- `GET /organizations/{organization_id}/qa/datasets` — list datasets
+- `POST /organizations/{organization_id}/qa/datasets` — create datasets
+- `PATCH /organizations/{organization_id}/qa/datasets/{dataset_id}` — rename
+- `DELETE /organizations/{organization_id}/qa/datasets` — delete datasets
+- `PUT /organizations/{organization_id}/qa/datasets/{dataset_id}/projects` — set project associations
 
 ## QA Run Process
 
@@ -16,7 +31,7 @@ Datasets belong to a project and contain input/groundtruth entries. Each dataset
 
 `POST /projects/{project_id}/qa/datasets/{dataset_id}/run`
 
-1. Verify dataset belongs to the project and graph runner is bound to the same project
+1. Verify dataset is associated with the project and graph runner is bound to the same project
 2. Select specific entries or all entries in the dataset
 3. Execute the project's graph version against each entry's input
 4. Store results as `VersionOutput` records (keyed by input + graph_runner_id, no session)
@@ -55,7 +70,17 @@ Fully decoupled from the `runs` table. Uses a dedicated `QASession` model in the
 
 **Table**: `quality_assurance.llm_judges`
 
-Fields: `project_id`, `name`, `description`, `evaluation_type`, `llm_model_reference` (default `openai:gpt-5-mini`), `prompt_template`, `temperature`.
+Fields: `organization_id`, `name`, `description`, `evaluation_type`, `llm_model_reference` (default `openai:gpt-5-mini`), `prompt_template`, `temperature`.
+
+Judges can be associated with multiple projects via the `llm_judge_project_associations` table (`judge_id`, `project_id`).
+
+### CRUD Endpoints (Organization-scoped)
+
+- `GET /organizations/{organization_id}/qa/llm-judges` — list judges
+- `POST /organizations/{organization_id}/qa/llm-judges` — create judge
+- `PATCH /organizations/{organization_id}/qa/llm-judges/{judge_id}` — update
+- `DELETE /organizations/{organization_id}/qa/llm-judges` — delete judges
+- `PUT /organizations/{organization_id}/qa/llm-judges/{judge_id}/projects` — set project associations
 
 ### Evaluation Types
 
@@ -76,14 +101,14 @@ The `json_equality` type uses deterministic comparison via `run_deterministic_ev
 
 Evaluates a judge against version outputs, storing results as `JudgeEvaluation` records.
 
-## Import/Export
+## Import/Export (Organization-scoped)
 
-- **Export**: `GET .../datasets/{dataset_id}/export?graph_runner_id=...` → CSV
-- **Import**: `POST .../datasets/{dataset_id}/import` → CSV upload
+- **Export**: `POST /organizations/{organization_id}/qa/datasets/{dataset_id}/export?graph_runner_id=...` → CSV
+- **Import**: `POST /organizations/{organization_id}/qa/datasets/{dataset_id}/import` → CSV upload
 
 ## From Trace to QA
 
-`POST .../datasets/{dataset_id}/entries/from-history` — converts a trace execution into a QA dataset entry (capturing input and actual output as groundtruth).
+`POST /organizations/{organization_id}/qa/datasets/{dataset_id}/entries/from-history` — converts a trace execution into a QA dataset entry (capturing input and actual output as groundtruth).
 
 ## Key Files
 

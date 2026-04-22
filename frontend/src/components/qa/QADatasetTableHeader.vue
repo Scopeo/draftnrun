@@ -1,24 +1,13 @@
 <script setup lang="ts">
-// 1. Vue/core imports
-
-// 2. Third-party libraries (none here)
-
-// 3. Local components (none here)
-
-// 4. Composables (none here)
-
-// 5. Utils/helpers (none here)
-
-// 6. Types
 import type { QADataset, QAVersion } from '@/types/qa'
 
-// Props & Emits
 interface Props {
   currentDataset: QADataset | null
   currentVersion: QAVersion | null
   datasets: Array<{ title: string; value: string }>
   versions: Array<{ title: string; value: string; env?: string }>
   canManageDatasets: boolean
+  unlinkedDatasets: Array<{ title: string; value: string }>
 }
 
 const props = defineProps<Props>()
@@ -27,12 +16,12 @@ const emit = defineEmits<{
   'dataset-change': [datasetId: string]
   'version-change': [versionId: string]
   'create-dataset': []
-  'delete-dataset': []
+  'add-existing-dataset': [datasetId: string]
+  'remove-dataset': []
   'import-csv': []
   'export-csv': []
 }>()
 
-// Methods
 const handleDatasetChange = (datasetId: string) => {
   emit('dataset-change', datasetId)
 }
@@ -106,22 +95,60 @@ const handleVersionChange = (versionId: string) => {
           </template>
         </VSelect>
 
-        <!-- Create Dataset Button -->
-        <VBtn color="primary" variant="outlined" @click="emit('create-dataset')">
-          <VIcon icon="tabler-plus" class="me-2" />
-          Create Dataset
-        </VBtn>
+        <!-- Add Dataset (split button) -->
+        <div v-if="canManageDatasets" class="d-flex split-btn-wrapper">
+          <VMenu location="bottom end" :close-on-content-click="true">
+            <template #activator="{ props: menuProps }">
+              <VBtn color="primary" variant="outlined" v-bind="menuProps" class="split-btn-main">
+                <VIcon icon="tabler-plus" class="me-2" />
+                Add Dataset
+              </VBtn>
+            </template>
 
-        <!-- Delete Dataset Button (Admin only) -->
+            <VList density="compact" min-width="220">
+              <VListSubheader v-if="unlinkedDatasets.length > 0">Existing datasets</VListSubheader>
+              <VListItem
+                v-for="ds in unlinkedDatasets"
+                :key="ds.value"
+                @click="emit('add-existing-dataset', ds.value)"
+              >
+                <template #prepend>
+                  <VIcon icon="tabler-database" size="18" />
+                </template>
+                <VListItemTitle>{{ ds.title }}</VListItemTitle>
+              </VListItem>
+
+              <VListItem
+                v-if="unlinkedDatasets.length === 0"
+                disabled
+              >
+                <VListItemTitle class="text-medium-emphasis text-body-2">
+                  No other datasets in this organization
+                </VListItemTitle>
+              </VListItem>
+
+              <VDivider class="my-1" />
+
+              <VListItem @click="emit('create-dataset')">
+                <template #prepend>
+                  <VIcon icon="tabler-file-plus" size="18" />
+                </template>
+                <VListItemTitle>Create New Dataset</VListItemTitle>
+              </VListItem>
+            </VList>
+          </VMenu>
+        </div>
+
+        <!-- Remove Dataset from Project -->
         <VBtn
           v-if="canManageDatasets"
-          color="error"
+          color="warning"
           variant="outlined"
           :disabled="!currentDataset"
-          @click="emit('delete-dataset')"
+          @click="emit('remove-dataset')"
         >
-          <VIcon icon="tabler-trash" class="me-2" />
-          Delete Dataset
+          <VIcon icon="tabler-unlink" class="me-2" />
+          Remove from Project
         </VBtn>
 
         <!-- CSV Import/Export Menu -->
@@ -173,3 +200,15 @@ const handleVersionChange = (versionId: string) => {
     </VCardTitle>
   </VCard>
 </template>
+
+<style lang="scss" scoped>
+.split-btn-wrapper {
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.split-btn-main {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+</style>

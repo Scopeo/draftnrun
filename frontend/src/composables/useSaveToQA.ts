@@ -9,12 +9,13 @@ interface SaveToQAItem {
 }
 
 interface UseSaveToQAOptions {
+  orgId: Ref<string | undefined>
   projectId: Ref<string | undefined>
   getConversationData?: () => SaveToQAItem | null
 }
 
 export function useSaveToQA(options: UseSaveToQAOptions) {
-  const { projectId, getConversationData } = options
+  const { orgId, projectId, getConversationData } = options
   const { emitConversationSaved, emitDatasetCreated } = useQAEvents()
 
   // State
@@ -50,7 +51,7 @@ export function useSaveToQA(options: UseSaveToQAOptions) {
 
   // Load QA datasets
   const loadQADatasets = async () => {
-    if (!projectId.value) return
+    if (!orgId.value) return
 
     // If datasets already loaded, just ensure first one is selected
     if (qaDatasets.value.length > 0) {
@@ -61,7 +62,7 @@ export function useSaveToQA(options: UseSaveToQAOptions) {
 
     loadingQADatasets.value = true
     try {
-      const datasets = await scopeoApi.qa.getDatasets(projectId.value)
+      const datasets = await scopeoApi.qa.getDatasets(orgId.value)
 
       qaDatasets.value = datasets || []
 
@@ -77,7 +78,7 @@ export function useSaveToQA(options: UseSaveToQAOptions) {
 
   // Create new dataset
   const createDataset = async () => {
-    if (!projectId.value || !newDatasetName.value.trim()) return
+    if (!orgId.value || !newDatasetName.value.trim()) return
 
     const datasetNameToCreate = newDatasetName.value.trim()
 
@@ -85,7 +86,7 @@ export function useSaveToQA(options: UseSaveToQAOptions) {
     saveToQAError.value = null
 
     try {
-      await scopeoApi.qa.createDatasets(projectId.value, {
+      await scopeoApi.qa.createDatasets(orgId.value, {
         datasets_name: [datasetNameToCreate],
       })
 
@@ -93,10 +94,13 @@ export function useSaveToQA(options: UseSaveToQAOptions) {
       qaDatasets.value = [] // Clear cache to force reload
       loadingQADatasets.value = true
 
-      const datasets = await scopeoApi.qa.getDatasets(projectId.value)
+      try {
+        const datasets = await scopeoApi.qa.getDatasets(orgId.value)
 
-      qaDatasets.value = datasets || []
-      loadingQADatasets.value = false
+        qaDatasets.value = datasets || []
+      } finally {
+        loadingQADatasets.value = false
+      }
 
       // Auto-select the newly created dataset by name
       const newDataset = qaDatasets.value.find(d => d.dataset_name === datasetNameToCreate)
@@ -149,7 +153,7 @@ export function useSaveToQA(options: UseSaveToQAOptions) {
   // TanStack Query mutation for saving trace
   const saveTraceMutation = useMutation({
     mutationFn: ({ traceId, datasetId }: { traceId: string; datasetId: string }) =>
-      scopeoApi.qa.saveTraceToQA(projectId.value!, traceId, datasetId),
+      scopeoApi.qa.saveTraceToQA(orgId.value!, traceId, datasetId),
     gcTime: 0, // No cache
     onSuccess: (_, variables) => {
       saveToQASuccess.value = true
@@ -178,7 +182,7 @@ export function useSaveToQA(options: UseSaveToQAOptions) {
 
   // Save to QA
   const saveToQA = async () => {
-    if (!selectedQADataset.value || !projectId.value || !getConversationData) return
+    if (!selectedQADataset.value || !orgId.value || !getConversationData) return
 
     // Guard against concurrent saves
     if (savingToQA.value) {

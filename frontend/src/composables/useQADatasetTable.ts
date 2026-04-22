@@ -17,9 +17,11 @@ import {
   useRenameQACustomColumnMutation,
   useRunQAProcessAsyncMutation,
   useRunQAProcessMutation,
+  useSetDatasetProjectsMutation,
   useUpdateInputGroundtruthMutation,
 } from '@/composables/queries/useQAQuery'
 import { useQAColumnVisibility } from '@/composables/useQAColumnVisibility'
+import { useProjectAssociation } from '@/composables/useProjectAssociation'
 import { useQAEvaluation } from '@/composables/useQAEvaluation'
 import { useQAEventsListener } from '@/composables/useQAEvents'
 import { useQANotifications } from '@/composables/useQANotifications'
@@ -36,13 +38,15 @@ interface Props {
 
 export function useQADatasetTable(props: Props) {
   const route = useRoute()
-  const { isOrgAdmin } = useSelectedOrg()
+  const { isOrgAdmin, selectedOrgId } = useSelectedOrg()
   const notifications = useQANotifications()
   const { showSuccess, showError, showWarning, showInfo } = notifications
 
   // --- Core computed ---
+  const orgId = computed(() => selectedOrgId.value || '')
   const projectId = computed(() => props.projectId || (route.params.id as string))
   const projectIdRef = computed(() => projectId.value)
+  const orgIdRef = computed(() => orgId.value)
 
   // --- Selection state ---
   const currentDataset = ref<QADataset | null>(null)
@@ -55,10 +59,13 @@ export function useQADatasetTable(props: Props) {
   const graphRunnerIdRef = computed(() => currentVersion.value?.graph_runner_id)
 
   // --- Queries ---
-  const { data: datasetsData, isLoading: datasetsLoading, refetch: refetchDatasets } = useQADatasetsQuery(projectIdRef)
-  const datasets = computed(() => datasetsData.value || [])
+  const { data: datasetsData, isLoading: datasetsLoading, refetch: refetchDatasets } = useQADatasetsQuery(orgIdRef)
+  const allOrgDatasets = computed(() => datasetsData.value || [])
+  const datasetAssoc = useProjectAssociation({ projectId, allItems: allOrgDatasets })
+  const datasets = computed(() => datasetAssoc.linkedItems(allOrgDatasets.value))
+  const unlinkedDatasets = computed(() => datasetAssoc.unlinkedItems(allOrgDatasets.value))
 
-  const { data: customColumnsData, refetch: refetchCustomColumns } = useQACustomColumnsQuery(projectIdRef, datasetIdRef)
+  const { data: customColumnsData, refetch: refetchCustomColumns } = useQACustomColumnsQuery(orgIdRef, datasetIdRef)
   const columnVisibility = useQAColumnVisibility(datasetIdRef)
 
   const customColumns = computed(() => {
@@ -78,7 +85,7 @@ export function useQADatasetTable(props: Props) {
     lastLoadedAt,
     isLoading: entriesLoading,
     refetch: refetchTestCases,
-  } = useQAInputGroundtruthsQuery(projectIdRef, datasetIdRef, graphRunnerIdRef)
+  } = useQAInputGroundtruthsQuery(orgIdRef, projectIdRef, datasetIdRef, graphRunnerIdRef)
 
   // --- Local mutable test cases ---
   const testCases = ref<QATestCaseUI[]>([])
@@ -119,6 +126,7 @@ export function useQADatasetTable(props: Props) {
   // --- Mutations ---
   const { mutateAsync: createDatasetMutation, isPending: creating } = useCreateQADatasetMutation()
   const { mutateAsync: deleteDatasetMutation } = useDeleteQADatasetMutation()
+  const { mutateAsync: setDatasetProjectsMutation } = useSetDatasetProjectsMutation()
   const { mutateAsync: addInputGroundtruthMutation } = useAddInputGroundtruthMutation()
   const { mutateAsync: updateInputGroundtruthMutation, isPending: updating } = useUpdateInputGroundtruthMutation()
   const { mutateAsync: deleteInputGroundtruthMutation } = useDeleteInputGroundtruthMutation()
@@ -132,7 +140,7 @@ export function useQADatasetTable(props: Props) {
 
   // --- QA Evaluation ---
   const {
-    judges,
+    judges: allOrgJudges,
     fetchLLMJudges,
     runEvaluations,
     fetchEvaluationsForVersionOutput,
@@ -140,8 +148,13 @@ export function useQADatasetTable(props: Props) {
     deleteEvaluationsForInputGroundtruth,
   } = useQAEvaluation()
 
+  const judges = computed(() =>
+    allOrgJudges.value.filter(j => j.project_ids?.includes(projectId.value))
+  )
+
   // --- Sub-composables ---
   const editing = useQATestCaseEditing({
+    orgId,
     projectId,
     currentDataset,
     testCases,
@@ -194,11 +207,13 @@ export function useQADatasetTable(props: Props) {
   })
 
   const crud = useQATestCaseCrud({
+    orgId,
     projectId,
     currentDataset,
     currentVersion,
     testCases,
     datasets,
+    allOrgDatasets,
     customColumns,
     allCustomColumns,
     columnVisibility,
@@ -209,6 +224,7 @@ export function useQADatasetTable(props: Props) {
     removeTestCases,
     createDatasetMutation,
     deleteDatasetMutation,
+    setDatasetProjectsMutation,
     addInputGroundtruthMutation,
     updateInputGroundtruthMutation,
     deleteInputGroundtruthMutation,
@@ -252,6 +268,10 @@ export function useQADatasetTable(props: Props) {
   // --- Options ---
   const datasetOptions = computed(() => datasets.value.map(d => ({ title: d.dataset_name, value: d.id })))
 
+  const unlinkedDatasetOptions = computed(() =>
+    unlinkedDatasets.value.map(d => ({ title: d.dataset_name, value: d.id }))
+  )
+
   const versionOptions = computed(() =>
     versions.value.map((v, i) => ({
       title: v.tag_name || (v.env === 'draft' ? '-' : `Version ${i + 1}`),
@@ -261,6 +281,31 @@ export function useQADatasetTable(props: Props) {
   )
 
   const hasDatasets = computed(() => datasets.value.length > 0)
+
+  const addDatasetToProject = async (datasetId: string) => {
+    if (!orgId.value) return
+    const projectIds = datasetAssoc.buildAddProjectIds(datasetId)
+    if (!projectIds) return
+    await setDatasetProjectsMutation({ orgId: orgId.value, datasetId, projectIds })
+    await refetchDatasets()
+    currentDataset.value = datasets.value.find(d => d.id === datasetId) || currentDataset.value
+  }
+
+  const showRemoveDatasetDialog = ref(false)
+
+  const openRemoveDatasetDialog = () => {
+    if (currentDataset.value) showRemoveDatasetDialog.value = true
+  }
+
+  const confirmRemoveDatasetFromProject = async () => {
+    if (!orgId.value || !currentDataset.value) return
+    const projectIds = datasetAssoc.buildRemoveProjectIds(currentDataset.value.id)
+    if (!projectIds) return
+    await setDatasetProjectsMutation({ orgId: orgId.value, datasetId: currentDataset.value.id, projectIds })
+    await refetchDatasets()
+    showRemoveDatasetDialog.value = false
+    currentDataset.value = datasets.value[0] || null
+  }
 
   // --- Status banner ---
   const isBusy = computed(() => loading.value || entriesLoading.value || updating.value)
@@ -378,12 +423,12 @@ export function useQADatasetTable(props: Props) {
   }
 
   const handleQAJudgesUpdated = async (event: { projectId: string }) => {
-    if (projectId.value && event.projectId === projectId.value) await fetchLLMJudges(projectId.value)
+    if (projectId.value && event.projectId === projectId.value && orgId.value) await fetchLLMJudges(orgId.value)
   }
 
   // --- Lifecycle ---
   onMounted(async () => {
-    if (projectId.value) await fetchLLMJudges(projectId.value)
+    if (orgId.value) await fetchLLMJudges(orgId.value)
     setupListeners(handleQAJudgesUpdated, handleQAConversationSaved, handleQADatasetCreated)
     autoSelectVersion()
     autoSelectDataset()
@@ -403,13 +448,15 @@ export function useQADatasetTable(props: Props) {
   }
 
   watch(
-    () => projectId.value,
-    newProjectId => {
-      if (!newProjectId) return
+    () => orgId.value,
+    async newOrgId => {
+      if (!newOrgId) return
       currentDataset.value = null
       currentVersion.value = null
       columnVisibility.clearCache()
-      fetchLLMJudges(newProjectId)
+      await fetchLLMJudges(newOrgId)
+      autoSelectDataset()
+      autoSelectVersion()
     }
   )
 
@@ -420,6 +467,7 @@ export function useQADatasetTable(props: Props) {
 
   // --- Return ---
   return {
+    orgId,
     projectId,
     currentDataset,
     currentVersion,
@@ -439,7 +487,12 @@ export function useQADatasetTable(props: Props) {
     canManageDatasets,
     hasDatasets,
     datasetOptions,
+    unlinkedDatasetOptions,
     versionOptions,
+    addDatasetToProject,
+    showRemoveDatasetDialog,
+    openRemoveDatasetDialog,
+    confirmRemoveDatasetFromProject,
     headers,
     isBusy,
     statusText,

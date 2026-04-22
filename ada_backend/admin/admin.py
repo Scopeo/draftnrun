@@ -593,6 +593,7 @@ class LLMJudgeAdmin(EnhancedModelView, model=db.LLMJudge):
     column_list = [
         "id",
         "project_id",
+        "organization_id",
         "name",
         "description",
         "evaluation_type",

@@ -115,6 +115,15 @@ class QADatasetNotInProjectError(QAServiceError):
         super().__init__(f"Dataset {dataset_id} not found in project {project_id}")
 
 
+class QADatasetNotInOrganizationError(QAServiceError):
+    """Raised when a dataset does not belong to the given organization"""
+
+    def __init__(self, organization_id: UUID, dataset_id: UUID):
+        self.organization_id = organization_id
+        self.dataset_id = dataset_id
+        super().__init__(f"Dataset {dataset_id} not found in organization {organization_id}")
+
+
 class QAColumnNotFoundError(QAServiceError):
     status_code = 404
 

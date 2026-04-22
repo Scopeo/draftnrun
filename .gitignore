@@ -69,5 +69,8 @@ custom_models.json
 
 # oauth
 
+# vite cache
+frontend/.vite/
+
 # test reports
 tests/external_api_calls/external_api_calls_matrix.md

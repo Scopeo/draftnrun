@@ -169,10 +169,13 @@ class EnvironmentNotFound(ServiceError):
 class LLMJudgeNotFound(ServiceError):
     status_code = 404
 
-    def __init__(self, judge_id: UUID, project_id: UUID):
+    def __init__(self, judge_id: UUID, organization_id: UUID | None = None):
         self.judge_id = judge_id
-        self.project_id = project_id
-        super().__init__(f"LLM judge {judge_id} not found in project {project_id}")
+        self.organization_id = organization_id
+        if organization_id is not None:
+            super().__init__(f"LLM judge {judge_id} not found in organization {organization_id}")
+        else:
+            super().__init__(f"LLM judge {judge_id} not found")
 
 
 class SourceNotFound(ServiceError):

@@ -25,9 +25,9 @@ export function useQAEvaluation() {
     evaluating: false,
   })
 
-  const fetchLLMJudges = async (projectId: string) => {
-    if (!projectId) {
-      error.value = 'No project ID provided'
+  const fetchLLMJudges = async (orgId: string) => {
+    if (!orgId) {
+      error.value = 'No organization ID provided'
 
       return
     }
@@ -36,7 +36,7 @@ export function useQAEvaluation() {
     error.value = null
 
     try {
-      const data = await qaEvaluationApi.getLLMJudges(projectId)
+      const data = await qaEvaluationApi.getLLMJudges(orgId)
 
       judges.value = data || []
     } catch (err: unknown) {
@@ -58,34 +58,34 @@ export function useQAEvaluation() {
     }
   }
 
-  const createJudge = async (projectId: string, judgeData: LLMJudgeCreate): Promise<boolean> => {
-    if (!projectId) {
-      error.value = 'No project ID provided'
+  const createJudge = async (orgId: string, judgeData: LLMJudgeCreate): Promise<LLMJudge | null> => {
+    if (!orgId) {
+      error.value = 'No organization ID provided'
 
-      return false
+      return null
     }
 
     loadingStates.value.creating = true
     error.value = null
 
     try {
-      await qaEvaluationApi.createLLMJudge(projectId, judgeData)
-      await fetchLLMJudges(projectId)
+      const created: LLMJudge = await qaEvaluationApi.createLLMJudge(orgId, judgeData)
+      await fetchLLMJudges(orgId)
 
-      return true
+      return created
     } catch (err: unknown) {
-      logger.error('[QA Judge] Failed to create judge', { projectId, name: judgeData.name, error: err })
+      logger.error('[QA Judge] Failed to create judge', { orgId, name: judgeData.name, error: err })
       error.value = err instanceof Error ? err.message : 'Failed to create LLM judge'
 
-      return false
+      return null
     } finally {
       loadingStates.value.creating = false
     }
   }
 
-  const updateJudge = async (projectId: string, judgeId: string, judgeData: LLMJudgeUpdate): Promise<boolean> => {
-    if (!projectId || !judgeId) {
-      error.value = 'Project ID and Judge ID are required'
+  const updateJudge = async (orgId: string, judgeId: string, judgeData: LLMJudgeUpdate): Promise<boolean> => {
+    if (!orgId || !judgeId) {
+      error.value = 'Organization ID and Judge ID are required'
 
       return false
     }
@@ -94,8 +94,8 @@ export function useQAEvaluation() {
     error.value = null
 
     try {
-      await qaEvaluationApi.updateLLMJudge(projectId, judgeId, judgeData)
-      await fetchLLMJudges(projectId)
+      await qaEvaluationApi.updateLLMJudge(orgId, judgeId, judgeData)
+      await fetchLLMJudges(orgId)
 
       return true
     } catch (err: unknown) {
@@ -107,9 +107,9 @@ export function useQAEvaluation() {
     }
   }
 
-  const deleteJudges = async (projectId: string, judgeIds: string[]): Promise<boolean> => {
-    if (!projectId || !judgeIds.length) {
-      error.value = 'Project ID and Judge IDs are required'
+  const deleteJudges = async (orgId: string, judgeIds: string[]): Promise<boolean> => {
+    if (!orgId || !judgeIds.length) {
+      error.value = 'Organization ID and Judge IDs are required'
 
       return false
     }
@@ -118,12 +118,12 @@ export function useQAEvaluation() {
     error.value = null
 
     try {
-      await qaEvaluationApi.deleteLLMJudges(projectId, judgeIds)
-      await fetchLLMJudges(projectId)
+      await qaEvaluationApi.deleteLLMJudges(orgId, judgeIds)
+      await fetchLLMJudges(orgId)
 
       return true
     } catch (err: unknown) {
-      logger.error('[QA Judge] Failed to delete judges', { projectId, count: judgeIds.length, error: err })
+      logger.error('[QA Judge] Failed to delete judges', { orgId, count: judgeIds.length, error: err })
       error.value = err instanceof Error ? err.message : 'Failed to delete LLM judges'
 
       return false
@@ -300,6 +300,23 @@ export function useQAEvaluation() {
     }
   }
 
+  const setJudgeProjects = async (orgId: string, judgeId: string, projectIds: string[]): Promise<boolean> => {
+    if (!orgId || !judgeId) {
+      error.value = 'Organization ID and Judge ID are required'
+      return false
+    }
+    error.value = null
+    try {
+      await qaEvaluationApi.setJudgeProjects(orgId, judgeId, projectIds)
+      await fetchLLMJudges(orgId)
+      return true
+    } catch (err: unknown) {
+      logger.error('[QA Judge] Failed to set judge projects', { orgId, judgeId, error: err })
+      error.value = err instanceof Error ? err.message : 'Failed to update judge projects'
+      return false
+    }
+  }
+
   watch(
     () => selectedOrgId.value,
     () => {
@@ -317,6 +334,7 @@ export function useQAEvaluation() {
     createJudge,
     updateJudge,
     deleteJudges,
+    setJudgeProjects,
     runEvaluations,
     fetchEvaluationsForVersionOutput,
     deleteEvaluationsForVersionOutput,

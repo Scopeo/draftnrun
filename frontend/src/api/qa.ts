@@ -10,61 +10,72 @@ interface QAProcessRunPayload {
 }
 
 export const qaApi = {
-  getDatasets: (projectId: string) => $api(`/projects/${projectId}/qa/datasets`),
+  // Organization-scoped dataset CRUD
+  getDatasets: (orgId: string) => $api(`/organizations/${orgId}/qa/datasets`),
 
-  createDatasets: (projectId: string, data: { datasets_name: string[] }) =>
-    $api(`/projects/${projectId}/qa/datasets`, { method: 'POST', body: data }),
+  createDatasets: (orgId: string, data: { datasets_name: string[] }) =>
+    $api(`/organizations/${orgId}/qa/datasets`, { method: 'POST', body: data }),
 
-  updateDataset: (projectId: string, datasetId: string, datasetName: string) =>
-    $api(`/projects/${projectId}/qa/datasets/${datasetId}`, {
+  updateDataset: (orgId: string, datasetId: string, datasetName: string) =>
+    $api(`/organizations/${orgId}/qa/datasets/${datasetId}`, {
       method: 'PATCH',
       query: { dataset_name: datasetName },
     }),
 
-  deleteDatasets: (projectId: string, data: { dataset_ids: string[] }) =>
-    $api(`/projects/${projectId}/qa/datasets`, { method: 'DELETE', body: data }),
+  deleteDatasets: (orgId: string, data: { dataset_ids: string[] }) =>
+    $api(`/organizations/${orgId}/qa/datasets`, { method: 'DELETE', body: data }),
 
-  getInputGroundtruths: (projectId: string, datasetId: string, params?: { page?: number; page_size?: number }) =>
-    $api(`/projects/${projectId}/qa/datasets/${datasetId}/entries`, { query: params }),
+  setDatasetProjects: (orgId: string, datasetId: string, projectIds: string[]) =>
+    $api(`/organizations/${orgId}/qa/datasets/${datasetId}/projects`, {
+      method: 'PUT',
+      body: { project_ids: projectIds },
+    }),
 
-  getOutputs: (projectId: string, datasetId: string, graphRunnerId: string) =>
-    $api(`/projects/${projectId}/qa/datasets/${datasetId}/outputs`, { query: { graph_runner_id: graphRunnerId } }),
+  // Organization-scoped entries
+  getInputGroundtruths: (orgId: string, datasetId: string, params?: { page?: number; page_size?: number }) =>
+    $api(`/organizations/${orgId}/qa/datasets/${datasetId}/entries`, { query: params }),
 
-  saveTraceToQA: (projectId: string, traceId: string, datasetId: string) =>
-    $api(`/projects/${projectId}/qa/datasets/${datasetId}/entries/from-history`, {
+  getOutputs: (orgId: string, datasetId: string, graphRunnerId: string) =>
+    $api(`/organizations/${orgId}/qa/datasets/${datasetId}/outputs`, { query: { graph_runner_id: graphRunnerId } }),
+
+  saveTraceToQA: (orgId: string, traceId: string, datasetId: string) =>
+    $api(`/organizations/${orgId}/qa/datasets/${datasetId}/entries/from-history`, {
       method: 'POST',
-      query: {
-        trace_id: traceId,
-      },
+      query: { trace_id: traceId },
     }),
 
   createInputGroundtruths: (
-    projectId: string,
+    orgId: string,
     datasetId: string,
     data: { inputs_groundtruths: Array<{ input: any; groundtruth: string }> }
-  ) => $api(`/projects/${projectId}/qa/datasets/${datasetId}/entries`, { method: 'POST', body: data }),
+  ) => $api(`/organizations/${orgId}/qa/datasets/${datasetId}/entries`, { method: 'POST', body: data }),
 
   updateInputGroundtruths: (
-    projectId: string,
+    orgId: string,
     datasetId: string,
     data: { inputs_groundtruths: Array<{ id: string; input?: any; groundtruth?: string }> }
-  ) => $api(`/projects/${projectId}/qa/datasets/${datasetId}/entries`, { method: 'PATCH', body: data }),
+  ) => $api(`/organizations/${orgId}/qa/datasets/${datasetId}/entries`, { method: 'PATCH', body: data }),
 
-  deleteInputGroundtruths: (projectId: string, datasetId: string, data: { input_groundtruth_ids: string[] }) =>
-    $api(`/projects/${projectId}/qa/datasets/${datasetId}/entries`, { method: 'DELETE', body: data }),
+  deleteInputGroundtruths: (orgId: string, datasetId: string, data: { input_groundtruth_ids: string[] }) =>
+    $api(`/organizations/${orgId}/qa/datasets/${datasetId}/entries`, { method: 'DELETE', body: data }),
 
-  getCustomColumns: (projectId: string, datasetId: string) =>
-    $api(`/projects/${projectId}/qa/datasets/${datasetId}/custom-columns`),
+  // Organization-scoped custom columns
+  getCustomColumns: (orgId: string, datasetId: string) =>
+    $api(`/organizations/${orgId}/qa/datasets/${datasetId}/custom-columns`),
 
-  createCustomColumn: (projectId: string, datasetId: string, data: { column_name: string }) =>
-    $api(`/projects/${projectId}/qa/datasets/${datasetId}/custom-columns`, { method: 'POST', body: data }),
+  createCustomColumn: (orgId: string, datasetId: string, data: { column_name: string }) =>
+    $api(`/organizations/${orgId}/qa/datasets/${datasetId}/custom-columns`, { method: 'POST', body: data }),
 
-  renameCustomColumn: (projectId: string, datasetId: string, columnId: string, data: { column_name: string }) =>
-    $api(`/projects/${projectId}/qa/datasets/${datasetId}/custom-columns/${columnId}`, { method: 'PATCH', body: data }),
+  renameCustomColumn: (orgId: string, datasetId: string, columnId: string, data: { column_name: string }) =>
+    $api(`/organizations/${orgId}/qa/datasets/${datasetId}/custom-columns/${columnId}`, {
+      method: 'PATCH',
+      body: data,
+    }),
 
-  deleteCustomColumn: (projectId: string, datasetId: string, columnId: string) =>
-    $api(`/projects/${projectId}/qa/datasets/${datasetId}/custom-columns/${columnId}`, { method: 'DELETE' }),
+  deleteCustomColumn: (orgId: string, datasetId: string, columnId: string) =>
+    $api(`/organizations/${orgId}/qa/datasets/${datasetId}/custom-columns/${columnId}`, { method: 'DELETE' }),
 
+  // Project-scoped QA runs (unchanged)
   runQAProcess: (projectId: string, datasetId: string, data: QAProcessRunPayload) =>
     $api(`/projects/${projectId}/qa/datasets/${datasetId}/run`, { method: 'POST', body: data }),
 
@@ -80,15 +91,15 @@ export const qaApi = {
   getQASessions: (projectId: string, datasetId: string): Promise<QASession[]> =>
     $api<QASession[]>(`/projects/${projectId}/qa/sessions`, { query: { dataset_id: datasetId } }),
 
-  // Uses raw fetch because $api doesn't support blob responses for file downloads
-  exportToCSV: async (projectId: string, datasetId: string, graphRunnerId: string) => {
+  // Organization-scoped CSV export/import
+  exportToCSV: async (orgId: string, datasetId: string, graphRunnerId: string) => {
     const authHeaders = await getAuthHeaders()
-    const path = `/projects/${projectId}/qa/datasets/${datasetId}/export`
+    const path = `/organizations/${orgId}/qa/datasets/${datasetId}/export`
     const url = `${getApiBaseUrl()}${path}?graph_runner_id=${encodeURIComponent(graphRunnerId)}`
 
     try {
       const response = await fetch(url, {
-        method: 'GET',
+        method: 'POST',
         headers: authHeaders,
       })
 
@@ -147,7 +158,7 @@ export const qaApi = {
     } catch (error: unknown) {
       logger.error('CSV Export Error', {
         url,
-        projectId,
+        orgId,
         datasetId,
         graphRunnerId,
         error,
@@ -156,14 +167,13 @@ export const qaApi = {
     }
   },
 
-  importFromCSV: async (projectId: string, datasetId: string, file: File) => {
+  importFromCSV: async (orgId: string, datasetId: string, file: File) => {
     if (!file.name.toLowerCase().endsWith('.csv')) throw new Error('File must be a CSV file')
 
     const formData = new FormData()
-
     formData.append('file', file)
 
-    return $api(`/projects/${projectId}/qa/datasets/${datasetId}/import`, {
+    return $api(`/organizations/${orgId}/qa/datasets/${datasetId}/import`, {
       method: 'POST',
       body: formData,
     })
@@ -171,20 +181,28 @@ export const qaApi = {
 }
 
 export const qaEvaluationApi = {
-  getLLMJudges: (projectId: string) => $api(`/projects/${projectId}/qa/llm-judges`),
+  // Organization-scoped judge CRUD
+  getLLMJudges: (orgId: string) => $api(`/organizations/${orgId}/qa/llm-judges`),
 
   getLLMJudgeDefaults: (evaluationType?: 'boolean' | 'score' | 'free_text' | 'json_equality') =>
     $api('/qa/llm-judges/defaults', { query: evaluationType ? { evaluation_type: evaluationType } : {} }),
 
-  createLLMJudge: (projectId: string, data: LLMJudgeCreate) =>
-    $api(`/projects/${projectId}/qa/llm-judges`, { method: 'POST', body: data }),
+  createLLMJudge: (orgId: string, data: LLMJudgeCreate) =>
+    $api(`/organizations/${orgId}/qa/llm-judges`, { method: 'POST', body: data }),
 
-  updateLLMJudge: (projectId: string, judgeId: string, data: LLMJudgeUpdate) =>
-    $api(`/projects/${projectId}/qa/llm-judges/${judgeId}`, { method: 'PATCH', body: data }),
+  updateLLMJudge: (orgId: string, judgeId: string, data: LLMJudgeUpdate) =>
+    $api(`/organizations/${orgId}/qa/llm-judges/${judgeId}`, { method: 'PATCH', body: data }),
 
-  deleteLLMJudges: (projectId: string, judgeIds: string[]) =>
-    $api(`/projects/${projectId}/qa/llm-judges`, { method: 'DELETE', body: judgeIds }),
+  deleteLLMJudges: (orgId: string, judgeIds: string[]) =>
+    $api(`/organizations/${orgId}/qa/llm-judges`, { method: 'DELETE', body: judgeIds }),
 
+  setJudgeProjects: (orgId: string, judgeId: string, projectIds: string[]) =>
+    $api(`/organizations/${orgId}/qa/llm-judges/${judgeId}/projects`, {
+      method: 'PUT',
+      body: { project_ids: projectIds },
+    }),
+
+  // Project-scoped evaluations (unchanged)
   runJudgeEvaluation: (projectId: string, judgeId: string, versionOutputId: string) =>
     $api(`/projects/${projectId}/qa/llm-judges/${judgeId}/evaluations/run`, {
       method: 'POST',

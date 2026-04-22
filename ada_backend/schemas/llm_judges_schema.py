@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -20,7 +20,8 @@ class LLMJudgeResponse(LLMJudgeCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    project_id: UUID
+    organization_id: UUID
+    project_ids: List[UUID] = []
     created_at: datetime
     updated_at: datetime
 
@@ -39,3 +40,9 @@ class LLMJudgeTemplate(BaseModel):
     llm_model_reference: Optional[str] = None
     prompt_template: str
     temperature: Optional[float] = None
+
+
+class LLMJudgeProjectAssociationRequest(BaseModel):
+    """Schema for associating/disassociating judges with projects."""
+
+    project_ids: List[UUID]

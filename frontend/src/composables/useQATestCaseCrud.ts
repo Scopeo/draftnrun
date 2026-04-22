@@ -45,11 +45,13 @@ export const extractErrorMessage = (error: unknown, defaultMessage: string): str
 // --- Deps interface ---
 
 interface CrudDeps {
+  orgId: ComputedRef<string>
   projectId: ComputedRef<string>
   currentDataset: Ref<QADataset | null>
   currentVersion: Ref<{ id: string; graph_runner_id?: string | null } | null>
   testCases: Ref<QATestCaseUI[]>
   datasets: ComputedRef<QADataset[]>
+  allOrgDatasets: ComputedRef<QADataset[]>
   customColumns: ComputedRef<QACustomColumn[]>
   allCustomColumns: ComputedRef<QACustomColumn[]>
   columnVisibility: {
@@ -63,31 +65,36 @@ interface CrudDeps {
   pushTestCases: (newCases: QATestCaseUI[]) => void
   removeTestCases: (ids: string[]) => void
 
-  createDatasetMutation: (args: { projectId: string; data: { datasets_name: string[] } }) => Promise<unknown>
-  deleteDatasetMutation: (args: { projectId: string; datasetIds: string[] }) => Promise<unknown>
+  createDatasetMutation: (args: { orgId: string; data: { datasets_name: string[] } }) => Promise<unknown>
+  deleteDatasetMutation: (args: { orgId: string; datasetIds: string[] }) => Promise<unknown>
+  setDatasetProjectsMutation: (args: {
+    orgId: string
+    datasetId: string
+    projectIds: string[]
+  }) => Promise<unknown>
   addInputGroundtruthMutation: (args: {
-    projectId: string
+    orgId: string
     datasetId: string
     data: { inputs_groundtruths: any[] }
   }) => Promise<any>
   updateInputGroundtruthMutation: (args: {
-    projectId: string
+    orgId: string
     datasetId: string
     data: { inputs_groundtruths: any[] }
   }) => Promise<unknown>
   deleteInputGroundtruthMutation: (args: {
-    projectId: string
+    orgId: string
     datasetId: string
     entryIds: string[]
   }) => Promise<unknown>
   createCustomColumnMutation: (args: {
-    projectId: string
+    orgId: string
     datasetId: string
     data: { column_name: string }
   }) => Promise<{ column_id?: string } | null>
-  deleteCustomColumnMutation: (args: { projectId: string; datasetId: string; columnId: string }) => Promise<unknown>
+  deleteCustomColumnMutation: (args: { orgId: string; datasetId: string; columnId: string }) => Promise<unknown>
   renameCustomColumnMutation: (args: {
-    projectId: string
+    orgId: string
     datasetId: string
     columnId: string
     data: { column_name: string }
@@ -104,11 +111,13 @@ interface CrudDeps {
 
 export function useQATestCaseCrud(deps: CrudDeps) {
   const {
+    orgId,
     projectId,
     currentDataset,
     currentVersion,
     testCases,
     datasets,
+    allOrgDatasets,
     customColumns,
     allCustomColumns,
     columnVisibility,
@@ -119,6 +128,7 @@ export function useQATestCaseCrud(deps: CrudDeps) {
     removeTestCases,
     createDatasetMutation,
     deleteDatasetMutation,
+    setDatasetProjectsMutation,
     addInputGroundtruthMutation,
     updateInputGroundtruthMutation,
     deleteInputGroundtruthMutation,
@@ -142,13 +152,13 @@ export function useQATestCaseCrud(deps: CrudDeps) {
   }
 
   const confirmDeleteDataset = async () => {
-    if (!projectId.value || !currentDataset.value) return
+    if (!orgId.value || !currentDataset.value) return
     try {
       deleteDatasetLoading.value = true
 
       const deletedId = currentDataset.value.id
 
-      await deleteDatasetMutation({ projectId: projectId.value, datasetIds: [deletedId] })
+      await deleteDatasetMutation({ orgId: orgId.value, datasetIds: [deletedId] })
       await refetchDatasets()
       if (currentDataset.value?.id === deletedId) currentDataset.value = datasets.value[0] || null
       showDeleteDatasetDialog.value = false
@@ -162,9 +172,9 @@ export function useQATestCaseCrud(deps: CrudDeps) {
   const testCaseToDelete = ref<QATestCaseUI | null>(null)
 
   const deleteSelectedTestCase = async () => {
-    if (!projectId.value || !currentDataset.value || !testCaseToDelete.value) return
+    if (!orgId.value || !currentDataset.value || !testCaseToDelete.value) return
     await deleteInputGroundtruthMutation({
-      projectId: projectId.value,
+      orgId: orgId.value,
       datasetId: currentDataset.value.id,
       entryIds: [testCaseToDelete.value.id],
     })
@@ -183,14 +193,14 @@ export function useQATestCaseCrud(deps: CrudDeps) {
   }
 
   const deleteSelectedTestCases = async () => {
-    if (!projectId.value || !currentDataset.value || !selected.value.length) return
+    if (!orgId.value || !currentDataset.value || !selected.value.length) return
     try {
       bulkDeleteLoading.value = true
 
       const ids = [...selected.value]
 
       await deleteInputGroundtruthMutation({
-        projectId: projectId.value,
+        orgId: orgId.value,
         datasetId: currentDataset.value.id,
         entryIds: ids,
       })
@@ -228,7 +238,7 @@ export function useQATestCaseCrud(deps: CrudDeps) {
   }
 
   const saveNewTestCase = async () => {
-    if (!projectId.value || !currentDataset.value) return
+    if (!orgId.value || !currentDataset.value) return
     const validMessages = addTestCaseMessages.value.filter(m => m.content.trim())
     if (!validMessages.length) return
 
@@ -259,7 +269,7 @@ export function useQATestCaseCrud(deps: CrudDeps) {
       const datasetId = currentDataset.value.id
 
       const result = await addInputGroundtruthMutation({
-        projectId: projectId.value,
+        orgId: orgId.value,
         datasetId,
         data: { inputs_groundtruths: [newEntry] },
       })
@@ -309,7 +319,7 @@ export function useQATestCaseCrud(deps: CrudDeps) {
   }
 
   const saveEditedTestCase = async () => {
-    if (!projectId.value || !currentDataset.value || !editingTestCase.value) return
+    if (!orgId.value || !currentDataset.value || !editingTestCase.value) return
     const tcId = editingTestCase.value.id
 
     editingTestCaseLoading.value = true
@@ -326,7 +336,7 @@ export function useQATestCaseCrud(deps: CrudDeps) {
 
       patchTestCase(tcId, { evaluations: [], output: null, version_output_id: null, status: 'Pending' })
       await updateInputGroundtruthMutation({
-        projectId: projectId.value,
+        orgId: orgId.value,
         datasetId: currentDataset.value.id,
         data: { inputs_groundtruths: [{ id: tcId, input: inputObj }] },
       })
@@ -348,11 +358,11 @@ export function useQATestCaseCrud(deps: CrudDeps) {
   const editingColumnName = ref('')
 
   const createCustomColumn = async (name: string) => {
-    if (!projectId.value || !currentDataset.value || !name.trim()) return
+    if (!orgId.value || !currentDataset.value || !name.trim()) return
     creatingColumn.value = true
     try {
       const newCol = await createCustomColumnMutation({
-        projectId: projectId.value,
+        orgId: orgId.value,
         datasetId: currentDataset.value.id,
         data: { column_name: name.trim() },
       })
@@ -384,7 +394,7 @@ export function useQATestCaseCrud(deps: CrudDeps) {
   }
 
   const saveEditingColumnName = async () => {
-    if (!editingColumnId.value || !editingColumnName.value.trim() || !projectId.value || !currentDataset.value) {
+    if (!editingColumnId.value || !editingColumnName.value.trim() || !orgId.value || !currentDataset.value) {
       cancelEditingColumnName()
       return
     }
@@ -397,7 +407,7 @@ export function useQATestCaseCrud(deps: CrudDeps) {
     const newName = editingColumnName.value.trim()
     try {
       await renameCustomColumnMutation({
-        projectId: projectId.value,
+        orgId: orgId.value,
         datasetId: currentDataset.value.id,
         columnId,
         data: { column_name: newName },
@@ -424,11 +434,11 @@ export function useQATestCaseCrud(deps: CrudDeps) {
   }
 
   const deleteCustomColumn = async () => {
-    if (!projectId.value || !currentDataset.value || !columnToDelete.value) return
+    if (!orgId.value || !currentDataset.value || !columnToDelete.value) return
     deletingColumn.value = true
     try {
       await deleteCustomColumnMutation({
-        projectId: projectId.value,
+        orgId: orgId.value,
         datasetId: currentDataset.value.id,
         columnId: columnToDelete.value.column_id,
       })
@@ -454,15 +464,28 @@ export function useQATestCaseCrud(deps: CrudDeps) {
   const showCreateDatasetDialog = ref(false)
 
   const createNewDataset = async (name: string) => {
-    if (!projectId.value || !name.trim()) return
+    if (!orgId.value || !name.trim()) return
     const createdName = name.trim()
 
-    await createDatasetMutation({ projectId: projectId.value, data: { datasets_name: [createdName] } })
+    await createDatasetMutation({ orgId: orgId.value, data: { datasets_name: [createdName] } })
     await refetchDatasets()
-    showCreateDatasetDialog.value = false
 
-    const justCreated = datasets.value.find(d => d.dataset_name === createdName)
-    if (justCreated) currentDataset.value = justCreated
+    const justCreated = allOrgDatasets.value.find(d => d.dataset_name === createdName)
+    if (justCreated && projectId.value) {
+      const existingIds = justCreated.project_ids || []
+      if (!existingIds.includes(projectId.value)) {
+        await setDatasetProjectsMutation({
+          orgId: orgId.value,
+          datasetId: justCreated.id,
+          projectIds: [...existingIds, projectId.value],
+        })
+        await refetchDatasets()
+      }
+    }
+
+    showCreateDatasetDialog.value = false
+    const updated = datasets.value.find(d => d.dataset_name === createdName)
+    if (updated) currentDataset.value = updated
   }
 
   // --- CSV ---
@@ -475,11 +498,11 @@ export function useQATestCaseCrud(deps: CrudDeps) {
   }
 
   const exportDatasetToCSV = async () => {
-    if (!projectId.value || !currentDataset.value || !currentVersion.value) return
+    if (!orgId.value || !currentDataset.value || !currentVersion.value) return
     exportingCSV.value = true
     try {
       await scopeoApi.qa.exportToCSV(
-        projectId.value,
+        orgId.value,
         currentDataset.value.id,
         currentVersion.value?.graph_runner_id || ''
       )
@@ -495,7 +518,7 @@ export function useQATestCaseCrud(deps: CrudDeps) {
     const target = event.target as HTMLInputElement
     const file = target.files?.[0]
     if (!file) return
-    if (!projectId.value || !currentDataset.value) {
+    if (!orgId.value || !currentDataset.value) {
       showError('Please select a dataset first')
       return
     }
@@ -511,7 +534,7 @@ export function useQATestCaseCrud(deps: CrudDeps) {
 
     importingCSV.value = true
     try {
-      const result = await scopeoApi.qa.importFromCSV(projectId.value, currentDataset.value.id, file)
+      const result = await scopeoApi.qa.importFromCSV(orgId.value, currentDataset.value.id, file)
 
       await refetchCustomColumns()
       if (currentVersion.value) await refetchTestCases()

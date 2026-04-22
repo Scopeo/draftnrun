@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useProjectAssociation } from '@/composables/useProjectAssociation'
 import { useQAEvaluation } from '@/composables/useQAEvaluation'
 import { useQAEvents } from '@/composables/useQAEvents'
 import { useSelectedOrg } from '@/composables/useSelectedOrg'
@@ -11,16 +12,33 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const { selectedOrgRole } = useSelectedOrg()
+const { selectedOrgId, selectedOrgRole } = useSelectedOrg()
 const { emitJudgesUpdated } = useQAEvents()
 
-const { judges, loadingStates, fetchLLMJudges, fetchLLMJudgeDefaults, createJudge, updateJudge, deleteJudges } =
-  useQAEvaluation()
+const {
+  judges: allOrgJudges,
+  loadingStates,
+  fetchLLMJudges,
+  fetchLLMJudgeDefaults,
+  createJudge,
+  updateJudge,
+  setJudgeProjects,
+} = useQAEvaluation()
+
+const orgId = computed(() => selectedOrgId.value || '')
+const projectIdRef = computed(() => props.projectId)
+
+const judgeAssoc = useProjectAssociation({
+  projectId: projectIdRef,
+  allItems: allOrgJudges,
+})
+
+const judges = computed(() => judgeAssoc.linkedItems(allOrgJudges.value))
+const unlinkedJudges = computed(() => judgeAssoc.unlinkedItems(allOrgJudges.value))
 
 const showCreateDialog = ref(false)
-const showDeleteAllDialog = ref(false)
-const showDeleteSingleJudgeDialog = ref(false)
-const judgeToDelete = ref<LLMJudge | null>(null)
+const showRemoveJudgeDialog = ref(false)
+const judgeToRemove = ref<LLMJudge | null>(null)
 const editingJudge = ref<LLMJudge | null>(null)
 const judgeForm = ref()
 
@@ -31,7 +49,6 @@ const evaluationTypeOptions = [
   { title: 'JSON Equality', value: 'json_equality' as EvaluationType },
 ]
 
-// Store templates in memory by evaluation type to preserve user edits
 const templatesByType = ref<Record<EvaluationType, string>>({
   boolean: '',
   score: '',
@@ -49,14 +66,11 @@ const judgeFormData = ref<LLMJudgeCreate>({
 const onEvaluationTypeChange = async () => {
   const newType = judgeFormData.value.evaluation_type
 
-  // If we already have a template in memory for this type, use it
   if (templatesByType.value[newType]) {
     judgeFormData.value.prompt_template = templatesByType.value[newType]
-
     return
   }
 
-  // Otherwise, fetch the default template for this evaluation type
   const defaultsData = await fetchLLMJudgeDefaults(newType)
   if (defaultsData?.prompt_template) {
     judgeFormData.value.prompt_template = defaultsData.prompt_template
@@ -64,7 +78,7 @@ const onEvaluationTypeChange = async () => {
   }
 }
 
-const canDeleteJudges = computed(() => {
+const canManageJudges = computed(() => {
   const role = selectedOrgRole.value?.toLowerCase()
   return ['admin', 'developer'].includes(role)
 })
@@ -86,7 +100,6 @@ const evaluationTypeHint = computed(() => {
 })
 
 const resetForm = async () => {
-  // Reset templates in memory
   templatesByType.value = {
     boolean: '',
     score: '',
@@ -94,7 +107,6 @@ const resetForm = async () => {
     json_equality: '',
   }
 
-  // Force refresh defaults from backend when creating new judge
   const defaultsData = await fetchLLMJudgeDefaults('boolean')
 
   if (defaultsData) {
@@ -130,7 +142,6 @@ const openDialog = async () => {
 const openEditDialog = (judge: LLMJudge) => {
   editingJudge.value = judge
 
-  // Reset templates in memory
   templatesByType.value = {
     boolean: '',
     score: '',
@@ -145,15 +156,13 @@ const openEditDialog = (judge: LLMJudge) => {
     prompt_template: judge.prompt_template,
   }
 
-  // Store the current template in memory
   templatesByType.value[judge.evaluation_type] = judge.prompt_template
   showCreateDialog.value = true
 }
 
 const saveJudge = async () => {
-  if (!props.projectId) return
+  if (!orgId.value) return
 
-  // Store current template in memory before saving
   templatesByType.value[judgeFormData.value.evaluation_type] = judgeFormData.value.prompt_template
 
   const isValid = await judgeForm.value?.validate()
@@ -167,11 +176,8 @@ const saveJudge = async () => {
       prompt_template: judgeFormData.value.prompt_template,
     }
 
-    const success = await updateJudge(props.projectId, editingJudge.value.id, updateData)
-    if (success) {
-      // Emit event to notify other components (e.g., QADatasetTable) to refresh judges
-      emitJudgesUpdated({ projectId: props.projectId })
-    }
+    const success = await updateJudge(orgId.value, editingJudge.value.id, updateData)
+    if (success) emitJudgesUpdated({ projectId: props.projectId })
   } else {
     const dataToSend: LLMJudgeCreate = {
       name: judgeFormData.value.name,
@@ -180,9 +186,14 @@ const saveJudge = async () => {
       prompt_template: judgeFormData.value.prompt_template,
     }
 
-    const success = await createJudge(props.projectId, dataToSend)
-    if (success) {
-      // Emit event to notify other components (e.g., QADatasetTable) to refresh judges
+    const createdJudge = await createJudge(orgId.value, dataToSend)
+    if (createdJudge) {
+      if (props.projectId) {
+        const existingIds = createdJudge.project_ids || []
+        if (!existingIds.includes(props.projectId)) {
+          await setJudgeProjects(orgId.value, createdJudge.id, [...existingIds, props.projectId])
+        }
+      }
       emitJudgesUpdated({ projectId: props.projectId })
     }
   }
@@ -190,55 +201,42 @@ const saveJudge = async () => {
   await closeDialog()
 }
 
-const openDeleteAllDialog = () => {
-  if (judges.value.length === 0) return
-  showDeleteAllDialog.value = true
+const addExistingJudge = async (judgeId: string) => {
+  if (!orgId.value) return
+  const projectIds = judgeAssoc.buildAddProjectIds(judgeId)
+  if (!projectIds) return
+  await setJudgeProjects(orgId.value, judgeId, projectIds)
+  emitJudgesUpdated({ projectId: props.projectId })
 }
 
-const confirmDeleteAll = async () => {
-  if (!props.projectId || judges.value.length === 0) return
-
-  const allJudgeIds = judges.value.map(j => j.id)
-
-  const success = await deleteJudges(props.projectId, allJudgeIds)
-  if (success) {
-    // Emit event to notify other components (e.g., QADatasetTable) to refresh judges
-    emitJudgesUpdated({ projectId: props.projectId })
-  }
-  showDeleteAllDialog.value = false
+const openRemoveJudgeDialog = (judge: LLMJudge) => {
+  judgeToRemove.value = judge
+  showRemoveJudgeDialog.value = true
 }
 
-const openDeleteSingleJudgeDialog = (judge: LLMJudge) => {
-  judgeToDelete.value = judge
-  showDeleteSingleJudgeDialog.value = true
-}
-
-const confirmDeleteSingleJudge = async () => {
-  if (!props.projectId || !judgeToDelete.value) return
-
-  const success = await deleteJudges(props.projectId, [judgeToDelete.value.id])
-  if (success) {
-    // Emit event to notify other components (e.g., QADatasetTable) to refresh judges
-    emitJudgesUpdated({ projectId: props.projectId })
-  }
-  judgeToDelete.value = null
-  showDeleteSingleJudgeDialog.value = false
+const confirmRemoveJudge = async () => {
+  if (!orgId.value || !judgeToRemove.value) return
+  const projectIds = judgeAssoc.buildRemoveProjectIds(judgeToRemove.value.id)
+  if (!projectIds) return
+  await setJudgeProjects(orgId.value, judgeToRemove.value.id, projectIds)
+  emitJudgesUpdated({ projectId: props.projectId })
+  judgeToRemove.value = null
+  showRemoveJudgeDialog.value = false
 }
 
 onMounted(async () => {
-  if (props.projectId) {
-    await Promise.all([fetchLLMJudges(props.projectId), fetchLLMJudgeDefaults()])
+  if (orgId.value) {
+    await Promise.all([fetchLLMJudges(orgId.value), fetchLLMJudgeDefaults()])
   }
 })
 
 watch(
-  () => props.projectId,
-  newProjectId => {
-    if (newProjectId) fetchLLMJudges(newProjectId)
+  () => orgId.value,
+  newOrgId => {
+    if (newOrgId) fetchLLMJudges(newOrgId)
   }
 )
 
-// Watch for prompt template changes and save to memory
 watch(
   () => judgeFormData.value.prompt_template,
   newTemplate => {
@@ -258,21 +256,47 @@ watch(
         </div>
 
         <div class="d-flex align-center gap-2">
-          <VBtn color="primary" variant="outlined" @click="openDialog">
-            <VIcon icon="tabler-plus" class="me-2" />
-            Create Judge
-          </VBtn>
+          <!-- Add Judge (split button) -->
+          <VMenu location="bottom end" :close-on-content-click="true">
+            <template #activator="{ props: menuProps }">
+              <VBtn color="primary" variant="outlined" v-bind="menuProps">
+                <VIcon icon="tabler-plus" class="me-2" />
+                Add Judge
+              </VBtn>
+            </template>
 
-          <VBtn
-            v-if="canDeleteJudges"
-            color="error"
-            variant="outlined"
-            :disabled="judges.length === 0"
-            @click="openDeleteAllDialog"
-          >
-            <VIcon icon="tabler-trash" class="me-2" />
-            Delete All
-          </VBtn>
+            <VList density="compact" min-width="220">
+              <VListSubheader v-if="unlinkedJudges.length > 0">Existing judges</VListSubheader>
+              <VListItem
+                v-for="judge in unlinkedJudges"
+                :key="judge.id"
+                @click="addExistingJudge(judge.id)"
+              >
+                <template #prepend>
+                  <VIcon icon="tabler-gavel" size="18" />
+                </template>
+                <VListItemTitle>{{ judge.name }}</VListItemTitle>
+                <VListItemSubtitle>
+                  <VChip size="x-small" variant="tonal">{{ judge.evaluation_type }}</VChip>
+                </VListItemSubtitle>
+              </VListItem>
+
+              <VListItem v-if="unlinkedJudges.length === 0" disabled>
+                <VListItemTitle class="text-medium-emphasis text-body-2">
+                  No other judges in this organization
+                </VListItemTitle>
+              </VListItem>
+
+              <VDivider class="my-1" />
+
+              <VListItem @click="openDialog">
+                <template #prepend>
+                  <VIcon icon="tabler-file-plus" size="18" />
+                </template>
+                <VListItemTitle>Create New Judge</VListItemTitle>
+              </VListItem>
+            </VList>
+          </VMenu>
         </div>
       </VCardTitle>
 
@@ -301,14 +325,15 @@ watch(
                   <VIcon icon="tabler-edit" />
                 </VBtn>
                 <VBtn
-                  v-if="canDeleteJudges"
+                  v-if="canManageJudges"
                   icon
                   size="small"
                   variant="text"
-                  color="error"
-                  @click.stop="openDeleteSingleJudgeDialog(judge)"
+                  color="warning"
+                  @click.stop="openRemoveJudgeDialog(judge)"
                 >
-                  <VIcon icon="tabler-trash" />
+                  <VIcon icon="tabler-unlink" />
+                  <VTooltip activator="parent">Remove from project</VTooltip>
                 </VBtn>
               </div>
             </template>
@@ -318,7 +343,7 @@ watch(
         <div v-else class="text-center pa-8">
           <VIcon icon="tabler-gavel-off" size="64" class="mb-4 text-disabled" />
           <h3 class="text-h6 mb-2">No LLM Judges</h3>
-          <p class="text-body-2 mb-4">Create an LLM judge to evaluate your test cases</p>
+          <p class="text-body-2 mb-4">Add an LLM judge to evaluate your test cases</p>
           <VBtn color="primary" @click="openDialog">
             <VIcon icon="tabler-plus" class="me-2" />
             Create Judge
@@ -393,30 +418,19 @@ watch(
       </VCard>
     </VDialog>
 
-    <VDialog v-model="showDeleteAllDialog" max-width="var(--dnr-dialog-sm)">
+    <VDialog v-model="showRemoveJudgeDialog" max-width="var(--dnr-dialog-sm)">
       <VCard>
-        <VCardTitle>Delete All LLM Judges</VCardTitle>
+        <VCardTitle>Remove LLM Judge</VCardTitle>
         <VCardText>
-          <p>Are you sure you want to delete all {{ judges.length }} LLM judges? This action cannot be undone.</p>
+          <p>
+            Remove "{{ judgeToRemove?.name }}" from this project?
+            The judge will still be available in the organization and can be re-added later.
+          </p>
         </VCardText>
         <VCardActions>
           <VSpacer />
-          <VBtn variant="text" @click="showDeleteAllDialog = false"> Cancel </VBtn>
-          <VBtn color="error" :loading="loadingStates.deleting" @click="confirmDeleteAll"> Delete All </VBtn>
-        </VCardActions>
-      </VCard>
-    </VDialog>
-
-    <VDialog v-model="showDeleteSingleJudgeDialog" max-width="var(--dnr-dialog-sm)">
-      <VCard>
-        <VCardTitle>Delete LLM Judge</VCardTitle>
-        <VCardText>
-          <p>Are you sure you want to delete "{{ judgeToDelete?.name }}"? This action cannot be undone.</p>
-        </VCardText>
-        <VCardActions>
-          <VSpacer />
-          <VBtn variant="text" @click="showDeleteSingleJudgeDialog = false"> Cancel </VBtn>
-          <VBtn color="error" :loading="loadingStates.deleting" @click="confirmDeleteSingleJudge"> Delete </VBtn>
+          <VBtn variant="text" @click="showRemoveJudgeDialog = false"> Cancel </VBtn>
+          <VBtn color="warning" @click="confirmRemoveJudge"> Remove </VBtn>
         </VCardActions>
       </VCard>
     </VDialog>

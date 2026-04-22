@@ -28,8 +28,9 @@ class DatasetResponse(BaseModel):
     """Schema for dataset response."""
 
     id: UUID
-    project_id: UUID
+    organization_id: UUID
     dataset_name: str
+    project_ids: List[UUID] = []
     created_at: datetime
     updated_at: datetime
 
@@ -41,3 +42,9 @@ class DatasetListResponse(BaseModel):
     """Schema for multiple dataset responses."""
 
     datasets: List[DatasetResponse]
+
+
+class DatasetProjectAssociationRequest(BaseModel):
+    """Schema for associating/disassociating datasets with projects."""
+
+    project_ids: List[UUID]

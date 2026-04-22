@@ -3,6 +3,7 @@ import SaveToQADialog from '@/components/qa/SaveToQADialog.vue'
 import { type TraceListParams, useTraceDetailsQuery, useTracesQuery } from '@/composables/queries/useObservabilityQuery'
 import { DATE_RANGES, formatDuration, useDateRangeFilter } from '@/composables/useDateRangeFilter'
 import { useSaveToQA } from '@/composables/useSaveToQA'
+import { useSelectedOrg } from '@/composables/useSelectedOrg'
 import { useSpanIconMap } from '@/composables/useSpanIconMap'
 import type { CallType, Span } from '@/types/observability'
 import { formatDateCalendar, formatNumberWithSpaces } from '@/utils/formatters'
@@ -76,6 +77,7 @@ const getMessageCount = (span: any): number => {
 }
 
 // Save to QA composable
+const { selectedOrgId } = useSelectedOrg()
 const projectIdRef = computed(() => props.projectId)
 const spanIconMap = useSpanIconMap(projectIdRef)
 
@@ -94,6 +96,7 @@ const {
   saveToQA,
   createDataset,
 } = useSaveToQA({
+  orgId: selectedOrgId,
   projectId: projectIdRef,
   getConversationData: () => {
     if (!traceToSave.value) return null

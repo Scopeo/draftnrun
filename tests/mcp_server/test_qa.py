@@ -6,6 +6,7 @@ from mcp_server.tools import _factory, qa
 from tests.mcp_server.conftest import (
     FAKE_DATASET_ID,
     FAKE_JUDGE_ID,
+    FAKE_ORG_ID,
     FAKE_PROJECT_ID,
     FAKE_VERSION_OUTPUT_ID,
 )
@@ -23,10 +24,10 @@ async def test_update_dataset_sends_name_as_query_param(mcp, monkeypatch):
     patch_mock = AsyncMock(return_value={"ok": True})
     monkeypatch.setattr(_factory.api, "patch", patch_mock)
 
-    await mcp.tools["update_dataset"](FAKE_PROJECT_ID, FAKE_DATASET_ID, "New Name")
+    await mcp.tools["update_dataset"](FAKE_ORG_ID, FAKE_DATASET_ID, "New Name")
 
     patch_mock.assert_awaited_once_with(
-        f"/projects/{FAKE_PROJECT_ID}/qa/datasets/{FAKE_DATASET_ID}",
+        f"/organizations/{FAKE_ORG_ID}/qa/datasets/{FAKE_DATASET_ID}",
         "jwt-token",
         trim=True,
         dataset_name="New Name",
