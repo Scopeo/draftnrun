@@ -16,12 +16,14 @@ from ada_backend.services.git_sync_service import (
     GraphJsonNotFound,
     InstallationOwnershipError,
     disconnect_sync,
+    ensure_installation_owned,
     handle_github_push,
     import_from_github,
     list_installation_repos_summary,
     register_installation_if_new,
     sync_graph_from_github,
 )
+from ada_backend.utils.github_state import create_install_state, verify_install_state
 from ada_backend.utils.redis_client import push_git_sync_task
 
 
@@ -315,6 +317,7 @@ class TestSyncGraphFromGithub:
 
 
 PATCH_REGISTER = "ada_backend.services.git_sync_service.register_installation_if_new"
+PATCH_ENSURE_OWNED = "ada_backend.services.git_sync_service.ensure_installation_owned"
 
 
 class TestImportFromGithub:
@@ -351,7 +354,7 @@ class TestImportFromGithub:
         config.id = config_id
 
         with (
-            patch(PATCH_REGISTER),
+            patch(PATCH_ENSURE_OWNED),
             patch(
                 "ada_backend.services.git_sync_service.github_client.get_branch_head_sha",
                 new_callable=AsyncMock,
@@ -410,7 +413,7 @@ class TestImportFromGithub:
         config.id = config_id
 
         with (
-            patch(PATCH_REGISTER),
+            patch(PATCH_ENSURE_OWNED),
             patch(
                 "ada_backend.services.git_sync_service.github_client.get_branch_head_sha",
                 new_callable=AsyncMock,
@@ -471,7 +474,7 @@ class TestImportFromGithub:
             return configs[kwargs["graph_folder"]]
 
         with (
-            patch(PATCH_REGISTER),
+            patch(PATCH_ENSURE_OWNED),
             patch(
                 "ada_backend.services.git_sync_service.github_client.get_branch_head_sha",
                 new_callable=AsyncMock,
@@ -522,7 +525,7 @@ class TestImportFromGithub:
         new_config = self._make_config(org_id, uuid4(), "agent-b")
 
         with (
-            patch(PATCH_REGISTER),
+            patch(PATCH_ENSURE_OWNED),
             patch(
                 "ada_backend.services.git_sync_service.github_client.get_branch_head_sha",
                 new_callable=AsyncMock,
@@ -569,7 +572,7 @@ class TestImportFromGithub:
         session = MagicMock()
 
         with (
-            patch(PATCH_REGISTER),
+            patch(PATCH_ENSURE_OWNED),
             patch(
                 "ada_backend.services.git_sync_service.github_client.get_branch_head_sha",
                 new_callable=AsyncMock,
@@ -601,7 +604,7 @@ class TestImportFromGithub:
         config = self._make_config(org_id, pid, "")
 
         with (
-            patch(PATCH_REGISTER),
+            patch(PATCH_ENSURE_OWNED),
             patch(
                 "ada_backend.services.git_sync_service.github_client.get_branch_head_sha",
                 new_callable=AsyncMock,
@@ -649,7 +652,7 @@ class TestImportFromGithub:
         project = SimpleNamespace(id=uuid4(), name="my-agent", organization_id=org_id)
 
         with (
-            patch(PATCH_REGISTER),
+            patch(PATCH_ENSURE_OWNED),
             patch(
                 "ada_backend.services.git_sync_service.github_client.get_branch_head_sha",
                 new_callable=AsyncMock,
@@ -695,7 +698,7 @@ class TestImportFromGithub:
         project = SimpleNamespace(id=config.project_id, name="my-agent", organization_id=org_id)
 
         with (
-            patch(PATCH_REGISTER),
+            patch(PATCH_ENSURE_OWNED),
             patch(
                 "ada_backend.services.git_sync_service.github_client.get_branch_head_sha",
                 new_callable=AsyncMock,
@@ -1077,7 +1080,7 @@ class TestImportFromGithubOwnership:
         session = MagicMock()
 
         with patch(
-            PATCH_REGISTER,
+            PATCH_ENSURE_OWNED,
             side_effect=InstallationOwnershipError(42),
         ):
             with pytest.raises(InstallationOwnershipError):
@@ -1096,20 +1099,63 @@ class TestListInstallationReposSummaryOwnership:
     @pytest.mark.asyncio
     async def test_rejects_foreign_installation(self):
         session = MagicMock()
+        org_id = uuid4()
+        other_org = uuid4()
+        existing = SimpleNamespace(github_installation_id=42, organization_id=other_org)
 
-        with patch(
-            PATCH_REGISTER,
-            side_effect=InstallationOwnershipError(42),
-        ):
+        with patch(f"{PATCH_INSTALL_REPO}.get_by_installation_id", return_value=existing):
             with pytest.raises(InstallationOwnershipError):
-                await list_installation_repos_summary(session, 42, uuid4())
+                await list_installation_repos_summary(session, 42, org_id, user_id=uuid4())
 
     @pytest.mark.asyncio
-    async def test_allows_owned_installation(self):
+    async def test_rejects_new_installation_without_state(self):
+        session = MagicMock()
+
+        with patch(f"{PATCH_INSTALL_REPO}.get_by_installation_id", return_value=None):
+            with pytest.raises(InstallationOwnershipError):
+                await list_installation_repos_summary(session, 42, uuid4(), user_id=uuid4())
+
+    @pytest.mark.asyncio
+    async def test_rejects_new_installation_with_invalid_state(self):
         session = MagicMock()
         org_id = uuid4()
+        user_id = uuid4()
+
+        with patch(f"{PATCH_INSTALL_REPO}.get_by_installation_id", return_value=None):
+            with pytest.raises(InstallationOwnershipError):
+                await list_installation_repos_summary(
+                    session, 42, org_id, user_id=user_id, install_state="bad-token",
+                )
+
+    @pytest.mark.asyncio
+    async def test_rejects_new_installation_with_wrong_org_state(self):
+        session = MagicMock()
+        org_id = uuid4()
+        user_id = uuid4()
+        wrong_org = uuid4()
+
+        with patch("settings.settings") as mock_settings:
+            mock_settings.BACKEND_SECRET_KEY = "test-secret"
+            state = create_install_state(wrong_org, user_id)
+
+        with patch(f"{PATCH_INSTALL_REPO}.get_by_installation_id", return_value=None):
+            with pytest.raises(InstallationOwnershipError):
+                await list_installation_repos_summary(
+                    session, 42, org_id, user_id=user_id, install_state=state,
+                )
+
+    @pytest.mark.asyncio
+    async def test_registers_new_installation_with_valid_state(self):
+        session = MagicMock()
+        org_id = uuid4()
+        user_id = uuid4()
+
+        with patch("ada_backend.utils.github_state.settings") as mock_settings:
+            mock_settings.BACKEND_SECRET_KEY = "test-secret"
+            state = create_install_state(org_id, user_id)
 
         with (
+            patch(f"{PATCH_INSTALL_REPO}.get_by_installation_id", return_value=None),
             patch(PATCH_REGISTER),
             patch(
                 "ada_backend.services.git_sync_service.github_client.list_installation_repos",
@@ -1124,8 +1170,120 @@ class TestListInstallationReposSummaryOwnership:
                     }
                 ],
             ),
+            patch("ada_backend.services.git_sync_service.verify_install_state") as verify_mock,
         ):
-            result = await list_installation_repos_summary(session, 42, org_id)
+            result = await list_installation_repos_summary(
+                session, 42, org_id, user_id=user_id, install_state=state,
+            )
 
         assert len(result) == 1
         assert result[0].full_name == "org/repo"
+        verify_mock.assert_called_once_with(state, org_id, user_id)
+
+    @pytest.mark.asyncio
+    async def test_allows_existing_owned_installation_without_state(self):
+        session = MagicMock()
+        org_id = uuid4()
+        existing = SimpleNamespace(github_installation_id=42, organization_id=org_id)
+
+        with (
+            patch(f"{PATCH_INSTALL_REPO}.get_by_installation_id", return_value=existing),
+            patch(
+                "ada_backend.services.git_sync_service.github_client.list_installation_repos",
+                new_callable=AsyncMock,
+                return_value=[
+                    {
+                        "full_name": "org/repo",
+                        "name": "repo",
+                        "owner": {"login": "org"},
+                        "default_branch": "main",
+                        "private": False,
+                    }
+                ],
+            ),
+        ):
+            result = await list_installation_repos_summary(session, 42, org_id, user_id=uuid4())
+
+        assert len(result) == 1
+        assert result[0].full_name == "org/repo"
+
+
+class TestEnsureInstallationOwned:
+    def test_passes_when_owned(self):
+        session = MagicMock()
+        org_id = uuid4()
+        existing = SimpleNamespace(github_installation_id=100, organization_id=org_id)
+
+        with patch(f"{PATCH_INSTALL_REPO}.get_by_installation_id", return_value=existing):
+            ensure_installation_owned(session, 100, org_id)
+
+    def test_raises_when_not_registered(self):
+        session = MagicMock()
+
+        with patch(f"{PATCH_INSTALL_REPO}.get_by_installation_id", return_value=None):
+            with pytest.raises(InstallationOwnershipError):
+                ensure_installation_owned(session, 100, uuid4())
+
+    def test_raises_when_owned_by_different_org(self):
+        session = MagicMock()
+        existing = SimpleNamespace(github_installation_id=100, organization_id=uuid4())
+
+        with patch(f"{PATCH_INSTALL_REPO}.get_by_installation_id", return_value=existing):
+            with pytest.raises(InstallationOwnershipError):
+                ensure_installation_owned(session, 100, uuid4())
+
+
+class TestGitHubInstallState:
+    def test_roundtrip(self):
+        org_id = uuid4()
+        user_id = uuid4()
+
+        with patch("ada_backend.utils.github_state.settings") as mock_settings:
+            mock_settings.BACKEND_SECRET_KEY = "test-secret-key"
+            state = create_install_state(org_id, user_id)
+            verify_install_state(state, org_id, user_id)
+
+    def test_rejects_wrong_org(self):
+        org_id = uuid4()
+        user_id = uuid4()
+
+        with patch("ada_backend.utils.github_state.settings") as mock_settings:
+            mock_settings.BACKEND_SECRET_KEY = "test-secret-key"
+            state = create_install_state(org_id, user_id)
+            with pytest.raises(ValueError, match="does not match"):
+                verify_install_state(state, uuid4(), user_id)
+
+    def test_rejects_wrong_user(self):
+        org_id = uuid4()
+        user_id = uuid4()
+
+        with patch("ada_backend.utils.github_state.settings") as mock_settings:
+            mock_settings.BACKEND_SECRET_KEY = "test-secret-key"
+            state = create_install_state(org_id, user_id)
+            with pytest.raises(ValueError, match="does not match"):
+                verify_install_state(state, org_id, uuid4())
+
+    def test_rejects_tampered_token(self):
+        org_id = uuid4()
+        user_id = uuid4()
+
+        with patch("ada_backend.utils.github_state.settings") as mock_settings:
+            mock_settings.BACKEND_SECRET_KEY = "test-secret-key"
+            with pytest.raises(ValueError, match="Invalid"):
+                verify_install_state("tampered.token", org_id, user_id)
+
+    def test_rejects_expired_token(self):
+        org_id = uuid4()
+        user_id = uuid4()
+
+        with patch("ada_backend.utils.github_state.settings") as mock_settings:
+            mock_settings.BACKEND_SECRET_KEY = "test-secret-key"
+            state = create_install_state(org_id, user_id)
+
+        with (
+            patch("ada_backend.utils.github_state.settings") as mock_settings,
+            patch("ada_backend.utils.github_state._MAX_AGE_SECONDS", 0),
+        ):
+            mock_settings.BACKEND_SECRET_KEY = "test-secret-key"
+            with pytest.raises(ValueError, match="expired"):
+                verify_install_state(state, org_id, user_id)

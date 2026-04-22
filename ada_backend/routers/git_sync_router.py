@@ -2,9 +2,10 @@ import hashlib
 import hmac
 import logging
 from typing import Annotated
+from urllib.parse import urlencode
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
@@ -32,6 +33,7 @@ from ada_backend.services.git_sync_service import (
     list_installation_repos_summary,
 )
 from ada_backend.services.github_client import GithubClientError
+from ada_backend.utils.github_state import create_install_state
 from settings import settings
 
 webhook_router = APIRouter(tags=["Git Sync"])
@@ -179,10 +181,15 @@ def get_github_app_info(
     ])
     if not all_configured:
         return GitHubAppInfoResponse(configured=False)
-    return GitHubAppInfoResponse(
-        configured=True,
-        install_url=f"https://github.com/apps/{settings.GITHUB_APP_SLUG}/installations/new",
-    )
+
+    base_url = f"https://github.com/apps/{settings.GITHUB_APP_SLUG}/installations/new"
+    if auth.user_id:
+        state = create_install_state(organization_id, auth.user_id)
+        install_url = f"{base_url}?{urlencode({'state': state})}"
+    else:
+        install_url = base_url
+
+    return GitHubAppInfoResponse(configured=True, install_url=install_url)
 
 
 @org_router.get(
@@ -197,9 +204,16 @@ async def list_repos_for_installation(
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
+    state: Annotated[str | None, Query(description="Signed install state from the GitHub App redirect")] = None,
 ) -> list[GitHubRepoSummary]:
     try:
-        return await list_installation_repos_summary(session, installation_id, organization_id)
+        return await list_installation_repos_summary(
+            session,
+            installation_id,
+            organization_id,
+            user_id=auth.user_id,
+            install_state=state,
+        )
     except InstallationOwnershipError:
         raise HTTPException(
             status_code=404,

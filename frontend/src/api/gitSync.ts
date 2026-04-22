@@ -50,8 +50,10 @@ export const gitSyncApi = {
   listConfigs: (orgId: string) =>
     $api<GitSyncConfig[]>(`/organizations/${orgId}/git-sync`),
 
-  listInstallationRepos: (orgId: string, installationId: number) =>
-    $api<GitHubRepo[]>(`/organizations/${orgId}/git-sync/installations/${installationId}/repos`),
+  listInstallationRepos: (orgId: string, installationId: number, state?: string | null) => {
+    const params = state ? `?${new URLSearchParams({ state })}` : ''
+    return $api<GitHubRepo[]>(`/organizations/${orgId}/git-sync/installations/${installationId}/repos${params}`)
+  },
 
   importFromGitHub: (
     orgId: string,

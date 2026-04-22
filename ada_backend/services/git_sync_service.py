@@ -19,6 +19,7 @@ from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.graph_v2_mapper_service import graph_save_v2_to_graph_update
 from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.services.project_service import create_project_with_graph_runner
+from ada_backend.utils.github_state import verify_install_state
 from ada_backend.utils.redis_client import push_git_sync_task
 
 LOGGER = logging.getLogger(__name__)
@@ -65,6 +66,16 @@ def register_installation_if_new(session: Session, installation_id: int, organiz
             raise
         if existing.organization_id != organization_id:
             raise InstallationOwnershipError(installation_id)
+
+
+def ensure_installation_owned(session: Session, installation_id: int, organization_id: UUID) -> None:
+    """Assert that *installation_id* is already registered and belongs to *organization_id*.
+
+    Unlike ``register_installation_if_new`` this never auto-registers.
+    """
+    existing = github_app_installation_repository.get_by_installation_id(session, installation_id)
+    if not existing or existing.organization_id != organization_id:
+        raise InstallationOwnershipError(installation_id)
 
 
 async def _fetch_graph_update_payload(config: db.GitSyncConfig, commit_sha: str) -> GraphUpdateSchema:
@@ -120,7 +131,7 @@ async def import_from_github(
 
     Raises InstallationOwnershipError if the installation belongs to another org.
     """
-    register_installation_if_new(session, github_installation_id, organization_id)
+    ensure_installation_owned(session, github_installation_id, organization_id)
 
     github_repo = f"{github_owner}/{github_repo_name}"
     head_sha = await github_client.get_branch_head_sha(github_repo, branch, github_installation_id)
@@ -362,14 +373,36 @@ def get_config(
 
 
 async def list_installation_repos_summary(
-    session: Session, installation_id: int, organization_id: UUID
+    session: Session,
+    installation_id: int,
+    organization_id: UUID,
+    user_id: UUID,
+    install_state: str | None = None,
 ) -> list[GitHubRepoSummary]:
     """List repos accessible to a GitHub App installation, returning only the fields the front-end needs.
 
-    On first call for a new installation, registers it to the requesting org.
-    Raises InstallationOwnershipError if the installation belongs to another org.
+    On first call for a new installation the caller must supply a valid *install_state*
+    token (produced by the ``/github-app`` endpoint) so we can prove the org/user that
+    initiated the GitHub App install flow is the same one registering the installation.
+
+    Raises InstallationOwnershipError if the installation belongs to another org or if
+    state validation fails for a new installation.
     """
-    register_installation_if_new(session, installation_id, organization_id)
+    existing = github_app_installation_repository.get_by_installation_id(session, installation_id)
+    if existing:
+        if existing.organization_id != organization_id:
+            raise InstallationOwnershipError(installation_id)
+    else:
+        if not install_state:
+            LOGGER.warning("Missing install state for new installation %s (org %s)", installation_id, organization_id)
+            raise InstallationOwnershipError(installation_id)
+        try:
+            verify_install_state(install_state, organization_id, user_id)
+        except ValueError:
+            LOGGER.warning("Invalid install state for installation %s (org %s)", installation_id, organization_id)
+            raise InstallationOwnershipError(installation_id)
+        register_installation_if_new(session, installation_id, organization_id)
+
     repos = await github_client.list_installation_repos(installation_id)
     return [
         GitHubRepoSummary(

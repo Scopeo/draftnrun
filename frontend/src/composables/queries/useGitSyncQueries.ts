@@ -42,6 +42,7 @@ export function useGitSyncConfigsQuery(orgId: Ref<string | undefined>) {
 export function useGitSyncInstallationReposQuery(
   orgId: Ref<string | undefined>,
   installationId: Ref<number | null>,
+  installState: Ref<string | null>,
 ) {
   const queryKey = computed(() => ['git-sync-repos', orgId.value, installationId.value])
 
@@ -52,7 +53,7 @@ export function useGitSyncInstallationReposQuery(
       if (!installationId.value) throw new Error('No installation ID provided')
       logQueryStart(queryKey.value, 'useGitSyncInstallationReposQuery')
       logNetworkCall(queryKey.value, `/organizations/${orgId.value}/git-sync/installations/${installationId.value}/repos`)
-      return gitSyncApi.listInstallationRepos(orgId.value, installationId.value)
+      return gitSyncApi.listInstallationRepos(orgId.value, installationId.value, installState.value)
     },
     enabled: computed(() => !!orgId.value && !!installationId.value),
     staleTime: 1000 * 60 * 2,

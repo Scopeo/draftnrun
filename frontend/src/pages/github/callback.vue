@@ -20,6 +20,11 @@ const setupAction = computed(() => {
   return (Array.isArray(raw) ? raw[0] : raw) ?? 'install'
 })
 
+const installState = computed(() => {
+  const raw = route.query.state
+  return (Array.isArray(raw) ? raw[0] : raw) ?? undefined
+})
+
 onMounted(() => {
   if (window.opener) {
     window.opener.postMessage(
@@ -27,6 +32,7 @@ onMounted(() => {
         type: 'github-app-installed',
         installation_id: installationId.value,
         setup_action: setupAction.value,
+        state: installState.value,
       },
       window.location.origin,
     )

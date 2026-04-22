@@ -60,11 +60,11 @@ class GitSyncImportResponse(BaseModel):
 
 
 class GitHubRepoSummary(BaseModel):
-    full_name: str = ""
-    name: str = ""
-    owner: str = ""
-    default_branch: str = "main"
-    private: bool = False
+    full_name: str
+    name: str
+    owner: str
+    default_branch: str
+    private: bool
 
 
 class GitHubAppInfoResponse(BaseModel):

@@ -33,6 +33,7 @@ function clearPopupPoll() {
 }
 
 const pendingInstallationId = ref<number | null>(null)
+const pendingInstallState = ref<string | null>(null)
 const importDialogVisible = ref(false)
 const selectedRepo = ref<GitHubRepo | null>(null)
 const importBranch = ref('main')
@@ -40,6 +41,7 @@ const importBranch = ref('main')
 const { data: importRepos, isLoading: importReposLoading } = useGitSyncInstallationReposQuery(
   selectedOrgId,
   pendingInstallationId,
+  pendingInstallState,
 )
 
 const disconnectDialog = ref(false)
@@ -68,6 +70,7 @@ function handleGitHubMessage(event: MessageEvent) {
   }
 
   pendingInstallationId.value = installationId
+  pendingInstallState.value = (event.data.state as string) ?? null
   openImportDialog(installationId)
 }
 
@@ -140,6 +143,7 @@ async function doImport() {
 
     importDialogVisible.value = false
     pendingInstallationId.value = null
+    pendingInstallState.value = null
   } catch (error) {
     logger.error('GitHub import failed', { error })
     notify.error(error instanceof Error ? error.message : 'Failed to import from GitHub.')
@@ -149,6 +153,7 @@ async function doImport() {
 function cancelImport() {
   importDialogVisible.value = false
   pendingInstallationId.value = null
+  pendingInstallState.value = null
 }
 
 function confirmDisconnect(config: GitSyncConfig) {
@@ -245,8 +250,8 @@ onUnmounted(() => {
       class="elevation-0"
     >
       <template #item.repo="{ item }">
-        <div class="d-flex align-center gap-3">
-          <VIcon icon="logos-github-icon" size="18" />
+        <div class="d-flex align-center">
+          <VIcon icon="logos-github-icon" size="18" class="me-3" />
           <a
             :href="`https://github.com/${item.github_owner}/${item.github_repo_name}`"
             target="_blank"
@@ -282,8 +287,8 @@ onUnmounted(() => {
   <!-- GitHub Import Dialog -->
   <VDialog v-model="importDialogVisible" max-width="560" persistent>
     <VCard>
-      <VCardTitle class="text-h6 d-flex align-center gap-3">
-        <VIcon icon="logos-github-icon" size="22" />
+      <VCardTitle class="text-h6 d-flex align-center">
+        <VIcon icon="logos-github-icon" size="22" class="me-3" />
         Import from GitHub
       </VCardTitle>
 

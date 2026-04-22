@@ -9,6 +9,7 @@ import {
 import { useDeleteOAuthConnectionMutation } from '@/composables/queries/useOAuthConnectionsQuery'
 import { useOAuthFlow } from '@/composables/useOAuthFlow'
 import { useSelectedOrg } from '@/composables/useSelectedOrg'
+import { logger } from '@/utils/logger'
 
 const { selectedOrgId } = useSelectedOrg()
 const { notify } = useNotifications()
@@ -89,6 +90,7 @@ async function doDelete() {
     defToDelete.value = ''
     deleteDialog.value = false
   } catch (error) {
+    logger.error('Failed to revoke connection', { error })
     notify.error('Failed to revoke connection')
   }
 }
