@@ -1282,7 +1282,7 @@ class TestGitHubInstallState:
 
         with (
             patch("ada_backend.utils.github_state.settings") as mock_settings,
-            patch("ada_backend.utils.github_state._MAX_AGE_SECONDS", 0),
+            patch("ada_backend.utils.github_state._MAX_AGE_SECONDS", -1),
         ):
             mock_settings.BACKEND_SECRET_KEY = "test-secret-key"
             with pytest.raises(ValueError, match="expired"):
