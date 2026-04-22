@@ -67,11 +67,6 @@ const handleContextMenu = (event: MouseEvent, graphRunnerId: string) => {
   contextMenu.openMenu(event, graphRunnerId)
 }
 
-const handleMenuItemRef = (el: HTMLElement | null, graphRunnerId: string) => {
-  if (!props.projectId) return
-  contextMenu.handleItemRef(el, graphRunnerId)
-}
-
 const handleDeploy = () => {
   if (contextMenu.menuTargetId.value) {
     deployment.deployToProduction(contextMenu.menuTargetId.value)
@@ -125,7 +120,6 @@ const isCurrentMenuTargetProduction = computed(() => {
       <template #item="{ props: itemProps, item }">
         <VListItem
           v-bind="itemProps"
-          :ref="(el: any) => handleMenuItemRef(el, item.raw.graph_runner_id)"
           :title="item.raw.versionLabel"
           @contextmenu.prevent="handleContextMenu($event, item.raw.graph_runner_id)"
         >
@@ -140,61 +134,50 @@ const isCurrentMenuTargetProduction = computed(() => {
             </VChip>
           </template>
         </VListItem>
-
-        <!-- Context menu for deployment actions -->
-        <VMenu
-          v-if="projectId && item.raw.env !== 'draft' && contextMenu.menuTargetId.value === item.raw.graph_runner_id"
-          v-model="contextMenu.menuVisible.value"
-          :activator="contextMenu.menuActivatorElement.value as any"
-          location="bottom end"
-          :close-on-content-click="false"
-        >
-          <VList density="compact">
-            <VListItem
-              :disabled="
-                deployment.isDeploying.value || draftLoading.isLoadingDraft.value || isCurrentMenuTargetProduction
-              "
-              @click="handleDeploy"
-              @contextmenu.prevent.stop="
-                () => {
-                  contextMenu.closeMenu()
-                  isSelectMenuOpen = true
-                }
-              "
-            >
-              <template #prepend>
-                <VProgressCircular v-if="deployment.isDeploying.value" indeterminate size="20" width="2" class="me-2" />
-                <VIcon v-else icon="tabler-cloud-upload" />
-              </template>
-              <VListItemTitle>Deploy to Production</VListItemTitle>
-            </VListItem>
-
-            <VListItem
-              :disabled="deployment.isDeploying.value || draftLoading.isLoadingDraft.value"
-              @click="handleLoadDraft"
-              @contextmenu.prevent.stop="
-                () => {
-                  contextMenu.closeMenu()
-                  isSelectMenuOpen = true
-                }
-              "
-            >
-              <template #prepend>
-                <VProgressCircular
-                  v-if="draftLoading.isLoadingDraft.value"
-                  indeterminate
-                  size="20"
-                  width="2"
-                  class="me-2"
-                />
-                <VIcon v-else icon="tabler-edit" />
-              </template>
-              <VListItemTitle>Start draft from this version</VListItemTitle>
-            </VListItem>
-          </VList>
-        </VMenu>
       </template>
     </VSelect>
+
+    <!-- Context menu for deployment actions (single shared instance, outside item loop) -->
+    <VMenu
+      v-if="projectId"
+      v-model="contextMenu.menuVisible.value"
+      :activator="contextMenu.menuActivatorElement.value as any"
+      location="bottom end"
+      :close-on-content-click="false"
+      @click:outside="contextMenu.closeMenu"
+    >
+      <VList density="compact">
+        <VListItem
+          :disabled="
+            deployment.isDeploying.value || draftLoading.isLoadingDraft.value || isCurrentMenuTargetProduction
+          "
+          @click="handleDeploy"
+        >
+          <template #prepend>
+            <VProgressCircular v-if="deployment.isDeploying.value" indeterminate size="20" width="2" class="me-2" />
+            <VIcon v-else icon="tabler-cloud-upload" />
+          </template>
+          <VListItemTitle>Deploy to Production</VListItemTitle>
+        </VListItem>
+
+        <VListItem
+          :disabled="deployment.isDeploying.value || draftLoading.isLoadingDraft.value"
+          @click="handleLoadDraft"
+        >
+          <template #prepend>
+            <VProgressCircular
+              v-if="draftLoading.isLoadingDraft.value"
+              indeterminate
+              size="20"
+              width="2"
+              class="me-2"
+            />
+            <VIcon v-else icon="tabler-edit" />
+          </template>
+          <VListItemTitle>Start draft from this version</VListItemTitle>
+        </VListItem>
+      </VList>
+    </VMenu>
 
     <!-- Loading spinner overlay -->
     <VProgressCircular
