@@ -178,7 +178,7 @@ jobs:
                     - "--target.url=${TARGET_GRPC}"
                     - "--target.api-key=\$(TARGET_KEY)"
                     - "--target.collection=${COLLECTION}"
-                    - "--migration.batch-size=512"
+                    - "--migration.batch-size=120"
                     - "--migration.restart"
             EOF
 
@@ -192,7 +192,12 @@ jobs:
                   break
                 fi
                 if [ -n "$JOB_FAILED" ] && [ "$JOB_FAILED" != "0" ]; then
-                  JOB_RESULT="failed"
+                  LOGS=$(kubectl logs "job/${JOB_NAME}" -n "${NS}" 2>/dev/null || echo "")
+                  if echo "$LOGS" | grep -q "Data migration finished successfully"; then
+                    JOB_RESULT="ok"
+                  else
+                    JOB_RESULT="failed"
+                  fi
                   break
                 fi
                 sleep 5
@@ -214,10 +219,25 @@ jobs:
               fi
 
               kubectl delete job "${JOB_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
+              curl -sf -X DELETE -H "api-key: ${TARGET_KEY}" "${TARGET_URL}/collections/_migration_offsets" > /dev/null 2>&1 || true
             done
 
             echo ""
             echo "Qdrant migration: $((TOTAL - FAIL_COUNT))/${TOTAL} succeeded"
+
+            echo "🔗 Syncing collection aliases from prod to staging..."
+            ALIASES_JSON=$(curl -sf -H "api-key: ${SOURCE_KEY}" "${SOURCE_URL}/collections/aliases")
+            ALIAS_COUNT=$(echo "$ALIASES_JSON" | jq '.result.aliases | length')
+            if [ "$ALIAS_COUNT" -gt 0 ]; then
+              ACTIONS=$(echo "$ALIASES_JSON" | jq '[.result.aliases[] | {create_alias: {alias_name: .alias_name, collection_name: .collection_name}}]')
+              curl -sf -X POST -H "api-key: ${TARGET_KEY}" -H "Content-Type: application/json" \
+                "${TARGET_URL}/collections/aliases" \
+                -d "{\"actions\": ${ACTIONS}}" > /dev/null
+              echo "  ✅ Synced ${ALIAS_COUNT} alias(es)"
+            else
+              echo "  No aliases to sync"
+            fi
+
             if [ $FAIL_COUNT -gt 0 ]; then
               echo "❌ ${FAIL_COUNT} collection(s) failed:${FAILED_COLLECTIONS}"
               exit 1
