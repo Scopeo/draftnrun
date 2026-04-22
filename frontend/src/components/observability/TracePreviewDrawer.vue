@@ -56,6 +56,7 @@ const onSpanClick = (span: Span) => {
     v-model="drawerOpen"
     location="end"
     temporary
+    width="1200"
     class="trace-preview-nav-drawer"
   >
     <div class="trace-drawer">
@@ -101,8 +102,9 @@ const onSpanClick = (span: Span) => {
 </template>
 
 <style lang="scss" scoped>
-:deep(.trace-preview-nav-drawer) {
-  inline-size: min(90vw, 1200px) !important;
+.trace-preview-nav-drawer {
+  width: min(90vw, 1200px) !important;
+  max-width: 1200px !important;
 }
 
 .trace-drawer {
