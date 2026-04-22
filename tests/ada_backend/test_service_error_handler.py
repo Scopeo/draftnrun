@@ -1,11 +1,14 @@
 import json
-from unittest.mock import patch
 
 import pytest
+from fastapi import FastAPI
 from starlette.requests import Request
 
-from ada_backend.main import service_error_handler, unhandled_error_handler
+from ada_backend.error_handlers import register_error_handlers
 from ada_backend.services.errors import ServiceError
+from engine.components.errors import LLMProviderError, MissingKeyPromptTemplateError
+from engine.errors import EngineError
+from engine.field_expressions.errors import FieldExpressionError
 
 
 class DemoClientError(ServiceError):
@@ -39,34 +42,78 @@ def _build_request() -> Request:
     return Request(scope)
 
 
+def _get_handlers() -> dict:
+    """Register handlers on a throwaway app and return them keyed by exception type."""
+    app = FastAPI()
+    register_error_handlers(app)
+    return app.exception_handlers
+
+
 @pytest.mark.asyncio
-async def test_service_error_handler_returns_client_error_without_sentry():
-    request = _build_request()
-    error = DemoClientError("invalid client request")
-    with patch("ada_backend.main.sentry_sdk.capture_exception") as capture_mock:
-        response = await service_error_handler(request, error)
+async def test_service_error_handler_returns_client_error():
+    handler = _get_handlers()[ServiceError]
+    response = await handler(_build_request(), DemoClientError("invalid client request"))
     assert response.status_code == 400
     assert json.loads(response.body) == {"detail": "invalid client request"}
-    capture_mock.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_service_error_handler_returns_server_error_without_explicit_sentry_capture():
-    request = _build_request()
-    error = DemoServerError("dependency unavailable")
-    with patch("ada_backend.main.sentry_sdk.capture_exception") as capture_mock:
-        response = await service_error_handler(request, error)
+async def test_service_error_handler_returns_server_error():
+    handler = _get_handlers()[ServiceError]
+    response = await handler(_build_request(), DemoServerError("dependency unavailable"))
     assert response.status_code == 503
     assert json.loads(response.body) == {"detail": "dependency unavailable"}
-    capture_mock.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_unhandled_error_handler_returns_generic_500_without_explicit_sentry_capture():
-    request = _build_request()
-    error = RuntimeError("boom")
-    with patch("ada_backend.main.sentry_sdk.capture_exception") as capture_mock:
-        response = await unhandled_error_handler(request, error)
+async def test_unhandled_error_handler_returns_generic_500():
+    handler = _get_handlers()[Exception]
+    response = await handler(_build_request(), RuntimeError("boom"))
     assert response.status_code == 500
     assert json.loads(response.body) == {"detail": "An unexpected server error occurred."}
-    capture_mock.assert_not_called()
+
+
+class TestEngineErrorHandler:
+    @pytest.mark.asyncio
+    async def test_engine_error_returns_400_with_message(self):
+        handler = _get_handlers()[EngineError]
+        exc = MissingKeyPromptTemplateError(missing_keys=["name", "role"])
+        response = await handler(_build_request(), exc)
+        assert response.status_code == 400
+        body = json.loads(response.body)
+        assert "name" in body["detail"]
+        assert "role" in body["detail"]
+
+    @pytest.mark.asyncio
+    async def test_field_expression_error_returns_400(self):
+        handler = _get_handlers()[EngineError]
+        exc = FieldExpressionError("bad expression")
+        response = await handler(_build_request(), exc)
+        assert response.status_code == 400
+        assert json.loads(response.body) == {"detail": "bad expression"}
+
+
+class TestLLMProviderErrorHandler:
+    @pytest.mark.asyncio
+    async def test_rate_limit_returns_429(self):
+        handler = _get_handlers()[LLMProviderError]
+        exc = LLMProviderError("Rate limit exceeded", status_code=429, provider_name="OpenAI")
+        response = await handler(_build_request(), exc)
+        assert response.status_code == 429
+        body = json.loads(response.body)
+        assert "OpenAI" in body["detail"]
+        assert "Rate limit" in body["detail"]
+
+    @pytest.mark.asyncio
+    async def test_server_error_returns_502(self):
+        handler = _get_handlers()[LLMProviderError]
+        exc = LLMProviderError("Internal server error", status_code=500, provider_name="Anthropic")
+        response = await handler(_build_request(), exc)
+        assert response.status_code == 502
+
+    @pytest.mark.asyncio
+    async def test_no_status_code_returns_502(self):
+        handler = _get_handlers()[LLMProviderError]
+        exc = LLMProviderError("Connection reset", status_code=None)
+        response = await handler(_build_request(), exc)
+        assert response.status_code == 502

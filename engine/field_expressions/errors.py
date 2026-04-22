@@ -1,4 +1,7 @@
-class FieldExpressionError(Exception):
+from engine.errors import EngineError
+
+
+class FieldExpressionError(EngineError):
     pass
 
 

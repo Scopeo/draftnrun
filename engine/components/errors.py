@@ -1,4 +1,7 @@
-class MissingKeyPromptTemplateError(Exception):
+from engine.errors import EngineError
+
+
+class MissingKeyPromptTemplateError(EngineError):
     """Raised when required keys are missing from prompt template variables."""
 
     def __init__(self, missing_keys: list[str]):
@@ -7,7 +10,7 @@ class MissingKeyPromptTemplateError(Exception):
         super().__init__(message)
 
 
-class KeyTypePromptTemplateError(Exception):
+class KeyTypePromptTemplateError(EngineError):
     """Raised when required keys cannot be cast as str for injection as prompt template variables."""
 
     def __init__(self, key: str, error: Exception):
@@ -17,14 +20,14 @@ class KeyTypePromptTemplateError(Exception):
         super().__init__(message)
 
 
-class MCPConnectionError(Exception):
+class MCPConnectionError(EngineError):
     """Raised when an MCP tool cannot connect to its endpoint (HTTP/SSE or stdio)."""
 
     def __init__(self, endpoint: str, detail: str):
         super().__init__(f"MCP Tool failed to connect to {endpoint}: {detail}")
 
 
-class NoMatchingRouteError(Exception):
+class NoMatchingRouteError(EngineError):
     """Raised when no route condition matches in a Router component."""
 
     def __init__(self, num_routes: int, routes_info: str = ""):
@@ -39,7 +42,7 @@ class NoMatchingRouteError(Exception):
         super().__init__(message)
 
 
-class CategorizationError(Exception):
+class CategorizationError(EngineError):
     """Raised when categorization fails due to invalid LLM response."""
 
     def __init__(self, detail: str, llm_output: dict):
@@ -50,7 +53,7 @@ class CategorizationError(Exception):
         super().__init__(message)
 
 
-class LLMProviderError(Exception):
+class LLMProviderError(EngineError):
     """Raised when an LLM provider (OpenAI, Mistral, Anthropic, custom) returns an API error."""
 
     _RETRIABLE_STATUS_CODES = {429}

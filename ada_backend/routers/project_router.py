@@ -47,13 +47,6 @@ from ada_backend.services.project_service import (
 from ada_backend.services.run_service import create_run, run_with_tracking, update_run_status
 from ada_backend.services.tag_service import compose_tag_name
 from ada_backend.utils.redis_client import push_run_task
-from engine.components.errors import (
-    CategorizationError,
-    KeyTypePromptTemplateError,
-    LLMProviderError,
-    MissingKeyPromptTemplateError,
-    NoMatchingRouteError,
-)
 from engine.trace.span_context import set_tracing_span
 
 LOGGER = logging.getLogger(__name__)
@@ -269,24 +262,6 @@ async def run_env_agent_endpoint(
                 response_format=response_format,
             ),
         )
-    except MissingKeyPromptTemplateError as e:
-        LOGGER.error(
-            f"Missing key from prompt template for project {project_id} in environment {env}: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except KeyTypePromptTemplateError as e:
-        LOGGER.error(
-            f"Key type error in prompt template for project {project_id} in environment {env}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except LLMProviderError as e:
-        LOGGER.warning("LLM provider error for project %s env %s: %s", project_id, env, e.provider_message)
-        label = e.provider_name or "LLM provider"
-        raise HTTPException(
-            status_code=e.http_status,
-            detail=f"{label} error: {e.provider_message}",
-        ) from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id} in environment {env}: {str(e)}", exc_info=True
@@ -396,43 +371,6 @@ async def chat(
                 response_format=ResponseFormat.S3_KEY,
             ),
         )
-    except MissingKeyPromptTemplateError as e:
-        LOGGER.error(
-            f"Missing key from prompt template for project {project_id} for graph runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except KeyTypePromptTemplateError as e:
-        LOGGER.error(
-            f"Key type error in prompt template for project {project_id} for graph runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except NoMatchingRouteError as e:
-        LOGGER.error(
-            f"No matching route in Router component for project {project_id}, "
-            f"graph_runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except CategorizationError as e:
-        LOGGER.error(
-            f"Categorization error for project {project_id} for graph runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except LLMProviderError as e:
-        LOGGER.warning(
-            "LLM provider error for project %s graph_runner %s: %s",
-            project_id,
-            graph_runner_id,
-            e.provider_message,
-        )
-        label = e.provider_name or "LLM provider"
-        raise HTTPException(
-            status_code=e.http_status,
-            detail=f"{label} error: {e.provider_message}",
-        ) from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
@@ -555,25 +493,6 @@ async def chat_env(
                 response_format=ResponseFormat.S3_KEY,
             ),
         )
-    except MissingKeyPromptTemplateError as e:
-        LOGGER.error(
-            f"Missing key from prompt template for project {project_id} in environment {env}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except KeyTypePromptTemplateError as e:
-        LOGGER.error(
-            f"Key type error in prompt template for project {project_id} in environment {env}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except LLMProviderError as e:
-        LOGGER.warning("LLM provider error for project %s env %s: %s", project_id, env, e.provider_message)
-        label = e.provider_name or "LLM provider"
-        raise HTTPException(
-            status_code=e.http_status,
-            detail=f"{label} error: {e.provider_message}",
-        ) from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id} in environment {env}: {str(e)}", exc_info=True

@@ -43,12 +43,6 @@ from ada_backend.services.graph.get_graph_modification_history_service import (
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_with_history_service
-from engine.components.errors import (
-    KeyTypePromptTemplateError,
-    MCPConnectionError,
-    MissingKeyPromptTemplateError,
-)
-from engine.field_expressions.errors import FieldExpressionError
 
 router = APIRouter(
     prefix="/projects/{project_id}/graph",
@@ -149,33 +143,6 @@ async def update_project_pipeline(
             "Database connection failed for project %s runner %s", project_id, graph_runner_id, exc_info=True
         )
         raise HTTPException(status_code=503, detail="Database connection failed, please retry") from e
-    except FieldExpressionError as e:
-        LOGGER.warning(
-            "Invalid field expression for project %s runner %s: %s", project_id, graph_runner_id, e
-        )
-        raise HTTPException(status_code=400, detail="Invalid field expression in the graph configuration") from e
-    except MissingKeyPromptTemplateError as e:
-        LOGGER.warning(
-            "Missing key from prompt template for project %s runner %s: %s", project_id, graph_runner_id, e,
-        )
-        raise HTTPException(
-            status_code=400,
-            detail=f"Missing template variable(s) in prompt: {', '.join(e.missing_keys)}",
-        ) from e
-    except KeyTypePromptTemplateError as e:
-        LOGGER.warning(
-            "Key type error in prompt template for project %s runner %s: %s", project_id, graph_runner_id, e,
-        )
-        raise HTTPException(
-            status_code=400, detail=f"Template variable '{e.key}' has an incompatible value type"
-        ) from e
-    except MCPConnectionError as e:
-        LOGGER.warning(
-            "MCP connection failed for project %s runner %s: %s", project_id, graph_runner_id, e,
-        )
-        raise HTTPException(
-            status_code=400, detail="An MCP tool in the graph failed to connect to its endpoint"
-        ) from e
     except ValueError as e:
         error_msg = str(e)
         LOGGER.error(
@@ -236,14 +203,6 @@ def deploy_graph(
             user_id=user.id,
             organization_id=project.organization_id,
         )
-    except FieldExpressionError as e:
-        LOGGER.warning(
-            "Invalid field expression when deploying project %s runner %s: %s",
-            project_id, graph_runner_id, e,
-        )
-        raise HTTPException(
-            status_code=400, detail="Cannot deploy: the graph contains an invalid field expression"
-        ) from e
     except IntegrityError as e:
         session.rollback()
         LOGGER.error(
@@ -335,14 +294,6 @@ def load_copy_graph_runner(
             project_id_to_copy=project_id,
             graph_runner_id_to_copy=graph_runner_id,
         )
-    except FieldExpressionError as e:
-        LOGGER.error(
-            "Invalid field expression when copying graph for project %s runner %s: %s",
-            project_id, graph_runner_id, e, exc_info=True,
-        )
-        raise HTTPException(
-            status_code=400, detail="Cannot copy graph: it contains an invalid field expression"
-        ) from e
     except ValueError as e:
         LOGGER.error(
             "Failed to copy graph for project %s runner %s: %s", project_id, graph_runner_id, e, exc_info=True

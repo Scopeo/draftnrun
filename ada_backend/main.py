@@ -3,7 +3,7 @@ import threading
 from contextlib import asynccontextmanager
 
 import sentry_sdk
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import start_http_server
@@ -12,6 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from ada_backend.admin.admin import setup_admin
+from ada_backend.error_handlers import register_error_handlers
 from ada_backend.graphql.schema import graphql_router
 from ada_backend.instrumentation import setup_performance_instrumentation
 from ada_backend.middleware.rate_limit_middleware import rate_limit_exceeded_handler
@@ -57,7 +58,6 @@ from ada_backend.routers.webhooks.provider_webhooks_router import router as prov
 from ada_backend.routers.webhooks.webhook_internal_router import router as webhook_internal_router
 from ada_backend.routers.webhooks.webhook_trigger_router import router as webhook_trigger_router
 from ada_backend.routers.widget_router import router as widget_router
-from ada_backend.services.errors import ServiceError
 from ada_backend.services.rate_limit_service import limiter
 from ada_backend.utils.redis_client import xgroup_create_if_not_exists
 from ada_backend.workers.git_sync_queue_worker import _request_git_sync_drain, start_git_sync_queue_worker_thread
@@ -296,28 +296,7 @@ app.include_router(alert_email_router)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
-
-
-@app.exception_handler(ServiceError)
-async def service_error_handler(request: Request, exc: ServiceError) -> JSONResponse:
-    if exc.status_code >= 500:
-        LOGGER.error("Service error on %s %s: %s", request.method, request.url.path, exc, exc_info=True)
-    else:
-        LOGGER.error("Service error on %s %s: %s", request.method, request.url.path, exc)
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-
-
-@app.exception_handler(HTTPException)
-async def sentry_http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    if exc.__cause__ and exc.status_code >= 500:
-        sentry_sdk.capture_exception(exc.__cause__)
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
-
-
-@app.exception_handler(Exception)
-async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    LOGGER.error("Unhandled error on %s %s", request.method, request.url.path, exc_info=True)
-    return JSONResponse(status_code=500, content={"detail": "An unexpected server error occurred."})
+register_error_handlers(app)
 
 
 app.add_middleware(SlowAPIMiddleware)

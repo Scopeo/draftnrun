@@ -28,11 +28,7 @@ from ada_backend.services.registry import FACTORY_REGISTRY
 from ada_backend.services.tool_description_generator import generate_tool_description
 from ada_backend.utils.secret_resolver import replace_secret_placeholders
 from engine.components.component import Component as EngineComponent
-from engine.components.errors import (
-    KeyTypePromptTemplateError,
-    MCPConnectionError,
-    MissingKeyPromptTemplateError,
-)
+from engine.errors import EngineError
 from engine.components.types import ComponentAttributes
 from engine.field_expressions.ast import ConcatNode, JsonBuildNode, LiteralNode, VarNode
 from engine.field_expressions.serializer import from_json as expression_from_json
@@ -272,13 +268,7 @@ async def instantiate_component(
             if param_name not in grouped_sub_components:
                 grouped_sub_components[param_name] = []
             grouped_sub_components[param_name].append((sub_component.order, instantiated_sub_component))
-        except (
-            MissingDataSourceError,
-            MissingKeyPromptTemplateError,
-            KeyTypePromptTemplateError,
-            MCPConnectionError,
-            MissingIntegrationError,
-        ):
+        except (MissingDataSourceError, MissingIntegrationError, EngineError):
             raise
         except Exception as e:
             error_msg = (
@@ -378,7 +368,7 @@ async def instantiate_component(
             f"Failed to connect to database for component '{component_name}' "
             f"(instance ID: {component_instance.id}): {str(e)}"
         ) from e
-    except (MissingDataSourceError, MCPConnectionError):
+    except (MissingDataSourceError, EngineError):
         raise
     except Exception as e:
         LOGGER.error(
