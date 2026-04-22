@@ -66,7 +66,7 @@ const graph = useStudioGraph({
 // ─── Graph display stream (auto-refreshes canvas on external changes) ─
 const { wsDisconnected, refreshing: streamRefreshing, manualRefresh } = useGraphDisplayStream(
   projectId,
-  () => graph.loadGraphData(projectId.value),
+  () => graph.refreshGraphTopologyV2(projectId.value),
   graph.hasUnsavedChanges,
 )
 
@@ -131,8 +131,8 @@ async function onSaveVersion() {
 }
 
 // ─── Thin UI handlers ────────────────────────────────────────────────
-function handleNodeEdit(node: any) {
-  const enhanced = graph.getEnhancedNode(node.id)
+async function handleNodeEdit(node: any) {
+  const enhanced = await graph.refreshNodeFromServer(node.id)
   if (enhanced) {
     selectedNode.value = enhanced
     showEditDrawer.value = true
@@ -155,16 +155,18 @@ function onNodeClick(event: any) {
   }
 }
 
-function handleComponentSave(updatedComponent: any) {
+async function handleComponentSave(updatedComponent: any) {
   if (!graph.isDraftMode.value || !selectedNode.value) return
-  const updated = graph.updateNodeData(selectedNode.value.id, updatedComponent)
+  const nodeId = selectedNode.value.id
+  const updated = graph.updateNodeData(nodeId, updatedComponent)
   if (updated) selectedNode.value = { ...updated } as GraphNode
+  await graph.saveComponentV2(nodeId)
 }
 
 async function handleToolSelection(selectedTool: any) {
   const nodeData = await graph.createNodeFromTemplate(selectedTool)
 
-  graph.addComponentToGraph(nodeData, dialogMode.value === 'tool')
+  await graph.addComponentToGraph(nodeData, dialogMode.value === 'tool')
   dialogMode.value = 'component'
 }
 
@@ -215,6 +217,7 @@ const {
   handleAddTools,
   handleRemoveTool,
   handleDeployConfirm,
+  createComponentOnServer,
   resetLayout,
   nodeHasChildren,
 } = graph
@@ -362,6 +365,7 @@ const { breadcrumbs, handleBreadcrumbClick, goToOverviewAndClearHistory, resetVi
       :projects="projects"
       :agents="agents"
       :is-draft-mode="isDraftMode"
+      :create-component="createComponentOnServer"
       @save="handleComponentSave"
       @add-tools="handleAddTools"
       @remove-tool="handleRemoveTool"

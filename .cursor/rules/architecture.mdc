@@ -55,10 +55,19 @@ Free-form string tags on projects via `project_tags` table (many-to-many). Tags 
 Three WebSocket endpoints stream real-time events via Redis Pub/Sub:
 
 - **Per-run** (`/ws/runs/{run_id}`, `run_stream_router.py`): streams `node.started`, `node.completed`, `run.completed`, `run.failed` for a single run. Channel: `run:{run_id}`.
-- **Graph display** (`/ws/projects/{project_id}/graph-updates`, `graph_display_stream_router.py`): streams `graph.changed` events when the graph structure is modified (component CRUD, topology changes, V1 full-graph updates). Channel: `graph-updates:{project_id}`. The frontend debounces and re-fetches the graph on each event.
+- **Graph display** (`/ws/projects/{project_id}/graph-updates`, `graph_display_stream_router.py`): streams `graph.changed` events when the graph structure is modified (component CRUD, topology changes, V1 full-graph updates). Channel: `graph-updates:{project_id}`. The frontend debounces and uses V2 GET (`getGraphV2`) to do a lightweight topology refresh, merging new topology into existing component data.
 - **QA session** (`/ws/qa/{project_id}/{session_id}`, `qa_stream_router.py`): streams QA entry progress. Channel: `qa:{session_id}`.
 
 Graph mutations publish `graph.changed` events from `graph_mutation_helpers.py` (V2 endpoints) and `update_graph_service.py` (V1 endpoint) via `publish_graph_update_event()`. All WS endpoints share the same pattern: JWT auth via `websocket_auth.py`, Redis Pub/Sub subscriber in a background thread, asyncio queue relay, 25s ping keepalive.
+
+### Frontend Graph API Usage (V1 + V2)
+
+The studio frontend uses a hybrid V1/V2 approach for graph operations:
+
+- **Initial load**: V1 GET (`/projects/{id}/graph/{runnerId}`) for full component data (parameters, field expressions, port configurations).
+- **WS reload**: V2 GET (`/v2/projects/{id}/graph/{runnerId}`) for lightweight topology refresh — merges into existing nodes via `graphTransformer.mergeV2Topology()`.
+- **Auto-save**: V2 topology PUT (`/v2/.../map`) for edges, relationships, and node metadata + V2 component PUT (`/v2/.../components/{id}`) for each component's parameters and field expressions — all in parallel via `Promise.all`.
+- **Deploy, version, history**: V1 endpoints (unchanged).
 
 ### Run Failure Alerting
 

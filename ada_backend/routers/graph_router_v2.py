@@ -10,6 +10,7 @@ from ada_backend.routers.auth_router import UserRights, user_has_access_to_proje
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.pipeline.graph_schema import (
     ComponentCreateV2Schema,
+    ComponentGetV2Response,
     ComponentUpdateV2Schema,
     ComponentV2Response,
     GraphGetV2Response,
@@ -42,6 +43,25 @@ def get_project_graph_v2(
     except ValueError as e:
         LOGGER.warning("Invalid v2 graph payload for runner %s: %s", graph_runner_id, e)
         raise HTTPException(status_code=400, detail="Invalid v2 graph payload")
+
+
+@router.get(
+    "/{graph_runner_id}/components/{instance_id}",
+    summary="Get Component Instance V2",
+    response_model=ComponentGetV2Response,
+)
+def get_component_v2(
+    project_id: UUID,
+    graph_runner_id: UUID,
+    instance_id: UUID,
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value))
+    ],
+    session: Session = Depends(get_db),
+) -> ComponentGetV2Response:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    return graph_mutation_helpers.get_component_v2(session, graph_runner_id, project_id, instance_id)
 
 
 @router.post(

@@ -95,7 +95,7 @@ class TestGraphMutationPublishesEvents:
         with (
             patch(f"{P}.validate_graph_is_draft"),
             patch(f"{P}.check_optimistic_lock"),
-            patch(f"{P}.sync_graph_topology"),
+            patch(f"{P}.sync_graph_topology", return_value=[]),
             patch(f"{P}.record_modification_history", return_value=_mock_history()),
             patch(f"{P}.notify_graph_changed") as mock_notify,
         ):

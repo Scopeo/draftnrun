@@ -3,9 +3,11 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ada_backend.database.models import PortType
 from ada_backend.repositories.component_repository import (
     delete_sub_component_inputs_for_instance,
     get_component_instance_by_id,
+    get_port_definitions_for_component_version_ids,
 )
 from ada_backend.repositories.edge_repository import delete_edge, get_edges
 from ada_backend.repositories.field_expression_repository import (
@@ -25,12 +27,15 @@ from ada_backend.repositories.input_port_instance_repository import (
 )
 from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterSchema, PipelineParameterV2Schema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
+from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
 from ada_backend.schemas.pipeline.graph_schema import (
     ComponentCreateV2Schema,
     ComponentUpdateV2Schema,
 )
 from ada_backend.schemas.pipeline.port_instance_schema import FieldExpressionSchema, InputPortInstanceSchema
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
+from ada_backend.services.parameter_synthesis_utils import build_field_expressions, synthesize_input_port_parameters
+from ada_backend.services.pipeline.get_pipeline_service import get_component_instance
 from ada_backend.services.pipeline.update_pipeline_service import (
     _normalize_expression_json,
     create_or_update_component_instance,
@@ -258,3 +263,30 @@ def delete_component_from_graph(
 
     delete_component_instances_from_nodes(session, {instance_id})
     delete_node(session, instance_id)
+
+
+def get_single_component_enriched(
+    session: Session,
+    graph_runner_id: UUID,
+    instance_id: UUID,
+) -> ComponentInstanceReadSchema:
+    nodes = get_component_nodes(session, graph_runner_id)
+    current_node = next((n for n in nodes if n.id == instance_id), None)
+    if current_node is None:
+        raise ValueError(f"Component instance {instance_id} does not belong to graph {graph_runner_id}")
+
+    comp_instance = get_component_instance(session, instance_id, is_start_node=current_node.is_start_node)
+
+    input_port_instances = get_input_port_instances_for_component_instance(
+        session, instance_id, eager_load_field_expression=True
+    )
+    comp_instance.field_expressions = build_field_expressions(input_port_instances)
+
+    all_port_defs = get_port_definitions_for_component_version_ids(session, [comp_instance.component_version_id])
+    input_ports = [p for p in all_port_defs if p.port_type == PortType.INPUT]
+
+    comp_instance.parameters = synthesize_input_port_parameters(
+        comp_instance.parameters, input_ports, comp_instance.field_expressions
+    )
+
+    return comp_instance

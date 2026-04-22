@@ -1,7 +1,8 @@
-import { v4 as uuidv4 } from 'uuid'
 import type { SubcomponentInfo } from '@/components/studio/data/component-definitions'
-import type { PortConfiguration } from '@/components/studio/types/graph.types'
+import type { ComponentCreateV2Data, ComponentV2Response, PortConfiguration } from '@/components/studio/types/graph.types'
 import { getComponentDefinitionFromCache } from '@/composables/queries/useComponentDefinitionsQuery'
+
+export type CreateComponentFn = (data: ComponentCreateV2Data) => Promise<ComponentV2Response>
 
 /**
  * Options for creating node data
@@ -140,18 +141,38 @@ export function createNodeData(definition: any, options: NodeDataOptions = {}): 
 }
 
 /**
- * Recursively processes tools and their subcomponents
- * Creates nodes and relationships for all tools in the hierarchy
- *
- * @param parentId - ID of the parent component
- * @param tools - Array of tools/subcomponents to process
- * @param options - Processing options
- * @returns Object containing arrays of nodes and relationships
+ * Build a ComponentCreateV2Data payload from a component definition.
+ */
+export function buildCreatePayload(definition: any, label: string, isStartNode = false): ComponentCreateV2Data {
+  const parameters = formatNodeParameters(definition.parameters || []).map((p: any) => {
+    let value = p.value
+    if (value === '' || value === 'None') value = null
+    return { ...p, value }
+  })
+
+  return {
+    component_id: definition.id || definition.component_id,
+    component_version_id: definition.component_version_id,
+    label: label || definition.name || 'Untitled',
+    is_start_node: isStartNode,
+    parameters,
+    input_port_instances: [],
+    port_configurations: null,
+    integration: definition.integration || null,
+    tool_description_override: null,
+  }
+}
+
+/**
+ * Recursively processes tools and their subcomponents.
+ * Each tool is created on the backend first via `createComponent`, so all
+ * returned node IDs are server-assigned.
  */
 export async function processToolsRecursively(
   parentId: string,
   tools: SubcomponentInfo[],
   componentDefinitions: any[],
+  createComponent: CreateComponentFn,
   options: ProcessToolsOptions = {},
   processedTools = new Set<string>()
 ): Promise<{ nodes: any[]; relationships: any[] }> {
@@ -160,16 +181,16 @@ export async function processToolsRecursively(
   const allRelationships: any[] = []
 
   for (const tool of tools) {
-    // Skip if we've already processed this tool (prevent circular dependencies)
-    if (processedTools.has(tool.component_version_id)) continue
-    processedTools.add(tool.component_version_id)
+    const dedupKey = `${tool.component_version_id}|${tool.parameter_name}`
+    if (processedTools.has(dedupKey)) continue
+    processedTools.add(dedupKey)
 
-    // Get the tool definition
     const toolDefinition = getComponentDefinitionFromCache(componentDefinitions, tool.component_version_id)
     if (!toolDefinition) continue
 
-    // Create tool node
-    const toolNodeId = uuidv4()
+    const payload = buildCreatePayload(toolDefinition, toolDefinition.name)
+    const response = await createComponent(payload)
+    const toolNodeId = response.instance_id
 
     const toolNode = {
       id: toolNodeId,
@@ -184,28 +205,26 @@ export async function processToolsRecursively(
       position: { x: 100, y: 200 },
     }
 
-    // Add relationship with parameter_name
     allRelationships.push({
       parent_component_instance_id: parentId,
-      child_component_instance_id: toolNode.id,
+      child_component_instance_id: toolNodeId,
       parameter_name: tool.parameter_name,
       order: null,
     })
 
     allNodes.push(toolNode)
 
-    // Recursively process this tool's subcomponents if any
     if (toolDefinition.subcomponents_info && toolDefinition.subcomponents_info.length > 0) {
-      // Filter for required tools only if requested
       const subTools = filterRequired
         ? toolDefinition.subcomponents_info.filter((sub: SubcomponentInfo) => !sub.is_optional)
         : toolDefinition.subcomponents_info
 
       if (subTools.length > 0) {
         const { nodes: subNodes, relationships: subRelationships } = await processToolsRecursively(
-          toolNode.id,
+          toolNodeId,
           subTools,
           componentDefinitions,
+          createComponent,
           options,
           processedTools
         )

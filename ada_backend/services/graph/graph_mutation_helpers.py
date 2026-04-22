@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ada_backend.repositories.graph_runner_repository import get_component_nodes, insert_modification_history
 from ada_backend.schemas.pipeline.graph_schema import (
     ComponentCreateV2Schema,
+    ComponentGetV2Response,
     ComponentUpdateV2Schema,
     ComponentV2Response,
     GraphTopologySaveV2Schema,
@@ -14,9 +15,11 @@ from ada_backend.schemas.pipeline.graph_schema import (
 from ada_backend.services.graph.component_instance_v2_service import (
     create_component_in_graph,
     delete_component_from_graph,
+    get_single_component_enriched,
     update_single_component,
 )
 from ada_backend.services.graph.graph_topology_v2_service import check_optimistic_lock, sync_graph_topology
+from ada_backend.services.graph.graph_validation_utils import validate_graph_runner_belongs_to_project
 from ada_backend.services.graph.update_graph_service import validate_graph_is_draft
 from ada_backend.utils.redis_client import notify_graph_changed
 
@@ -24,6 +27,17 @@ from ada_backend.utils.redis_client import notify_graph_changed
 def record_modification_history(session: Session, graph_runner_id: UUID, user_id: UUID):
     change_hash = hashlib.sha256(str(uuid4()).encode()).hexdigest()
     return insert_modification_history(session, graph_runner_id, user_id, modification_hash=change_hash)
+
+
+def get_component_v2(
+    session: Session,
+    graph_runner_id: UUID,
+    project_id: UUID,
+    instance_id: UUID,
+) -> ComponentGetV2Response:
+    validate_graph_runner_belongs_to_project(session, graph_runner_id, project_id)
+    comp_instance = get_single_component_enriched(session, graph_runner_id, instance_id)
+    return ComponentGetV2Response(component_instance=comp_instance)
 
 
 def create_component_v2(
@@ -92,7 +106,7 @@ def save_graph_topology_v2(
 ) -> GraphUpdateResponse:
     validate_graph_is_draft(session, graph_runner_id)
     check_optimistic_lock(session, graph_runner_id, payload.last_edited_time)
-    sync_graph_topology(
+    auto_generated_field_expressions = sync_graph_topology(
         session,
         graph_runner_id=graph_runner_id,
         nodes=payload.nodes,
@@ -105,4 +119,5 @@ def save_graph_topology_v2(
         graph_id=graph_runner_id,
         last_edited_time=history.created_at if history else None,
         last_edited_user_id=history.user_id if history else None,
+        auto_generated_field_expressions=auto_generated_field_expressions,
     )

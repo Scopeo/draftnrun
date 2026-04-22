@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import ParameterType, PortType
+from ada_backend.database.models import PortType
 from ada_backend.repositories.component_repository import get_port_definitions_for_component_version_ids
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.repositories.graph_runner_repository import (
@@ -12,7 +12,6 @@ from ada_backend.repositories.graph_runner_repository import (
     get_latest_modification_history,
 )
 from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
-from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterReadSchema
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionReadSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphGetResponse
 from ada_backend.services.graph.graph_validation_utils import validate_graph_runner_belongs_to_project
@@ -20,11 +19,9 @@ from ada_backend.services.graph.playground_utils import (
     classify_schema_fields,
     extract_payload_schema_from_instance,
 )
-from ada_backend.services.parameter_synthesis_utils import filter_conflicting_parameters
+from ada_backend.services.parameter_synthesis_utils import build_field_expressions, synthesize_input_port_parameters
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 from ada_backend.services.tag_service import compose_tag_name
-from engine.field_expressions.parser import unparse_expression
-from engine.field_expressions.serializer import from_json as expr_from_json
 
 LOGGER = logging.getLogger(__name__)
 
@@ -81,19 +78,7 @@ def get_graph_service(
         input_port_instances = get_input_port_instances_for_component_instance(
             session, component_instance_id, eager_load_field_expression=True
         )
-        for input_port_instance in input_port_instances:
-            if input_port_instance.field_expression:
-                field_expressions_by_instance[component_instance_id].append(
-                    FieldExpressionReadSchema(
-                        field_name=input_port_instance.name,
-                        expression_json=input_port_instance.field_expression.expression_json,
-                        expression_text=(
-                            unparse_expression(expr_from_json(input_port_instance.field_expression.expression_json))
-                            if input_port_instance.field_expression.expression_json
-                            else None
-                        ),
-                    )
-                )
+        field_expressions_by_instance[component_instance_id] = build_field_expressions(input_port_instances)
     for comp_instance in component_instances_with_definitions:
         comp_instance.field_expressions = field_expressions_by_instance.get(comp_instance.id, [])
 
@@ -106,37 +91,9 @@ def get_graph_service(
             input_ports_by_component_version[port.component_version_id].append(port)
 
     for comp_instance in component_instances_with_definitions:
-        field_expression_by_name = {fe.field_name: fe.expression_text for fe in comp_instance.field_expressions}
         input_ports = input_ports_by_component_version.get(comp_instance.component_version_id, [])
-
-        comp_instance.parameters = filter_conflicting_parameters(comp_instance.parameters or [], input_ports)
-
-        for input_port in input_ports:
-            comp_instance.parameters.append(
-                PipelineParameterReadSchema(
-                    kind=ParameterKind.INPUT,
-                    is_tool_input=input_port.is_tool_input,
-                    id=input_port.id,
-                    name=input_port.name,
-                    type=input_port.parameter_type or ParameterType.STRING,
-                    nullable=input_port.nullable,
-                    default=input_port.get_default() if input_port.default is not None else None,
-                    ui_component=input_port.ui_component,
-                    ui_component_properties=input_port.ui_component_properties,
-                    is_advanced=input_port.is_advanced,
-                    drives_output_schema=input_port.drives_output_schema,
-                    display_order=input_port.display_order,
-                    value=field_expression_by_name.get(input_port.name),
-                )
-            )
-
-        # TODO: Temporary patch to ensure 'messages' appears first. Clean later.
-        comp_instance.parameters.sort(
-            key=lambda p: (
-                0 if p.name == "messages" else 1,
-                p.display_order if p.display_order is not None else 999,
-                p.name,
-            )
+        comp_instance.parameters = synthesize_input_port_parameters(
+            comp_instance.parameters, input_ports, comp_instance.field_expressions
         )
 
     latest_modification_history = get_latest_modification_history(session, graph_runner_id)

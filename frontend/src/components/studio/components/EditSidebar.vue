@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useAbility } from '@casl/vue'
 import { Icon } from '@iconify/vue'
-import { isProviderLogo } from '../utils/node-factory.utils'
+import { isProviderLogo, type CreateComponentFn } from '../utils/node-factory.utils'
 import EditSidebarParameterField from './EditSidebarParameterField.vue'
 import EditSidebarGmail from './EditSidebarGmail.vue'
 import EditSidebarOptionalTools from './EditSidebarOptionalTools.vue'
@@ -9,7 +9,7 @@ import EditSidebarConfigContent from './EditSidebarConfigContent.vue'
 import ProjectSelectionDialog from './ProjectSelectionDialog.vue'
 import { useEditSidebarForm } from '@/composables/useEditSidebarForm'
 import { useEditSidebarPorts } from '@/composables/useEditSidebarPorts'
-import { useEditSidebarSubmit } from '@/composables/useEditSidebarSubmit'
+import { useEditSidebarSubmit, type AddToolsPayload, type RemoveToolPayload } from '@/composables/useEditSidebarSubmit'
 import { useEditSidebarOAuth } from '@/composables/useEditSidebarOAuth'
 import { useEditSidebarComponentConfig } from '@/composables/useEditSidebarComponentConfig'
 import { getComponentDefinitionFromCache } from '@/composables/queries/useComponentDefinitionsQuery'
@@ -23,11 +23,17 @@ interface Props {
   projects?: any[] | null
   agents?: any[] | null
   isDraftMode?: boolean
+  createComponent?: CreateComponentFn | null
 }
 
 const props = defineProps<Props>()
 
-const emit = defineEmits(['update:modelValue', 'save', 'add-tools', 'remove-tool'])
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'save': [component: Record<string, unknown>]
+  'add-tools': [payload: AddToolsPayload]
+  'remove-tool': [payload: RemoveToolPayload]
+}>()
 
 const drawer = computed({
   get: () => props.modelValue,
@@ -69,7 +75,6 @@ const form = useEditSidebarForm(
   componentIdComputed
 )
 
-const emitAny = emit as (event: string, ...args: any[]) => void
 const ports = useEditSidebarPorts(componentData)
 
 const componentConfig = useEditSidebarComponentConfig(
@@ -97,7 +102,8 @@ const submit = useEditSidebarSubmit(
       drawer.value = v
     },
   },
-  emitAny
+  emit,
+  props.createComponent || undefined
 )
 
 const oauth = useEditSidebarOAuth(componentData)
