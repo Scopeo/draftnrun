@@ -15,6 +15,7 @@ from ada_backend.routers.auth_router import (
 from ada_backend.schemas.auth_schema import AuthenticatedEntity
 from ada_backend.schemas.git_sync_schemas import (
     GitHubAppInfoResponse,
+    GitHubRepoSummary,
     GitSyncConfigResponse,
     GitSyncImportRequest,
     GitSyncImportResponse,
@@ -22,6 +23,7 @@ from ada_backend.schemas.git_sync_schemas import (
 from ada_backend.services.git_sync_service import (
     GitSyncConfigNotFound,
     GraphJsonNotFound,
+    InstallationOwnershipError,
     disconnect_sync,
     get_config,
     handle_github_push,
@@ -125,6 +127,11 @@ async def create_git_sync(
             project_type=request.project_type,
         )
         return GitSyncImportResponse(imported=imported, skipped=skipped)
+    except InstallationOwnershipError as e:
+        raise HTTPException(
+            status_code=404,
+            detail="GitHub installation not found",
+        ) from e
     except GraphJsonNotFound as e:
         raise HTTPException(
             status_code=422,
@@ -164,7 +171,13 @@ def get_github_app_info(
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.MEMBER.value)),
     ],
 ) -> GitHubAppInfoResponse:
-    if not settings.GITHUB_APP_SLUG:
+    all_configured = all([
+        settings.GITHUB_APP_SLUG,
+        settings.GITHUB_APP_ID,
+        settings.GITHUB_APP_PRIVATE_KEY,
+        settings.GITHUB_APP_WEBHOOK_SECRET,
+    ])
+    if not all_configured:
         return GitHubAppInfoResponse(configured=False)
     return GitHubAppInfoResponse(
         configured=True,
@@ -183,12 +196,21 @@ async def list_repos_for_installation(
         AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
-) -> list[dict]:
+    session: Session = Depends(get_db),
+) -> list[GitHubRepoSummary]:
     try:
-        return await list_installation_repos_summary(installation_id)
+        return await list_installation_repos_summary(session, installation_id, organization_id)
+    except InstallationOwnershipError:
+        raise HTTPException(
+            status_code=404,
+            detail="GitHub installation not found",
+        )
     except GithubClientError:
         LOGGER.warning("Failed to list repos for installation %s", installation_id)
         raise HTTPException(status_code=502, detail="Failed to list repositories from GitHub")
+    except Exception as e:
+        LOGGER.error("Unexpected error listing repos for installation %s: %s", installation_id, e, exc_info=True)
+        raise HTTPException(status_code=502, detail="Failed to list repositories from GitHub") from e
 
 
 @org_router.get(

@@ -2412,6 +2412,14 @@ class ProjectAlertEmail(Base):
     __table_args__ = (UniqueConstraint("project_id", "email", name="uq_project_alert_email"),)
 
 
+class GitHubAppInstallation(Base):
+    __tablename__ = "github_app_installations"
+
+    github_installation_id = mapped_column(Integer, primary_key=True, autoincrement=False)
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class GitSyncConfig(Base):
     __tablename__ = "git_sync_configs"
 

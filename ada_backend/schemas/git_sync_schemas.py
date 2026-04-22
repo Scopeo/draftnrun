@@ -59,6 +59,14 @@ class GitSyncImportResponse(BaseModel):
     skipped: list[str] = Field(default_factory=list, description="Folders already linked to a project")
 
 
+class GitHubRepoSummary(BaseModel):
+    full_name: str = ""
+    name: str = ""
+    owner: str = ""
+    default_branch: str = "main"
+    private: bool = False
+
+
 class GitHubAppInfoResponse(BaseModel):
     configured: bool
     install_url: str | None = None

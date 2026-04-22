@@ -8,11 +8,11 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.database.models import ProjectType
 from ada_backend.mixpanel_analytics import track_deployed_to_production
-from ada_backend.repositories import git_sync_repository
+from ada_backend.repositories import git_sync_repository, github_app_installation_repository
 from ada_backend.repositories.graph_runner_repository import (
     insert_graph_runner_and_bind_to_project,
 )
-from ada_backend.schemas.git_sync_schemas import GitSyncImportResult
+from ada_backend.schemas.git_sync_schemas import GitHubRepoSummary, GitSyncImportResult
 from ada_backend.schemas.pipeline.graph_schema import GraphSaveV2Schema, GraphUpdateSchema
 from ada_backend.services import github_client
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
@@ -39,6 +39,32 @@ class GraphJsonNotFound(Exception):
         self.repo = repo
         self.branch = branch
         super().__init__(f"No graph.json found in {repo} on branch {branch}")
+
+
+class InstallationOwnershipError(Exception):
+    """Raised when a GitHub installation belongs to a different organization."""
+
+    def __init__(self, installation_id: int):
+        self.installation_id = installation_id
+        super().__init__(f"GitHub installation {installation_id} belongs to another organization")
+
+
+def register_installation_if_new(session: Session, installation_id: int, organization_id: UUID) -> None:
+    """Register a GitHub installation for the org, or raise if it belongs to another org."""
+    existing = github_app_installation_repository.get_by_installation_id(session, installation_id)
+    if existing:
+        if existing.organization_id != organization_id:
+            raise InstallationOwnershipError(installation_id)
+        return
+    try:
+        github_app_installation_repository.register_installation(session, installation_id, organization_id)
+    except IntegrityError:
+        session.rollback()
+        existing = github_app_installation_repository.get_by_installation_id(session, installation_id)
+        if existing is None:
+            raise
+        if existing.organization_id != organization_id:
+            raise InstallationOwnershipError(installation_id)
 
 
 async def _fetch_graph_update_payload(config: db.GitSyncConfig, commit_sha: str) -> GraphUpdateSchema:
@@ -91,7 +117,11 @@ async def import_from_github(
 
     Returns (imported, skipped) where imported is a list of typed import results,
     and skipped is a list of folder names that already had a sync config.
+
+    Raises InstallationOwnershipError if the installation belongs to another org.
     """
+    register_installation_if_new(session, github_installation_id, organization_id)
+
     github_repo = f"{github_owner}/{github_repo_name}"
     head_sha = await github_client.get_branch_head_sha(github_repo, branch, github_installation_id)
     github_folders = await github_client.find_graph_json_folders(
@@ -331,16 +361,23 @@ def get_config(
     return config
 
 
-async def list_installation_repos_summary(installation_id: int) -> list[dict]:
-    """List repos accessible to a GitHub App installation, returning only the fields the front-end needs."""
+async def list_installation_repos_summary(
+    session: Session, installation_id: int, organization_id: UUID
+) -> list[GitHubRepoSummary]:
+    """List repos accessible to a GitHub App installation, returning only the fields the front-end needs.
+
+    On first call for a new installation, registers it to the requesting org.
+    Raises InstallationOwnershipError if the installation belongs to another org.
+    """
+    register_installation_if_new(session, installation_id, organization_id)
     repos = await github_client.list_installation_repos(installation_id)
     return [
-        {
-            "full_name": r.get("full_name", ""),
-            "name": r.get("name", ""),
-            "owner": r.get("owner", {}).get("login", ""),
-            "default_branch": r.get("default_branch", "main"),
-            "private": r.get("private", False),
-        }
+        GitHubRepoSummary(
+            full_name=r.get("full_name", ""),
+            name=r.get("name", ""),
+            owner=r.get("owner", {}).get("login", ""),
+            default_branch=r.get("default_branch", "main"),
+            private=r.get("private", False),
+        )
         for r in repos
     ]

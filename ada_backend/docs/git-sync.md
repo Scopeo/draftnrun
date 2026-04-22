@@ -121,12 +121,12 @@ Flow:
 1. User clicks "Connect" → popup opens to `https://github.com/apps/{slug}/installations/new`
 2. After installation, GitHub redirects to the app's Setup URL (must be configured to `{FRONTEND_URL}/github/callback`)
 3. The callback page posts the `installation_id` back to the opener via `postMessage`
-4. A repo-picker dialog appears listing accessible repos (`GET /{org_id}/git-sync/installations/{id}/repos`)
-5. User selects a repo → `POST /{org_id}/git-sync` imports matching graph payloads
+4. A repo-picker dialog appears listing accessible repos (`GET /organizations/{org_id}/git-sync/installations/{id}/repos`)
+5. User selects a repo → `POST /organizations/{org_id}/git-sync` imports matching graph payloads
 
 API endpoints added for the frontend:
-- `GET /{org_id}/git-sync/github-app` — returns `{ configured, install_url }` (requires `GITHUB_APP_SLUG`)
-- `GET /{org_id}/git-sync/installations/{installation_id}/repos` — proxies `list_installation_repos`
+- `GET /organizations/{org_id}/git-sync/github-app` — returns `{ configured, install_url }` (requires `GITHUB_APP_SLUG`)
+- `GET /organizations/{org_id}/git-sync/installations/{installation_id}/repos` — proxies `list_installation_repos`
 
 ## Env Vars
 

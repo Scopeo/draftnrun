@@ -1,9 +1,9 @@
 import type { QueryClient } from '@tanstack/vue-query'
-import { useQuery } from '@tanstack/vue-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import type { Ref } from 'vue'
 import { computed } from 'vue'
 import type { OAuthConnectionListItem } from '@/api'
-import { scopeoApi } from '@/api'
+import { oauthConnectionsApi } from '@/api/oauth'
 import { logNetworkCall, logQueryStart } from '@/utils/queryLogger'
 
 /**
@@ -25,11 +25,29 @@ export function useOAuthConnectionsQuery(orgId: Ref<string | undefined>, provide
         return []
       }
 
-      const connections = await scopeoApi.oauthConnections.list(orgId.value, provider?.value)
+      const connections = await oauthConnectionsApi.list(orgId.value, provider?.value)
       return connections || []
     },
     enabled: computed(() => !!orgId.value),
     staleTime: 30000, // 30s - connections don't change frequently
+  })
+}
+
+export function useDeleteOAuthConnectionMutation(orgId: Ref<string | undefined>) {
+  const queryClient = useQueryClient()
+
+  return useMutation<void, Error, { connectionId: string; providerConfigKey: string }>({
+    mutationFn: async ({ connectionId, providerConfigKey }) => {
+      if (!orgId.value) throw new Error('No org ID provided')
+      logNetworkCall(['delete-oauth-connection', connectionId], `DELETE /organizations/${orgId.value}/oauth-connections/${connectionId}`)
+      await oauthConnectionsApi.delete(orgId.value, connectionId, providerConfigKey)
+    },
+    onSuccess: () => {
+      if (orgId.value) {
+        queryClient.invalidateQueries({ queryKey: ['oauth-connections', orgId.value] })
+        queryClient.invalidateQueries({ queryKey: ['org-variable-definitions', orgId.value] })
+      }
+    },
   })
 }
 
