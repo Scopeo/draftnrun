@@ -470,7 +470,10 @@ The v2 endpoints support two save granularities:
 
 **Granular save (front/MCP):**
 - `create_component_v2` — add a new component to the graph, returns `instance_id`
-- `update_component_v2` — update a single component's parameters, ports, integration
+- `update_component_v2` — update a single component's parameters, ports, integration. \
+  **Full-replace semantics**: `parameters` and `input_port_instances` replace the existing lists entirely — \
+  include ALL parameters from `get_graph`, not only the ones you want to change. \
+  For single-parameter changes, prefer `update_component_parameters`
 - `delete_component_v2` — remove a component and cascade-delete its edges/relationships
 - `update_graph_topology_v2` — sync edges, relationships, and node metadata (label, is_start_node); \
   all referenced instance_ids must already exist; edges use full-replace semantics

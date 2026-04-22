@@ -117,7 +117,13 @@ PROXY_SPECS: list[ToolSpec] = [
         description=(
             "Update a single component instance's parameters and ports (v2).\n\n"
             "Only updates the specified component — does not touch topology. "
-            "Optionally update label and is_start_node."
+            "Optionally update label and is_start_node.\n\n"
+            "⚠️ FULL-REPLACE semantics: `parameters` and `input_port_instances` "
+            "replace the existing lists entirely. You MUST include ALL parameters "
+            "from `get_graph` or `get_graph_v2`, not only the ones you want to "
+            "change — omitted parameters will be lost. For single-parameter "
+            "changes, prefer `update_component_parameters` which handles the "
+            "read-modify-write automatically."
         ),
         method="put",
         path=f"{_GRAPH_BASE_V2}/components/{{instance_id}}",
@@ -126,7 +132,8 @@ PROXY_SPECS: list[ToolSpec] = [
             "component_data",
             dict,
             description=(
-                "Component update: {parameters, input_port_instances, label?, is_start_node?, ...}."
+                "Component update: {parameters, input_port_instances, label?, is_start_node?, ...}. "
+                "parameters and input_port_instances use full-replace — include the complete lists."
             ),
         ),
     ),
