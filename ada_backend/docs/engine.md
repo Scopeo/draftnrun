@@ -155,6 +155,30 @@ In ingestion workers, `ingestion_script.ingest_db_source.upload_db_source()` sho
 
 - Keep searchable field mapping in `SENTRY_TAG_FIELDS`.
 - Avoid mutating `TracingSpanParams` directly; use helper functions.
+- `SENTRY_TAG_FIELDS` maps `TracingSpanParams` attributes to Sentry keys (e.g., `environment` -> `env`).
+- Sync handles `None` by clearing tags/attributes to avoid stale values.
+- `run_id` is injected at run boundaries (`run_with_tracking`, async enqueue, worker processing).
+- Avoid mutating `TracingSpanParams` directly; always use the helper functions.
+- `SENTRY_TAG_FIELDS` defines the allowlist propagated to Sentry (`cron_id`, `trace_id`, `project_id`,
+  `organization_id`, `environment`, `call_type`, `graph_runner_id`, `tag_name`)
+- non-`None` values are converted to strings and sent via `sentry_sdk.set_tag`
+- `None` values remove the tag from the current Sentry isolation scope (`remove_tag`) to avoid stale tag leakage
+- calling `set_tracing_span` is safe when Sentry is disabled; tag operations are no-ops until `sentry_sdk.init` runs
+
+When introducing a new tracing field, add it to `TracingSpanParams` first. If it should be searchable in Sentry,
+also add it to `SENTRY_TAG_FIELDS` so the propagation remains centralized and endpoint-agnostic.
+## Ingestion Presigned URL Mode
+
+Folder-source ingestion can optionally force presigned URL usage for S3-backed files via
+`IS_CLOUD_S3` in environment settings:
+
+- `IS_CLOUD_S3 = False` (default): ingestion never requests presigned URLs and always reads file content directly.
+  `S3FolderManager.get_file_presigned_url()` returns `None` in this mode and does not attempt URL generation.
+  Use this for local/dev and custom `S3_ENDPOINT_URL` setups (for example MinIO/LocalStack).
+- `IS_CLOUD_S3 = True`: ingestion passes a presigned URL getter into document chunking for supported parsers.
+  This mode is intended for cloud AWS S3 deployments where generated presigned URLs are externally reachable.
+- When enabled, missing S3 metadata (`s3_path`), custom endpoint configuration (`S3_ENDPOINT_URL`), or presigned URL
+  generation failures are treated as hard errors instead of silently falling back.
 
 ## Key Files
 

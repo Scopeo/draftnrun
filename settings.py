@@ -162,6 +162,7 @@ class BaseConfig(BaseSettings):
     PLAYGROUND_S3_BUCKET_NAME: Optional[str] = None
     RESULTS_S3_BUCKET_NAME: Optional[str] = None
     S3_REGION_NAME: Optional[str] = None
+    IS_CLOUD_S3: bool = False
 
     # Ingestion parameters
     NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE: Optional[int] = 5

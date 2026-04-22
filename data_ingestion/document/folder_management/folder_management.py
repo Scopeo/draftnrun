@@ -126,3 +126,6 @@ class FolderManager(ABC):
     @abstractmethod
     def get_file_content(self, path: str) -> bytes:
         pass
+
+    def get_file_presigned_url(self, path: str) -> str | None:
+        return None

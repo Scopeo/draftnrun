@@ -37,6 +37,7 @@ def document_chunking_mapping(
     document_reading_mode: DocumentReadingMode = DocumentReadingMode.STANDARD,
     llamaparse_api_key: Optional[str] = None,
     mistral_ocr_api_key: Optional[str] = None,
+    get_presigned_url_func: Optional[Callable[[str], str | None]] = None,
 ) -> dict[FileDocumentType, FileProcessor]:
     excel_processor = None
     if document_reading_mode == DocumentReadingMode.LLM_VISION:
@@ -69,6 +70,7 @@ def document_chunking_mapping(
             pdf_parser=document_parser,
             chunk_size=chunk_size,
             chunk_overlap=overlapping_size,
+            get_presigned_url=get_presigned_url_func,
         )
         docx_processor = partial(
             get_chunks_from_docx,
@@ -76,11 +78,13 @@ def document_chunking_mapping(
             docx_parser=document_parser,
             chunk_size=chunk_size,
             chunk_overlap=overlapping_size,
+            get_presigned_url=get_presigned_url_func,
         )
         excel_processor = partial(
             create_chunks_from_excel_file_with_llamaparse,
             get_file_content_func=get_file_content_func,
             llamaparse_api_key=llamaparse_api_key,
+            get_presigned_url=get_presigned_url_func,
         )
         LOGGER.info("Using LlamaParse for PDF and DOCX processing")
 
@@ -93,6 +97,7 @@ def document_chunking_mapping(
             mistral_ocr_api_key=mistral_ocr_api_key,
             chunk_size=chunk_size,
             chunk_overlap=overlapping_size,
+            get_presigned_url=get_presigned_url_func,
         )
         pdf_processor = mistral_ocr_processor
         docx_processor = mistral_ocr_processor

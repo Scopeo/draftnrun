@@ -1,6 +1,8 @@
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Optional
+
+from botocore.exceptions import ClientError
 
 from data_ingestion.boto3_client import delete_file_from_bucket, get_content_from_file, get_s3_boto3_client
 from data_ingestion.document.folder_management.folder_management import FileDocument, FileDocumentType, FolderManager
@@ -91,6 +93,28 @@ class S3FolderManager(FolderManager):
     def get_file_content(self, file_path: str) -> bytes:
         s3_path_to_file = self._files[file_path]["s3_path"]
         return get_content_from_file(self.s3_client, self._bucket_name, s3_path_to_file)
+
+    def get_file_presigned_url(self, file_path: str, expiration: int = 3600) -> Optional[str]:
+        if settings.IS_CLOUD_S3:
+            return self._get_cloud_presigned_url(file_path, expiration)
+        return self._get_local_presigned_url(file_path)
+
+    def _get_cloud_presigned_url(self, file_path: str, expiration: int) -> str:
+        s3_path_to_file = self._files[file_path]["s3_path"]
+        if not s3_path_to_file:
+            raise ValueError(f"Missing s3_path for file: {file_path}")
+        try:
+            return self.s3_client.generate_presigned_url(
+                ClientMethod="get_object",
+                Params={"Bucket": self._bucket_name, "Key": s3_path_to_file},
+                ExpiresIn=expiration,
+            )
+        except ClientError as e:
+            raise RuntimeError(f"Failed to generate presigned URL for {s3_path_to_file}") from e
+
+    def _get_local_presigned_url(self, file_path: str) -> None:
+        self._files[file_path]
+        return None
 
     def clean_bucket(self) -> None:
         """Delete all files in the S3 bucket."""
