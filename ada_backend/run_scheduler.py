@@ -13,6 +13,7 @@ from ada_backend.scheduler.service import (
     start_scheduler,
     stop_scheduler,
 )
+from ada_backend.utils.log_redaction import scrub_sentry_event
 from engine.trace.trace_context import set_trace_manager
 from logger import setup_logging
 from settings import settings
@@ -68,6 +69,9 @@ async def run_scheduler():
             enable_logs=True,
             profile_session_sample_rate=settings.SENTRY_PROFILE_SESSION_SAMPLE_RATE,
             profile_lifecycle="trace",
+            before_send=lambda event, hint: scrub_sentry_event(event),
+            before_send_log=lambda log, hint: scrub_sentry_event(log),
+            before_send_transaction=lambda event, hint: scrub_sentry_event(event),
         )
 
     # Initialize the shared TraceManager singleton early

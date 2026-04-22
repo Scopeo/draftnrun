@@ -8,6 +8,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field
 
 from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
+from ada_backend.utils.log_redaction import redact_sensitive
 from engine.components.component import Component
 from engine.components.types import (
     ComponentAttributes,
@@ -179,7 +180,13 @@ class APICallTool(Component):
                     response_body = e.response.json()
                 except Exception:
                     response_body = e.response.text
-            LOGGER.error(f"API request failed: {str(e)} | status={status_code} | response_body={response_body}")
+            # TODO(security): `response_body` may echo request headers (e.g. Authorization)
+            # returned by misbehaving upstream APIs. Deep redaction of third-party payloads
+            # requires a broader policy.
+            LOGGER.error(
+                f"API request failed: {type(e).__name__} | status={status_code} "
+                f"| response_body_type={type(response_body).__name__}"
+            )
             return {
                 "status_code": status_code or 0,
                 "error": str(e),
@@ -218,7 +225,8 @@ class APICallTool(Component):
                 "status_code": api_response.get("status_code"),
                 "response_body": api_response.get("response_body"),
             }
-            content = f"API call failed: {json.dumps(error_details, indent=2)}"
+            redacted_error_details = redact_sensitive(error_details)
+            content = f"API call failed: {json.dumps(redacted_error_details, indent=2)}"
             response_body = api_response.get("response_body")
             if isinstance(response_body, dict):
                 data = response_body

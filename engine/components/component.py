@@ -19,6 +19,7 @@ from engine.components.types import (
     ToolDescription,
 )
 from engine.prometheus_metric import track_calls
+from engine.secret_utils import unwrap_secrets
 from engine.trace.credit_calculator import calculate_and_set_component_credits
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
@@ -160,6 +161,9 @@ class Component(ABC):
         with self.trace_manager.start_span(span_name) as span:
             try:
                 if input_node_data is not None:
+                    # TODO(security): serialize_to_json masks SecretStr but not plaintext
+                    # secrets produced by prior concat/unwrap. Richer redaction requires
+                    # catalog-level "sensitive port" metadata.
                     span.set_attributes({
                         SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
                         SpanAttributes.INPUT_VALUE: serialize_to_json(input_node_data.data, shorten_string=True),
@@ -180,7 +184,7 @@ class Component(ABC):
 
                     if self.migrated:
                         InputModel = self.get_inputs_schema()
-                        validated_inputs = InputModel(**input_node_data.data)
+                        validated_inputs = InputModel(**unwrap_secrets(input_node_data.data))
                         output_model_instance = await self._run_without_io_trace(
                             inputs=validated_inputs, ctx=input_node_data.ctx
                         )
@@ -204,7 +208,7 @@ class Component(ABC):
                         span.set_status(trace_api.StatusCode.OK)
                         return output_node_data
                     else:
-                        data = input_node_data.data or {}
+                        data = unwrap_secrets(input_node_data.data or {})
                         if "messages" in data:
                             legacy_arg = AgentPayload(**data)
                         else:
@@ -271,16 +275,20 @@ class Component(ABC):
                             data[input_port_name] = last_message.get("content", "")
 
                     _coerce_inputs_for_model(data, InputModel)
+                    data = unwrap_secrets(data)
 
                     try:
                         validated_inputs = InputModel(**data)
                     except ValidationError as e:
                         component_name = self.component_attributes.component_instance_name or self.__class__.__name__
+                        error_summary = "; ".join(
+                            f"{'.'.join(str(loc) for loc in err['loc'])}: {err['type']}" for err in e.errors()
+                        )
                         raise CoercionError(
                             source_type=type(data),
                             target_type=InputModel,
-                            value=data,
-                            reason=f"Failed to validate inputs for component '{component_name}': {e}",
+                            value=None,
+                            reason=f"Failed to validate inputs for component '{component_name}': {error_summary}",
                         ) from e
                     # Pass ctx that was explicitly provided by caller (e.g., ReActAgent)
                     output_model_instance = await self._run_without_io_trace(inputs=validated_inputs, ctx=ctx)

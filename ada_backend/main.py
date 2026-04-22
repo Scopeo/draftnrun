@@ -58,6 +58,7 @@ from ada_backend.routers.webhooks.webhook_internal_router import router as webho
 from ada_backend.routers.webhooks.webhook_trigger_router import router as webhook_trigger_router
 from ada_backend.routers.widget_router import router as widget_router
 from ada_backend.services.rate_limit_service import limiter
+from ada_backend.utils.log_redaction import scrub_sentry_event
 from ada_backend.utils.redis_client import xgroup_create_if_not_exists
 from ada_backend.workers.git_sync_queue_worker import _request_git_sync_drain, start_git_sync_queue_worker_thread
 from ada_backend.workers.qa_queue_worker import _request_qa_drain, start_qa_queue_worker_thread
@@ -82,6 +83,9 @@ if settings.SENTRY_DSN:
         enable_logs=True,
         profile_session_sample_rate=settings.SENTRY_PROFILE_SESSION_SAMPLE_RATE,
         profile_lifecycle="trace",
+        before_send=lambda event, hint: scrub_sentry_event(event),
+        before_send_log=lambda log, hint: scrub_sentry_event(log),
+        before_send_transaction=lambda event, hint: scrub_sentry_event(event),
     )
 
 

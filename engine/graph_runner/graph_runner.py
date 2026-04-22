@@ -113,6 +113,9 @@ class GraphRunner:
                 params.trace_id = trace_id
                 set_tracing_span(trace_id=trace_id)
 
+            # TODO(security): `input_data` is the raw run payload (ctx + user inputs).
+            # `serialize_to_json` applies heuristic redaction, but plaintext secrets
+            # under non-sensitive keys still require catalog-level sensitive metadata.
             trace_input = serialize_to_json(input_data, shorten_string=True)
             span.set_attributes({
                 SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
@@ -279,7 +282,7 @@ class GraphRunner:
                 )
                 evaluated_value = coerced
         input_data[field_name] = evaluated_value
-        LOGGER.debug(f"Set {node_id}.{field_name} from {log_prefix}: {evaluated_value}")
+        LOGGER.debug(f"Set {node_id}.{field_name} from {log_prefix}")
 
     def _gather_inputs(self, node_id: str) -> dict[str, Any]:
         """Assemble input data for a node by evaluating all field expressions.

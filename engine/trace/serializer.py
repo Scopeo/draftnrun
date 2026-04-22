@@ -1,6 +1,9 @@
 import json
 from typing import Any, Optional
 
+from pydantic import SecretStr
+
+from ada_backend.utils.log_redaction import redact_sensitive
 from engine.components.utils import shorten_base64_string
 
 
@@ -19,6 +22,7 @@ def serialize_to_json(obj: Any, indent: int = 2, shorten_string: bool = False) -
         JSON string representation of the object
     """
     serialized_obj = _serialize_object(obj, shorten_string=shorten_string)
+    serialized_obj = redact_sensitive(serialized_obj)
     return json.dumps(serialized_obj, indent=indent)
 
 
@@ -40,6 +44,8 @@ def _serialize_object(obj: Any, visited: Optional[set] = None, shorten_string: b
 
     if obj is None:
         return None
+    elif isinstance(obj, SecretStr):
+        return str(obj)
     elif isinstance(obj, str):
         if shorten_string:
             return shorten_base64_string(obj)

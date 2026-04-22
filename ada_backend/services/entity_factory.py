@@ -8,7 +8,7 @@ from inspect import signature
 from typing import Any, Callable, Optional, Type, Union, get_args, get_origin, get_type_hints
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 
 from ada_backend.context import get_current_project_id, get_run_variables
 from ada_backend.database.models import EnvType
@@ -37,6 +37,7 @@ from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import ToolDescription
 from engine.llm_services.llm_service import CompletionService, EmbeddingService, OCRService, WebSearchService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
+from engine.secret_utils import unwrap_secret, unwrap_secrets
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_context import get_trace_manager
 
@@ -123,7 +124,7 @@ class EntityFactory:
         """
         for processor in self.parameter_processors:
             kwargs = processor(kwargs, self.constructor_params)
-        return args, kwargs
+        return args, unwrap_secrets(kwargs)
 
     async def __call__(self, *args, **kwargs) -> Any:
         """
@@ -202,7 +203,7 @@ class RemoteMCPToolFactory:
             if trace_manager is None:
                 raise ValueError("Trace manager is required")
             kwargs["trace_manager"] = trace_manager
-        return await RemoteMCPTool.from_mcp_server(**kwargs)
+        return await RemoteMCPTool.from_mcp_server(**unwrap_secrets(kwargs))
 
 
 # TODO: Refactor to inject the session directly
@@ -236,15 +237,16 @@ async def resolve_oauth_access_token(
 
         # set_id override takes priority over the stored default connection
         variables = get_run_variables()
-        LOGGER.info(f"Set run variables: {variables}")
+        LOGGER.debug("Set run variables available for OAuth resolution")
         if variables and definition.name in variables:
-            LOGGER.info(f"Using set run variables for {definition.name}: {variables[definition.name]}")
-            connection_uuid = UUID(variables[definition.name])
+            LOGGER.debug(f"Using set run variables for {definition.name}")
+            raw_connection_id = unwrap_secret(variables[definition.name])
+            connection_uuid = UUID(raw_connection_id)
         elif definition.default_value:
-            LOGGER.info(f"Using default value for {definition.name}: {definition.default_value}")
+            LOGGER.debug(f"Using default value for {definition.name}")
             connection_uuid = UUID(definition.default_value)
         else:
-            LOGGER.info(f"No connection found for {definition.name}")
+            LOGGER.debug(f"No connection found for {definition.name}")
             return None
 
         return await get_oauth_access_token(
@@ -310,10 +312,12 @@ class OAuthComponentFactory:
         if isinstance(definition_id, list):
             definition_id = definition_id[0]
         access_token = await resolve_oauth_access_token(definition_id, self.provider_config_key)
-        kwargs[self.target_param_name] = access_token  # may be None; component raises at run if required
+        # may be None; component raises at run if required
+        kwargs[self.target_param_name] = SecretStr(access_token) if access_token is not None else None
 
         for processor in self.parameter_processors:
             kwargs = processor(kwargs, self.constructor_params)
+        kwargs = unwrap_secrets(kwargs)
 
         if self.constructor_method == "__init__":
             return self.entity_class(**kwargs)
@@ -523,7 +527,7 @@ def pydantic_processor(params: dict, constructor_params: dict[str, Any]) -> dict
     """Returns a processor function to handle Pydantic model parameters."""
     for param_name, param_type in constructor_params.items():
         if param_name in params and issubclass(param_type, BaseModel):
-            params[param_name] = param_type(**params[param_name])
+            params[param_name] = param_type(**unwrap_secrets(params[param_name]))
     return params
 
 
@@ -878,6 +882,10 @@ def build_db_service_processor(target_name: str = "db_service") -> ParameterProc
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        # TODO(security): `engine_url` is stored as `ParameterType.STRING` but typically
+        # contains a connection string with inline credentials (e.g.
+        # `postgresql://user:password@host/db`). It should be promoted to a secret type
+        # so it is masked in logs/traces and wrapped as SecretStr through the pipeline.
         engine_url = params.pop("engine_url", None)
         if not engine_url:
             return params
@@ -1181,6 +1189,8 @@ def _pop_and_validate_parameter(params: dict, parameter_name: str, expected_type
 
     if parameter_value is None:
         raise ValueError(f"{error_message}: parameter '{parameter_name}' cannot be None")
+
+    parameter_value = unwrap_secret(parameter_value)
 
     if expected_type is str:
         if not isinstance(parameter_value, str):

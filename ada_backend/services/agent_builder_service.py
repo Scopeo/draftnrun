@@ -2,6 +2,7 @@ import logging
 from typing import Any, Optional
 from uuid import UUID
 
+from pydantic import SecretStr
 from sqlalchemy.orm import Session
 
 from ada_backend.context import set_current_project_id
@@ -58,7 +59,7 @@ def get_component_params(
             - Parameters with order=None are returned as single values
             - Parameters with order!=None are grouped in lists, ordered by the order field
     """
-    params = {}
+    params: dict[str, Any] = {}
     ordered_params: dict[str, list[tuple[int, Any]]] = {}  # name -> [(order, value), ...]
 
     for param in get_component_basic_parameters(session, component_instance_id):
@@ -215,7 +216,7 @@ async def instantiate_component(
         project_id=project_id,
     )
 
-    LOGGER.debug(f"{input_params=}\n")
+    LOGGER.debug(f"Loaded component input param names: {list(input_params.keys())}")
 
     component_integration = get_integration_from_component(session, component_instance.component_version_id)
 
@@ -289,15 +290,15 @@ async def instantiate_component(
                 error_msg,
                 exc_info=True,
                 extra={
-                    "input_params": input_params,
-                    "grouped_sub_components": grouped_sub_components,
+                    "input_param_names": list(input_params.keys()),
+                    "grouped_sub_component_names": list(grouped_sub_components.keys()),
                 },
             )
             raise ValueError(error_msg) from e
-    LOGGER.debug(f"Resolved sub-components: {grouped_sub_components}\n")
+    LOGGER.debug(f"Resolved sub-component parameter names: {list(grouped_sub_components.keys())}")
     # Merge grouped sub-components into input parameters
     for parameter_name, sub_component_list in grouped_sub_components.items():
-        LOGGER.debug(f"Merging sub-components for parameter '{parameter_name}': {sub_component_list}\n")
+        LOGGER.debug(f"Merging {len(sub_component_list)} sub-component(s) for parameter '{parameter_name}'")
         if not any(order is not None for order, _ in sub_component_list):
             # All sub-components have order=None, treat as singleton if only one
             if len(sub_component_list) == 1:
@@ -309,7 +310,7 @@ async def instantiate_component(
             input_params[parameter_name] = [
                 instance for _, instance in sorted(sub_component_list, key=lambda x: x[0] or 0)
             ]
-    LOGGER.debug(f"Merged input parameters: {input_params}\n")
+    LOGGER.debug(f"Merged input parameter names: {list(input_params.keys())}")
 
     # Apply global component parameters (non-overridable, invisible to UI)
     try:
@@ -329,14 +330,14 @@ async def instantiate_component(
                 input_params[pname] = gparam.get_value()
         for pname, values in grouped_globals.items():
             input_params[pname] = [v for _, v in sorted(values, key=lambda x: x[0])]
-        LOGGER.debug(f"Input parameters after applying global component parameters: {input_params}\n")
+        LOGGER.debug(f"Input parameter names after applying global component parameters: {list(input_params.keys())}")
     except Exception as e:
         raise ValueError(
             f"Failed to apply global component parameters for instance {component_instance.ref}: {e}"
         ) from e
 
     # Resolve secret placeholders for any parameter in input_params.
-    key_to_secret: dict[str, str] | None = None
+    key_to_secret: dict[str, SecretStr] | None = None
     if project_id:
         secrets = get_organization_secrets_from_project_id(session, project_id)
         key_to_secret = {s.key: s.secret for s in secrets}
@@ -360,7 +361,7 @@ async def instantiate_component(
     LOGGER.debug(
         f"Trying to create component: {component_name} "
         f"(version ID: {component_instance.component_version_id}) "
-        f"with input params: {input_params}\n"
+        f"with input param names: {list(input_params.keys())}\n"
     )
     try:
         component_version_id = component_instance.component_version_id
@@ -384,7 +385,7 @@ async def instantiate_component(
             f"Failed to instantiate component '{component_name}' "
             f"with version ID {component_instance.component_version_id} "
             f"and instance ID {component_instance.id}: {e}. "
-            f"Input parameters: {input_params}",
+            f"Input parameter names: {list(input_params.keys())}",
             exc_info=True,
         )
         raise ValueError(

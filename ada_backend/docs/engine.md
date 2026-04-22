@@ -113,7 +113,20 @@ Merge order: **defaults → set_ids[0] → set_ids[1] → ...**
 1. Load all `VariableDefinition` rows for the org
 2. Apply defaults (secret type → secret row with `set_id=None`; other → `definition.default_value`)
 3. Layer variable sets in order, each overriding previous values
-4. Returns `dict[str, Any]` consumed by `VarNode` expression evaluation
+4. Secret values are returned as `SecretStr` objects from `pydantic` (masked by `str()`/`repr()`)
+5. Returns `dict[str, Any]` consumed by `VarNode` expression evaluation
+
+Keep values as `SecretStr` through resolution/evaluation. Unwrap only at explicit execution boundaries that require
+plaintext (for example prompt rendering or external client construction). The trace serializer
+(`engine/trace/serializer.py`) masks `SecretStr` values before span export.
+
+### Secret Redaction
+
+Primary boundary: typed `SecretStr` + explicit unwrap at boundaries.
+`ada_backend/utils/log_redaction.py` (`redact_sensitive`, `scrub_sentry_event`) is best-effort defense-in-depth for
+untyped inputs/events where `SecretStr` cannot be applied directly. This currently lives under `ada_backend` because
+the webhook worker image does not ship `engine/`; extract it later to a runtime-neutral shared module once all worker
+images can include that package.
 
 ## Legacy Compatibility
 
@@ -137,12 +150,11 @@ In ingestion workers, `ingestion_script.ingest_db_source.upload_db_source()` sho
 
 **File**: `engine/trace/span_context.py`
 
-`set_tracing_span(**kwargs)` merges partial updates into the `ContextVar` and synchronizes selected fields to Sentry's isolation scope (both tags and attributes). `reset_tracing_span()` wipes the context and Sentry tags for top-level boundaries (e.g., `RunQueueWorker`) to prevent leakage between independent runs.
+`set_tracing_span(**kwargs)` is the canonical way to update tracing context and sync searchable fields to Sentry.
+`reset_tracing_span()` clears context at top-level boundaries between independent runs.
 
-- `SENTRY_TAG_FIELDS` maps `TracingSpanParams` attributes to Sentry keys (e.g., `environment` -> `env`).
-- Sync handles `None` by clearing tags/attributes to avoid stale values.
-- `run_id` is injected at run boundaries (`run_with_tracking`, async enqueue, worker processing).
-- Avoid mutating `TracingSpanParams` directly; always use the helper functions.
+- Keep searchable field mapping in `SENTRY_TAG_FIELDS`.
+- Avoid mutating `TracingSpanParams` directly; use helper functions.
 
 ## Key Files
 

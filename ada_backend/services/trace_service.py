@@ -44,8 +44,12 @@ def get_attributes_with_messages(span_kind: str, row: pd.Series, filter_to_last_
                 input.append({**input_data[0], "messages": [user_msgs[-1]]})
         if not input:
             input = input_data
-    except Exception as e:
-        LOGGER.error(f"Error extracting last user message: {e}, input_data: {input_data}")
+    except Exception:
+        LOGGER.error(
+            "Error extracting last user message (input_data_len=%s)",
+            len(input_data),
+            exc_info=True,
+        )
         input = input_data
     output = _safe_json_loads(row["output_content"])
     documents = []
@@ -219,8 +223,13 @@ def get_root_traces_by_project(
         end_time=end_time,
     )
     track_monitoring_loaded(user_id, project_count=1, organization_id=organization_id)
-    LOGGER.info("Querying root spans for project %s with duration=%s start_time=%s end_time=%s",
-                project_id, duration, start_time, end_time)
+    LOGGER.debug(
+        "Querying root spans for project %s with duration=%s start_time=%s end_time=%s",
+        project_id,
+        duration,
+        start_time,
+        end_time,
+    )
 
     traces = build_root_spans(rows)
     return PaginatedRootTracesResponse(

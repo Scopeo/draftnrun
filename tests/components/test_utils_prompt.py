@@ -1,6 +1,7 @@
 """Unit tests for fill_prompt_template function."""
 
 import pytest
+from pydantic import SecretStr
 
 from engine.components.errors import MissingKeyPromptTemplateError
 from engine.components.utils_prompt import fill_prompt_template
@@ -176,3 +177,20 @@ class TestFillPromptTemplate:
         # Single braces should be preserved (escaped then unescaped by format), double braces replaced
         assert "{single}" in result  # Single braces preserved as-is
         assert "replaced" in result  # Double braces replaced
+
+    def test_secretstr_is_unwrapped_for_template_substitution(self):
+        template = "Bearer {{api_key}}"
+        variables = {"api_key": SecretStr("real-secret")}
+        result = fill_prompt_template(template, component_name="test", variables=variables)
+        assert result == "Bearer real-secret"
+
+    def test_secretstr_can_render_masked_prompt_for_tracing(self):
+        template = "Bearer {{api_key}}"
+        variables = {"api_key": SecretStr("real-secret")}
+        result = fill_prompt_template(
+            template,
+            component_name="test",
+            variables=variables,
+            reveal_secrets=False,
+        )
+        assert result == "Bearer **********"

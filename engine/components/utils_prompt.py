@@ -1,5 +1,8 @@
 import logging
 import re
+from typing import Any
+
+from pydantic import SecretStr
 
 from engine.components.errors import (
     KeyTypePromptTemplateError,
@@ -9,7 +12,12 @@ from engine.components.errors import (
 LOGGER = logging.getLogger(__name__)
 
 
-def fill_prompt_template(prompt_template: str, component_name: str = "", variables: dict = None) -> str:
+def fill_prompt_template(
+    prompt_template: str,
+    component_name: str = "",
+    variables: dict[str, Any] | None = None,
+    reveal_secrets: bool = True,
+) -> str:
     """
     Fills the system prompt with only the keys required from variables.
     Ensures all values used can be converted to string.
@@ -67,7 +75,10 @@ def fill_prompt_template(prompt_template: str, component_name: str = "", variabl
     for key in template_vars:
         value = variables[key]
         try:
-            str_value = str(value)
+            if isinstance(value, SecretStr):
+                str_value = value.get_secret_value() if reveal_secrets else str(value)
+            else:
+                str_value = str(value)
         except Exception as e:
             LOGGER.error(
                 f"Value for key '{key}' cannot be cast to string in prompt template "

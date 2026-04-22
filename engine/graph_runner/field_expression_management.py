@@ -12,6 +12,7 @@ from typing import Any, Callable
 from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode, VarNode
 from engine.field_expressions.errors import FieldExpressionError
 from engine.graph_runner.types import Task
+from engine.secret_utils import unwrap_secret
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ def evaluate_expression(
             result = obj
             for placeholder, value in sorted(refs.items(), key=lambda item: len(item[0]), reverse=True):
                 if placeholder in result:
-                    result = result.replace(placeholder, to_string(value))
+                    result = result.replace(placeholder, to_runtime_string(value))
             return result
         elif isinstance(obj, dict):
             return {key: substitute_in_template(val, refs) for key, val in obj.items()}
@@ -84,6 +85,9 @@ def evaluate_expression(
             raise FieldExpressionError(f"Variable '{var.name}' not found")
         return variables[var.name]
 
+    def to_runtime_string(value: Any) -> str:
+        return to_string(unwrap_secret(value))
+
     def evaluate_node(node: ExpressionNode) -> str:
         """Evaluate node to string (for concat/ref/literal)."""
         match node:
@@ -92,11 +96,11 @@ def evaluate_expression(
 
             case RefNode() as ref:
                 raw_value = evaluate_ref_as_object(ref)
-                return to_string(raw_value)
+                return to_runtime_string(raw_value)
 
             case VarNode() as var:
                 raw_value = evaluate_var(var)
-                return to_string(raw_value)
+                return to_runtime_string(raw_value)
 
             case ConcatNode(parts=parts):
                 return "".join(evaluate_node(part) for part in parts)
@@ -107,12 +111,12 @@ def evaluate_expression(
     match expression:
         case VarNode() as var:
             result = evaluate_var(var)
-            LOGGER.debug(f"Evaluated variable expression for {target_field_name}: {result}")
+            LOGGER.debug(f"Evaluated variable expression for {target_field_name} (type={type(result).__name__})")
             return result
 
         case RefNode() as ref:
             result = evaluate_ref_as_object(ref)
-            LOGGER.debug(f"Evaluated ref expression for {target_field_name}: {result}")
+            LOGGER.debug(f"Evaluated ref expression for {target_field_name} (type={type(result).__name__})")
             return result
 
         case JsonBuildNode(template=template, refs=ref_nodes):
@@ -127,12 +131,13 @@ def evaluate_expression(
             LOGGER.debug(f"Evaluated JSON build expression for {target_field_name}")
             return result
 
+        # TODO: duplicate of the RefNode case above, never reached — remove.
         case RefNode() as ref:
             result = evaluate_ref_as_object(ref)
-            LOGGER.debug(f"Evaluated ref expression for {target_field_name}: {result}")
+            LOGGER.debug(f"Evaluated ref expression for {target_field_name} (type={type(result).__name__})")
             return result
 
         case _:
             result = evaluate_node(expression)
-            LOGGER.debug(f"Evaluated expression for {target_field_name}: {result}")
+            LOGGER.debug(f"Evaluated expression for {target_field_name}")
             return result

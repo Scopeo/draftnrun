@@ -314,6 +314,29 @@ def test_run_without_io_trace_error(api_tool):
         assert "API call failed" in result.output
 
 
+def test_run_without_io_trace_error_redacts_error_content_best_effort(api_tool):
+    inputs = APICallToolInputs(
+        endpoint=ENDPOINT,
+        headers=HEADERS,
+        fixed_parameters=FIXED_PARAMS,
+    )
+
+    with patch.object(api_tool, "make_api_call", new_callable=AsyncMock) as mock_make_api_call:
+        mock_make_api_call.return_value = {
+            "status_code": 500,
+            "error": "Internal Server Error",
+            "response_body": {"authorization": "Bearer leaked-token-123", "detail": "boom"},
+            "success": False,
+        }
+
+        result = asyncio.run(api_tool._run_without_io_trace(inputs))
+
+        assert isinstance(result, APICallToolOutputs)
+        assert result.success is False
+        assert "[REDACTED]" in result.output
+        assert "leaked-token-123" not in result.output
+
+
 @patch("httpx.AsyncClient")
 def test_api_call_tool_with_string_headers_and_fixed_params(mock_client_class, mock_trace_manager, mock_response):
     """String headers and fixed_parameters are parsed in _run_without_io_trace."""

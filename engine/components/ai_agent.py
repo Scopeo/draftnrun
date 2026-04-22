@@ -19,6 +19,7 @@ from engine.components.utils import extract_source_ranks, load_str_to_json, merg
 from engine.components.utils_prompt import fill_prompt_template
 from engine.graph_runner.runnable import Runnable
 from engine.llm_services.llm_service import CompletionService
+from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -321,7 +322,9 @@ class AIAgent(Component):
         tool_call_id = tool_call.id
         tool_function_name = tool_call.function.name
         tool_arguments = json.loads(tool_call.function.arguments)
-        LOGGER.info(f"Tool call: {tool_function_name} with query string: {tool_arguments} and id: {tool_call_id}")
+        LOGGER.info(
+            f"Tool call: {tool_function_name} (id={tool_call_id}) with argument keys={list(tool_arguments.keys())}"
+        )
 
         tool_entry = self._tool_registry.get(tool_function_name)
         if tool_entry is None:
@@ -333,11 +336,10 @@ class AIAgent(Component):
         # Merge pre-configured literal inputs with LLM-provided arguments; LLM args win.
         merged_arguments = {**pre_configured, **tool_arguments}
         try:
-            LOGGER.info(f"Calling tool {tool_function_name} with arguments: {merged_arguments}")
+            LOGGER.debug(f"Calling tool {tool_function_name} with argument keys={list(merged_arguments.keys())}")
             tool_output = await tool_to_use.run(ctx=ctx, **merged_arguments)
-            LOGGER.info(f"Tool {tool_function_name} returned: {tool_output}")
         except Exception as e:
-            LOGGER.error(f"Error running tool {tool_function_name}: {e}")
+            LOGGER.error(f"Error running tool {tool_function_name}: {type(e).__name__}", exc_info=True)
             tool_output = AgentPayload(messages=[ChatMessage(role="assistant", content=str(e))], error=str(e))
         return tool_call_id, tool_output
 
@@ -435,6 +437,12 @@ class AIAgent(Component):
             component_name=self.component_attributes.component_instance_name,
             variables=merged_dict,
         )
+        masked_system_prompt = fill_prompt_template(
+            prompt_template=system_prompt_content,
+            component_name=self.component_attributes.component_instance_name,
+            variables=merged_dict,
+            reveal_secrets=False,
+        )
 
         if system_message is None:
             original_agent_input.messages.insert(
@@ -456,9 +464,17 @@ class AIAgent(Component):
         tool_choice = "auto" if self._current_iteration + 1 < self._max_iterations else "none"
         with self.trace_manager.start_span("Agentic reflexion") as span:
             llm_input_messages = [msg.model_dump() for msg in history_messages_handled]
+            trace_input_messages = [dict(message) for message in llm_input_messages]
+            for message in trace_input_messages:
+                if message.get("role") == "system":
+                    message["content"] = masked_system_prompt
+                    break
+            # TODO(security): user/tool/assistant history messages can still contain plaintext
+            # secrets coming from upstream concat/unwrap. serialize_to_json masks SecretStr only;
+            # per-role redaction requires catalog-level "sensitive port" metadata.
             span.set_attributes({
                 SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
-                SpanAttributes.LLM_INPUT_MESSAGES: json.dumps(llm_input_messages),
+                SpanAttributes.LLM_INPUT_MESSAGES: serialize_to_json(trace_input_messages),
                 SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
                 "model_id": (
                     str(self._completion_service._model_id) if self._completion_service._model_id is not None else None
@@ -472,7 +488,7 @@ class AIAgent(Component):
             )
 
             span.set_attributes({
-                SpanAttributes.LLM_OUTPUT_MESSAGES: json.dumps(chat_response.choices[0].message.model_dump()),
+                SpanAttributes.LLM_OUTPUT_MESSAGES: serialize_to_json(chat_response.choices[0].message.model_dump()),
             })
             span.set_status(trace_api.StatusCode.OK)
 

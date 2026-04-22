@@ -1,7 +1,10 @@
 import logging
 from typing import Optional
 
+from pydantic import SecretStr
+
 from engine.llm_services.providers.base_provider import BaseProvider
+from engine.secret_utils import unwrap_secret
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -10,10 +13,12 @@ LOGGER = logging.getLogger(__name__)
 def create_provider(
     provider: str,
     model_name: str,
-    api_key: Optional[str] = None,
+    api_key: Optional[str | SecretStr] = None,
     base_url: Optional[str] = None,
     **kwargs,
 ) -> BaseProvider:
+    api_key = unwrap_secret(api_key)
+
     if api_key is None:
         match provider:
             case "openai":

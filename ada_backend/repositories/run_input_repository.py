@@ -13,7 +13,13 @@ def save_run_input(
     project_id: UUID,
     input_data: dict,
 ) -> None:
-    """Persist run input for retries."""
+    """Persist run input for retries.
+
+    TODO(security): ``input_data`` is stored verbatim. If callers include plaintext secrets
+    in the run payload, they persist durably in Postgres. A follow-up should either encrypt
+    the column, redact known-sensitive fields, or persist a reference to values resolved
+    elsewhere.
+    """
     stmt = (
         pg_insert(RunInput)
         .values(

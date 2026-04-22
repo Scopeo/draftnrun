@@ -3,7 +3,7 @@ import json
 
 import networkx as nx
 import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from engine.components.component import Component
 from engine.components.inputs_outputs.start import Start
@@ -603,6 +603,41 @@ class TestGraphRunnerExpressions:
         )
         result = asyncio.run(gr.run({"input": 42}))  # Provide integer input for FixedIntSource
         assert result.messages[0].content == "echo[num:7]"
+
+    def test_concat_with_secret_varnode_uses_plain_value(self):
+        tm = TraceManager(project_name="test")
+        set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])
+
+        b = StrEcho(tm, name="B")
+        runnables = {"B": b}
+
+        g = nx.DiGraph()
+        g.add_nodes_from(["B"])
+
+        expressions = [
+            {
+                "target_instance_id": "B",
+                "field_name": "input",
+                "expression_ast": expr_from_json({
+                    "type": "concat",
+                    "parts": [
+                        {"type": "literal", "value": "Bearer "},
+                        {"type": "var", "name": "api_key"},
+                    ],
+                }),
+            }
+        ]
+
+        gr = GraphRunner(
+            graph=g,
+            runnables=runnables,
+            start_nodes=["B"],
+            trace_manager=tm,
+            expressions=expressions,
+            variables={"api_key": SecretStr("real-secret")},
+        )
+        result = asyncio.run(gr.run({"input": "seed"}))
+        assert result.messages[0].content == "echo[Bearer real-secret]"
 
 
 class TestGraphRunnerComplexFormulas:

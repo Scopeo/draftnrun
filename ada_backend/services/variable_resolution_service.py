@@ -2,6 +2,7 @@ import logging
 from typing import Any, Optional
 from uuid import UUID
 
+from pydantic import SecretStr
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import VariableType
@@ -42,7 +43,7 @@ def resolve_variables(
         if definition.type == VariableType.SECRET:
             row = secret_defaults.get(definition.id)
             if row:
-                resolved[definition.name] = row.get_secret()
+                resolved[definition.name] = SecretStr(row.get_secret())
         elif definition.default_value is not None:
             resolved[definition.name] = definition.default_value
 
@@ -68,5 +69,5 @@ def resolve_variables(
             if definition.type == VariableType.SECRET:
                 row = secrets_by_def.get(definition.id)
                 if row:
-                    resolved[definition.name] = row.get_secret()
+                    resolved[definition.name] = SecretStr(row.get_secret())
     return resolved
