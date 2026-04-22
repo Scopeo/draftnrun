@@ -1,7 +1,9 @@
+import ast
 import importlib
 import json
 import threading
 from collections import deque
+from pathlib import Path
 from typing import Any, Dict
 
 import redis
@@ -11,6 +13,7 @@ from workers.worker import base_worker
 from workers.worker.base_worker import BaseWorker, ProcessTaskOutcome, _ScheduledRetry
 
 _UNSET = object()
+_BASE_WORKER_PATH = Path(__file__).resolve().parents[3] / "workers" / "worker" / "base_worker.py"
 
 
 class DummyWorker(BaseWorker):
@@ -387,3 +390,21 @@ def test_sentry_init_registers_scrubbing_hooks(monkeypatch):
     assert "super-secret-token" not in scrubbed_event["message"]
 
     importlib.reload(reloaded_module)
+
+
+def test_base_worker_does_not_import_ada_backend():
+    tree = ast.parse(_BASE_WORKER_PATH.read_text(encoding="utf-8"))
+
+    forbidden_imports: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            forbidden_imports.extend(
+                alias.name
+                for alias in node.names
+                if alias.name == "ada_backend" or alias.name.startswith("ada_backend.")
+            )
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            if node.module == "ada_backend" or node.module.startswith("ada_backend."):
+                forbidden_imports.append(node.module)
+
+    assert forbidden_imports == []
