@@ -1,7 +1,8 @@
 import json
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from starlette.requests import Request
 
 from ada_backend.error_handlers import register_error_handlers
@@ -71,6 +72,21 @@ async def test_unhandled_error_handler_returns_generic_500():
     response = await handler(_build_request(), RuntimeError("boom"))
     assert response.status_code == 500
     assert json.loads(response.body) == {"detail": "An unexpected server error occurred."}
+
+
+def test_http_exception_uses_specific_handler_over_generic_handler():
+    app = FastAPI()
+    register_error_handlers(app)
+
+    @app.get("/raises-http")
+    def raises_http_exception():
+        raise HTTPException(status_code=404, detail="Not found")
+
+    client = TestClient(app)
+    response = client.get("/raises-http")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Not found"}
 
 
 class TestEngineErrorHandler:
