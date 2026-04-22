@@ -62,8 +62,14 @@ onMounted(async () => {
       }
     }
 
-    // Normal authentication flow
-    const result = await handleGoogleAuthCallback()
+    // Normal authentication flow — hard timeout so any hang (PKCE exchange, edge function, etc.)
+    // doesn't leave the user stuck on the spinner indefinitely
+    const result = await Promise.race([
+      handleGoogleAuthCallback(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Authentication timed out — please try again')), 20_000)
+      ),
+    ])
 
     if (result) {
       const { accessToken, userData, userAbilityRules, isNewUser } = result
