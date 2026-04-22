@@ -58,7 +58,6 @@ from ada_backend.routers.webhooks.webhook_internal_router import router as webho
 from ada_backend.routers.webhooks.webhook_trigger_router import router as webhook_trigger_router
 from ada_backend.routers.widget_router import router as widget_router
 from ada_backend.services.rate_limit_service import limiter
-from ada_backend.utils.log_redaction import scrub_sentry_event
 from ada_backend.utils.redis_client import xgroup_create_if_not_exists
 from ada_backend.workers.git_sync_queue_worker import _request_git_sync_drain, start_git_sync_queue_worker_thread
 from ada_backend.workers.qa_queue_worker import _request_qa_drain, start_qa_queue_worker_thread
@@ -66,6 +65,7 @@ from ada_backend.workers.run_queue_worker import _request_drain, start_run_queue
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from logger import setup_logging
+from shared.log_redaction import scrub_sentry_event
 from settings import settings
 
 setup_logging()
