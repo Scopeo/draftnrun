@@ -25,7 +25,10 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(LLMProviderError)
     async def llm_provider_error_handler(request: Request, exc: LLMProviderError) -> JSONResponse:
         LOGGER.warning(
-            "LLM provider error on %s %s: %s", request.method, request.url.path, exc.provider_message
+            "LLM provider error on %s %s: %s",
+            request.method,
+            request.url.path,
+            exc.provider_message,
         )
         return JSONResponse(status_code=exc.http_status, content={"detail": str(exc)})
 

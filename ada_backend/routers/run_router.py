@@ -211,5 +211,3 @@ def get_organization_run_input(
         return input_data
     except RunNotFound:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found in organization {organization_id}")
-    except HTTPException:
-        raise

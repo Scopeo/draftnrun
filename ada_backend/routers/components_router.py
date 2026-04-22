@@ -1,4 +1,3 @@
-import logging
 from typing import Annotated, Optional
 from uuid import UUID
 
@@ -23,16 +22,6 @@ from ada_backend.services.components_service import (
 )
 
 router = APIRouter(prefix="/components", tags=["Components"])
-LOGGER = logging.getLogger(__name__)
-
-
-def _get_all_components_with_error_handling(
-    session: Session, release_stage: Optional[ReleaseStage], log_context: str, use_global: bool = False
-):
-    if use_global:
-        return get_all_components_global_endpoint(session, release_stage)
-    else:
-        return get_all_components_endpoint(session, release_stage)
 
 
 @router.get("/fields/options", response_model=ComponentFieldsOptionsResponse)
@@ -59,11 +48,7 @@ def get_all_components(
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    return _get_all_components_with_error_handling(
-        session,
-        release_stage,
-        f"for organization {organization_id} (release_stage={release_stage})",
-    )
+    return get_all_components_endpoint(session, release_stage)
 
 
 @router.get("/", response_model=ComponentsResponse)
@@ -73,12 +58,7 @@ async def get_all_components_global(
     session: Session = Depends(get_db),
 ):
     """Return all components regardless of organization. Super admin only."""
-    return _get_all_components_with_error_handling(
-        session,
-        release_stage,
-        f"(global) by super admin (release_stage={release_stage})",
-        use_global=True,
-    )
+    return get_all_components_global_endpoint(session, release_stage)
 
 
 @router.delete("/{component_id}", status_code=204)
