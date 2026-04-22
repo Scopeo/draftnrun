@@ -518,6 +518,10 @@ export async function handleGoogleAuthCallback() {
       } catch (setupErr) {
         // Non-fatal: user is authenticated, org setup can be retried later
         logger.warn('User setup failed or timed out, continuing login', { error: setupErr })
+        Sentry.captureException(setupErr, {
+          tags: { context: 'complete-user-setup', userId: user.id },
+          extra: { email: user.email, isNewUser },
+        })
       }
     }
 
