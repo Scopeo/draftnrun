@@ -56,6 +56,16 @@ function createNode(portConfigurations?: PortConfiguration[]): TestNode {
 }
 
 describe('graphTransformer.fromFlow', () => {
+  it('preserves empty port_configurations array in the API payload', () => {
+    const result = graphTransformer.fromFlow({
+      nodes: [createNode([])],
+      edges: [] as Edge[],
+    })
+
+    expect(result.component_instances[0]).toHaveProperty('port_configurations')
+    expect(result.component_instances[0].port_configurations).toEqual([])
+  })
+
   it('keeps explicit deactivated port_configurations in the API payload', () => {
     const portConfigurations: PortConfiguration[] = [
       {

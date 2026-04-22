@@ -98,6 +98,14 @@ function getPortConfig(parameterId: string | null, portName: string, isCustom: b
   return undefined
 }
 
+function getResolvedSetupMode(
+  parameterId: string | null,
+  portName: string,
+  isCustom: boolean
+): 'user_set' | 'ai_filled' | 'deactivated' {
+  return getPortConfig(parameterId, portName, isCustom)?.setup_mode || 'ai_filled'
+}
+
 // Create a new configuration for a port
 function createConfig(
   parameterId: string | null,
@@ -404,20 +412,14 @@ function cancelEditing() {
               </div>
 
               <VChip
-                :color="
-                  getConfigTypeColor(
-                    getPortConfig(port.parameter_id, port.name, port.is_custom)?.setup_mode || 'ai_filled'
-                  )
-                "
+                :color="getConfigTypeColor(getResolvedSetupMode(port.parameter_id, port.name, port.is_custom))"
                 size="x-small"
                 variant="tonal"
               >
                 {{
-                  (getPortConfig(port.parameter_id, port.name, port.is_custom)?.setup_mode || 'ai_filled') ===
-                  'ai_filled'
+                  getResolvedSetupMode(port.parameter_id, port.name, port.is_custom) === 'ai_filled'
                     ? 'AI'
-                    : (getPortConfig(port.parameter_id, port.name, port.is_custom)?.setup_mode || 'ai_filled') ===
-                        'user_set'
+                    : getResolvedSetupMode(port.parameter_id, port.name, port.is_custom) === 'user_set'
                       ? 'Set value'
                       : 'Discard'
                 }}
@@ -485,7 +487,7 @@ function cancelEditing() {
 
               <!-- Configuration Type Selector -->
               <VRadioGroup
-                :model-value="getPortConfig(port.parameter_id, port.name, port.is_custom)?.setup_mode || 'ai_filled'"
+                :model-value="getResolvedSetupMode(port.parameter_id, port.name, port.is_custom)"
                 :disabled="readonly"
                 @update:model-value="
                   (val: any) => updateConfigType(port.parameter_id, port.name, val, port.nullable, port.is_custom)
@@ -518,7 +520,7 @@ function cancelEditing() {
 
               <!-- AI Filled Configuration -->
               <div
-                v-if="getPortConfig(port.parameter_id, port.name, port.is_custom)?.setup_mode === 'ai_filled'"
+                v-if="getResolvedSetupMode(port.parameter_id, port.name, port.is_custom) === 'ai_filled'"
                 class="mt-4"
               >
                 <!-- Required Toggle -->
@@ -573,7 +575,7 @@ function cancelEditing() {
 
               <!-- User Set Configuration -->
               <div
-                v-if="getPortConfig(port.parameter_id, port.name, port.is_custom)?.setup_mode === 'user_set'"
+                v-if="getResolvedSetupMode(port.parameter_id, port.name, port.is_custom) === 'user_set'"
                 class="mt-4"
               >
                 <div class="text-subtitle-2 mb-2">Value</div>
