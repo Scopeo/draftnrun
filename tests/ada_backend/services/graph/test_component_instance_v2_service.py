@@ -68,13 +68,13 @@ class TestUpdateSingleComponent:
     ):
         mock_instance = MagicMock()
         mock_instance.name = "Old Name"
-        mock_instance.is_start_node = False
-        mock_instance.component_id = ids["component_id"]
         mock_instance.component_version_id = ids["component_version_id"]
+        mock_instance.component_version.component_id = ids["component_id"]
         mock_get_inst.return_value = mock_instance
 
         node = MagicMock()
         node.id = ids["instance_id"]
+        node.is_start_node = False
         mock_get_nodes.return_value = [node]
 
         payload = ComponentUpdateV2Schema(
