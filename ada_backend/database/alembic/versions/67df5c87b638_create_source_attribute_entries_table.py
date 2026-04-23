@@ -22,6 +22,27 @@ deploy_strategy: Union[str, None] = "migrate-first"
 
 
 def upgrade() -> None:
+    backfill_values_sql = """
+        VALUES
+            ('access_token', to_jsonb(access_token)),
+            ('path', to_jsonb(path)),
+            ('folder_id', to_jsonb(folder_id)),
+            ('source_db_url', to_jsonb(source_db_url::text)),
+            ('source_table_name', to_jsonb(source_table_name)),
+            ('id_column_name', to_jsonb(id_column_name)),
+            ('source_schema_name', to_jsonb(source_schema_name)),
+            ('chunk_size', to_jsonb(chunk_size)),
+            ('chunk_overlap', to_jsonb(chunk_overlap)),
+            ('timestamp_column_name', to_jsonb(timestamp_column_name)),
+            ('url_pattern', to_jsonb(url_pattern)),
+            ('update_existing', to_jsonb(update_existing)),
+            ('query_filter', to_jsonb(query_filter)),
+            ('timestamp_filter', to_jsonb(timestamp_filter)),
+            ('list_of_files_from_local_folder', NULLIF(list_of_files_from_local_folder::jsonb, 'null'::jsonb)),
+            ('text_column_names', NULLIF(text_column_names::jsonb, 'null'::jsonb)),
+            ('metadata_column_names', NULLIF(metadata_column_names::jsonb, 'null'::jsonb))
+    """
+
     op.create_table(
         "source_attribute_entries",
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
@@ -47,7 +68,7 @@ def upgrade() -> None:
 
     op.execute(
         sa.text(
-            """
+            f"""
             INSERT INTO source_attribute_entries (id, source_id, attribute_name, value, created_at, updated_at)
             SELECT
                 gen_random_uuid(),
@@ -57,30 +78,38 @@ def upgrade() -> None:
                 created_at,
                 updated_at
             FROM source_attributes,
-            LATERAL (
-                VALUES
-                    ('access_token', to_jsonb(access_token)),
-                    ('path', to_jsonb(path)),
-                    ('folder_id', to_jsonb(folder_id)),
-                    ('source_db_url', to_jsonb(source_db_url::text)),
-                    ('source_table_name', to_jsonb(source_table_name)),
-                    ('id_column_name', to_jsonb(id_column_name)),
-                    ('source_schema_name', to_jsonb(source_schema_name)),
-                    ('chunk_size', to_jsonb(chunk_size)),
-                    ('chunk_overlap', to_jsonb(chunk_overlap)),
-                    ('timestamp_column_name', to_jsonb(timestamp_column_name)),
-                    ('url_pattern', to_jsonb(url_pattern)),
-                    ('update_existing', to_jsonb(update_existing)),
-                    ('query_filter', to_jsonb(query_filter)),
-                    ('timestamp_filter', to_jsonb(timestamp_filter)),
-                    ('list_of_files_from_local_folder', NULLIF(list_of_files_from_local_folder::jsonb, 'null'::jsonb)),
-                    ('text_column_names', NULLIF(text_column_names::jsonb, 'null'::jsonb)),
-                    ('metadata_column_names', NULLIF(metadata_column_names::jsonb, 'null'::jsonb))
-            ) AS attribute_values(attr_name, attr_value)
+            LATERAL ({backfill_values_sql}) AS attribute_values(attr_name, attr_value)
             WHERE attr_value IS NOT NULL
             """
         )
     )
+
+    connection = op.get_bind()
+    expected_backfill_count = connection.execute(
+        sa.text(
+            f"""
+            SELECT COUNT(*)
+            FROM source_attributes,
+            LATERAL ({backfill_values_sql}) AS attribute_values(attr_name, attr_value)
+            WHERE attr_value IS NOT NULL
+            """
+        )
+    ).scalar_one()
+    actual_backfill_count = connection.execute(sa.text("SELECT COUNT(*) FROM source_attribute_entries")).scalar_one()
+    jsonb_null_row_count = connection.execute(
+        sa.text("SELECT COUNT(*) FROM source_attribute_entries WHERE value = 'null'::jsonb")
+    ).scalar_one()
+
+    if actual_backfill_count != expected_backfill_count:
+        raise RuntimeError(
+            "source_attribute_entries backfill row count mismatch: "
+            f"expected {expected_backfill_count}, got {actual_backfill_count}"
+        )
+
+    if jsonb_null_row_count != 0:
+        raise RuntimeError(
+            "source_attribute_entries backfill produced unexpected jsonb null rows: " f"{jsonb_null_row_count}"
+        )
 
 
 def downgrade() -> None:
