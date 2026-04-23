@@ -156,7 +156,9 @@ def get_version_output_ids_by_input_ids_and_graph_runner_service(
     session: Session,
     input_ids: List[UUID],
     graph_runner_id: UUID,
+    project_id: UUID,
 ) -> Dict[UUID, Optional[UUID]]:
+    _validate_env_binding(session, project_id, graph_runner_id)
     return get_version_output_ids_by_input_ids_and_graph_runner(
         session=session, input_ids=input_ids, graph_runner_id=graph_runner_id
     )

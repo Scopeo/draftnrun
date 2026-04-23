@@ -164,7 +164,7 @@ def set_judge_projects_endpoint(
 ) -> LLMJudgeResponse:
     try:
         return set_judge_projects_service(session, organization_id, judge_id, body.project_ids)
-    except LLMJudgeNotFound as e:
+    except (LLMJudgeNotFound, ProjectNotFound) as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

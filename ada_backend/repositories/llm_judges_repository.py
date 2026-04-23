@@ -3,14 +3,20 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import EvaluationType, LLMJudge, LLMJudgeProjectAssociation
+from ada_backend.database.models import EvaluationType, LLMJudge, LLMJudgeProjectAssociation, Project
 
 
 def get_llm_judges_by_project(
     session: Session,
     project_id: UUID,
 ) -> List[LLMJudge]:
-    return session.query(LLMJudge).filter(LLMJudge.project_id == project_id).order_by(LLMJudge.created_at.desc()).all()
+    return (
+        session.query(LLMJudge)
+        .join(LLMJudgeProjectAssociation, LLMJudge.id == LLMJudgeProjectAssociation.judge_id)
+        .filter(LLMJudgeProjectAssociation.project_id == project_id)
+        .order_by(LLMJudge.created_at.desc())
+        .all()
+    )
 
 
 def get_llm_judges_by_organization(
@@ -28,8 +34,12 @@ def get_llm_judges_by_organization(
 def get_llm_judge_by_id(
     session: Session,
     judge_id: UUID,
+    organization_id: Optional[UUID] = None,
 ) -> Optional[LLMJudge]:
-    return session.query(LLMJudge).filter(LLMJudge.id == judge_id).first()
+    query = session.query(LLMJudge).filter(LLMJudge.id == judge_id)
+    if organization_id is not None:
+        query = query.filter(LLMJudge.organization_id == organization_id)
+    return query.first()
 
 
 def create_llm_judge(
@@ -109,6 +119,20 @@ def delete_llm_judges(
 
     session.commit()
     return deleted_count
+
+
+def get_valid_project_ids_for_organization(
+    session: Session,
+    project_ids: List[UUID],
+    organization_id: UUID,
+) -> set[UUID]:
+    """Return the subset of project_ids that belong to the given organization."""
+    return {
+        row[0]
+        for row in session.query(Project.id)
+        .filter(Project.id.in_(project_ids), Project.organization_id == organization_id)
+        .all()
+    }
 
 
 # Judge-Project association functions

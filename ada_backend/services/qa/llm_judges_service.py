@@ -4,13 +4,14 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import EvaluationType, LLMJudge
+from ada_backend.database.models import EvaluationType
 from ada_backend.repositories.llm_judges_repository import (
     create_llm_judge,
     delete_llm_judges,
-    get_judge_project_associations,
+    get_llm_judge_by_id,
     get_llm_judges_by_organization,
     get_llm_judges_by_project,
+    get_valid_project_ids_for_organization,
     set_judge_project_associations,
     update_llm_judge,
 )
@@ -20,7 +21,7 @@ from ada_backend.schemas.llm_judges_schema import (
     LLMJudgeTemplate,
     LLMJudgeUpdate,
 )
-from ada_backend.services.errors import LLMJudgeNotFound
+from ada_backend.services.errors import LLMJudgeNotFound, ProjectNotFound
 from ada_backend.services.qa.utils import (
     DEFAULT_BOOLEAN_PROMPT,
     DEFAULT_FREE_TEXT_PROMPT,
@@ -31,8 +32,7 @@ from ada_backend.services.qa.utils import (
 LOGGER = logging.getLogger(__name__)
 
 
-def _judge_to_response(session: Session, judge) -> LLMJudgeResponse:
-    project_ids = get_judge_project_associations(session, judge.id)
+def _judge_to_response(judge) -> LLMJudgeResponse:
     return LLMJudgeResponse(
         id=judge.id,
         organization_id=judge.organization_id,
@@ -42,7 +42,7 @@ def _judge_to_response(session: Session, judge) -> LLMJudgeResponse:
         llm_model_reference=judge.llm_model_reference,
         prompt_template=judge.prompt_template,
         temperature=judge.temperature,
-        project_ids=project_ids,
+        project_ids=[assoc.project_id for assoc in judge.project_associations],
         created_at=judge.created_at,
         updated_at=judge.updated_at,
     )
@@ -54,7 +54,7 @@ def get_llm_judges_by_project_service(
 ) -> List[LLMJudgeResponse]:
     try:
         judges = get_llm_judges_by_project(session=session, project_id=project_id)
-        return [LLMJudgeResponse.model_validate(judge) for judge in judges]
+        return [_judge_to_response(judge) for judge in judges]
     except Exception as e:
         LOGGER.error(f"Error in get_llm_judges_by_project_service for project {project_id}: {str(e)}")
         raise ValueError(f"Failed to list LLM judges: {str(e)}") from e
@@ -66,7 +66,7 @@ def get_llm_judges_by_organization_service(
 ) -> List[LLMJudgeResponse]:
     try:
         judges = get_llm_judges_by_organization(session=session, organization_id=organization_id)
-        return [_judge_to_response(session, judge) for judge in judges]
+        return [_judge_to_response(judge) for judge in judges]
     except Exception as e:
         LOGGER.error(f"Error in get_llm_judges_by_organization_service for org {organization_id}: {str(e)}")
         raise ValueError(f"Failed to list LLM judges: {str(e)}") from e
@@ -109,7 +109,7 @@ def create_llm_judge_service(
             temperature=judge_data.temperature,
         )
         LOGGER.info(f"Created LLM judge {llm_judge.id} for organization {organization_id}")
-        return _judge_to_response(session, llm_judge)
+        return _judge_to_response(llm_judge)
     except Exception as e:
         LOGGER.error(f"Error in create_llm_judge_service for organization {organization_id}: {str(e)}")
         raise ValueError(f"Failed to create LLM judge: {str(e)}") from e
@@ -136,7 +136,7 @@ def update_llm_judge_service(
         if not updated_judge:
             raise LLMJudgeNotFound(judge_id=judge_id, organization_id=organization_id)
         LOGGER.info(f"Updated LLM judge {judge_id} for organization {organization_id}")
-        return _judge_to_response(session, updated_judge)
+        return _judge_to_response(updated_judge)
     except LLMJudgeNotFound:
         raise
     except Exception as e:
@@ -167,11 +167,16 @@ def set_judge_projects_service(
     judge_id: UUID,
     project_ids: List[UUID],
 ) -> LLMJudgeResponse:
-    judge = (
-        session.query(LLMJudge).filter(LLMJudge.id == judge_id, LLMJudge.organization_id == organization_id).first()
-    )
+    judge = get_llm_judge_by_id(session, judge_id, organization_id=organization_id)
     if not judge:
         raise LLMJudgeNotFound(judge_id=judge_id, organization_id=organization_id)
 
+    if project_ids:
+        valid_ids = get_valid_project_ids_for_organization(session, project_ids, organization_id)
+        invalid_ids = set(project_ids) - valid_ids
+        if invalid_ids:
+            raise ProjectNotFound(project_id=next(iter(invalid_ids)))
+
     set_judge_project_associations(session, judge_id, project_ids)
-    return _judge_to_response(session, judge)
+    session.refresh(judge)
+    return _judge_to_response(judge)
