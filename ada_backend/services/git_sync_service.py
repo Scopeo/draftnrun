@@ -15,6 +15,7 @@ from ada_backend.repositories.graph_runner_repository import (
 from ada_backend.schemas.git_sync_schemas import GitHubRepoSummary, GitSyncImportResult
 from ada_backend.schemas.pipeline.graph_schema import GraphSaveV2Schema, GraphUpdateSchema
 from ada_backend.services import github_client
+from ada_backend.services.errors import ServiceError
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.graph_v2_mapper_service import graph_save_v2_to_graph_update
 from ada_backend.services.graph.update_graph_service import update_graph_service
@@ -29,25 +30,30 @@ class GitSyncError(Exception):
     pass
 
 
-class GitSyncConfigNotFound(Exception):
+class GitSyncConfigNotFound(ServiceError):
+    status_code = 404
+
     def __init__(self, config_id: UUID):
         self.config_id = config_id
         super().__init__(f"Git sync config {config_id} not found")
 
 
-class GraphJsonNotFound(Exception):
+class GraphJsonNotFound(ServiceError):
+    status_code = 422
+
     def __init__(self, repo: str, branch: str):
         self.repo = repo
         self.branch = branch
         super().__init__(f"No graph.json found in {repo} on branch {branch}")
 
 
-class InstallationOwnershipError(Exception):
+class InstallationOwnershipError(ServiceError):
     """Raised when a GitHub installation belongs to a different organization."""
+    status_code = 404
 
     def __init__(self, installation_id: int):
         self.installation_id = installation_id
-        super().__init__(f"GitHub installation {installation_id} belongs to another organization")
+        super().__init__("GitHub installation not found")
 
 
 def register_installation_if_new(session: Session, installation_id: int, organization_id: UUID) -> None:

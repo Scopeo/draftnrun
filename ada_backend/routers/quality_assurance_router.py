@@ -31,19 +31,7 @@ from ada_backend.schemas.input_groundtruth_schema import (
     QASessionResponseSchema,
 )
 from ada_backend.schemas.qa_metadata_schema import QAColumnResponse
-from ada_backend.services.errors import GraphNotBoundToProjectError
-from ada_backend.services.qa.qa_error import (
-    CSVEmptyFileError,
-    CSVExportError,
-    CSVInvalidJSONError,
-    CSVInvalidPositionError,
-    CSVMissingDatasetColumnError,
-    CSVNonUniquePositionError,
-    QAColumnNotFoundError,
-    QADatasetNotInProjectError,
-    QADuplicatePositionError,
-    QAPartialPositionError,
-)
+from ada_backend.services.qa.qa_error import QADatasetNotInProjectError
 from ada_backend.services.qa.qa_metadata_service import (
     create_qa_column_service,
     delete_qa_column_service,
@@ -105,9 +93,6 @@ def get_datasets_by_project_endpoint(
     except ValueError as e:
         LOGGER.error(f"Failed to get datasets for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to get datasets for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post(
@@ -139,9 +124,6 @@ def create_dataset_endpoint(
     except ValueError as e:
         LOGGER.error(f"Failed to create datasets for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to create datasets for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.patch(
@@ -171,15 +153,9 @@ def update_dataset_endpoint(
 
     try:
         return update_dataset_service(session, project_id, dataset_id, dataset_name)
-    except QADatasetNotInProjectError as e:
-        LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete(
@@ -208,15 +184,9 @@ def delete_dataset_endpoint(
     try:
         deleted_count = delete_datasets_service(session, project_id, delete_data)
         return {"message": f"Deleted {deleted_count} datasets successfully"}
-    except QADatasetNotInProjectError as e:
-        LOGGER.error(f"Failed to delete datasets for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(f"Failed to delete datasets for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to delete datasets for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 # QA Metadata (Custom Columns) endpoints
@@ -238,18 +208,7 @@ def get_columns_by_dataset_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        return get_qa_columns_by_dataset_service(session, project_id, dataset_id)
-    except QADatasetNotInProjectError as e:
-        LOGGER.error(
-            f"Failed to get columns for dataset {dataset_id} in project {project_id}: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to get columns for dataset {dataset_id} in project {project_id}: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return get_qa_columns_by_dataset_service(session, project_id, dataset_id)
 
 
 @router.post(
@@ -271,14 +230,7 @@ def add_column_to_dataset_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        return create_qa_column_service(session, project_id, dataset_id, column_name)
-    except QADatasetNotInProjectError as e:
-        LOGGER.error(f"Failed to add column to dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(f"Failed to add column to dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return create_qa_column_service(session, project_id, dataset_id, column_name)
 
 
 @router.patch(
@@ -301,26 +253,7 @@ def rename_column_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        return rename_qa_column_service(session, project_id, dataset_id, column_id, column_name)
-    except QADatasetNotInProjectError as e:
-        LOGGER.error(
-            f"Failed to rename column {column_id} in dataset {dataset_id} for project {project_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except QAColumnNotFoundError as e:
-        LOGGER.error(
-            f"Failed to rename column {column_id} in dataset {dataset_id} for project {project_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to rename column {column_id} in dataset {dataset_id} for project {project_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return rename_qa_column_service(session, project_id, dataset_id, column_id, column_name)
 
 
 @router.delete(
@@ -341,26 +274,7 @@ def delete_column_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        return delete_qa_column_service(session, project_id, dataset_id, column_id)
-    except QADatasetNotInProjectError as e:
-        LOGGER.error(
-            f"Failed to delete column {column_id} from dataset {dataset_id} for project {project_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except QAColumnNotFoundError as e:
-        LOGGER.error(
-            f"Failed to delete column {column_id} from dataset {dataset_id} for project {project_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to delete column {column_id} from dataset {dataset_id} for project {project_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return delete_qa_column_service(session, project_id, dataset_id, column_id)
 
 
 # Input Groundtruth endpoints
@@ -395,9 +309,6 @@ def get_inputs_groundtruths_by_dataset_endpoint(
     except ValueError as e:
         LOGGER.error(f"Failed to get input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to get input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get(
@@ -432,12 +343,6 @@ def get_outputs_endpoint(
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to get outputs for graph runner {graph_runner_id} and dataset {dataset_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get(
@@ -458,16 +363,9 @@ def get_version_output_ids_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        return get_version_output_ids_by_input_ids_and_graph_runner_service(
-            session=session, input_ids=input_ids, graph_runner_id=graph_runner_id
-        )
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to get version output IDs for inputs {input_ids} and graph runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return get_version_output_ids_by_input_ids_and_graph_runner_service(
+        session=session, input_ids=input_ids, graph_runner_id=graph_runner_id
+    )
 
 
 @router.post(
@@ -497,15 +395,9 @@ def create_input_groundtruth_endpoint(
 
     try:
         return create_inputs_groundtruths_service(session, dataset_id, input_groundtruth_data)
-    except (QADuplicatePositionError, QAPartialPositionError) as e:
-        LOGGER.error(f"Failed to create input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(f"Failed to create input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to create input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.patch(
@@ -538,9 +430,6 @@ def update_input_groundtruth_endpoint(
     except ValueError as e:
         LOGGER.error(f"Failed to update input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to update input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete(
@@ -573,9 +462,6 @@ def delete_input_groundtruth_endpoint(
     except ValueError as e:
         LOGGER.error(f"Failed to delete input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to delete input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 # QA Run endpoint
@@ -623,22 +509,11 @@ async def run_qa_endpoint(
         return await run_qa_service(session, project_id, dataset_id, run_request)
     except QADatasetNotInProjectError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except GraphNotBoundToProjectError as e:
-        LOGGER.error(
-            f"Graph runner {run_request.graph_runner_id} is not bound to project {project_id} when running QA",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(
             f"Failed to run QA process on dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to run QA process on dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post(
@@ -665,8 +540,6 @@ async def run_qa_async_endpoint(
         validate_qa_run_request(session, project_id, dataset_id, run_request)
     except QADatasetNotInProjectError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except GraphNotBoundToProjectError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -759,15 +632,9 @@ async def create_entry_from_history(
             trace_id=trace_id,
             dataset_id=dataset_id,
         )
-    except (QADuplicatePositionError, QAPartialPositionError) as e:
-        LOGGER.error(f"Failed to save trace {trace_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(f"Failed to save trace {trace_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(f"Failed to save trace {trace_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get(
@@ -787,21 +654,15 @@ def export_qa_data_to_csv_endpoint(
 ) -> Response:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        csv_content = export_qa_data_to_csv_service(session, dataset_id, graph_runner_id)
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        filename = f"qa_export_{dataset_id}_{timestamp}.csv"
+    csv_content = export_qa_data_to_csv_service(session, dataset_id, graph_runner_id)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    filename = f"qa_export_{dataset_id}_{timestamp}.csv"
 
-        return Response(
-            content=csv_content,
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
-        )
-    except CSVExportError as e:
-        LOGGER.warning(f"CSV export failed for dataset {dataset_id}: {str(e)}")
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @router.post(
@@ -823,30 +684,12 @@ async def import_qa_data_from_csv_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        await file.seek(0)
+    await file.seek(0)
 
-        result = import_qa_data_from_csv_service(
-            session=session,
-            project_id=project_id,
-            dataset_id=dataset_id,
-            csv_file=file.file,
-        )
-        return result
-
-    except (
-        CSVEmptyFileError,
-        CSVInvalidJSONError,
-        CSVMissingDatasetColumnError,
-        CSVNonUniquePositionError,
-        CSVInvalidPositionError,
-    ) as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except QADatasetNotInProjectError as e:
-        LOGGER.error(
-            f"Failed to import QA data for dataset {dataset_id} in project {project_id}: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(f"Failed to import QA data for dataset {dataset_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    result = import_qa_data_from_csv_service(
+        session=session,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        csv_file=file.file,
+    )
+    return result

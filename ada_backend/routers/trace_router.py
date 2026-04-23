@@ -75,16 +75,6 @@ async def get_root_traces(
     except ValueError as e:
         LOGGER.warning("Invalid trace search parameters for project %s: %s", project_id, e)
         raise HTTPException(status_code=400, detail=f"Invalid parameters for trace search on project {project_id}")
-    except Exception as e:
-        LOGGER.exception(
-            "Failed to get root traces for project %s (duration=%s, env=%s, call_type=%s, search=%s)",
-            project_id,
-            duration,
-            environment,
-            call_type,
-            search,
-        )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
 # TODO: use user_has_access_to_project_dependency :
@@ -101,9 +91,3 @@ async def get_span_trace(
         return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception(
-            "Failed to get span trace for trace_id=%s",
-            trace_id,
-        )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e

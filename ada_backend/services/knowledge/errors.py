@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from typing import Any, List
 
+from ada_backend.services.errors import ServiceError
 
-class KnowledgeServiceError(Exception):
+
+class KnowledgeServiceError(ServiceError):
     """Base exception for Knowledge service errors."""
 
     code = "knowledge_service_error"
@@ -12,12 +14,14 @@ class KnowledgeServiceQdrantConfigurationError(KnowledgeServiceError):
     """Raised when Qdrant configuration is missing or invalid."""
 
     code = "qdrant_configuration_error"
+    status_code = 500
 
 
 class KnowledgeServiceQdrantOperationError(KnowledgeServiceError):
     """Raised when Qdrant operations fail at runtime."""
 
     code = "qdrant_operation_error"
+    status_code = 500
 
 
 @dataclass
@@ -78,6 +82,7 @@ class KnowledgeServiceQdrantCollectionNotFoundError(KnowledgeServiceQdrantConfig
     collection_name: str
 
     code = "qdrant_collection_not_found"
+    status_code = 404
 
     def __post_init__(self):
         super().__init__(
@@ -115,6 +120,8 @@ class KnowledgeServiceQdrantCollectionCheckError(KnowledgeServiceQdrantOperation
 class KnowledgeSourceNotFoundError(KnowledgeServiceError):
     """Raised when a data source is not found."""
 
+    status_code = 404
+
     def __init__(self, source_id: str, organization_id: str):
         self.source_id = source_id
         self.organization_id = organization_id
@@ -124,6 +131,8 @@ class KnowledgeSourceNotFoundError(KnowledgeServiceError):
 class KnowledgeServiceDocumentNotFoundError(KnowledgeServiceError):
     """Raised when a document cannot be found for a given source."""
 
+    status_code = 404
+
     def __init__(self, document_id: str, source_id: str):
         self.document_id = document_id
         self.source_id = source_id
@@ -132,6 +141,8 @@ class KnowledgeServiceDocumentNotFoundError(KnowledgeServiceError):
 
 class KnowledgeMaxChunkSizeError(KnowledgeServiceError):
     """Raised when a chunk size is too large."""
+
+    status_code = 400
 
     def __init__(self, token_count: int, max_chunk_tokens: int):
         self.token_count = token_count
@@ -145,12 +156,16 @@ class KnowledgeMaxChunkSizeError(KnowledgeServiceError):
 class KnowledgeEmptyChunkError(KnowledgeServiceError):
     """Raised when a chunk content is empty."""
 
+    status_code = 400
+
     def __init__(self):
         super().__init__("Chunk content cannot be empty.")
 
 
 class KnowledgeServiceDBError(KnowledgeServiceError):
     """Base exception for database-related errors in the knowledge service."""
+
+    status_code = 500
 
 
 class KnowledgeServiceDBSourceConfigError(KnowledgeServiceDBError):

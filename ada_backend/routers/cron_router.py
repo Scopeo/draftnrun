@@ -1,4 +1,3 @@
-import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -22,11 +21,6 @@ from ada_backend.schemas.cron_schema import (
     CronJobWithRuns,
     CronRunListResponse,
 )
-from ada_backend.services.cron.errors import (
-    CronJobAccessDenied,
-    CronJobNotFound,
-    CronValidationError,
-)
 from ada_backend.services.cron.service import (
     create_cron_job,
     delete_cron_job_service,
@@ -39,8 +33,6 @@ from ada_backend.services.cron.service import (
     trigger_cron_job_now,
     update_cron_job_service,
 )
-
-LOGGER = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/organizations", tags=["Cron Jobs"])
 
@@ -61,11 +53,7 @@ def get_organization_cron_jobs(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        return get_cron_jobs_for_organization(session, organization_id, enabled_only)
-    except Exception as e:
-        LOGGER.error(f"Failed to fetch cron jobs for organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return get_cron_jobs_for_organization(session, organization_id, enabled_only)
 
 
 @router.get("/{organization_id}/crons/{cron_id}", response_model=CronJobWithRuns)
@@ -85,16 +73,8 @@ def get_cron_job_details(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        cron_job = get_cron_job_detail(session, cron_id, include_runs, organization_id=organization_id)
-        return cron_job
-    except CronJobNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except CronJobAccessDenied as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(f"Failed to fetch cron job {cron_id} for organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    cron_job = get_cron_job_detail(session, cron_id, include_runs, organization_id=organization_id)
+    return cron_job
 
 
 @router.post("/{organization_id}/crons", response_model=CronJobResponse, status_code=201)
@@ -113,13 +93,7 @@ def create_organization_cron_job(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        return create_cron_job(session, organization_id, cron_data, user_id=user.id)
-    except CronValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(f"Failed to create cron job for organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return create_cron_job(session, organization_id, cron_data, user_id=user.id)
 
 
 @router.patch("/{organization_id}/crons/{cron_id}", response_model=CronJobResponse)
@@ -139,20 +113,8 @@ def update_organization_cron_job(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        updated_cron = update_cron_job_service(session, cron_id, cron_data, organization_id, user_id=user.id)
-        return updated_cron
-    except CronJobNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except CronJobAccessDenied as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except CronValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to update cron job {cron_id} for organization {organization_id}: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    updated_cron = update_cron_job_service(session, cron_id, cron_data, organization_id, user_id=user.id)
+    return updated_cron
 
 
 @router.delete("/{organization_id}/crons/{cron_id}", response_model=CronJobDeleteResponse)
@@ -171,19 +133,9 @@ def delete_organization_cron_job(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        result = delete_cron_job_service(session, cron_id, organization_id, user_id=user.id)
-        if not result:
-            raise HTTPException(status_code=404, detail="Cron job not found")
-    except CronJobNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except CronJobAccessDenied as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to delete cron job {cron_id} for organization {organization_id}: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    result = delete_cron_job_service(session, cron_id, organization_id, user_id=user.id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Cron job not found")
 
     return result
 
@@ -204,17 +156,9 @@ def pause_organization_cron_job(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        result = pause_cron_job(session, cron_id, organization_id=organization_id, user_id=user.id)
-        if not result:
-            raise HTTPException(status_code=404, detail="Cron job not found")
-    except CronJobNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except CronJobAccessDenied as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(f"Failed to pause cron job {cron_id} for organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    result = pause_cron_job(session, cron_id, organization_id=organization_id, user_id=user.id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Cron job not found")
 
     return result
 
@@ -234,19 +178,9 @@ def resume_organization_cron_job(
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        result = resume_cron_job(session, cron_id, organization_id=organization_id, user_id=user.id)
-        if not result:
-            raise HTTPException(status_code=404, detail="Cron job not found")
-    except CronJobNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except CronJobAccessDenied as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to resume cron job {cron_id} for organization {organization_id}: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    result = resume_cron_job(session, cron_id, organization_id=organization_id, user_id=user.id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Cron job not found")
 
     return result
 
@@ -267,20 +201,10 @@ def get_cron_job_runs(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        result = get_cron_runs(session, cron_id, organization_id=organization_id)
-        if not result:
-            raise HTTPException(status_code=404, detail="Cron job not found")
-        return result
-    except CronJobNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except CronJobAccessDenied as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to fetch runs for cron job {cron_id} for organization {organization_id}: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    result = get_cron_runs(session, cron_id, organization_id=organization_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Cron job not found")
+    return result
 
 
 @router.post("/{organization_id}/crons/{cron_id}/trigger", response_model=CronJobTriggerResponse, status_code=202)
@@ -300,22 +224,12 @@ def trigger_organization_cron_job(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        result, entrypoint, payload = trigger_cron_job_now(session, cron_id, organization_id=organization_id)
-        background_tasks.add_task(
-            execute_cron_run,
-            run_id=result.run_id,
-            cron_id=cron_id,
-            entrypoint=entrypoint,
-            payload=payload,
-        )
-        return result
-    except CronJobNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except CronJobAccessDenied as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to trigger cron job {cron_id} for organization {organization_id}: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    result, entrypoint, payload = trigger_cron_job_now(session, cron_id, organization_id=organization_id)
+    background_tasks.add_task(
+        execute_cron_run,
+        run_id=result.run_id,
+        cron_id=cron_id,
+        entrypoint=entrypoint,
+        payload=payload,
+    )
+    return result

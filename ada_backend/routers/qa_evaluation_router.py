@@ -14,7 +14,6 @@ from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.qa_evaluation_schema import (
     JudgeEvaluationResponse,
 )
-from ada_backend.services.errors import LLMJudgeNotFound, ProjectNotFound
 from ada_backend.services.qa.qa_evaluation_service import (
     delete_judge_evaluations_service,
     get_evaluations_by_version_output_service,
@@ -42,15 +41,7 @@ def get_evaluations_by_version_output_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        return get_evaluations_by_version_output_service(session=session, version_output_id=version_output_id)
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to get judge evaluations for "
-            f"version_output {version_output_id} in project {project_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return get_evaluations_by_version_output_service(session=session, version_output_id=version_output_id)
 
 
 @router.post(
@@ -78,20 +69,11 @@ async def run_judge_evaluation_endpoint(
             judge_id=judge_id,
             version_output_id=version_output_id,
         )
-    except ProjectNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except LLMJudgeNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(
             f"Failed to run judge evaluation for judge {judge_id} in project {project_id}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to run judge evaluation for judge {judge_id} in project {project_id}: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete(
@@ -117,6 +99,3 @@ def delete_judge_evaluations_endpoint(
     except ValueError as e:
         LOGGER.error(f"Failed to delete judge evaluations for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to delete judge evaluations for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e

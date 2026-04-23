@@ -3,7 +3,7 @@ import threading
 from contextlib import asynccontextmanager
 
 import sentry_sdk
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import start_http_server
@@ -12,6 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from ada_backend.admin.admin import setup_admin
+from ada_backend.error_handlers import register_error_handlers
 from ada_backend.graphql.schema import graphql_router
 from ada_backend.instrumentation import setup_performance_instrumentation
 from ada_backend.middleware.rate_limit_middleware import rate_limit_exceeded_handler
@@ -295,13 +296,7 @@ app.include_router(alert_email_router)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
-
-
-@app.exception_handler(HTTPException)
-async def sentry_http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    if exc.__cause__ and exc.status_code >= 500:
-        sentry_sdk.capture_exception(exc.__cause__)
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
+register_error_handlers(app)
 
 
 app.add_middleware(SlowAPIMiddleware)

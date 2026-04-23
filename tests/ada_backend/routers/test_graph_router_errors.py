@@ -114,17 +114,17 @@ class TestValueErrorNeverLeaksPythonMessage:
 
 
 class TestDomainExceptionsUseCustomMessages:
-    """Domain exceptions must use router-level messages built from route params, not str(e)."""
+    """ServiceError subclasses should carry the caller-facing message used by the global handler."""
 
     @patch("ada_backend.routers.graph_router.save_graph_version_service", side_effect=GraphNotFound(uuid4()))
     @patch("ada_backend.routers.graph_router.get_project", return_value=_make_fake_project())
     def test_graph_not_found(self, _mock_project, _mock_service):
         runner_id = uuid4()
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(GraphNotFound) as exc_info:
             save_graph_version(uuid4(), runner_id, _make_fake_user(), MagicMock())
         assert exc_info.value.status_code == 404
-        assert str(runner_id) in exc_info.value.detail
-        assert "not found" in exc_info.value.detail
+        assert str(exc_info.value.graph_id) in exc_info.value.detail
+        assert "not found" in exc_info.value.detail.lower()
 
     @patch(
         "ada_backend.routers.graph_router.save_graph_version_service",
@@ -132,13 +132,11 @@ class TestDomainExceptionsUseCustomMessages:
     )
     @patch("ada_backend.routers.graph_router.get_project", return_value=_make_fake_project())
     def test_graph_not_bound(self, _mock_project, _mock_service):
-        project_id = uuid4()
-        runner_id = uuid4()
-        with pytest.raises(HTTPException) as exc_info:
-            save_graph_version(project_id, runner_id, _make_fake_user(), MagicMock())
+        with pytest.raises(GraphNotBoundToProjectError) as exc_info:
+            save_graph_version(uuid4(), uuid4(), _make_fake_user(), MagicMock())
         assert exc_info.value.status_code == 403
-        assert str(runner_id) in exc_info.value.detail
-        assert "does not belong" in exc_info.value.detail
+        assert str(exc_info.value.graph_runner_id) in exc_info.value.detail
+        assert "not bound" in exc_info.value.detail.lower()
 
     @patch(
         "ada_backend.routers.graph_router.save_graph_version_service",
@@ -146,7 +144,7 @@ class TestDomainExceptionsUseCustomMessages:
     )
     @patch("ada_backend.routers.graph_router.get_project", return_value=_make_fake_project())
     def test_save_from_non_draft(self, _mock_project, _mock_service):
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(GraphVersionSavingFromNonDraftError) as exc_info:
             save_graph_version(uuid4(), uuid4(), _make_fake_user(), MagicMock())
         assert exc_info.value.status_code == 400
         assert "draft" in exc_info.value.detail.lower()
@@ -157,12 +155,11 @@ class TestDomainExceptionsUseCustomMessages:
     )
     @patch("ada_backend.routers.graph_router.get_project", return_value=_make_fake_project())
     def test_already_in_environment(self, _mock_project, _mock_service):
-        runner_id = uuid4()
-        with pytest.raises(HTTPException) as exc_info:
-            deploy_graph(uuid4(), runner_id, _make_fake_user(), MagicMock())
+        with pytest.raises(GraphRunnerAlreadyInEnvironmentError) as exc_info:
+            deploy_graph(uuid4(), uuid4(), _make_fake_user(), MagicMock())
         assert exc_info.value.status_code == 400
-        assert str(runner_id) in exc_info.value.detail
-        assert "already in production" in exc_info.value.detail
+        assert str(exc_info.value.graph_runner_id) in exc_info.value.detail
+        assert "already in production" in exc_info.value.detail.lower()
 
     @patch(
         "ada_backend.routers.graph_router.save_graph_version_service",
@@ -193,8 +190,8 @@ class TestDeployGraphIntegrityError:
         session.rollback.assert_called_once()
 
 
-class TestCatchAllUsesContextualMessage:
-    """Final except Exception must use a contextual message, not 'Internal server error'."""
+class TestUnexpectedExceptionsBubbleToGlobalHandler:
+    """Routers should let unexpected exceptions bubble to the global Exception handler."""
 
     @patch(
         "ada_backend.routers.graph_router.save_graph_version_service",
@@ -202,8 +199,5 @@ class TestCatchAllUsesContextualMessage:
     )
     @patch("ada_backend.routers.graph_router.get_project", return_value=_make_fake_project())
     def test_save_version_catch_all(self, _mock_project, _mock_service):
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RuntimeError, match="segfault in C extension"):
             save_graph_version(uuid4(), uuid4(), _make_fake_user(), MagicMock())
-        assert exc_info.value.status_code == 500
-        assert "segfault" not in exc_info.value.detail
-        assert "saving graph version" in exc_info.value.detail.lower()

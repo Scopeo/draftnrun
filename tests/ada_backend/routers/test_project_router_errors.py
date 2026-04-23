@@ -145,109 +145,40 @@ def _make_verified_api_key():
     return key
 
 
-class TestLLMProviderErrorMapping:
+class TestEngineErrorsPropagateToGlobalHandler:
+    """Engine errors should propagate out of the router so the global handler resolves them."""
+
     @pytest.mark.asyncio
     @patch("ada_backend.routers.project_router.run_with_tracking")
     @patch("ada_backend.routers.project_router.verify_project_access")
     @patch("ada_backend.routers.project_router.get_db_session")
-    async def test_run_env_agent_returns_429_on_rate_limit(self, mock_db_ctx, mock_verify, mock_run_tracking):
+    async def test_llm_provider_error_propagates_from_run_env(self, mock_db_ctx, mock_verify, mock_run_tracking):
         mock_db_ctx.return_value.__enter__ = MagicMock()
         mock_db_ctx.return_value.__exit__ = MagicMock(return_value=False)
         mock_run_tracking.side_effect = LLMProviderError(
             "Rate limit exceeded", status_code=429, provider_name="OpenAI"
         )
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(LLMProviderError) as exc_info:
             await run_env_agent_endpoint(
                 project_id=uuid4(),
                 env=EnvType.PRODUCTION,
                 input_data={"messages": [{"role": "user", "content": "hi"}]},
                 verified_api_key=_make_verified_api_key(),
             )
-        assert exc_info.value.status_code == 429
-        assert "OpenAI" in exc_info.value.detail
+        assert exc_info.value.http_status == 429
 
     @pytest.mark.asyncio
     @patch("ada_backend.routers.project_router.run_with_tracking")
-    @patch("ada_backend.routers.project_router.verify_project_access")
-    @patch("ada_backend.routers.project_router.get_db_session")
-    async def test_run_env_agent_returns_502_on_server_error(self, mock_db_ctx, mock_verify, mock_run_tracking):
-        mock_db_ctx.return_value.__enter__ = MagicMock()
-        mock_db_ctx.return_value.__exit__ = MagicMock(return_value=False)
-        mock_run_tracking.side_effect = LLMProviderError(
-            "Internal server error", status_code=500, provider_name="OpenAI"
-        )
-
-        with pytest.raises(HTTPException) as exc_info:
-            await run_env_agent_endpoint(
-                project_id=uuid4(),
-                env=EnvType.PRODUCTION,
-                input_data={"messages": [{"role": "user", "content": "hi"}]},
-                verified_api_key=_make_verified_api_key(),
-            )
-        assert exc_info.value.status_code == 502
-
-    @pytest.mark.asyncio
-    @patch("ada_backend.routers.project_router.run_with_tracking")
-    @patch("ada_backend.routers.project_router.verify_project_access")
-    @patch("ada_backend.routers.project_router.get_db_session")
-    async def test_run_env_agent_returns_502_when_no_status_code(self, mock_db_ctx, mock_verify, mock_run_tracking):
-        mock_db_ctx.return_value.__enter__ = MagicMock()
-        mock_db_ctx.return_value.__exit__ = MagicMock(return_value=False)
-        mock_run_tracking.side_effect = LLMProviderError("Connection reset", status_code=None)
-
-        with pytest.raises(HTTPException) as exc_info:
-            await run_env_agent_endpoint(
-                project_id=uuid4(),
-                env=EnvType.PRODUCTION,
-                input_data={"messages": [{"role": "user", "content": "hi"}]},
-                verified_api_key=_make_verified_api_key(),
-            )
-        assert exc_info.value.status_code == 502
-
-    @pytest.mark.asyncio
-    @patch("ada_backend.routers.project_router.run_with_tracking")
-    async def test_chat_env_returns_429_on_rate_limit(self, mock_run_tracking):
+    async def test_llm_provider_error_propagates_from_chat_env(self, mock_run_tracking):
         mock_run_tracking.side_effect = LLMProviderError(
             "Rate limit exceeded", status_code=429, provider_name="Anthropic"
         )
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(LLMProviderError):
             await chat_env(
                 project_id=uuid4(),
                 env=EnvType.DRAFT,
                 user=_make_fake_user(),
                 input_data={"messages": [{"role": "user", "content": "hi"}]},
             )
-        assert exc_info.value.status_code == 429
-        assert "Anthropic" in exc_info.value.detail
-
-    @pytest.mark.asyncio
-    @patch("ada_backend.routers.project_router.run_with_tracking")
-    async def test_chat_env_returns_502_on_server_error(self, mock_run_tracking):
-        mock_run_tracking.side_effect = LLMProviderError(
-            "Internal server error", status_code=500, provider_name="OpenAI"
-        )
-
-        with pytest.raises(HTTPException) as exc_info:
-            await chat_env(
-                project_id=uuid4(),
-                env=EnvType.DRAFT,
-                user=_make_fake_user(),
-                input_data={"messages": [{"role": "user", "content": "hi"}]},
-            )
-        assert exc_info.value.status_code == 502
-
-    @pytest.mark.asyncio
-    @patch("ada_backend.routers.project_router.run_with_tracking")
-    async def test_chat_env_returns_502_when_no_status_code(self, mock_run_tracking):
-        mock_run_tracking.side_effect = LLMProviderError("Connection reset", status_code=None)
-
-        with pytest.raises(HTTPException) as exc_info:
-            await chat_env(
-                project_id=uuid4(),
-                env=EnvType.DRAFT,
-                user=_make_fake_user(),
-                input_data={"messages": [{"role": "user", "content": "hi"}]},
-            )
-        assert exc_info.value.status_code == 502

@@ -9,7 +9,7 @@ globs:
 - Endpoints MUST use auth dependencies from `auth_router.py` — never manual token validation.
 - Input validation: manual checks, raise `HTTPException` with descriptive `detail`.
 - Pagination: use `page` (1-based) and `page_size` query params where applicable.
-- Error responses: always use `HTTPException` with specific status codes.
+- Domain/service errors should be raised as `ServiceError` subclasses in the service layer and handled globally in `main.py`.
 - Secrets/credentials: never return in API responses.
 - When adding a new router: register in `main.py`, add to `ada_backend/docs/api-reference.md`, update cursor rules if new patterns emerge.
 - Graph save APIs now have versioned routes; keep legacy and `/v2/...` behavior isolated with dedicated schemas to avoid breaking clients.
@@ -25,32 +25,30 @@ WebSocket endpoints (`run_stream_router.py`, `graph_display_stream_router.py`, `
 - Close codes: `4401` (unauthorized), `4403` (forbidden), `4404` (not found), `4510` (Redis unavailable).
 - Cleanup: `stop_event.set()` + `thread.join(timeout=2.0)` in the `finally` block.
 
-## HTTP Error Details — No Python Exceptions in Responses
+## Error Handling Pattern
 
-**Never use `str(e)` or `repr(e)` in `HTTPException(detail=...)`.**  Python exception messages leak implementation details (class names, tracebacks, internal IDs, SQL errors) to API consumers. Instead:
+Routers should stay thin and avoid repetitive `try/except` blocks for domain errors.
 
-1. **Write an explicit, human-readable message** in the `detail` kwarg that describes the problem from the caller's perspective. Build it from route parameters or exception attributes — not from the exception string.
-2. **Log level depends on the exception kind:**
-   - **Domain / client errors** (`GraphNotFound`, `MissingIntegrationError`, validation errors, etc.): `LOGGER.warning(...)` — no `exc_info=True` (the traceback is noise for expected failures).
-   - **Infrastructure errors** (DB connection, external service timeouts): `LOGGER.error(..., exc_info=True)`.
-   - **Catch-all `except Exception`**: `LOGGER.error(..., exc_info=True)`.
-3. **For the final catch-all** `except Exception` (the "default" branch), use a contextual but generic message like `"Unexpected error while saving graph version"` — never expose the raw exception.
-4. **For domain exceptions** (`GraphNotFound`, `MissingIntegrationError`, etc.) that carry structured attributes (`.graph_id`, `.component_instance_name`), construct the detail from those attributes, not from `str(e)`.
+- Do not catch and re-map `ServiceError` subclasses in routers. Let `@app.exception_handler(ServiceError)` translate them to HTTP responses.
+- Do not add router-level `except Exception` boilerplate to return `"Internal server error"`. The global unhandled exception handler is responsible for that path.
+- Keep router-level exception handling only when transport-specific behavior is needed (for example, dynamic provider status from `LLMProviderError`/`NangoClientError`, or temporary `ValueError` fallback until migrated to typed `ServiceError`).
+- If a router still raises `HTTPException` directly, use a caller-facing message and never leak tracebacks/SQL details.
+- For expected client mistakes in router-level fallbacks, log with `LOGGER.warning(...)`; reserve `LOGGER.error(..., exc_info=True)` for infrastructure failures.
 
 ```python
-# BAD
+# BAD: service exceptions are re-wrapped in router
+try:
+    return get_project_service(session, project_id)
+except ProjectNotFound as e:
+    raise HTTPException(status_code=404, detail=str(e)) from e
+
+# GOOD: service exception propagates to global ServiceError handler
+return get_project_service(session, project_id)
+
+# GOOD: temporary fallback for non-typed validation errors
+try:
+    return retry_run(...)
 except ValueError as e:
-    raise HTTPException(status_code=400, detail=str(e))
-
-# BAD
-except GraphNotFound as e:
-    raise HTTPException(status_code=404, detail=str(e))
-
-# GOOD
-except ValueError:
-    raise HTTPException(status_code=400, detail="Failed to save version: the graph contains corrupted data")
-
-# GOOD
-except GraphNotFound:
-    raise HTTPException(status_code=404, detail=f"Graph runner {graph_runner_id} not found")
+    LOGGER.warning("Invalid retry request for run %s: %s", run_id, e)
+    raise HTTPException(status_code=400, detail="Invalid retry request") from e
 ```

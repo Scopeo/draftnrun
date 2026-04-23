@@ -24,13 +24,7 @@ from ada_backend.schemas.run_schema import (
     RunRetrySchema,
     RunUpdateStatusSchema,
 )
-from ada_backend.services.errors import (
-    InvalidRunStatusTransition,
-    ProjectNotFound,
-    ResultsBucketNotConfigured,
-    RunNotFound,
-    RunResultNotFound,
-)
+from ada_backend.services.errors import RunNotFound
 from ada_backend.services.run_service import (
     create_run,
     get_org_run_input,
@@ -61,13 +55,7 @@ def create_run_endpoint(
     session: Session = Depends(get_db),
 ) -> RunResponseSchema:
     """Create a new run for the project. Run starts with status pending."""
-    try:
-        return create_run(session, project_id=project_id, trigger=body.trigger)
-    except ProjectNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception("Failed to create run for project %s", project_id)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return create_run(session, project_id=project_id, trigger=body.trigger)
 
 
 @router.get(
@@ -83,13 +71,7 @@ def get_run_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> RunResponseSchema:
-    try:
-        return get_run(session, run_id=run_id, project_id=project_id)
-    except RunNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception("Failed to get run %s", run_id)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return get_run(session, run_id=run_id, project_id=project_id)
 
 
 @router.get(
@@ -108,15 +90,8 @@ def get_run_result_endpoint(
     """Return the run result (ChatResponse) from S3. Run must be completed and have a result_id."""
     try:
         return get_run_result(session, run_id=run_id, project_id=project_id)
-    except (RunNotFound, RunResultNotFound) as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ResultsBucketNotConfigured as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception("Failed to get result for run %s", run_id)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.patch(
@@ -134,22 +109,14 @@ def update_run_status_endpoint(
     session: Session = Depends(get_db),
 ) -> RunResponseSchema:
     """Update run status (and optionally error/trace_id). Run must belong to the given project."""
-    try:
-        return update_run_status(
-            session,
-            run_id=run_id,
-            project_id=project_id,
-            status=body.status,
-            error=body.error,
-            trace_id=body.trace_id,
-        )
-    except RunNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except InvalidRunStatusTransition as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception("Failed to update run %s", run_id)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return update_run_status(
+        session,
+        run_id=run_id,
+        project_id=project_id,
+        status=body.status,
+        error=body.error,
+        trace_id=body.trace_id,
+    )
 
 
 @router.post(
@@ -183,9 +150,6 @@ def retry_run_endpoint(
             status_code=400,
             detail="Invalid retry request. Provide env or graph_runner_id and ensure run input exists.",
         ) from exc
-    except Exception as exc:
-        LOGGER.error("Failed to retry run %s for project %s", run_id, project_id, exc_info=True)
-        raise HTTPException(status_code=500, detail="Unexpected error while retrying run") from exc
 
 
 org_router = APIRouter(prefix="/org", tags=["Runs"])
@@ -207,31 +171,27 @@ def list_organization_runs(
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
 ) -> OrgRunListResponse:
-    try:
-        runs, total = get_org_runs(
-            session,
-            organization_id=organization_id,
+    runs, total = get_org_runs(
+        session,
+        organization_id=organization_id,
+        page=page,
+        page_size=page_size,
+        statuses=statuses,
+        project_ids=project_ids,
+        trigger=trigger,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    total_pages = (total + page_size - 1) // page_size if page_size else 0
+    return OrgRunListResponse(
+        runs=runs,
+        pagination=RunListPagination(
             page=page,
             page_size=page_size,
-            statuses=statuses,
-            project_ids=project_ids,
-            trigger=trigger,
-            date_from=date_from,
-            date_to=date_to,
-        )
-        total_pages = (total + page_size - 1) // page_size if page_size else 0
-        return OrgRunListResponse(
-            runs=runs,
-            pagination=RunListPagination(
-                page=page,
-                page_size=page_size,
-                total_items=total,
-                total_pages=total_pages,
-            ),
-        )
-    except Exception as e:
-        LOGGER.error("Failed to list runs for organization %s", organization_id, exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+            total_items=total,
+            total_pages=total_pages,
+        ),
+    )
 
 
 @org_router.get("/{organization_id}/runs/{run_id}/input")
@@ -251,8 +211,3 @@ def get_organization_run_input(
         return input_data
     except RunNotFound:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found in organization {organization_id}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        LOGGER.error("Failed to get input for run %s in organization %s", run_id, organization_id, exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e

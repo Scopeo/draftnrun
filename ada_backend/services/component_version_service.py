@@ -129,6 +129,9 @@ def update_component_fields_service(
 ) -> None:
     component_version = get_component_version_by_id(session, component_version_id)
     if component_version is None:
+        # TODO(DRA-1224): message says "Component not found" but the missing
+        # entity is the component version. Introduce a ComponentVersionNotFound
+        # error as part of the message-quality pass.
         raise ComponentNotFound(component_version_id)
 
     if component_version.component_id != component_id:

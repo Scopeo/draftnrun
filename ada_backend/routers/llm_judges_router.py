@@ -19,7 +19,6 @@ from ada_backend.schemas.llm_judges_schema import (
     LLMJudgeTemplate,
     LLMJudgeUpdate,
 )
-from ada_backend.services.errors import LLMJudgeNotFound
 from ada_backend.services.qa.llm_judges_service import (
     create_llm_judge_service,
     delete_llm_judges_service,
@@ -48,11 +47,7 @@ def get_llm_judges_by_project_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        return get_llm_judges_by_project_service(session=session, project_id=project_id)
-    except Exception as e:
-        LOGGER.error(f"Failed to get LLM judges for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return get_llm_judges_by_project_service(session=session, project_id=project_id)
 
 
 @router.get(
@@ -92,9 +87,6 @@ def create_llm_judge_endpoint(
     except ValueError as e:
         LOGGER.error(f"Failed to create LLM judge for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to create LLM judge for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.patch(
@@ -122,14 +114,9 @@ def update_llm_judge_endpoint(
             judge_id=judge_id,
             judge_data=judge_data,
         )
-    except LLMJudgeNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(f"Failed to update LLM judge {judge_id} for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to update LLM judge {judge_id} for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete(
@@ -155,6 +142,3 @@ def delete_llm_judges_endpoint(
     except ValueError as e:
         LOGGER.error(f"Failed to delete LLM judges for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to delete LLM judges for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
