@@ -6,7 +6,7 @@ Unmigrated components (Synthesizer, HybridSynthesizer, RelevantChunkSelector) ke
 completion_model as a BasicParameter.
 
 Revision ID: e5f6a7b8c9d0
-Revises: i1j2k3l4m5n6
+Revises: j1k2l3m4n5o6
 Create Date: 2026-03-24 00:00:00.000000
 
 """
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e5f6a7b8c9d0"
-down_revision: Union[str, None] = "i1j2k3l4m5n6"
+down_revision: Union[str, None] = "j1k2l3m4n5o6"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 deploy_strategy: Union[str, None] = "breaking"
