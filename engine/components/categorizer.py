@@ -2,6 +2,7 @@ import json
 import logging
 from collections.abc import Callable
 from typing import Optional, Type
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -11,7 +12,6 @@ from engine.components.errors import CategorizationError
 from engine.components.llm_call import LLMCallAgent, LLMCallInputs
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
 from engine.constants import DEFAULT_MODEL
-from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -180,10 +180,14 @@ class Categorizer(Component):
 
     def __init__(
         self,
-        completion_service: CompletionService,
         trace_manager: TraceManager,
         tool_description: ToolDescription = DEFAULT_CATEGORIZER_TOOL_DESCRIPTION,
         component_attributes: Optional[ComponentAttributes] = None,
+        temperature: float = 1.0,
+        llm_api_key: Optional[str] = None,
+        verbosity: Optional[str] = None,
+        reasoning: Optional[str] = None,
+        model_id_resolver: Optional[Callable[[str], Optional[UUID]]] = None,
         capability_resolver: Optional[Callable[[list[str]], set[str]]] = None,
     ):
         if component_attributes is None:
@@ -194,10 +198,14 @@ class Categorizer(Component):
             component_attributes=component_attributes,
         )
         self._llm_call_agent = LLMCallAgent(
-            completion_service=completion_service,
             trace_manager=trace_manager,
             tool_description=tool_description,
             component_attributes=component_attributes,
+            temperature=temperature,
+            llm_api_key=llm_api_key,
+            verbosity=verbosity,
+            reasoning=reasoning,
+            model_id_resolver=model_id_resolver,
             capability_resolver=capability_resolver,
         )
 
