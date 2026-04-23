@@ -1,6 +1,6 @@
 """Migrate completion_model from BasicParameter to FieldExpression + InputPortInstance.
 
-Creates INPUT PortDefinitions for completion_model on 11 migrated component versions
+Creates INPUT PortDefinitions for completion_model on 12 migrated component versions
 and migrates existing BasicParameter rows to FieldExpression LiteralNodes + InputPortInstances.
 Unmigrated components (Synthesizer, HybridSynthesizer, RelevantChunkSelector) keep
 completion_model as a BasicParameter.
@@ -27,6 +27,7 @@ COMPLETION_MODEL_CPD_IDS = [
     "e2d157b4-f26d-41b4-9e47-62b5b041a9ff",  # AI Agent
     "1233f6b4-cfab-44f6-bf62-f6e0a1b95db1",  # LLM Call
     "3d6b6263-7ada-4021-bb56-3ee2653e9fb3",  # Categorizer
+    "3d6b6263-7ada-4021-bb56-3ee2653e9fb4",  # Scorer
     "329f22ec-0382-4fcf-963f-3281e68e6222",  # Web Search (OpenAI)
     "978afae2-4a79-4f26-a3a1-0a64cbd75b82",  # SQL Tool
     "329f22ec-0382-4fcf-963f-3281e68e6224",  # OCR Call
@@ -58,6 +59,7 @@ COMPONENT_VERSIONS = [
     ),
     ("7a039611-49b3-4bfd-b09b-c0f93edf3b79", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5f7", DEFAULT_MODEL, CAP_COMPLETION),
     ("c4a1e2f3-5d6b-4c7a-8e9f-1a2b3c4d5e6f", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5f8", DEFAULT_MODEL, CAP_COMPLETION),
+    ("f1a2b3c4-d5e6-7890-abcd-ef1234567892", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e604", DEFAULT_MODEL, CAP_COMPLETION),
     (
         "d6020df0-a7e0-4d82-b731-0a653beef2e5",
         "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5f9",
@@ -100,7 +102,7 @@ def upgrade() -> None:
 
     rows_before = bind.execute(
         sa.text(f"""
-            SELECT COUNT(*) FROM basic_parameters bp
+            SELECT COUNT(DISTINCT bp.component_instance_id) FROM basic_parameters bp
             JOIN component_instances ci ON ci.id = bp.component_instance_id
             WHERE bp.parameter_definition_id = ANY({CPD_IDS_ARRAY})
               AND ci.component_version_id = ANY({CV_IDS_ARRAY})
@@ -193,8 +195,11 @@ def upgrade() -> None:
                 ON CONFLICT (id)
                 DO UPDATE SET field_expression_id = EXCLUDED.field_expression_id
             )
-            DELETE FROM basic_parameters
-            WHERE parameter_definition_id = ANY({CPD_IDS_ARRAY})
+            DELETE FROM basic_parameters bp
+            USING component_instances ci
+            WHERE bp.parameter_definition_id = ANY({CPD_IDS_ARRAY})
+              AND ci.id = bp.component_instance_id
+              AND ci.component_version_id = ANY({CV_IDS_ARRAY})
         """),
     )
 
@@ -216,7 +221,12 @@ def upgrade() -> None:
 
 def _assert_upgrade_succeeded(bind, rows_before: int, any_cv_exists: bool) -> None:
     remaining_bp = bind.execute(
-        sa.text(f"SELECT COUNT(*) FROM basic_parameters WHERE parameter_definition_id = ANY({CPD_IDS_ARRAY})"),
+        sa.text(f"""
+            SELECT COUNT(*) FROM basic_parameters bp
+            JOIN component_instances ci ON ci.id = bp.component_instance_id
+            WHERE bp.parameter_definition_id = ANY({CPD_IDS_ARRAY})
+              AND ci.component_version_id = ANY({CV_IDS_ARRAY})
+        """),
     ).scalar()
     if remaining_bp != 0:
         raise RuntimeError(

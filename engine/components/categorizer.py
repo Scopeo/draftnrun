@@ -221,6 +221,7 @@ class Categorizer(Component):
             messages=[ChatMessage(role="user", content=inputs.content_to_categorize)],
             prompt_template=prompt_template,
             output_format=output_format,
+            completion_model=inputs.completion_model,
         )
 
         llm_outputs = await self._llm_call_agent._run_without_io_trace(inputs=llm_inputs, ctx=ctx)

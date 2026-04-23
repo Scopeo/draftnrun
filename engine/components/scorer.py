@@ -10,6 +10,7 @@ from ada_backend.database.models import ParameterType, UIComponent, UIComponentP
 from engine.components.component import Component
 from engine.components.llm_call import LLMCallAgent, LLMCallInputs
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
+from engine.constants import DEFAULT_MODEL
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -68,6 +69,15 @@ OUTPUT_FORMAT = {
 
 
 class ScorerInputs(BaseModel):
+    completion_model: str = Field(
+        default=DEFAULT_MODEL,
+        json_schema_extra={
+            "is_tool_input": False,
+            "parameter_type": ParameterType.LLM_MODEL,
+            "ui_component": "Select",
+            "ui_component_properties": {"label": "Model Name", "model_capabilities": ["completion"]},
+        },
+    )
     input: str = Field(
         description="The item to be scored",
         json_schema_extra={
@@ -175,6 +185,7 @@ class Scorer(Component):
             messages=[ChatMessage(role="user", content=inputs.input)],
             prompt_template=prompt,
             output_format=json.dumps(OUTPUT_FORMAT),
+            completion_model=inputs.completion_model,
         )
 
         llm_outputs = await self._llm_agent._run_without_io_trace(llm_inputs, ctx)

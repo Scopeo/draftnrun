@@ -1,6 +1,5 @@
 import json
 from logging import getLogger
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -30,15 +29,6 @@ from engine.field_expressions.serializer import to_json as expression_to_json
 from engine.llm_services.utils import get_llm_provider_and_model
 
 LOGGER = getLogger(__name__)
-
-
-def _resolve_completion_model_name(session: Session, instance_data: ComponentInstanceSchema) -> Optional[str]:
-    # TODO: Remove this input-specific resolution once we support
-    # a generic mechanism for dynamic UI data on input ports
-    param = next((p for p in instance_data.parameters if p.name == COMPLETION_MODEL_IN_DB), None)
-    if param is not None:
-        return str(param.value) if param.value is not None else None
-    return get_port_definition_default(session, instance_data.component_version_id, COMPLETION_MODEL_IN_DB)
 
 
 def _normalize_expression_json(raw: object) -> dict | None:
@@ -105,7 +95,11 @@ def create_or_update_component_instance(
                 )
                 continue
 
-            model_name = _resolve_completion_model_name(session, instance_data)
+            model_name = get_port_definition_default(
+                session,
+                instance_data.component_version_id,
+                COMPLETION_MODEL_IN_DB,
+            )
             if model_name is None:
                 LOGGER.warning(
                     f"Could not resolve completion_model for component '{component_name}'. "
