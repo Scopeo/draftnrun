@@ -25,7 +25,9 @@ def mock_completion_service():
 
 @pytest.fixture
 def scorer(mock_completion_service, monkeypatch):
-    monkeypatch.setattr("engine.components.llm_call.CompletionService", MagicMock(return_value=mock_completion_service))
+    monkeypatch.setattr(
+        "engine.components.llm_call.CompletionService", MagicMock(return_value=mock_completion_service)
+    )
     trace_manager = MagicMock()
     return Scorer(
         trace_manager=trace_manager,
