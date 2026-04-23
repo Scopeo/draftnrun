@@ -26,7 +26,7 @@ from sqlalchemy import (
 )
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import declarative_base, mapped_column, relationship
+from sqlalchemy.orm import declarative_base, mapped_column, relationship, validates
 
 from ada_backend.database.utils import camel_to_snake
 from ada_backend.schemas.llm_models_schema import ModelCapabilityEnum
@@ -184,6 +184,30 @@ class SourceType(StrEnum):
     LOCAL = "local"
     DATABASE = "database"
     WEBSITE = "website"
+
+
+class SourceAttributeKey(StrEnum):
+    ACCESS_TOKEN = "access_token"
+    PATH = "path"
+    LIST_OF_FILES_FROM_LOCAL_FOLDER = "list_of_files_from_local_folder"
+    FOLDER_ID = "folder_id"
+    SOURCE_DB_URL = "source_db_url"
+    SOURCE_TABLE_NAME = "source_table_name"
+    ID_COLUMN_NAME = "id_column_name"
+    TEXT_COLUMN_NAMES = "text_column_names"
+    SOURCE_SCHEMA_NAME = "source_schema_name"
+    CHUNK_SIZE = "chunk_size"
+    CHUNK_OVERLAP = "chunk_overlap"
+    METADATA_COLUMN_NAMES = "metadata_column_names"
+    TIMESTAMP_COLUMN_NAME = "timestamp_column_name"
+    URL_PATTERN = "url_pattern"
+    UPDATE_EXISTING = "update_existing"
+    QUERY_FILTER = "query_filter"
+    TIMESTAMP_FILTER = "timestamp_filter"
+
+    @classmethod
+    def values(cls) -> set[str]:
+        return {item.value for item in cls}
 
 
 class TaskStatus(StrEnum):
@@ -1676,6 +1700,7 @@ class DataSource(Base):
     last_ingestion_time = mapped_column(DateTime(timezone=True), nullable=True)
 
     ingestion_tasks = relationship("IngestionTask", back_populates="source")
+    # TODO(DRA-1273): Remove once reads no longer depend on the legacy wide table.
     attributes = relationship(
         "SourceAttributes",
         back_populates="source",
@@ -1695,6 +1720,7 @@ class SourceAttributes(Base):
     """
     Represents attributes for a data source.
     """
+    # TODO(DRA-1273): Delete after switching reads to EAV and dropping the legacy table.
 
     __tablename__ = "source_attributes"
 
@@ -1758,6 +1784,12 @@ class SourceAttributeEntry(Base):
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     source = relationship("DataSource", back_populates="attribute_entries")
+
+    @validates("attribute_name")
+    def validate_attribute_name(self, _, attribute_name: str) -> str:
+        if attribute_name not in SourceAttributeKey.values():
+            raise ValueError(f"Invalid source attribute key: {attribute_name}")
+        return attribute_name
 
     def __str__(self):
         return f"SourceAttributeEntry(source_id={self.source_id}, attribute_name={self.attribute_name})"
