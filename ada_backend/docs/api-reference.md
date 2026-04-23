@@ -6,8 +6,8 @@ Complete endpoint reference for the Draft'n Run backend.
 
 ## Error Handling
 
-- Service/domain failures are represented by `ServiceError` subclasses in `ada_backend/services/errors.py` and related domain error modules.
-- Routers should generally allow those exceptions to propagate; `ada_backend/main.py` handles them globally and returns `{ "detail": ... }` with the exception status code.
+- Service/domain failures are represented by `ServiceError` subclasses (`ada_backend/services/errors.py` and related domain modules). Engine-domain failures are represented by `EngineError` (`engine/errors.py`) and its subclasses.
+- Routers should allow both `ServiceError` and `EngineError` to propagate; `ada_backend/error_handlers.py` handles them globally and returns `{ "detail": ... }` with the appropriate status code.
 - Router-level `HTTPException` should be reserved for transport-specific validation (for example malformed query/body combinations) or provider-specific status passthrough cases.
 - Generic router-level `except Exception` blocks for `"Internal server error"` are intentionally avoided in favor of the global unhandled exception handler.
 

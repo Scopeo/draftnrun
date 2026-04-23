@@ -171,6 +171,7 @@ def autocomplete_field_expressions_endpoint(
 ) -> FieldExpressionAutocompleteResponse:
     if not user or not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
+    # TODO: Add (DBAPIError, DisconnectionError) fallback like other endpoints in this router.
     request = FieldExpressionAutocompleteRequest(
         target_instance_id=target_instance_id,
         query=query,

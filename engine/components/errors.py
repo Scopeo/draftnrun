@@ -23,6 +23,8 @@ class KeyTypePromptTemplateError(EngineError):
 class MCPConnectionError(EngineError):
     """Raised when an MCP tool cannot connect to its endpoint (HTTP/SSE or stdio)."""
 
+    # TODO: Store endpoint/detail as attributes only, use a generic public message
+    # to avoid leaking internal URLs in the client-facing response.
     def __init__(self, endpoint: str, detail: str):
         super().__init__(f"MCP Tool failed to connect to {endpoint}: {detail}")
 
@@ -45,6 +47,8 @@ class NoMatchingRouteError(EngineError):
 class CategorizationError(EngineError):
     """Raised when categorization fails due to invalid LLM response."""
 
+    # TODO: Keep llm_output as attribute only, omit it from the exception message
+    # to avoid exposing raw LLM output in client-facing responses.
     def __init__(self, detail: str, llm_output: dict):
         self.detail = detail
         self.llm_output = llm_output

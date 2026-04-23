@@ -206,9 +206,6 @@ async def list_repos_for_installation(
     except GithubClientError:
         LOGGER.warning("Failed to list repos for installation %s", installation_id)
         raise HTTPException(status_code=502, detail="Failed to list repositories from GitHub")
-    except Exception as e:
-        LOGGER.error("Unexpected error listing repos for installation %s: %s", installation_id, e, exc_info=True)
-        raise HTTPException(status_code=502, detail="Failed to list repositories from GitHub") from e
 
 
 @org_router.get(

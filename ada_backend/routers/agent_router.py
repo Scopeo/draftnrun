@@ -95,4 +95,4 @@ async def update_agent(
         LOGGER.error(
             f"Database connection failed for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
         )
-        raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
+        raise HTTPException(status_code=503, detail="Database connection failed, please retry") from e

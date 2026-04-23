@@ -88,6 +88,7 @@ def upsert_org_variable_definition(
 ):
     try:
         return upsert_definition_service(session, organization_id, name, body)
+    # Sanitize: return generic 404 to avoid leaking internal UUIDs from the exception message.
     except (ProjectNotFound, ProjectNotInOrganization) as e:
         raise HTTPException(status_code=404, detail="Project not found") from e
     except IntegrityError as e:
@@ -131,6 +132,7 @@ def get_set_ids(
 ):
     try:
         return get_set_ids_service(session, organization_id, project_id)
+    # Sanitize: return generic 404 to avoid leaking internal UUIDs from the exception message.
     except (ProjectNotFound, ProjectNotInOrganization) as e:
         raise HTTPException(status_code=404, detail="Project not found") from e
 
