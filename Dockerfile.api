@@ -52,6 +52,7 @@ COPY --from=builder /app/.venv /app/.venv
 # Copy application code
 COPY ada_backend/ ./ada_backend/
 COPY engine/ ./engine/
+COPY shared/ ./shared/
 COPY data_ingestion/ ./data_ingestion/
 COPY ingestion_script/ ./ingestion_script/
 COPY scripts/ ./scripts/

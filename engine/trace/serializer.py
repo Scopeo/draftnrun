@@ -3,8 +3,8 @@ from typing import Any, Optional
 
 from pydantic import SecretStr
 
-from ada_backend.utils.log_redaction import redact_sensitive
 from engine.components.utils import shorten_base64_string
+from shared.log_redaction import redact_sensitive
 
 
 # TODO : when observability will handle json display, change the default indent to 0

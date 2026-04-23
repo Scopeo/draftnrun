@@ -7,9 +7,9 @@ from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 
-from ada_backend.utils.log_redaction import redact_sensitive
 from engine.components.types import ToolDescription
 from engine.trace.serializer import serialize_to_json
+from shared.log_redaction import redact_sensitive
 
 DEFAULT_MCP_TOOL_DESCRIPTION = ToolDescription(
     name="mcp_tool",

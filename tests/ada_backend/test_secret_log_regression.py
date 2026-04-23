@@ -12,13 +12,13 @@ import ada_backend.services.agent_builder_service as agent_builder_service
 import ada_backend.services.entity_factory as entity_factory
 import ada_backend.services.trace_service as trace_service
 import engine.graph_runner.graph_runner as graph_runner_module
-from ada_backend.utils.log_redaction import redact_sensitive
 from ada_backend.utils.secret_resolver import replace_secret_placeholders
 from engine.components.utils_prompt import fill_prompt_template
 from engine.field_expressions.ast import ConcatNode, LiteralNode, VarNode
 from engine.graph_runner.field_expression_management import evaluate_expression
 from engine.secret_utils import unwrap_secrets
 from engine.trace.serializer import serialize_to_json
+from shared.log_redaction import redact_sensitive
 
 LEAK_MARKER = "SUPER_SECRET_API_KEY_12345"
 

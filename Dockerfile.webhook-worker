@@ -37,6 +37,7 @@ COPY --from=builder /app/.venv /app/.venv
 # Copy application code
 COPY workers/ ./workers/
 COPY ada_backend/ ./ada_backend/
+COPY shared/ ./shared/
 COPY webhook_scripts/ ./webhook_scripts/
 COPY settings.py logger.py logging-config.yaml ./
 

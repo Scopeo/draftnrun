@@ -135,12 +135,14 @@ default-groups = [
 [tool.hatch.build.targets.sdist]
 include = [
     "engine",
+    "shared",
     "workers",
 ]
 
 [tool.hatch.build.targets.wheel]
 include = [
     "engine",
+    "shared",
     "workers",
 ]
 

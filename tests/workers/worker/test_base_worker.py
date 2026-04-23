@@ -1,14 +1,19 @@
+import ast
+import importlib
 import json
 import threading
 from collections import deque
+from pathlib import Path
 from typing import Any, Dict
 
 import redis
 
+from shared.log_redaction import REDACTED_PLACEHOLDER
 from workers.worker import base_worker
 from workers.worker.base_worker import BaseWorker, ProcessTaskOutcome, _ScheduledRetry
 
 _UNSET = object()
+_BASE_WORKER_PATH = Path(__file__).resolve().parents[3] / "workers" / "worker" / "base_worker.py"
 
 
 class DummyWorker(BaseWorker):
@@ -349,3 +354,60 @@ def test_dispatch_due_retries_preserves_entry_when_at_capacity(monkeypatch):
     assert dispatch_calls == []
     assert len(worker._retry_queue) == 1
     assert worker._retry_queue[0].message_id == "msg-1"
+
+
+def test_sentry_init_registers_scrubbing_hooks(monkeypatch):
+    monkeypatch.setattr("settings.settings.SENTRY_DSN_REDIS", "https://examplePublicKey@o0.ingest.sentry.io/0")
+
+    init_calls = []
+
+    def fake_init(**kwargs):
+        init_calls.append(kwargs)
+
+    monkeypatch.setattr("sentry_sdk.init", fake_init)
+
+    reloaded_module = importlib.reload(base_worker)
+
+    assert len(init_calls) == 1
+
+    sentry_kwargs = init_calls[0]
+    before_send = sentry_kwargs["before_send"]
+    before_send_log = sentry_kwargs["before_send_log"]
+    before_send_transaction = sentry_kwargs["before_send_transaction"]
+
+    def make_event_payload() -> dict:
+        return {
+            "message": "Authorization: Bearer super-secret-token",
+            "extra": {"api_key": "plain-secret", "public": "ok"},
+        }
+
+    scrubbed_event = before_send(make_event_payload(), None)
+    scrubbed_log = before_send_log(make_event_payload(), None)
+    scrubbed_transaction = before_send_transaction(make_event_payload(), None)
+
+    assert scrubbed_event["extra"]["api_key"] == REDACTED_PLACEHOLDER
+    assert scrubbed_log["extra"]["api_key"] == REDACTED_PLACEHOLDER
+    assert scrubbed_transaction["extra"]["api_key"] == REDACTED_PLACEHOLDER
+    assert "super-secret-token" not in scrubbed_event["message"]
+    assert "super-secret-token" not in scrubbed_log["message"]
+    assert "super-secret-token" not in scrubbed_transaction["message"]
+
+    importlib.reload(reloaded_module)
+
+
+def test_base_worker_does_not_import_ada_backend():
+    tree = ast.parse(_BASE_WORKER_PATH.read_text(encoding="utf-8"))
+
+    forbidden_imports: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            forbidden_imports.extend(
+                alias.name
+                for alias in node.names
+                if alias.name == "ada_backend" or alias.name.startswith("ada_backend.")
+            )
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            if node.module == "ada_backend" or node.module.startswith("ada_backend."):
+                forbidden_imports.append(node.module)
+
+    assert forbidden_imports == []

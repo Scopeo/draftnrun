@@ -4,12 +4,6 @@ This is defense-in-depth only. The primary boundary for secrets is
 ``pydantic.SecretStr`` typing + explicit unwrap at the execution boundary, with
 ``engine/trace/serializer.py`` masking any ``SecretStr`` that reaches a span or
 log.
-
-TODO(architecture): extract this module to a runtime-neutral shared package and
-ensure all worker/API images include it. It currently lives under
-``ada_backend.utils`` because the webhook worker image does not ship the
-``engine`` package, while the API, scheduler, ingestion worker, and engine code
-all already depend on ``ada_backend`` at runtime.
 """
 
 from __future__ import annotations
