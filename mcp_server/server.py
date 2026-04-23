@@ -120,6 +120,7 @@ def create_app() -> FastMCP:
     auth = SupabaseProvider(
         project_url=settings.SUPABASE_PROJECT_URL,
         base_url=settings.MCP_BASE_URL,
+        scopes_supported=["openid", "profile", "email"],
     )
 
     mcp = FastMCP(
