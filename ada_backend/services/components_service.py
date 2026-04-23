@@ -25,6 +25,7 @@ from ada_backend.schemas.parameter_schema import ComponentParamDefDTO, Parameter
 from ada_backend.services.errors import EntityInUseDeletionError
 from ada_backend.services.parameter_synthesis_utils import filter_conflicting_parameters
 from ada_backend.services.tool_description_generator import sanitize_tool_name
+from ada_backend.utils.component_utils import get_ui_component_properties_with_llm_options
 
 LOGGER = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ def _process_components_with_ports(
         )
         if port.port_type == PortType.INPUT:
             input_ports_by_component_version.setdefault(port.component_version_id, []).append(port)
+    llm_options_cache: dict = {}
     for component in components:
         component.port_definitions = comp_id_to_ports.get(str(component.component_version_id), [])
 
@@ -70,6 +72,12 @@ def _process_components_with_ports(
         component.parameters = filter_conflicting_parameters(component.parameters or [], input_ports)
 
         for input_port in input_ports:
+            props = input_port.ui_component_properties
+            if input_port.parameter_type == ParameterType.LLM_MODEL:
+                caps = (props or {}).get("model_capabilities")
+                props = get_ui_component_properties_with_llm_options(
+                    session, caps, props, llm_options_cache,
+                )
             component.parameters.append(
                 ComponentParamDefDTO(
                     id=input_port.id,
@@ -79,7 +87,7 @@ def _process_components_with_ports(
                     nullable=input_port.nullable,
                     default=input_port.get_default() if input_port.default is not None else None,
                     ui_component=input_port.ui_component,
-                    ui_component_properties=input_port.ui_component_properties,
+                    ui_component_properties=props,
                     is_advanced=input_port.is_advanced,
                     is_tool_input=input_port.is_tool_input,
                     drives_output_schema=input_port.drives_output_schema,
