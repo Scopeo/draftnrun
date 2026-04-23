@@ -1681,6 +1681,11 @@ class DataSource(Base):
         back_populates="source",
         cascade="all, delete-orphan",
     )
+    attribute_entries = relationship(
+        "SourceAttributeEntry",
+        back_populates="source",
+        cascade="all, delete-orphan",
+    )
 
     def __str__(self):
         return f"DataSource({self.name})"
@@ -1726,6 +1731,36 @@ class SourceAttributes(Base):
 
     def __str__(self):
         return f"SourceAttributes(source_id={self.source_id})"
+
+
+class SourceAttributeEntry(Base):
+    """Represents a single persisted source attribute in the EAV transition table."""
+
+    __tablename__ = "source_attribute_entries"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_id",
+            "attribute_name",
+            name="uq_source_attribute_entries_source_id_attribute_name",
+        ),
+    )
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    source_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("data_sources.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    attribute_name = mapped_column(String, nullable=False)
+    value = mapped_column(JSONB, nullable=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    source = relationship("DataSource", back_populates="attribute_entries")
+
+    def __str__(self):
+        return f"SourceAttributeEntry(source_id={self.source_id}, attribute_name={self.attribute_name})"
 
 
 class CronJob(Base):
