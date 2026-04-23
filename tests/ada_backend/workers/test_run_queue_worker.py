@@ -572,7 +572,7 @@ class TestPeriodicOrphanRecovery:
 
         client.exists.side_effect = fake_exists
         client.scan.return_value = (0, [processing_key])
-        client.rpoplpush.side_effect = [orphan_payload.encode(), None]
+        client.rpop.side_effect = [orphan_payload.encode(), None]
 
         with patch.object(RunQueueWorker, "__init__", lambda self: None):
             w = RunQueueWorker.__new__(RunQueueWorker)
@@ -582,14 +582,15 @@ class TestPeriodicOrphanRecovery:
         own_processing = BaseQueueWorker._processing_queue_key(queue_name, "live-worker")
 
         w._recover_orphaned_processing_queues(client, own_processing)
-        client.rpoplpush.assert_not_called()
+        client.rpop.assert_not_called()
 
         heartbeat_alive = False
         client.scan.return_value = (0, [processing_key])
-        client.rpoplpush.side_effect = [orphan_payload.encode(), None]
+        client.rpop.side_effect = [orphan_payload.encode(), None]
 
         w._recover_orphaned_processing_queues(client, own_processing)
-        client.rpoplpush.assert_called()
+        client.rpop.assert_called()
+        client.lpush.assert_called_once_with(queue_name, orphan_payload.encode())
 
     def test_worker_loop_triggers_periodic_scan(self):
         queue_name = "test_queue"
@@ -687,3 +688,48 @@ class TestPeriodicOrphanRecovery:
 
     def test_follow_up_delay_covers_heartbeat_ttl(self):
         assert _ORPHAN_FOLLOW_UP_DELAY >= _HEARTBEAT_TTL
+
+    def test_recover_resets_db_before_enqueueing(self):
+        """The DB status must be reset to PENDING before the item is pushed to the
+        main queue, otherwise a concurrent worker can grab it, see RUNNING, and
+        silently discard it."""
+        queue_name = "test_queue"
+        dead_worker_id = "dead-worker-race"
+        processing_key = BaseQueueWorker._processing_queue_key(queue_name, dead_worker_id)
+        run_id = uuid4()
+        orphan_payload = json.dumps({
+            "run_id": str(run_id),
+            "project_id": str(uuid4()),
+            "env": "production",
+            "input_data": {},
+        })
+
+        client = MagicMock()
+        client.exists.return_value = False
+        client.scan.return_value = (0, [processing_key])
+        client.rpop.side_effect = [orphan_payload.encode(), None]
+
+        call_order = []
+        original_lpush = client.lpush
+
+        def tracking_lpush(*args, **kwargs):
+            call_order.append("lpush")
+            return original_lpush(*args, **kwargs)
+
+        client.lpush = MagicMock(side_effect=tracking_lpush)
+
+        with patch.object(RunQueueWorker, "__init__", lambda self: None):
+            w = RunQueueWorker.__new__(RunQueueWorker)
+            w.queue_name = queue_name
+            w.worker_label = "test"
+
+        def tracking_recover(item_payload):
+            call_order.append("recover")
+
+        with patch.object(w, "recover_orphaned_item", side_effect=tracking_recover):
+            own_processing = BaseQueueWorker._processing_queue_key(queue_name, "live-worker")
+            w._recover_orphaned_processing_queues(client, own_processing)
+
+        assert call_order == ["recover", "lpush"], (
+            f"recover_orphaned_item must be called before lpush, got: {call_order}"
+        )
