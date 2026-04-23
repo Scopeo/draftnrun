@@ -69,7 +69,9 @@ function getSupabaseProjectRef(): string {
   } catch {
     // fall through
   }
-  return import.meta.env.VITE_SUPABASE_PROJECT_REF || 'unknown'
+  const fallback = import.meta.env.VITE_SUPABASE_PROJECT_REF
+  if (!fallback) logger.warn('auth.ts: Could not derive Supabase project ref — localStorage session key will be wrong')
+  return fallback || 'unknown'
 }
 
 // Resolve quickly from localStorage; Supabase's onAuthStateChange may fire later
@@ -518,9 +520,10 @@ export async function handleGoogleAuthCallback() {
       } catch (setupErr) {
         // Non-fatal: user is authenticated, org setup can be retried later
         logger.warn('User setup failed or timed out, continuing login', { error: setupErr })
-        Sentry.captureException(setupErr, {
+        Sentry.captureMessage('complete-user-setup failed or timed out', {
+          level: 'warning',
           tags: { context: 'complete-user-setup', userId: user.id },
-          extra: { email: user.email, isNewUser },
+          extra: { email: user.email, error: setupErr instanceof Error ? setupErr.message : String(setupErr) },
         })
       }
     }
