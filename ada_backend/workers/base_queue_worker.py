@@ -109,21 +109,18 @@ class BaseQueueWorker(ABC):
                         orphan_worker_id,
                     )
                     while True:
-                        item = client.rpoplpush(key_str, self.queue_name)
+                        item = client.rpop(key_str)
                         if item is None:
                             break
                         try:
                             item_payload = json.loads(item)
                             self.parse_item_id(item_payload)
                         except Exception:
-                            try:
-                                client.lrem(self.queue_name, 1, item)
-                            except Exception as rm_exc:
-                                LOGGER.exception(
-                                    "[%s] Failed to remove malformed item from main queue during orphan recovery: %s",
-                                    self.worker_label,
-                                    rm_exc,
-                                )
+                            LOGGER.warning(
+                                "[%s] Discarding malformed item from orphaned queue of worker %s",
+                                self.worker_label,
+                                orphan_worker_id,
+                            )
                             continue
 
                         try:
@@ -131,6 +128,16 @@ class BaseQueueWorker(ABC):
                         except Exception as e:
                             LOGGER.exception(
                                 "[%s] Error resetting stuck item to PENDING: %s", self.worker_label, e,
+                            )
+
+                        try:
+                            client.lpush(self.queue_name, item)
+                        except Exception as push_exc:
+                            LOGGER.exception(
+                                "[%s] Failed to re-enqueue recovered item %s (stranded in PENDING): %s",
+                                self.worker_label,
+                                self.parse_item_id(item_payload),
+                                push_exc,
                             )
 
                     self._cleanup_worker_keys(client, self.queue_name, orphan_worker_id)
