@@ -867,7 +867,8 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
 def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterProcessor:
     """
     Creates a processor that builds a Synthesizer.
-    The synthesizer receives temperature, llm_api_key, etc. as constructor params.
+    Pops LLM-related params so they don't leak to the parent component's constructor.
+    Handles both translated names (temperature) and DB names (default_temperature).
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
@@ -880,17 +881,25 @@ def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterPr
             if len(prompt_template) == 0:
                 raise ValueError("prompt_template must be a non-empty string")
 
+        temperature = params.pop("temperature", params.pop("default_temperature", 1.0))
+        if temperature is not None:
+            try:
+                temperature = float(temperature)
+            except (ValueError, TypeError):
+                temperature = 1.0
+
         synthesizer = Synthesizer(
             trace_manager=get_trace_manager(),
-            temperature=params.get("temperature", 1.0),
-            llm_api_key=params.get("llm_api_key"),
-            verbosity=params.get("verbosity"),
-            reasoning=params.get("reasoning"),
-            model_id_resolver=params.get("model_id_resolver"),
+            temperature=temperature,
+            llm_api_key=params.pop("llm_api_key", None),
+            verbosity=params.pop("verbosity", None),
+            reasoning=params.pop("reasoning", None),
+            model_id_resolver=params.pop("model_id_resolver", None),
             prompt_template=prompt_template,
             component_attributes=None,
         )
 
+        params.pop("completion_model", None)
         params[target_name] = synthesizer
         return params
 

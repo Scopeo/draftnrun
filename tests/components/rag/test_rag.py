@@ -126,10 +126,11 @@ def test_rag_run(
     assert rehydrated_sources[1].content == results[1].payload["content"]
 
 
+@patch("engine.components.synthesizer.CompletionService")
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
 def test_vocabulary_rag_run(
-    agent_calls_mock, get_span_mock, make_mock_llm_service, mock_trace_manager, mock_retriever
+    agent_calls_mock, get_span_mock, mock_cs_cls, make_mock_llm_service, mock_trace_manager, mock_retriever
 ):
     get_span_mock.return_value.project_id = "1234"
     counter_mock = MagicMock()
@@ -137,6 +138,7 @@ def test_vocabulary_rag_run(
     mock_llm_service = make_mock_llm_service(
         default_response="Test Response [1][2]\nSources:\n[1] <url1|SourceChunk_1>\n[2] <url2|SourceChunk_2>\n"
     )
+    mock_cs_cls.return_value = mock_llm_service
     prompt_template = "{{context_str}} ---\n{{vocabulary_context_str}}\n---{{query_str}}"
     vocabulary_context = {"term": ["term1", "term2"], "definition": ["definition1", "definition2"]}
     vocabulary_search = VocabularySearch(
@@ -149,7 +151,6 @@ def test_vocabulary_rag_run(
         retriever=mock_retriever,
         trace_manager=mock_trace_manager,
         synthesizer=Synthesizer(
-            completion_service_factory=lambda **kwargs: mock_llm_service,
             prompt_template=prompt_template,
             trace_manager=mock_trace_manager,
         ),

@@ -80,12 +80,13 @@ def llm_call_with_output_format(monkeypatch):
 
     monkeypatch.setattr("engine.components.llm_call.CompletionService", MagicMock(return_value=mock_service))
 
-    return LLMCallAgent(
+    agent = LLMCallAgent(
         trace_manager=MagicMock(),
         tool_description=MagicMock(),
         component_attributes=ComponentAttributes(component_instance_name="test_component"),
         capability_resolver=make_capability_resolver(mock_service),
     )
+    return agent, mock_service
 
 
 class TestConvertPropertiesToOpenAIFormat:
@@ -114,18 +115,17 @@ class TestConvertPropertiesToOpenAIFormat:
 
 @pytest.mark.anyio
 async def test_structured_output_with_flat_properties(llm_call_with_output_format, input_payload):
+    agent, mock_service = llm_call_with_output_format
     inputs = LLMCallInputs.model_validate({
         **input_payload,
         "prompt_template": PROMPT_TEMPLATE,
         "output_format": OUTPUT_FORMAT,
     })
-    response = await llm_call_with_output_format._run_without_io_trace(inputs, ctx={})
+    response = await agent._run_without_io_trace(inputs, ctx={})
 
     assert isinstance(response.output, str)
 
-    call_kwargs = (
-        llm_call_with_output_format._completion_service.constrained_complete_with_json_schema_async.call_args[1]
-    )
+    call_kwargs = mock_service.constrained_complete_with_json_schema_async.call_args[1]
     passed_format = call_kwargs["response_format"]
     assert passed_format["name"] == "output_schema"
     assert passed_format["schema"]["type"] == "object"
@@ -136,12 +136,13 @@ async def test_structured_output_with_flat_properties(llm_call_with_output_forma
 
 @pytest.mark.anyio
 async def test_dynamic_output_ports_merged(llm_call_with_output_format, input_payload):
+    agent, _ = llm_call_with_output_format
     inputs = LLMCallInputs.model_validate({
         **input_payload,
         "prompt_template": PROMPT_TEMPLATE,
         "output_format": OUTPUT_FORMAT,
     })
-    response = await llm_call_with_output_format._run_without_io_trace(inputs, ctx={})
+    response = await agent._run_without_io_trace(inputs, ctx={})
 
     assert response.location == "Miami"
     assert response.unit == "F"
@@ -150,12 +151,13 @@ async def test_dynamic_output_ports_merged(llm_call_with_output_format, input_pa
 
 @pytest.mark.anyio
 async def test_chat_completion_to_response(llm_call_with_output_format, input_payload_with_file):
+    agent, _ = llm_call_with_output_format
     inputs = LLMCallInputs.model_validate({
         **input_payload_with_file,
         "prompt_template": PROMPT_TEMPLATE,
         "output_format": OUTPUT_FORMAT,
     })
-    response = await llm_call_with_output_format._run_without_io_trace(inputs, ctx={})
+    response = await agent._run_without_io_trace(inputs, ctx={})
     assert isinstance(response.output, str)
 
     expected_messages = [

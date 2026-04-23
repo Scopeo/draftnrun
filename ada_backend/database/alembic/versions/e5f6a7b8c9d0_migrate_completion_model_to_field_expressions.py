@@ -1,6 +1,6 @@
 """Migrate completion_model from BasicParameter to FieldExpression + InputPortInstance.
 
-Creates INPUT PortDefinitions for completion_model on 10 migrated component versions
+Creates INPUT PortDefinitions for completion_model on 11 migrated component versions
 and migrates existing BasicParameter rows to FieldExpression LiteralNodes + InputPortInstances.
 Unmigrated components (Synthesizer, HybridSynthesizer, RelevantChunkSelector) keep
 completion_model as a BasicParameter.
@@ -32,6 +32,7 @@ COMPLETION_MODEL_CPD_IDS = [
     "329f22ec-0382-4fcf-963f-3281e68e6224",  # OCR Call
     "12345678-9012-3456-7890-123456789012",  # ReAct SQL
     "134a4ddb-6906-4a22-b6b9-404f48543cc7",  # RAG Agent v3
+    "7af4208e-e8a0-46fc-87c7-34d3123afa11",  # RAG Agent v4
     "69ae956a-31f0-4349-8d87-115fd42c3356",  # Smart RAG (Document React Loader)
     "a1b2c3d4-e5f6-7890-abcd-ef1234567890",  # DOCX Template Agent
 ]
@@ -72,6 +73,7 @@ COMPONENT_VERSIONS = [
         CAP_FUNCTION_CALLING,
     ),
     ("f1a5b6c7-d8e9-4f0a-1b2c-3d4e5f6a7b8c", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5fd", DEFAULT_MODEL, CAP_COMPLETION),
+    ("a8b768b3-c436-4ffe-9388-528d55a578e6", "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e603", DEFAULT_MODEL, CAP_COMPLETION),
     (
         "1c2fdf5b-4a8d-4788-acb6-86b00124c7ce",
         "d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e601",
@@ -97,7 +99,12 @@ def upgrade() -> None:
     bind = op.get_bind()
 
     rows_before = bind.execute(
-        sa.text(f"SELECT COUNT(*) FROM basic_parameters WHERE parameter_definition_id = ANY({CPD_IDS_ARRAY})"),
+        sa.text(f"""
+            SELECT COUNT(*) FROM basic_parameters bp
+            JOIN component_instances ci ON ci.id = bp.component_instance_id
+            WHERE bp.parameter_definition_id = ANY({CPD_IDS_ARRAY})
+              AND ci.component_version_id = ANY({CV_IDS_ARRAY})
+        """),
     ).scalar()
 
     for cv_id, pd_id, default_model, capability in COMPONENT_VERSIONS:
@@ -228,13 +235,14 @@ def _assert_upgrade_succeeded(bind, rows_before: int, any_cv_exists: bool) -> No
             SELECT COUNT(*)
             FROM input_port_instances ipi
             JOIN port_instances pi ON pi.id = ipi.id
+            JOIN component_instances ci ON ci.id = pi.component_instance_id
             WHERE pi.name = 'completion_model'
-              AND pi.port_definition_id = ANY({PORT_DEF_IDS_ARRAY})
+              AND ci.component_version_id = ANY({CV_IDS_ARRAY})
         """),
     ).scalar()
-    if rows_before > 0 and migrated_count != rows_before:
+    if rows_before > 0 and migrated_count < rows_before:
         raise RuntimeError(
-            f"[e5f6a7b8c9d0] upgrade: expected {rows_before} input_port_instances for completion_model, "
+            f"[e5f6a7b8c9d0] upgrade: expected at least {rows_before} input_port_instances for completion_model, "
             f"got {migrated_count}."
         )
 
