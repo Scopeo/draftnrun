@@ -7,6 +7,11 @@ import openai
 from openai.types.chat import ChatCompletion
 from pydantic import BaseModel
 
+from engine.llm_services.openai_streaming_utils import (
+    consume_openai_responses_stream_and_get_final_response,
+    extract_openai_parsed_result,
+    extract_openai_text_result,
+)
 from engine.llm_services.providers.base_provider import BaseProvider
 from engine.llm_services.utils import (
     build_openai_responses_kwargs,
@@ -45,21 +50,24 @@ class OpenAIProvider(BaseProvider):
     ) -> tuple[str, int, int, int]:
         messages = chat_completion_to_response(messages)
         client = openai.AsyncOpenAI(api_key=self._api_key)
+
         kwargs_create = build_openai_responses_kwargs(
             self._model_name,
             self._verbosity,
             self._reasoning,
             temperature,
-            {"model": self._model_name, "input": messages, "stream": stream},
+            {"model": self._model_name, "input": messages},
         )
-        response = await client.responses.create(**kwargs_create)
 
-        return (
-            response.output_text,
-            response.usage.input_tokens,
-            response.usage.output_tokens,
-            response.usage.total_tokens,
-        )
+        if stream:
+            async with client.responses.stream(**kwargs_create) as stream_context:
+                response = await consume_openai_responses_stream_and_get_final_response(stream_context)
+        else:
+            response = await client.responses.create(**kwargs_create)
+
+        result = extract_openai_text_result(response)
+
+        return result, response.usage.input_tokens, response.usage.output_tokens, response.usage.total_tokens
 
     async def embed(self, text: str | list[str], **kwargs) -> tuple[list[float] | list[list[float]], int, int, int]:
         if self._api_key is None:
@@ -91,23 +99,25 @@ class OpenAIProvider(BaseProvider):
         **kwargs,
     ) -> tuple[BaseModel, int, int, int]:
         messages = chat_completion_to_response(messages)
+        client = openai.AsyncOpenAI(api_key=self._api_key)
+
         kwargs_create = build_openai_responses_kwargs(
             self._model_name,
             self._verbosity,
             self._reasoning,
             temperature,
-            {"input": messages, "model": self._model_name, "stream": stream, "text_format": response_format},
+            {"input": messages, "model": self._model_name, "text_format": response_format},
         )
 
-        client = openai.AsyncOpenAI(api_key=self._api_key)
-        response = await client.responses.parse(**kwargs_create)
+        if stream:
+            async with client.responses.stream(**kwargs_create) as stream_context:
+                response = await consume_openai_responses_stream_and_get_final_response(stream_context)
+        else:
+            response = await client.responses.parse(**kwargs_create)
 
-        return (
-            response.output_parsed,
-            response.usage.input_tokens,
-            response.usage.output_tokens,
-            response.usage.total_tokens,
-        )
+        result = extract_openai_parsed_result(response)
+
+        return result, response.usage.input_tokens, response.usage.output_tokens, response.usage.total_tokens
 
     def _force_additional_properties_false(self, schema: object) -> None:
         if isinstance(schema, dict):
@@ -137,6 +147,8 @@ class OpenAIProvider(BaseProvider):
         # Force additionalProperties to false for OpenAI Responses API
         self._force_additional_properties_false(schema)
 
+        client = openai.AsyncOpenAI(api_key=self._api_key)
+
         kwargs_create = build_openai_responses_kwargs(
             self._model_name,
             self._verbosity,
@@ -145,7 +157,6 @@ class OpenAIProvider(BaseProvider):
             {
                 "input": messages,
                 "model": self._model_name,
-                "stream": stream,
                 "text": {
                     "format": {
                         "type": "json_schema",
@@ -156,15 +167,15 @@ class OpenAIProvider(BaseProvider):
             },
         )
 
-        client = openai.AsyncOpenAI(api_key=self._api_key)
-        response = await client.responses.parse(**kwargs_create)
+        if stream:
+            async with client.responses.stream(**kwargs_create) as stream_context:
+                response = await consume_openai_responses_stream_and_get_final_response(stream_context)
+        else:
+            response = await client.responses.parse(**kwargs_create)
 
-        return (
-            response.output_text,
-            response.usage.input_tokens,
-            response.usage.output_tokens,
-            response.usage.total_tokens,
-        )
+        result = extract_openai_text_result(response)
+
+        return result, response.usage.input_tokens, response.usage.output_tokens, response.usage.total_tokens
 
     async def function_call_without_structured_output(
         self,
@@ -185,6 +196,7 @@ class OpenAIProvider(BaseProvider):
             response = wrap_str_content_into_chat_completion_message(content, self._model_name)
             return response, prompt_tokens, completion_tokens, total_tokens
 
+        client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
         messages_for_responses = chat_completion_to_response(messages)
         responses_tools = convert_tools_to_responses_format(tools)
 
@@ -193,7 +205,6 @@ class OpenAIProvider(BaseProvider):
             "model": self._model_name,
             "input": messages_for_responses,
             "tools": responses_tools,
-            "stream": stream,
             "tool_choice": tool_choice,
         }
 
@@ -205,8 +216,12 @@ class OpenAIProvider(BaseProvider):
             base_kwargs,
         )
 
-        client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
-        response = await client.responses.create(**kwargs_create)
+        if stream:
+
+            async with client.responses.stream(**kwargs_create) as stream_context:
+                response = await consume_openai_responses_stream_and_get_final_response(stream_context)
+        else:
+            response = await client.responses.create(**kwargs_create)
 
         chat_completion = convert_response_to_chat_completion(response, self._model_name)
 
@@ -259,7 +274,6 @@ class OpenAIProvider(BaseProvider):
             "model": self._model_name,
             "input": messages_for_responses,
             "tools": responses_tools,
-            "stream": stream,
             "tool_choice": "required",
         }
 
@@ -272,7 +286,12 @@ class OpenAIProvider(BaseProvider):
         )
 
         client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
-        response = await client.responses.create(**kwargs_create)
+
+        if stream:
+            async with client.responses.stream(**kwargs_create) as stream_context:
+                response = await consume_openai_responses_stream_and_get_final_response(stream_context)
+        else:
+            response = await client.responses.create(**kwargs_create)
 
         chat_completion = convert_response_to_chat_completion(response, self._model_name)
 
