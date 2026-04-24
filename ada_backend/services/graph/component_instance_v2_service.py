@@ -20,8 +20,6 @@ from ada_backend.repositories.graph_runner_repository import (
 )
 from ada_backend.repositories.input_port_instance_repository import (
     create_input_port_instance,
-    delete_input_port_instance,
-    get_input_port_instance,
     get_input_port_instances_for_component_instance,
     update_input_port_instance,
 )
@@ -65,55 +63,6 @@ def _to_component_instance_schema(
     )
 
 
-def _sync_input_port_instances(
-    session: Session,
-    instance_id: UUID,
-    incoming_port_instances: list[dict],
-) -> None:
-    """Sync field expressions for a component instance (full-replace semantics).
-
-    Mirrors the input_port_instances processing in update_graph_service but
-    scoped to a single component.  Existing field expressions not present in
-    the incoming list are deleted.
-    """
-    db_ports = get_input_port_instances_for_component_instance(session, instance_id)
-    db_ports_by_name: dict[str, UUID] = {port.name: port.id for port in db_ports}
-    db_field_expr_names: set[str] = {port.name for port in db_ports if port.field_expression_id}
-
-    incoming_names: set[str] = set()
-    for port_data in incoming_port_instances:
-        fe_data = port_data.get("field_expression") or {}
-        expression_json = fe_data.get("expression_json")
-        field_name = port_data.get("name")
-        if not field_name or not expression_json:
-            continue
-
-        incoming_names.add(field_name)
-        existing_port_id = db_ports_by_name.get(field_name)
-        if existing_port_id:
-            port = get_input_port_instance(session, existing_port_id)
-            if port and port.field_expression_id:
-                update_field_expression(session, port.field_expression_id, expression_json)
-            else:
-                expr = create_field_expression(session, expression_json)
-                update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
-        else:
-            expr = create_field_expression(session, expression_json)
-            create_input_port_instance(
-                session=session,
-                component_instance_id=instance_id,
-                name=field_name,
-                field_expression_id=expr.id,
-            )
-
-    for field_name in db_field_expr_names - incoming_names:
-        port_id = db_ports_by_name[field_name]
-        port = get_input_port_instance(session, port_id)
-        if port and port.field_expression_id:
-            delete_field_expression_by_id(session, port.field_expression_id)
-        delete_input_port_instance(session, port_id)
-
-
 def create_component_in_graph(
     session: Session,
     graph_runner_id: UUID,
@@ -134,7 +83,8 @@ def create_component_in_graph(
     )
     instance_id = create_or_update_component_instance(session, instance_schema, project_id)
 
-    _sync_input_port_instances(session, instance_id, payload.input_port_instances)
+    if payload.input_port_instances:
+        _sync_input_port_field_expressions(session, instance_id, payload.input_port_instances)
 
     upsert_component_node(
         session,
