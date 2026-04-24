@@ -24,6 +24,7 @@ export interface RunCompletedPayload {
 
 export interface RunFailedPayload {
   type: 'run.failed'
+  trace_id?: string
   error: {
     message: string
     type?: string

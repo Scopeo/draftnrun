@@ -321,7 +321,9 @@ async def run_agent(
             is_root_execution=True,
         )
         params = get_tracing_span()
-    except EngineError:
+    except EngineError as e:
+        params = get_tracing_span()
+        e.trace_id = params.trace_id if params else None
         raise
     except Exception as e:
         tb = traceback.format_exc()

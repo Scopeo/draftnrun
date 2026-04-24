@@ -92,7 +92,7 @@ export function usePlaygroundChatRun() {
 
     const { onSyncSuccess, isAsyncRunStream, runStreamCleanup } = options
 
-    const failStream = (error?: string) => {
+    const failStream = (error?: string, trace_id?: string) => {
       const errorMessage = error ?? 'Unknown error'
 
       runStreamCleanup.value?.()
@@ -101,7 +101,7 @@ export function usePlaygroundChatRun() {
         content: errorMessage,
         isLoading: false,
         isError: true,
-        metadata: { status: 'error' },
+        metadata: { status: 'error', trace_id },
       })
       setError(errorMessage)
       ensureScrollToBottom()
@@ -161,7 +161,7 @@ export function usePlaygroundChatRun() {
           isAsyncRunStream.value = false
           setTyping(false)
         },
-        onRunFailed: ({ message, type }) => failStream(type ? `${type}: ${message}` : message),
+        onRunFailed: ({ message, type, trace_id }) => failStream(type ? `${type}: ${message}` : message, trace_id),
         onError: message => failStream(message),
         onClose: (code, reason) => {
           if (code >= 4400 && code <= 4510) failStream(reason || `Connection closed (${code})`)

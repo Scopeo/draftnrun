@@ -205,7 +205,11 @@ class RunQueueWorker(BaseQueueWorker):
                 try:
                     publish_run_event(
                         run_id,
-                        {"type": "run.failed", "error": {"message": str(e), "type": type(e).__name__}},
+                        {
+                            "type": "run.failed",
+                            "error": {"message": str(e), "type": type(e).__name__},
+                            "trace_id": trace_id,
+                        },
                     )
                 except Exception as event_exc:
                     LOGGER.exception("Failed to publish run.failed event for %s: %s", run_id, event_exc)

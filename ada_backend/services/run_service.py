@@ -189,6 +189,7 @@ def get_run_final_state_event(session: Session, run_id: UUID) -> Optional[Dict[s
         return {
             "type": "run.failed",
             "error": getattr(run, "error", None) or {"message": "Run failed", "type": "UnknownError"},
+            "trace_id": getattr(run, "trace_id", None),
         }
     return None
 
