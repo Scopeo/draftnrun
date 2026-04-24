@@ -543,6 +543,9 @@ def register(mcp: FastMCP) -> None:
             new_value = parameters[param["name"]]
             field_name = param["name"]
             existing_fe = next((fe for fe in field_expr_list if fe.get("field_name") == field_name), None)
+            existing_type = (existing_fe or {}).get("expression_json", {}).get("type")
+            if existing_fe is not None and existing_type not in (None, "literal"):
+                continue
             if new_value is not None:
                 expr = {"type": "literal", "value": str(new_value)}
                 if existing_fe:
