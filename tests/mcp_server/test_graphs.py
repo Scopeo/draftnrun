@@ -392,3 +392,128 @@ async def test_update_component_parameters_preserves_json_build_expressions(monk
 
     updated_param = next(p for p in sent_params if p["name"] == "initial_prompt")
     assert updated_param["value"] == "Updated prompt"
+
+
+@pytest.mark.asyncio
+async def test_update_component_parameters_updates_input_kind_field_expressions(monkeypatch, fake_mcp):
+    """Regression: updating a parameter with kind='input' must update the
+    corresponding field_expression so the new value reaches the backend
+    via input_port_instances."""
+    graph_response = {
+        "component_instances": [
+            {
+                "id": FAKE_INSTANCE_ID,
+                "name": "Scorer",
+                "parameters": [
+                    {"name": "input", "value": "@{{start.messages}}", "kind": "input"},
+                    {"name": "criteria", "value": "sentence is correct", "kind": "input"},
+                    {"name": "additional_context", "value": None, "kind": "input"},
+                    {"name": "completion_model", "value": "anthropic:claude-haiku-4-5", "kind": "parameter"},
+                ],
+                "field_expressions": [
+                    {
+                        "field_name": "input",
+                        "expression_json": {"type": "ref", "instance": "start-id", "port": "messages"},
+                        "expression_text": "@{{start-id.messages}}",
+                    },
+                    {
+                        "field_name": "criteria",
+                        "expression_json": {"type": "literal", "value": "sentence is correct"},
+                        "expression_text": "sentence is correct",
+                    },
+                ],
+                "input_port_instances": [],
+            }
+        ],
+        "edges": [],
+        "relationships": [],
+    }
+
+    put_payload = {}
+
+    async def mock_get(path, token, *, trim=True, **params):
+        return graph_response
+
+    async def mock_put(path, token, *, json=None, **kwargs):
+        put_payload.update(json)
+        return {"status": "ok"}
+
+    monkeypatch.setattr(graphs, "_get_auth", lambda: ("jwt-token", "user-123"))
+    monkeypatch.setattr(graphs.api, "get", mock_get)
+    monkeypatch.setattr(graphs.api, "put", mock_put)
+
+    graphs.register(fake_mcp)
+    result = await fake_mcp.tools["update_component_parameters"](
+        UUID(FAKE_PROJECT_ID),
+        UUID(FAKE_RUNNER_ID),
+        UUID(FAKE_INSTANCE_ID),
+        {"criteria": "Hello DIana", "additional_context": "Hi it is me"},
+    )
+
+    assert result["status"] == "ok"
+    assert sorted(result["updated_parameters"]) == ["additional_context", "criteria"]
+
+    ipis = put_payload["input_port_instances"]
+    criteria_ipi = next(ipi for ipi in ipis if ipi["name"] == "criteria")
+    assert criteria_ipi["field_expression"]["expression_json"] == {"type": "literal", "value": "Hello DIana"}
+
+    context_ipi = next(ipi for ipi in ipis if ipi["name"] == "additional_context")
+    assert context_ipi["field_expression"]["expression_json"] == {"type": "literal", "value": "Hi it is me"}
+
+    input_ipi = next(ipi for ipi in ipis if ipi["name"] == "input")
+    assert input_ipi["field_expression"]["expression_json"]["type"] == "ref"
+
+    param_kinds = {p.get("kind", "parameter") for p in put_payload["parameters"]}
+    assert "input" not in param_kinds
+
+
+@pytest.mark.asyncio
+async def test_update_component_parameters_removes_field_expression_on_null(monkeypatch, fake_mcp):
+    """Setting a kind='input' parameter to None should remove its field_expression."""
+    graph_response = {
+        "component_instances": [
+            {
+                "id": FAKE_INSTANCE_ID,
+                "name": "Scorer",
+                "parameters": [
+                    {"name": "criteria", "value": "old value", "kind": "input"},
+                    {"name": "completion_model", "value": "model-x", "kind": "parameter"},
+                ],
+                "field_expressions": [
+                    {
+                        "field_name": "criteria",
+                        "expression_json": {"type": "literal", "value": "old value"},
+                        "expression_text": "old value",
+                    },
+                ],
+                "input_port_instances": [],
+            }
+        ],
+        "edges": [],
+        "relationships": [],
+    }
+
+    put_payload = {}
+
+    async def mock_get(path, token, *, trim=True, **params):
+        return graph_response
+
+    async def mock_put(path, token, *, json=None, **kwargs):
+        put_payload.update(json)
+        return {"status": "ok"}
+
+    monkeypatch.setattr(graphs, "_get_auth", lambda: ("jwt-token", "user-123"))
+    monkeypatch.setattr(graphs.api, "get", mock_get)
+    monkeypatch.setattr(graphs.api, "put", mock_put)
+
+    graphs.register(fake_mcp)
+    await fake_mcp.tools["update_component_parameters"](
+        UUID(FAKE_PROJECT_ID),
+        UUID(FAKE_RUNNER_ID),
+        UUID(FAKE_INSTANCE_ID),
+        {"criteria": None},
+    )
+
+    ipis = put_payload["input_port_instances"]
+    criteria_ipis = [ipi for ipi in ipis if ipi["name"] == "criteria"]
+    assert len(criteria_ipis) == 0
