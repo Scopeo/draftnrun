@@ -108,7 +108,7 @@ def register(mcp: FastMCP) -> None:
         """
         name = name.strip()
         if not name:
-            raise ValueError("name must not be empty")
+            raise ValueError("Workflow name must not be empty. Provide a non-empty string.")
 
         jwt, user_id = _get_auth()
         org = await require_role(user_id, "developer", "admin", "super_admin")
@@ -142,12 +142,12 @@ def register(mcp: FastMCP) -> None:
         if name is not None:
             name = name.strip()
             if not name:
-                raise ValueError("name must not be empty")
+                raise ValueError("Workflow name must not be empty. Provide a non-empty string.")
             body["name"] = name
         if description is not None:
             body["description"] = description
         if not body:
-            raise ValueError("At least one field must be provided")
+            raise ValueError("At least one field (name or description) must be provided to update.")
         return await api.patch(f"/projects/{project_id}", jwt, json=body)
 
     @mcp.tool()

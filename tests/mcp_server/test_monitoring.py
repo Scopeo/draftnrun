@@ -98,5 +98,5 @@ async def test_list_traces_rejects_zero_page(fake_mcp, monkeypatch):
     monkeypatch.setattr(monitoring, "_get_auth", lambda: ("jwt", "user-1"))
     monitoring.register(fake_mcp)
 
-    with pytest.raises(ValueError, match="page must be >= 1"):
+    with pytest.raises(ValueError, match="Page must be >= 1"):
         await fake_mcp.tools["list_traces"](project_id=FAKE_PROJECT_ID, page=0)

@@ -81,7 +81,7 @@ def register(mcp: FastMCP) -> None:
         """
         query = query.strip()
         if not query:
-            raise ValueError("query must not be empty")
+            raise ValueError("Search query must not be empty. Provide a term to match against component names.")
 
         jwt, user_id = _get_auth()
         org = await require_org_context(user_id)
