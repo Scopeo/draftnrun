@@ -3,6 +3,7 @@ from uuid import uuid4
 import pytest
 
 from ada_backend.schemas.pipeline.graph_schema import GraphSaveV2Schema
+from ada_backend.services.errors import GraphValidationError
 from ada_backend.services.graph.graph_v2_mapper_service import (
     _resolve_expression_file_keys,
     graph_save_v2_to_graph_update,
@@ -53,7 +54,7 @@ def test_v2_mapper_raises_on_duplicate_node_file_key():
         ],
     )
 
-    with pytest.raises(ValueError, match="Duplicate file_key 'start' in graph_map.nodes"):
+    with pytest.raises(GraphValidationError, match="Duplicate file_key 'start' in graph_map.nodes"):
         graph_save_v2_to_graph_update(payload)
 
 
@@ -70,7 +71,7 @@ def test_v2_mapper_raises_on_unknown_file_key_edge():
         ],
     )
 
-    with pytest.raises(ValueError, match="Unknown file_key"):
+    with pytest.raises(GraphValidationError, match="Unknown file_key"):
         graph_save_v2_to_graph_update(payload)
 
 
@@ -95,7 +96,7 @@ class TestResolveExpressionFileKeys:
         assert result == {"type": "ref", "instance": str(mapping["comp1"]), "port": "output", "key": "messages"}
 
     def test_unknown_file_key_raises(self):
-        with pytest.raises(ValueError, match="Unknown file_key 'missing'"):
+        with pytest.raises(GraphValidationError, match="Unknown file_key 'missing'"):
             _resolve_expression_file_keys({"type": "ref", "file_key": "missing", "port": "out"}, {})
 
     def test_concat_resolves_nested_refs(self):

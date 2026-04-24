@@ -9,6 +9,7 @@ from ada_backend.schemas.pipeline.graph_schema import (
     GraphMapRelationshipSchema,
     GraphTopologyNodeSchema,
 )
+from ada_backend.services.errors import GraphValidationError
 from ada_backend.services.graph.graph_topology_v2_service import sync_graph_topology
 
 
@@ -72,7 +73,7 @@ class TestSyncGraphTopology:
 
         nodes = [GraphTopologyNodeSchema(instance_id=uuid4(), label="Ghost")]
 
-        with pytest.raises(ValueError, match="do not exist in graph"):
+        with pytest.raises(GraphValidationError, match="do not exist in graph"):
             sync_graph_topology(session, graph_runner_id, nodes=nodes, edges=[], relationships=[])
 
     @patch("ada_backend.services.graph.graph_topology_v2_service.delete_edge")
