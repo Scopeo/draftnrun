@@ -536,6 +536,28 @@ def register(mcp: FastMCP) -> None:
                 f"Available parameters: {available}"
             )
 
+        field_expr_list = target.get("field_expressions", [])
+        for param in existing_params:
+            if param.get("kind") != "input" or param.get("name") not in parameters:
+                continue
+            new_value = parameters[param["name"]]
+            field_name = param["name"]
+            existing_fe = next((fe for fe in field_expr_list if fe.get("field_name") == field_name), None)
+            if new_value is not None:
+                expr = {"type": "literal", "value": str(new_value)}
+                if existing_fe:
+                    existing_fe["expression_json"] = expr
+                    existing_fe["expression_text"] = str(new_value)
+                else:
+                    field_expr_list.append({
+                        "field_name": field_name,
+                        "expression_json": expr,
+                        "expression_text": str(new_value),
+                    })
+            elif existing_fe:
+                field_expr_list.remove(existing_fe)
+        target["field_expressions"] = field_expr_list
+
         write_params = [p for p in existing_params if p.get("kind", "parameter") != "input"]
 
         _convert_field_expressions_to_write_format([target])
