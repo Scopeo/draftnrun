@@ -233,6 +233,7 @@ export function usePlaygroundSession(props: {
   const messageToSave = ref<{ message: any; index: number } | null>(null)
 
   const qa = useSaveToQA({
+    orgId: selectedOrgId,
     projectId: projectIdRef,
     getConversationData: () => {
       if (!messageToSave.value) return null

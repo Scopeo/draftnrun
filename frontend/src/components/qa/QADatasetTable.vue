@@ -27,10 +27,12 @@ const t = reactive(composable)
       :datasets="t.datasetOptions"
       :versions="t.versionOptions"
       :can-manage-datasets="t.canManageDatasets"
+      :unlinked-datasets="t.unlinkedDatasetOptions"
       @dataset-change="t.onDatasetChange"
       @version-change="t.onVersionChange"
       @create-dataset="t.showCreateDatasetDialog = true"
-      @delete-dataset="t.openDeleteDatasetDialog"
+      @add-existing-dataset="t.addDatasetToProject"
+      @remove-dataset="t.openRemoveDatasetDialog"
       @import-csv="t.triggerFileInput"
       @export-csv="t.exportDatasetToCSV"
     />
@@ -271,6 +273,24 @@ const t = reactive(composable)
 
     <!-- Dialogs -->
     <QACreateDatasetDialog v-model="t.showCreateDatasetDialog" :loading="t.creating" @create="t.createNewDataset" />
+
+    <VDialog v-model="t.showRemoveDatasetDialog" max-width="var(--dnr-dialog-sm)">
+      <VCard>
+        <VCardTitle>Remove Dataset from Project</VCardTitle>
+        <VCardText>
+          <p>
+            Remove "{{ t.currentDataset?.dataset_name }}" from this project?
+            The dataset will still be available in the organization and can be re-added later.
+          </p>
+        </VCardText>
+        <VCardActions>
+          <VSpacer />
+          <VBtn variant="text" @click="t.showRemoveDatasetDialog = false"> Cancel </VBtn>
+          <VBtn color="warning" @click="t.confirmRemoveDatasetFromProject"> Remove </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
+
     <QACreateColumnDialog
       v-model="t.showCreateColumnDialog"
       :loading="t.creatingColumn"
@@ -317,12 +337,6 @@ const t = reactive(composable)
       @save="t.saveEditedTestCase"
     />
 
-    <QADeleteDatasetDialog
-      v-model="t.showDeleteDatasetDialog"
-      :dataset-name="t.currentDataset?.dataset_name || ''"
-      :loading="t.deleteDatasetLoading"
-      @confirm="t.confirmDeleteDataset"
-    />
     <QABulkDeleteDialog
       v-model="t.showBulkDeleteDialog"
       :count="t.selected.length"

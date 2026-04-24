@@ -10,7 +10,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import CallType, QASession, RunStatus
+from ada_backend.database.models import CallType, DatasetProject, Project, QASession, RunStatus
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.qa_evaluation_repository import delete_evaluations_for_input_ids
@@ -21,12 +21,15 @@ from ada_backend.repositories.qa_session_repository import (
     update_qa_session_status,
 )
 from ada_backend.repositories.quality_assurance_repository import (
+    check_dataset_belongs_to_organization,
     check_dataset_belongs_to_project,
     clear_version_outputs_for_input_ids,
     create_datasets,
     create_inputs_groundtruths,
     delete_datasets,
     delete_inputs_groundtruths,
+    get_dataset_project_associations,
+    get_datasets_by_organization,
     get_datasets_by_project,
     get_inputs_groundtruths_by_dataset,
     get_inputs_groundtruths_by_ids,
@@ -35,6 +38,7 @@ from ada_backend.repositories.quality_assurance_repository import (
     get_positions_of_dataset,
     get_qa_columns_by_dataset,
     get_version_output_ids_by_input_ids_and_graph_runner,
+    set_dataset_project_associations,
     update_dataset,
     update_inputs_groundtruths,
     upsert_version_output,
@@ -152,7 +156,9 @@ def get_version_output_ids_by_input_ids_and_graph_runner_service(
     session: Session,
     input_ids: List[UUID],
     graph_runner_id: UUID,
+    project_id: UUID,
 ) -> Dict[UUID, Optional[UUID]]:
+    _validate_env_binding(session, project_id, graph_runner_id)
     return get_version_output_ids_by_input_ids_and_graph_runner(
         session=session, input_ids=input_ids, graph_runner_id=graph_runner_id
     )
@@ -579,20 +585,22 @@ def delete_inputs_groundtruths_service(
         raise ValueError(f"Failed to delete input-groundtruth entries: {str(e)}") from e
 
 
+def _dataset_to_response(session: Session, dataset) -> DatasetResponse:
+    project_ids = get_dataset_project_associations(session, dataset.id)
+    return DatasetResponse(
+        id=dataset.id,
+        organization_id=dataset.organization_id,
+        dataset_name=dataset.dataset_name,
+        project_ids=project_ids,
+        created_at=dataset.created_at,
+        updated_at=dataset.updated_at,
+    )
+
+
 def get_datasets_by_project_service(
     session: Session,
     project_id: UUID,
 ) -> List[DatasetResponse]:
-    """
-    Get all datasets for a project.
-
-    Args:
-        session (Session): SQLAlchemy session
-        project_id (UUID): ID of the project
-
-    Returns:
-        List[DatasetResponse]: List of datasets
-    """
     try:
         datasets = get_datasets_by_project(session, project_id)
         return [DatasetResponse.model_validate(dataset) for dataset in datasets]
@@ -601,31 +609,34 @@ def get_datasets_by_project_service(
         raise ValueError(f"Failed to get datasets: {str(e)}") from e
 
 
+def get_datasets_by_organization_service(
+    session: Session,
+    organization_id: UUID,
+) -> List[DatasetResponse]:
+    try:
+        datasets = get_datasets_by_organization(session, organization_id)
+        return [_dataset_to_response(session, dataset) for dataset in datasets]
+    except Exception as e:
+        LOGGER.error(f"Error in get_datasets_by_organization_service: {str(e)}")
+        raise ValueError(f"Failed to get datasets: {str(e)}") from e
+
+
 def create_datasets_service(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     datasets_data: DatasetCreateList,
 ) -> DatasetListResponse:
-    """
-    Create datasets.
-
-    Args:
-        session (Session): SQLAlchemy session
-        project_id (UUID): ID of the project
-        datasets_data (DatasetCreateList): Dataset data to create
-
-    Returns:
-        DatasetListResponse: The created datasets
-    """
     try:
         created_datasets = create_datasets(
             session,
-            project_id,
+            organization_id,
             datasets_data.datasets_name,
         )
 
-        LOGGER.info(f"Created {len(created_datasets)} datasets for project {project_id}")
-        return DatasetListResponse(datasets=[DatasetResponse.model_validate(dataset) for dataset in created_datasets])
+        LOGGER.info(f"Created {len(created_datasets)} datasets for organization {organization_id}")
+        return DatasetListResponse(
+            datasets=[_dataset_to_response(session, dataset) for dataset in created_datasets]
+        )
     except Exception as e:
         LOGGER.error(f"Error in create_datasets_service: {str(e)}")
         raise ValueError(f"Failed to create datasets: {str(e)}") from e
@@ -633,36 +644,26 @@ def create_datasets_service(
 
 def update_dataset_service(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     dataset_id: UUID,
     dataset_name: str,
 ) -> DatasetResponse:
-    """
-    Update a single dataset.
-
-    Args:
-        session (Session): SQLAlchemy session
-        project_id (UUID): ID of the project
-        dataset_id (UUID): ID of the dataset to update
-        dataset_name (str): New name for the dataset
-
-    Returns:
-        DatasetResponse: The updated dataset
-    """
-    if not check_dataset_belongs_to_project(session, project_id, dataset_id):
-        LOGGER.error(f"Failed to update dataset {dataset_id}: Dataset {dataset_id} not found in project {project_id}")
-        raise QADatasetNotInProjectError(project_id, dataset_id)
+    if not check_dataset_belongs_to_organization(session, organization_id, dataset_id):
+        LOGGER.error(
+            f"Failed to update dataset {dataset_id}: not found in organization {organization_id}"
+        )
+        raise ValueError(f"Dataset {dataset_id} not found in organization {organization_id}")
 
     try:
         updated_dataset = update_dataset(
             session,
             dataset_id,
             dataset_name,
-            project_id,
+            organization_id,
         )
 
-        LOGGER.info(f"Updated dataset {dataset_id} with name '{dataset_name}' for project {project_id}")
-        return DatasetResponse.model_validate(updated_dataset)
+        LOGGER.info(f"Updated dataset {dataset_id} with name '{dataset_name}' for organization {organization_id}")
+        return _dataset_to_response(session, updated_dataset)
     except Exception as e:
         LOGGER.error(f"Error in update_dataset_service: {str(e)}")
         raise ValueError(f"Failed to update dataset: {str(e)}") from e
@@ -670,40 +671,54 @@ def update_dataset_service(
 
 def delete_datasets_service(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     delete_data: DatasetDeleteList,
 ) -> int:
-    """
-    Delete multiple datasets.
-
-    Args:
-        session (Session): SQLAlchemy session
-        project_id (UUID): ID of the project
-        delete_data (DatasetDeleteList): IDs of datasets to delete
-
-    Returns:
-        int: Number of deleted datasets
-    """
     for dataset_id in delete_data.dataset_ids:
-        if not check_dataset_belongs_to_project(session, project_id, dataset_id):
+        if not check_dataset_belongs_to_organization(session, organization_id, dataset_id):
             LOGGER.error(
-                f"Failed to delete datasets for project {project_id}: "
-                f"Dataset {dataset_id} not found in project {project_id}"
+                f"Failed to delete datasets for organization {organization_id}: "
+                f"Dataset {dataset_id} not found in organization {organization_id}"
             )
-            raise QADatasetNotInProjectError(project_id, dataset_id)
+            raise ValueError(f"Dataset {dataset_id} not found in organization {organization_id}")
 
     try:
         deleted_count = delete_datasets(
             session,
             delete_data.dataset_ids,
-            project_id,
+            organization_id,
         )
 
-        LOGGER.info(f"Deleted {deleted_count} datasets for project {project_id}")
+        LOGGER.info(f"Deleted {deleted_count} datasets for organization {organization_id}")
         return deleted_count
     except Exception as e:
         LOGGER.error(f"Error in delete_datasets_service: {str(e)}")
         raise ValueError(f"Failed to delete datasets: {str(e)}") from e
+
+
+def set_dataset_projects_service(
+    session: Session,
+    organization_id: UUID,
+    dataset_id: UUID,
+    project_ids: List[UUID],
+) -> DatasetResponse:
+    if not check_dataset_belongs_to_organization(session, organization_id, dataset_id):
+        raise ValueError(f"Dataset {dataset_id} not found in organization {organization_id}")
+
+    if project_ids:
+        projects = session.query(Project.id, Project.organization_id).filter(Project.id.in_(project_ids)).all()
+        found_ids = {p.id for p in projects}
+        missing = set(project_ids) - found_ids
+        if missing:
+            raise ValueError(f"Projects not found: {sorted(missing)}")
+        foreign = {p.id for p in projects if p.organization_id != organization_id}
+        if foreign:
+            raise ValueError(f"Projects do not belong to organization {organization_id}: {sorted(foreign)}")
+
+    set_dataset_project_associations(session, dataset_id, project_ids)
+
+    dataset = session.query(DatasetProject).filter(DatasetProject.id == dataset_id).first()
+    return _dataset_to_response(session, dataset)
 
 
 def save_conversation_to_groundtruth_service(
@@ -788,7 +803,7 @@ def export_qa_data_to_csv_service(
 
 def import_qa_data_from_csv_service(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     dataset_id: UUID,
     csv_file: BinaryIO,
 ) -> InputGroundtruthResponseList:
@@ -813,7 +828,7 @@ def import_qa_data_from_csv_service(
         for column_name in custom_columns_to_add:
             create_qa_column_service(
                 session=session,
-                project_id=project_id,
+                organization_id=organization_id,
                 dataset_id=dataset_id,
                 column_name=column_name,
             )

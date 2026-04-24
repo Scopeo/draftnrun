@@ -5,13 +5,14 @@ import type { QATestCaseUI, QAVersion } from '@/composables/queries/useQAQuery'
 export type EditableField = 'input' | 'groundtruth' | `custom-${string}`
 
 interface EditingDeps {
+  orgId: ComputedRef<string>
   projectId: ComputedRef<string>
   currentDataset: Ref<{ id: string } | null>
   testCases: Ref<QATestCaseUI[]>
   versions: ComputedRef<QAVersion[]>
   patchTestCase: (id: string, patch: Partial<QATestCaseUI>) => void
   updateInputGroundtruthMutation: (args: {
-    projectId: string
+    orgId: string
     datasetId: string
     data: { inputs_groundtruths: any[] }
   }) => Promise<unknown>
@@ -26,6 +27,7 @@ interface EditingDeps {
 
 export function useQATestCaseEditing(deps: EditingDeps) {
   const {
+    orgId,
     projectId,
     currentDataset,
     testCases,
@@ -119,8 +121,9 @@ export function useQATestCaseEditing(deps: EditingDeps) {
   }
 
   const onUpdateTestCase = (testCase: QATestCaseUI, field: EditableField) => {
-    if (!projectId.value || !currentDataset.value) return
+    if (!orgId.value || !currentDataset.value) return
     const datasetId = currentDataset.value.id
+    const currentOrgId = orgId.value
     const projId = projectId.value
 
     if (field === 'input') return
@@ -146,7 +149,7 @@ export function useQATestCaseEditing(deps: EditingDeps) {
           const latestValue = latest.custom_columns?.[columnId] ?? null
           try {
             await updateInputGroundtruthMutation({
-              projectId: projId,
+              orgId: currentOrgId,
               datasetId,
               data: { inputs_groundtruths: [{ id: testCase.id, custom_columns: { [columnId]: latestValue } }] },
             })
@@ -184,7 +187,7 @@ export function useQATestCaseEditing(deps: EditingDeps) {
         patchTestCase(testCase.id, { evaluations: [] })
         try {
           await updateInputGroundtruthMutation({
-            projectId: projId,
+            orgId: currentOrgId,
             datasetId,
             data: { inputs_groundtruths: [{ id: testCase.id, groundtruth: latest.groundtruth || '' }] },
           })

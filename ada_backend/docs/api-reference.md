@@ -152,7 +152,7 @@ Run input data is persisted in the `run_inputs` table (keyed by `retry_group_id`
 | GET | `.../qa/sessions/{qa_session_id}` | JWT(Member) | Get QA session |
 | WS | `/ws/qa/{project_id}/{session_id}` | JWT(Member) | Stream QA session events |
 | POST | `.../entries/from-history` | JWT(Developer) | Trace → QA entry |
-| GET | `.../datasets/{dataset_id}/export` | JWT(Member) | Export CSV |
+| POST | `.../datasets/{dataset_id}/export` | JWT(Member) | Export CSV |
 | POST | `.../datasets/{dataset_id}/import` | JWT(Developer) | Import CSV |
 
 ## QA Judges (`llm_judges_router.py`, `qa_evaluation_router.py`)

@@ -16,24 +16,24 @@ import { logNetworkCall, logQueryStart } from '@/utils/queryLogger'
 export type { QADataset, QATestCaseUI, QAVersion }
 
 /**
- * Fetches QA datasets for a project
+ * Fetches QA datasets for an organization
  */
-export function useQADatasetsQuery(projectId: Ref<string | undefined>) {
-  const queryKey = computed(() => ['qa-datasets', projectId.value] as const)
+export function useQADatasetsQuery(orgId: Ref<string | undefined>) {
+  const queryKey = computed(() => ['qa-datasets', orgId.value] as const)
 
   return useQuery<QADataset[]>({
     queryKey,
     queryFn: async () => {
-      logQueryStart(['qa-datasets', projectId.value], 'useQADatasetsQuery')
+      logQueryStart(['qa-datasets', orgId.value], 'useQADatasetsQuery')
 
-      if (!projectId.value) {
+      if (!orgId.value) {
         return []
       }
 
-      const data = await scopeoApi.qa.getDatasets(projectId.value)
+      const data = await scopeoApi.qa.getDatasets(orgId.value)
       return data || []
     },
-    enabled: computed(() => !!projectId.value),
+    enabled: computed(() => !!orgId.value),
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
     refetchOnMount: true,
@@ -69,12 +69,13 @@ export function useQAVersionsQuery(projectId: Ref<string | undefined>) {
  * Includes full transformation logic with pagination, sorting, outputs, and version_output_ids
  */
 export function useQAInputGroundtruthsQuery(
+  orgId: Ref<string | undefined>,
   projectId: Ref<string | undefined>,
   datasetId: Ref<string | undefined>,
   graphRunnerId: Ref<string | undefined>
 ) {
   const queryKey = computed(
-    () => ['qa-input-groundtruths', projectId.value, datasetId.value, graphRunnerId.value] as const
+    () => ['qa-input-groundtruths', orgId.value, datasetId.value, graphRunnerId.value] as const
   )
 
   const query = useQuery<{ testCases: QATestCaseUI[]; lastLoadedAt: string }>({
@@ -82,11 +83,11 @@ export function useQAInputGroundtruthsQuery(
     refetchOnWindowFocus: false,
     queryFn: async () => {
       logQueryStart(
-        ['qa-input-groundtruths', projectId.value, datasetId.value, graphRunnerId.value],
+        ['qa-input-groundtruths', orgId.value, datasetId.value, graphRunnerId.value],
         'useQAInputGroundtruthsQuery'
       )
 
-      if (!projectId.value || !datasetId.value) {
+      if (!orgId.value || !datasetId.value) {
         return { testCases: [], lastLoadedAt: new Date().toISOString() }
       }
 
@@ -97,7 +98,7 @@ export function useQAInputGroundtruthsQuery(
       let hasMore = true
 
       while (hasMore) {
-        const baseResp = await scopeoApi.qa.getInputGroundtruths(projectId.value, datasetId.value, {
+        const baseResp = await scopeoApi.qa.getInputGroundtruths(orgId.value, datasetId.value, {
           page,
           page_size: pageSize,
         })
@@ -144,7 +145,7 @@ export function useQAInputGroundtruthsQuery(
       // If graphRunnerId is provided, fetch outputs and version_output_ids
       if (graphRunnerId.value) {
         // Get outputs (Dict[input_id, output])
-        const outputsResp = await scopeoApi.qa.getOutputs(projectId.value, datasetId.value, graphRunnerId.value)
+        const outputsResp = await scopeoApi.qa.getOutputs(orgId.value, datasetId.value, graphRunnerId.value)
         const outputsDict: Record<string, string> = outputsResp || {}
 
         // Get all input IDs from the test cases
@@ -199,7 +200,7 @@ export function useQAInputGroundtruthsQuery(
 
       return { testCases: initialCases, lastLoadedAt: new Date().toISOString() }
     },
-    enabled: computed(() => !!projectId.value && !!datasetId.value),
+    enabled: computed(() => !!orgId.value && !!datasetId.value),
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
     refetchOnMount: true,
@@ -223,11 +224,11 @@ export function useCreateQADatasetMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ projectId, data }: { projectId: string; data: any }) => {
-      return await scopeoApi.qa.createDatasets(projectId, data)
+    mutationFn: async ({ orgId, data }: { orgId: string; data: any }) => {
+      return await scopeoApi.qa.createDatasets(orgId, data)
     },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['qa-datasets', variables.projectId] })
+      queryClient.invalidateQueries({ queryKey: ['qa-datasets', variables.orgId] })
     },
   })
 }
@@ -239,13 +240,13 @@ export function useDeleteQADatasetMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ projectId, datasetIds }: { projectId: string; datasetIds: string[] }) => {
-      return await scopeoApi.qa.deleteDatasets(projectId, { dataset_ids: datasetIds })
+    mutationFn: async ({ orgId, datasetIds }: { orgId: string; datasetIds: string[] }) => {
+      return await scopeoApi.qa.deleteDatasets(orgId, { dataset_ids: datasetIds })
     },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['qa-datasets', variables.projectId] })
+      queryClient.invalidateQueries({ queryKey: ['qa-datasets', variables.orgId] })
       variables.datasetIds.forEach(datasetId => {
-        queryClient.invalidateQueries({ queryKey: ['qa-input-groundtruths', variables.projectId, datasetId] })
+        queryClient.invalidateQueries({ queryKey: ['qa-input-groundtruths', variables.orgId, datasetId] })
       })
     },
   })
@@ -259,11 +260,11 @@ export function useAddInputGroundtruthMutation() {
 
   return useMutation({
     mutationFn: async ({
-      projectId,
+      orgId,
       datasetId,
       data,
     }: {
-      projectId: string
+      orgId: string
       datasetId: string
       data: {
         inputs_groundtruths: Array<{
@@ -273,11 +274,11 @@ export function useAddInputGroundtruthMutation() {
         }>
       }
     }) => {
-      return await scopeoApi.qa.createInputGroundtruths(projectId, datasetId, data)
+      return await scopeoApi.qa.createInputGroundtruths(orgId, datasetId, data)
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['qa-input-groundtruths', variables.projectId, variables.datasetId],
+        queryKey: ['qa-input-groundtruths', variables.orgId, variables.datasetId],
       })
     },
   })
@@ -289,11 +290,11 @@ export function useAddInputGroundtruthMutation() {
 export function useUpdateInputGroundtruthMutation() {
   return useMutation({
     mutationFn: async ({
-      projectId,
+      orgId,
       datasetId,
       data,
     }: {
-      projectId: string
+      orgId: string
       datasetId: string
       data: {
         inputs_groundtruths: Array<{
@@ -304,7 +305,7 @@ export function useUpdateInputGroundtruthMutation() {
         }>
       }
     }) => {
-      return await scopeoApi.qa.updateInputGroundtruths(projectId, datasetId, data)
+      return await scopeoApi.qa.updateInputGroundtruths(orgId, datasetId, data)
     },
     // No onSuccess/cache patch — the local ref in QADatasetTable is the source of truth
     // while editing. Patching the cache here would trigger the queryTestCases watcher
@@ -320,19 +321,19 @@ export function useDeleteInputGroundtruthMutation() {
 
   return useMutation({
     mutationFn: async ({
-      projectId,
+      orgId,
       datasetId,
       entryIds,
     }: {
-      projectId: string
+      orgId: string
       datasetId: string
       entryIds: string[]
     }) => {
-      return await scopeoApi.qa.deleteInputGroundtruths(projectId, datasetId, { input_groundtruth_ids: entryIds })
+      return await scopeoApi.qa.deleteInputGroundtruths(orgId, datasetId, { input_groundtruth_ids: entryIds })
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['qa-input-groundtruths', variables.projectId, variables.datasetId],
+        queryKey: ['qa-input-groundtruths', variables.orgId, variables.datasetId],
       })
     },
   })
@@ -364,22 +365,22 @@ export function useRunQAProcessMutation() {
 /**
  * Fetches custom columns for a dataset
  */
-export function useQACustomColumnsQuery(projectId: Ref<string | undefined>, datasetId: Ref<string | undefined>) {
-  const queryKey = computed(() => ['qa-custom-columns', projectId.value, datasetId.value] as const)
+export function useQACustomColumnsQuery(orgId: Ref<string | undefined>, datasetId: Ref<string | undefined>) {
+  const queryKey = computed(() => ['qa-custom-columns', orgId.value, datasetId.value] as const)
 
   return useQuery<QAColumnListResponse>({
     queryKey,
     queryFn: async () => {
-      logQueryStart(['qa-custom-columns', projectId.value, datasetId.value], 'useQACustomColumnsQuery')
+      logQueryStart(['qa-custom-columns', orgId.value, datasetId.value], 'useQACustomColumnsQuery')
 
-      if (!projectId.value || !datasetId.value) {
+      if (!orgId.value || !datasetId.value) {
         return []
       }
 
-      const data = await scopeoApi.qa.getCustomColumns(projectId.value, datasetId.value)
+      const data = await scopeoApi.qa.getCustomColumns(orgId.value, datasetId.value)
       return data || []
     },
-    enabled: computed(() => !!projectId.value && !!datasetId.value),
+    enabled: computed(() => !!orgId.value && !!datasetId.value),
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
     refetchOnMount: true,
@@ -394,19 +395,19 @@ export function useCreateQACustomColumnMutation() {
 
   return useMutation({
     mutationFn: async ({
-      projectId,
+      orgId,
       datasetId,
       data,
     }: {
-      projectId: string
+      orgId: string
       datasetId: string
       data: QAColumnCreate
     }) => {
-      return await scopeoApi.qa.createCustomColumn(projectId, datasetId, data)
+      return await scopeoApi.qa.createCustomColumn(orgId, datasetId, data)
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['qa-custom-columns', variables.projectId, variables.datasetId],
+        queryKey: ['qa-custom-columns', variables.orgId, variables.datasetId],
       })
     },
   })
@@ -420,21 +421,21 @@ export function useRenameQACustomColumnMutation() {
 
   return useMutation({
     mutationFn: async ({
-      projectId,
+      orgId,
       datasetId,
       columnId,
       data,
     }: {
-      projectId: string
+      orgId: string
       datasetId: string
       columnId: string
       data: QAColumnRename
     }) => {
-      return await scopeoApi.qa.renameCustomColumn(projectId, datasetId, columnId, data)
+      return await scopeoApi.qa.renameCustomColumn(orgId, datasetId, columnId, data)
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['qa-custom-columns', variables.projectId, variables.datasetId],
+        queryKey: ['qa-custom-columns', variables.orgId, variables.datasetId],
       })
     },
   })
@@ -448,24 +449,71 @@ export function useDeleteQACustomColumnMutation() {
 
   return useMutation({
     mutationFn: async ({
-      projectId,
+      orgId,
       datasetId,
       columnId,
     }: {
-      projectId: string
+      orgId: string
       datasetId: string
       columnId: string
     }) => {
-      return await scopeoApi.qa.deleteCustomColumn(projectId, datasetId, columnId)
+      return await scopeoApi.qa.deleteCustomColumn(orgId, datasetId, columnId)
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['qa-custom-columns', variables.projectId, variables.datasetId],
+        queryKey: ['qa-custom-columns', variables.orgId, variables.datasetId],
       })
-      // Also invalidate entries since deleting a column affects the data
       queryClient.invalidateQueries({
-        queryKey: ['qa-input-groundtruths', variables.projectId, variables.datasetId],
+        queryKey: ['qa-input-groundtruths', variables.orgId, variables.datasetId],
       })
+    },
+  })
+}
+
+/**
+ * Mutation to set which projects a dataset belongs to
+ */
+export function useSetDatasetProjectsMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      orgId,
+      datasetId,
+      projectIds,
+    }: {
+      orgId: string
+      datasetId: string
+      projectIds: string[]
+    }) => {
+      return await scopeoApi.qa.setDatasetProjects(orgId, datasetId, projectIds)
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['qa-datasets', variables.orgId] })
+    },
+  })
+}
+
+/**
+ * Mutation to set which projects a judge belongs to
+ */
+export function useSetJudgeProjectsMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      orgId,
+      judgeId,
+      projectIds,
+    }: {
+      orgId: string
+      judgeId: string
+      projectIds: string[]
+    }) => {
+      return await qaEvaluationApi.setJudgeProjects(orgId, judgeId, projectIds)
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['qa-judges', variables.orgId] })
     },
   })
 }

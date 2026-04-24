@@ -74,7 +74,7 @@ def _setup_judge_evaluation_context(
         judge_id=judge_id,
     )
     if not judge:
-        raise LLMJudgeNotFound(judge_id, project_id)
+        raise LLMJudgeNotFound(judge_id)
 
     version_output_data = get_version_output(
         session=session,
@@ -145,7 +145,7 @@ async def run_judge_evaluation_service(
     try:
         judge = get_llm_judge_by_id(session=session, judge_id=judge_id)
         if not judge:
-            raise LLMJudgeNotFound(judge_id, project_id)
+            raise LLMJudgeNotFound(judge_id)
 
         # TODO: Deterministic evaluations will have their own dedicated service and endpoint
         # - The function as it was before was EXACTLY what is in the "else" :
