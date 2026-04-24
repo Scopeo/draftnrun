@@ -358,6 +358,7 @@ defineExpose({
   <AppPage width="full">
     <AppPageHeader :title="title">
       <template v-if="projects.length > 0 || templates.length > 0" #actions>
+        <slot name="header-actions" />
         <VBtn
           icon
           variant="text"

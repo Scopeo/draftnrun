@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import ProjectListView from '@/components/projects/ProjectListView.vue'
 import IconPicker from '@/components/projects/IconPicker.vue'
+import ImportRepoDialog from '@/components/workflows/ImportRepoDialog.vue'
 import { useCreateProjectMutation } from '@/composables/queries/useProjectsQuery'
 import { useSelectedOrg } from '@/composables/useSelectedOrg'
 import { useProjectEntityEditor } from '@/composables/useProjectEntityEditor'
@@ -46,6 +47,8 @@ function onTagsUpdate(value: string[]) {
   editedTags.value = [...new Set(value.map(t => t.toLowerCase().trim()).filter(Boolean))]
 }
 
+const isImportRepoDialogVisible = ref(false)
+
 const showCreateError = computed(() => createError.value !== null)
 
 definePage({
@@ -66,7 +69,19 @@ definePage({
     @create-click="openCreateDialog"
     @template-click="handleTemplateClick"
     @edit-click="openEditModal"
-  />
+  >
+    <template #header-actions>
+      <VBtn
+        variant="tonal"
+        color="primary"
+        size="small"
+        prepend-icon="tabler-brand-github"
+        @click="isImportRepoDialogVisible = true"
+      >
+        Import repo
+      </VBtn>
+    </template>
+  </ProjectListView>
 
   <!-- Project Edit Dialog -->
   <VDialog v-model="isEditDialogVisible" max-width="var(--dnr-dialog-md)">
@@ -128,6 +143,9 @@ definePage({
       </VCardActions>
     </VCard>
   </VDialog>
+
+  <!-- Import Repo Dialog -->
+  <ImportRepoDialog v-model="isImportRepoDialogVisible" />
 
   <!-- Error Snackbar -->
   <VSnackbar v-model="showCreateError" :timeout="5000" color="error" location="top">
