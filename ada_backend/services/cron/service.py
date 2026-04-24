@@ -290,7 +290,7 @@ def delete_cron_job_service(
     cron_id: UUID,
     organization_id: UUID,
     user_id: UUID | None = None,
-) -> Optional[CronJobDeleteResponse]:
+) -> CronJobDeleteResponse:
     _assert_cron_in_org(session, cron_id, organization_id)
 
     success = delete_cron_job(session, cron_id)
@@ -301,7 +301,7 @@ def delete_cron_job_service(
             track_cron_job_deleted(user_id, organization_id)
         return CronJobDeleteResponse(id=cron_id)
 
-    return None
+    raise CronJobNotFound(cron_id)
 
 
 def permanently_delete_cron_jobs_by_project_service(session: Session, project_id: UUID) -> None:
@@ -327,11 +327,11 @@ def pause_cron_job(
     cron_id: UUID,
     organization_id: UUID,
     user_id: UUID | None = None,
-) -> Optional[CronJobPauseResponse]:
+) -> CronJobPauseResponse:
     _assert_cron_in_org(session, cron_id, organization_id)
     updated_cron = update_cron_job(session, cron_id, is_enabled=False)
     if not updated_cron:
-        return None
+        raise CronJobNotFound(cron_id)
 
     if user_id:
         track_cron_job_toggled(user_id, organization_id, enabled=False)
@@ -348,11 +348,11 @@ def resume_cron_job(
     cron_id: UUID,
     organization_id: UUID,
     user_id: UUID | None = None,
-) -> Optional[CronJobPauseResponse]:
+) -> CronJobPauseResponse:
     _assert_cron_in_org(session, cron_id, organization_id)
     updated_cron = update_cron_job(session, cron_id, is_enabled=True)
     if not updated_cron:
-        return None
+        raise CronJobNotFound(cron_id)
 
     if user_id:
         track_cron_job_toggled(user_id, organization_id, enabled=True)

@@ -33,7 +33,7 @@ from ada_backend.services.tool_description_generator import (
     _get_tool_eligible_port_definitions,
     generate_tool_description,
 )
-from ada_backend.services.errors import ComponentInstanceNotFound
+from ada_backend.services.errors import ComponentInstanceNotFound, GraphValidationError
 from ada_backend.utils.component_utils import get_ui_component_properties_with_llm_options
 
 LOGGER = getLogger(__name__)
@@ -162,7 +162,7 @@ def get_component_instance(
         session, component_version_id=component_instance.component_version_id
     )
     if component_version is None:
-        raise ValueError(f"Component version {component_instance.component_version_id} not found")
+        raise GraphValidationError(f"Component version {component_instance.component_version_id} not found")
     subcomponent_params = get_subcomponent_param_def_by_component_version(
         session, component_instance.component_version_id
     )

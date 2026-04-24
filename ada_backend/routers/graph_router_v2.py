@@ -1,4 +1,3 @@
-import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -21,7 +20,6 @@ from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.graph_v2_mapper_service import graph_get_to_graph_v2_response
 
 router = APIRouter(prefix="/v2/projects/{project_id}/graph", tags=["Graph"])
-LOGGER = logging.getLogger(__name__)
 
 
 @router.get("/{graph_runner_id}", summary="Get Project Graph V2", response_model=GraphGetV2Response)
@@ -35,13 +33,9 @@ def get_project_graph_v2(
 ) -> GraphGetV2Response:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        # TODO: replace get_graph_service (deprecated) with its successor
-        graph = get_graph_service(session, project_id, graph_runner_id)
-        return graph_get_to_graph_v2_response(graph)
-    except ValueError as e:
-        LOGGER.warning("Invalid v2 graph payload for runner %s: %s", graph_runner_id, e)
-        raise HTTPException(status_code=400, detail="Invalid v2 graph payload")
+    # TODO: replace get_graph_service (deprecated) with its successor
+    graph = get_graph_service(session, project_id, graph_runner_id)
+    return graph_get_to_graph_v2_response(graph)
 
 
 @router.post(
@@ -61,11 +55,7 @@ def create_component_v2(
 ) -> ComponentV2Response:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        return graph_mutation_helpers.create_component_v2(session, graph_runner_id, project_id, user.id, payload)
-    except ValueError as e:
-        LOGGER.warning("Invalid component payload for runner %s: %s", graph_runner_id, e)
-        raise HTTPException(status_code=400, detail="Invalid component payload")
+    return graph_mutation_helpers.create_component_v2(session, graph_runner_id, project_id, user.id, payload)
 
 
 @router.put(
@@ -85,13 +75,9 @@ def update_component_v2(
 ) -> ComponentV2Response:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        return graph_mutation_helpers.update_component_v2(
-            session, graph_runner_id, project_id, instance_id, user.id, payload
-        )
-    except ValueError as e:
-        LOGGER.warning("Invalid component update payload for instance %s: %s", instance_id, e)
-        raise HTTPException(status_code=400, detail="Invalid component update payload")
+    return graph_mutation_helpers.update_component_v2(
+        session, graph_runner_id, project_id, instance_id, user.id, payload
+    )
 
 
 @router.delete(
@@ -110,11 +96,7 @@ def delete_component_v2(
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        graph_mutation_helpers.delete_component_v2(session, graph_runner_id, project_id, instance_id, user.id)
-    except ValueError as e:
-        LOGGER.warning("Invalid component deletion request for instance %s: %s", instance_id, e)
-        raise HTTPException(status_code=400, detail="Invalid component deletion request")
+    graph_mutation_helpers.delete_component_v2(session, graph_runner_id, project_id, instance_id, user.id)
 
 
 @router.put(
@@ -133,8 +115,4 @@ def update_graph_topology_v2(
 ) -> GraphUpdateResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        return graph_mutation_helpers.save_graph_topology_v2(session, graph_runner_id, project_id, user.id, payload)
-    except ValueError as e:
-        LOGGER.warning("Invalid graph topology payload for runner %s: %s", graph_runner_id, e)
-        raise HTTPException(status_code=400, detail="Invalid graph topology payload")
+    return graph_mutation_helpers.save_graph_topology_v2(session, graph_runner_id, project_id, user.id, payload)

@@ -1,4 +1,3 @@
-import logging
 from typing import Annotated, List
 from uuid import UUID
 
@@ -21,7 +20,6 @@ from ada_backend.services.qa.qa_evaluation_service import (
 )
 
 router = APIRouter(tags=["QA Evaluation"])
-LOGGER = logging.getLogger(__name__)
 
 
 @router.get(
@@ -61,19 +59,12 @@ async def run_judge_evaluation_endpoint(
 ) -> JudgeEvaluationResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-
-    try:
-        return await run_judge_evaluation_service(
-            session=session,
-            project_id=project_id,
-            judge_id=judge_id,
-            version_output_id=version_output_id,
-        )
-    except ValueError as e:
-        LOGGER.error(
-            f"Failed to run judge evaluation for judge {judge_id} in project {project_id}: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=400, detail="Bad request") from e
+    return await run_judge_evaluation_service(
+        session=session,
+        project_id=project_id,
+        judge_id=judge_id,
+        version_output_id=version_output_id,
+    )
 
 
 @router.delete(
@@ -92,10 +83,5 @@ def delete_judge_evaluations_endpoint(
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-
-    try:
-        delete_judge_evaluations_service(session=session, evaluation_ids=evaluation_ids)
-        return None
-    except ValueError as e:
-        LOGGER.error(f"Failed to delete judge evaluations for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Bad request") from e
+    delete_judge_evaluations_service(session=session, evaluation_ids=evaluation_ids)
+    return None
