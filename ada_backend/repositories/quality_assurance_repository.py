@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
@@ -7,13 +8,20 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import (
+    AssociationColumnMapping,
+    ColumnRole,
+    DatasetCellValue,
     DatasetProject,
     DatasetProjectAssociation,
     InputGroundtruth,
     QADatasetMetadata,
     VersionOutput,
 )
-from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate, InputGroundtruthUpdateList
+from ada_backend.schemas.input_groundtruth_schema import (
+    InputGroundtruthCreate,
+    InputGroundtruthUpdateList,
+    InputGroundtruthUpdateWithId,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -83,7 +91,7 @@ def create_inputs_groundtruths(
     dataset_id: UUID,
     inputs_groundtruths_data: List[InputGroundtruthCreate],
 ) -> List[InputGroundtruth]:
-    """Create multiple input-groundtruth entries."""
+    """Create multiple input-groundtruth entries with dual-write to DatasetCellValue."""
     max_position = get_max_position_of_dataset(session, dataset_id)
     starting_position = (max_position + 1) if max_position is not None else 1
 
@@ -92,22 +100,32 @@ def create_inputs_groundtruths(
         for i, data in enumerate(inputs_groundtruths_data)
     ]
 
-    inputs_groundtruths = [
-        InputGroundtruth(
+    column_map = _get_typed_column_map(session, dataset_id)
+
+    inputs_groundtruths = []
+    for data, position in zip(inputs_groundtruths_data, positions, strict=False):
+        input_val, groundtruth_val = _resolve_legacy_from_cell_values(data, column_map)
+        ig = InputGroundtruth(
             dataset_id=dataset_id,
-            input=data.input,
-            groundtruth=data.groundtruth,
+            input=input_val,
+            groundtruth=groundtruth_val,
             position=position,
             custom_columns=data.custom_columns,
         )
-        for data, position in zip(inputs_groundtruths_data, positions, strict=False)
-    ]
+        inputs_groundtruths.append(ig)
 
     session.add_all(inputs_groundtruths)
+    session.flush()
+
+    for ig, data in zip(inputs_groundtruths, inputs_groundtruths_data, strict=False):
+        cell_vals = _build_cell_values_for_write(data, column_map)
+        if cell_vals:
+            _upsert_cell_values(session, ig.id, cell_vals)
+
     session.commit()
 
-    for input_groundtruth in inputs_groundtruths:
-        session.refresh(input_groundtruth)
+    for ig in inputs_groundtruths:
+        session.refresh(ig)
 
     LOGGER.info(f"Created {len(inputs_groundtruths)} input-groundtruth entries for dataset {dataset_id}")
     return inputs_groundtruths
@@ -118,8 +136,9 @@ def update_inputs_groundtruths(
     inputs_groundtruths_data: InputGroundtruthUpdateList,
     dataset_id: UUID,
 ) -> List[InputGroundtruth]:
-    """Update multiple input-groundtruth entries."""
+    """Update multiple input-groundtruth entries with dual-write to DatasetCellValue."""
     updated_inputs_groundtruths = []
+    column_map = _get_typed_column_map(session, dataset_id)
 
     for update_item in inputs_groundtruths_data.inputs_groundtruths:
         input_id = update_item.id
@@ -145,6 +164,10 @@ def update_inputs_groundtruths(
                     else:
                         current_custom_columns[key] = value
                 input_groundtruth.custom_columns = current_custom_columns if current_custom_columns else None
+
+            cell_updates = _build_cell_values_for_update(update_item, column_map)
+            if cell_updates:
+                _upsert_cell_values(session, input_id, cell_updates)
 
             updated_inputs_groundtruths.append(input_groundtruth)
 
@@ -356,12 +379,26 @@ def get_datasets_by_organization(
     )
 
 
+# TODO: remove when system columns are no longer hardcoded (users will define their own roles)
+def _create_system_columns(session: Session, dataset_id: UUID) -> None:
+    session.add(QADatasetMetadata(
+        dataset_id=dataset_id, column_name="Input", column_display_position=0, default_role=ColumnRole.INPUT,
+    ))
+    session.add(QADatasetMetadata(
+        dataset_id=dataset_id,
+        column_name="Expected Output",
+        column_display_position=1,
+        default_role=ColumnRole.EXPECTED_OUTPUT,
+    ))
+
+
 def create_datasets(
     session: Session,
     organization_id: UUID,
     dataset_names: List[str],
+    *,
+    commit: bool = True,
 ) -> List[DatasetProject]:
-    """Create multiple datasets."""
     datasets = []
 
     for dataset_name in dataset_names:
@@ -372,10 +409,15 @@ def create_datasets(
         datasets.append(dataset)
 
     session.add_all(datasets)
-    session.commit()
+    session.flush()
 
     for dataset in datasets:
-        session.refresh(dataset)
+        _create_system_columns(session, dataset.id)
+
+    if commit:
+        session.commit()
+        for dataset in datasets:
+            session.refresh(dataset)
 
     LOGGER.debug(f"Created {len(datasets)} datasets for organization {organization_id}")
     return datasets
@@ -455,24 +497,73 @@ def set_dataset_project_associations(
     dataset_id: UUID,
     project_ids: List[UUID],
 ) -> None:
-    """Replace all project associations for a dataset."""
+    """Replace all project associations for a dataset, auto-populating column mappings from system columns."""
     session.query(DatasetProjectAssociation).filter(DatasetProjectAssociation.dataset_id == dataset_id).delete(
         synchronize_session=False
     )
 
-    for project_id in project_ids:
-        session.add(DatasetProjectAssociation(dataset_id=dataset_id, project_id=project_id))
+    system_columns = (
+        session.query(QADatasetMetadata)
+        .filter(QADatasetMetadata.dataset_id == dataset_id, QADatasetMetadata.default_role.isnot(None))
+        .all()
+    )
+
+    associations = [DatasetProjectAssociation(dataset_id=dataset_id, project_id=pid) for pid in project_ids]
+    session.add_all(associations)
+    session.flush()
+
+    mappings = [
+        AssociationColumnMapping(association_id=assoc.id, column_id=col.column_id, role=col.default_role)
+        for assoc in associations
+        for col in system_columns
+    ]
+    session.add_all(mappings)
 
     session.commit()
 
 
-def get_qa_columns_by_dataset(session: Session, dataset_id: UUID) -> List[QADatasetMetadata]:
-    return (
+def create_column_mappings_for_association(
+    session: Session, association_id: UUID, dataset_id: UUID,
+) -> List[AssociationColumnMapping]:
+    system_columns = (
         session.query(QADatasetMetadata)
-        .filter(QADatasetMetadata.dataset_id == dataset_id)
-        .order_by(QADatasetMetadata.column_display_position.asc())
+        .filter(QADatasetMetadata.dataset_id == dataset_id, QADatasetMetadata.default_role.isnot(None))
         .all()
     )
+    mappings = []
+    for col in system_columns:
+        mapping = AssociationColumnMapping(
+            association_id=association_id, column_id=col.column_id, role=col.default_role,
+        )
+        session.add(mapping)
+        mappings.append(mapping)
+    return mappings
+
+
+def get_column_mappings_for_association(
+    session: Session, association_id: UUID,
+) -> List[AssociationColumnMapping]:
+    return (
+        session.query(AssociationColumnMapping)
+        .filter(AssociationColumnMapping.association_id == association_id)
+        .all()
+    )
+
+
+def remove_column_mapping(session: Session, association_id: UUID, column_id: UUID) -> None:
+    session.query(AssociationColumnMapping).filter(
+        AssociationColumnMapping.association_id == association_id,
+        AssociationColumnMapping.column_id == column_id,
+    ).delete(synchronize_session=False)
+
+
+def get_qa_columns_by_dataset(
+    session: Session, dataset_id: UUID, *, user_only: bool = False,
+) -> List[QADatasetMetadata]:
+    query = session.query(QADatasetMetadata).filter(QADatasetMetadata.dataset_id == dataset_id)
+    if user_only:
+        query = query.filter(QADatasetMetadata.default_role.is_(None))
+    return query.order_by(QADatasetMetadata.column_display_position.asc()).all()
 
 
 def get_dataset_custom_columns_display_max_position(
@@ -493,12 +584,14 @@ def create_custom_column(
     column_id: UUID,
     column_name: str,
     column_display_position: int,
+    default_role: Optional["ColumnRole"] = None,
 ) -> QADatasetMetadata:
     qa_metadata = QADatasetMetadata(
         dataset_id=dataset_id,
         column_id=column_id,
         column_name=column_name,
         column_display_position=column_display_position,
+        default_role=default_role,
     )
 
     session.add(qa_metadata)
@@ -506,7 +599,7 @@ def create_custom_column(
     session.refresh(qa_metadata)
 
     LOGGER.info(
-        f"Created QA column '{column_name}' (column_id: {column_id}) "
+        f"Created QA column '{column_name}' (column_id: {column_id}, default_role: {default_role}) "
         f"at position {column_display_position} for dataset {dataset_id}"
     )
     return qa_metadata
@@ -519,6 +612,14 @@ def check_column_exist(session: Session, dataset_id: UUID, column_id: UUID) -> b
         .exists()
     ).scalar()
     return exists
+
+
+def get_column_metadata(session: Session, dataset_id: UUID, column_id: UUID) -> Optional[QADatasetMetadata]:
+    return (
+        session.query(QADatasetMetadata)
+        .filter(QADatasetMetadata.dataset_id == dataset_id, QADatasetMetadata.column_id == column_id)
+        .first()
+    )
 
 
 def rename_custom_column(
@@ -540,13 +641,13 @@ def rename_custom_column(
     return qa_metadata
 
 
-def remove_column_value_from_custom_column(session: Session, dataset_id: UUID, column_id: UUID) -> None:
+def delete_custom_column(session: Session, dataset_id: UUID, column_id: UUID) -> None:
     column_id_str = str(column_id)
 
     remove_key_from_jsonb = InputGroundtruth.custom_columns.op("-")(column_id_str)
     jsonb_empty_dict = func.cast("{}", JSONB)
 
-    stmt = (
+    session.execute(
         update(InputGroundtruth)
         .where(
             InputGroundtruth.dataset_id == dataset_id,
@@ -561,15 +662,145 @@ def remove_column_value_from_custom_column(session: Session, dataset_id: UUID, c
         )
     )
 
-    session.execute(stmt)
+    session.query(DatasetCellValue).filter(DatasetCellValue.column_id == column_id).delete(
+        synchronize_session=False
+    )
+    session.query(AssociationColumnMapping).filter(
+        AssociationColumnMapping.column_id == column_id
+    ).delete(synchronize_session=False)
+    session.query(QADatasetMetadata).filter(
+        QADatasetMetadata.dataset_id == dataset_id, QADatasetMetadata.column_id == column_id
+    ).delete(synchronize_session=False)
+
     session.commit()
 
 
-def delete_custom_column(session: Session, dataset_id: UUID, column_id: UUID) -> None:
-    (
-        session.query(QADatasetMetadata)
-        .filter(QADatasetMetadata.dataset_id == dataset_id, QADatasetMetadata.column_id == column_id)
+# ── DatasetCellValue helpers ──────────────────────────────────────────
+
+def get_cell_values_for_rows(session: Session, row_ids: List[UUID]) -> Dict[UUID, Dict[str, Optional[str]]]:
+    """Fetch cell values grouped by row_id."""
+    if not row_ids:
+        return {}
+    rows = (
+        session.query(DatasetCellValue.row_id, DatasetCellValue.column_id, DatasetCellValue.value)
+        .filter(DatasetCellValue.row_id.in_(row_ids))
+        .all()
+    )
+    result: Dict[UUID, Dict[str, Optional[str]]] = {}
+    for row_id, col_id, value in rows:
+        result.setdefault(row_id, {})[str(col_id)] = value
+    return result
+
+
+def _upsert_cell_values(session: Session, row_id: UUID, cell_values: Dict[str, Optional[str]]) -> None:
+    """Insert or update cell values for a given row."""
+    for col_id_str, value in cell_values.items():
+        col_id = UUID(col_id_str)
+        existing = (
+            session.query(DatasetCellValue)
+            .filter(DatasetCellValue.row_id == row_id, DatasetCellValue.column_id == col_id)
+            .first()
+        )
+        if existing:
+            existing.value = value
+        else:
+            session.add(DatasetCellValue(row_id=row_id, column_id=col_id, value=value))
+
+
+def delete_cell_values_for_row(session: Session, row_id: UUID) -> int:
+    return (
+        session.query(DatasetCellValue)
+        .filter(DatasetCellValue.row_id == row_id)
         .delete(synchronize_session=False)
     )
 
-    session.commit()
+
+def _get_typed_column_map(session: Session, dataset_id: UUID) -> Dict[str, List["QADatasetMetadata"]]:
+    """Return a dict mapping default_role -> list of columns for typed columns."""
+    columns = get_qa_columns_by_dataset(session, dataset_id)
+    result = {}
+    for col in columns:
+        if col.default_role is not None:
+            role_key = col.default_role.value if hasattr(col.default_role, "value") else col.default_role
+            result.setdefault(role_key, []).append(col)
+    return result
+
+
+def _resolve_legacy_from_cell_values(
+    data: InputGroundtruthCreate,
+    column_map: Dict,
+) -> tuple[dict, Optional[str]]:
+    """Derive legacy input/groundtruth from cell_values when not explicitly provided."""
+    input_val = data.input
+    groundtruth_val = data.groundtruth
+
+    if data.cell_values:
+        if input_val is None:
+            for col in column_map.get("input", []):
+                cv = data.cell_values.get(str(col.column_id))
+                if cv is not None:
+                    try:
+                        input_val = json.loads(cv)
+                    except (json.JSONDecodeError, TypeError):
+                        input_val = {"value": cv}
+                    break
+        if groundtruth_val is None:
+            for col in column_map.get("expected_output", []):
+                cv = data.cell_values.get(str(col.column_id))
+                if cv is not None:
+                    groundtruth_val = cv
+                    break
+
+    if input_val is None:
+        input_val = {}
+
+    return input_val, groundtruth_val
+
+
+def _build_cell_values_for_write(
+    data: InputGroundtruthCreate,
+    column_map: Dict,
+) -> Dict[str, Optional[str]]:
+    """Build cell_values dict from a create request, for dual-write."""
+    cell_vals: Dict[str, Optional[str]] = {}
+
+    for col in column_map.get("input", []):
+        if data.input is not None:
+            cell_vals[str(col.column_id)] = json.dumps(data.input)
+
+    for col in column_map.get("expected_output", []):
+        cell_vals[str(col.column_id)] = data.groundtruth
+
+    if data.custom_columns:
+        for col_id_str, value in data.custom_columns.items():
+            cell_vals[col_id_str] = value
+
+    if data.cell_values:
+        cell_vals.update(data.cell_values)
+
+    return cell_vals
+
+
+def _build_cell_values_for_update(
+    data: InputGroundtruthUpdateWithId,
+    column_map: Dict,
+) -> Dict[str, Optional[str]]:
+    """Build cell_values dict from an update request, for dual-write."""
+    cell_vals: Dict[str, Optional[str]] = {}
+
+    if data.input is not None:
+        for col in column_map.get("input", []):
+            cell_vals[str(col.column_id)] = json.dumps(data.input)
+
+    if data.groundtruth is not None:
+        for col in column_map.get("expected_output", []):
+            cell_vals[str(col.column_id)] = data.groundtruth
+
+    if data.custom_columns:
+        for col_id_str, value in data.custom_columns.items():
+            cell_vals[col_id_str] = value
+
+    if data.cell_values:
+        cell_vals.update(data.cell_values)
+
+    return cell_vals
