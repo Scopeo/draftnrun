@@ -1771,7 +1771,7 @@ class SourceAttributeEntry(Base):
         ),
     )
 
-    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     source_id = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("data_sources.id", ondelete="CASCADE"),
