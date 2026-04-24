@@ -1869,6 +1869,7 @@ class InputGroundtruth(Base):
     # Relationships
     dataset = relationship("DatasetProject", back_populates="input_groundtruths")
     version_outputs = relationship("VersionOutput", back_populates="input_groundtruth", cascade="all, delete-orphan")
+    cell_values = relationship("DatasetCellValue", back_populates="row", cascade="all, delete-orphan")
 
     def __str__(self):
         return f"InputGroundtruth(id={self.id}, input={self.input})"
@@ -1917,18 +1918,50 @@ class DatasetProjectAssociation(Base):
         nullable=False,
         index=True,
     )
+    column_mappings = relationship("AssociationColumnMapping", cascade="all, delete-orphan", lazy="selectin")
+
+
+class ColumnRole(StrEnum):
+    INPUT = "input"
+    EXPECTED_OUTPUT = "expected_output"
+
+
+class AssociationColumnMapping(Base):
+    __tablename__ = "association_column_mappings"
+    __table_args__ = (
+        sa.UniqueConstraint("association_id", "column_id", name="uq_association_column_mapping"),
+        {"schema": "quality_assurance"},
+    )
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    association_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.dataset_project_associations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    column_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.qa_dataset_metadata.column_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    role = mapped_column(make_pg_enum(ColumnRole, schema="quality_assurance"), nullable=False)
+
+    column = relationship("QADatasetMetadata")
 
 
 class QADatasetMetadata(Base):
     """
-    Represents custom column definitions for QA datasets.
-    Each row defines a custom column with its name, ID, and display position.
+    Represents column definitions for QA datasets.
+    Each row defines a column with its name, ID, display position, and optional role.
     """
 
     __tablename__ = "qa_dataset_metadata"
     __table_args__ = (
         sa.UniqueConstraint("dataset_id", "column_id", name="uq_qa_metadata_dataset_column_id"),
         sa.UniqueConstraint("dataset_id", "column_display_position", name="uq_qa_metadata_dataset_column_position"),
+        sa.UniqueConstraint("column_id", name="uq_qa_metadata_column_id"),
         sa.CheckConstraint("column_display_position >= 0", name="ck_qa_metadata_column_position_non_negative"),
         {"schema": "quality_assurance"},
     )
@@ -1948,13 +1981,43 @@ class QADatasetMetadata(Base):
 
     column_display_position = mapped_column(Integer, nullable=False)
 
+    default_role = mapped_column(make_pg_enum(ColumnRole, schema="quality_assurance"), nullable=True)
+
     dataset = relationship("DatasetProject", back_populates="qa_metadata")
 
     def __str__(self):
         return (
             f"QADatasetMetadata(id={self.id}, dataset_id={self.dataset_id}, "
-            f"column_name={self.column_name}, column_display_position={self.column_display_position})"
+            f"column_name={self.column_name}, default_role={self.default_role})"
         )
+
+
+class DatasetCellValue(Base):
+    """Each row stores one cell value: the intersection of a dataset row and a column."""
+
+    __tablename__ = "dataset_cell_values"
+    __table_args__ = (
+        sa.UniqueConstraint("row_id", "column_id", name="uq_cell_row_column"),
+        {"schema": "quality_assurance"},
+    )
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    row_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.input_groundtruth.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    column_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.qa_dataset_metadata.column_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    value = mapped_column(Text, nullable=True)
+
+    row = relationship("InputGroundtruth", back_populates="cell_values")
+    column = relationship("QADatasetMetadata")
 
 
 class VersionOutput(Base):

@@ -131,3 +131,12 @@ class QAColumnNotFoundError(QAServiceError):
         self.dataset_id = dataset_id
         self.column_id = column_id
         super().__init__(f"Column {column_id} not found in dataset {dataset_id}")
+
+
+class QASystemColumnModificationError(QAServiceError):
+    status_code = 400
+
+    def __init__(self, dataset_id: UUID, column_id: UUID):
+        self.dataset_id = dataset_id
+        self.column_id = column_id
+        super().__init__(f"System column {column_id} in dataset {dataset_id} cannot be modified or deleted")
