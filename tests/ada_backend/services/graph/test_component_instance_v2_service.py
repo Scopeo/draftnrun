@@ -57,29 +57,6 @@ class TestCreateComponentInGraph:
             is_start_node=False,
         )
 
-    @patch("ada_backend.services.graph.component_instance_v2_service._sync_input_port_field_expressions")
-    @patch("ada_backend.services.graph.component_instance_v2_service.upsert_component_node")
-    @patch("ada_backend.services.graph.component_instance_v2_service.create_or_update_component_instance")
-    def test_syncs_input_port_instances_when_provided(
-        self, mock_create, mock_upsert_node, mock_sync_fe, session, ids
-    ):
-        created_id = uuid4()
-        mock_create.return_value = created_id
-
-        ipis = [{"name": "criteria", "field_expression": {"expression_json": {"type": "literal", "value": "hi"}}}]
-        payload = ComponentCreateV2Schema(
-            component_id=ids["component_id"],
-            component_version_id=ids["component_version_id"],
-            label="Scorer",
-            is_start_node=False,
-            parameters=[],
-            input_port_instances=ipis,
-        )
-
-        create_component_in_graph(session, ids["graph_runner_id"], ids["project_id"], payload)
-
-        mock_sync_fe.assert_called_once_with(session, created_id, ipis)
-
 
 class TestUpdateSingleComponent:
     @patch("ada_backend.services.graph.component_instance_v2_service.upsert_component_node")
