@@ -1,7 +1,7 @@
 """create source attribute entries table
 
 Revision ID: 67df5c87b638
-Revises: j1k2l3m4n5o6
+Revises: i8j9k0l1m2n3
 Create Date: 2026-04-23 12:59:35.649247
 
 """
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "67df5c87b638"
-down_revision: Union[str, None] = "j1k2l3m4n5o6"
+down_revision: Union[str, None] = "i8j9k0l1m2n3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
