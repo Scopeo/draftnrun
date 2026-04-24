@@ -33,9 +33,7 @@ class KnowledgeServiceQdrantChunkDeletionError(KnowledgeServiceQdrantOperationEr
     code = "qdrant_chunk_deletion_error"
 
     def __post_init__(self):
-        super().__init__(
-            f"Failed to delete chunk {self.chunk_id} from Qdrant collection {self.collection_name}: {self.reason}"
-        )
+        super().__init__(f"Failed to delete chunk {self.chunk_id} from vector store: {self.reason}")
 
 
 @dataclass
@@ -58,7 +56,7 @@ class KnowledgeServiceInvalidQdrantSchemaError(KnowledgeServiceQdrantConfigurati
     code = "invalid_qdrant_schema"
 
     def __post_init__(self):
-        super().__init__(f"Data source '{self.source_id}' has invalid qdrant_schema: {self.reason}")
+        super().__init__(f"Data source '{self.source_id}' has invalid vector search configuration: {self.reason}")
 
 
 @dataclass
@@ -86,7 +84,7 @@ class KnowledgeServiceQdrantCollectionNotFoundError(KnowledgeServiceQdrantConfig
 
     def __post_init__(self):
         super().__init__(
-            f"Data source '{self.source_id}' references Qdrant collection "
+            f"Data source '{self.source_id}' references vector collection "
             f"'{self.collection_name}' which does not exist"
         )
 
@@ -99,7 +97,7 @@ class KnowledgeServiceQdrantServiceCreationError(KnowledgeServiceQdrantOperation
     code = "qdrant_service_creation_failed"
 
     def __post_init__(self):
-        super().__init__(f"Failed to create Qdrant service for source '{self.source_id}': {self.reason}")
+        super().__init__(f"Failed to initialize vector search for source '{self.source_id}': {self.reason}")
 
 
 @dataclass
@@ -148,7 +146,7 @@ class KnowledgeMaxChunkSizeError(KnowledgeServiceError):
         self.token_count = token_count
         self.max_chunk_tokens = max_chunk_tokens
         super().__init__(
-            f"Chunk content exceeds maximum allowed token count: {self.max_chunk_tokens}"
+            f"Chunk content exceeds maximum allowed token count: {self.max_chunk_tokens}. "
             f"Token count: {self.token_count}"
         )
 
@@ -183,7 +181,5 @@ class KnowledgeServiceDBChunkDeletionError(KnowledgeServiceDBError):
 
     def __post_init__(self):
         super().__init__(
-            f"Failed to delete chunk {self.chunk_id} "
-            f"from Table {self.table_name} "
-            f"in Schema {self.schema_name}: {self.reason}"
+            f"Failed to delete chunk {self.chunk_id} from source database: {self.reason}"
         )

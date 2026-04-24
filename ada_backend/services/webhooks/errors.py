@@ -48,10 +48,7 @@ class WebhookEventIdNotFoundError(WebhookServiceError):
     def __init__(self, provider: WebhookProvider, payload: Dict[str, Any]):
         self.provider = provider
         self.payload = payload
-        payload_keys = list(payload.keys()) if isinstance(payload, dict) else "N/A"
-        super().__init__(
-            f"Webhook event id not found for provider: {provider}. Payload structure keys: {payload_keys}"
-        )
+        super().__init__(f"Webhook event id not found for provider: {provider}.")
 
 
 class WebhookQueueError(WebhookServiceError):
@@ -73,9 +70,9 @@ class WebhookSignatureVerificationError(WebhookServiceError):
 
     status_code = 401
 
-    def __init__(self, message: str = "Invalid Svix signature"):
-        self.message = message
-        super().__init__(self.message)
+    def __init__(self, message: str = "Webhook signature verification failed."):
+        self.reason = message
+        super().__init__("Webhook signature verification failed.")
 
 
 class WebhookConfigurationError(WebhookServiceError):

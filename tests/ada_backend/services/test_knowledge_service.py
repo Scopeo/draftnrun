@@ -282,7 +282,7 @@ def test_validate_qdrant_service_raises_when_invalid_schema(
         embedding_model_reference="openai:text-embedding-3-large",
     )
 
-    with pytest.raises(KnowledgeServiceInvalidQdrantSchemaError, match="invalid qdrant_schema"):
+    with pytest.raises(KnowledgeServiceInvalidQdrantSchemaError, match="invalid vector search configuration"):
         asyncio.run(knowledge_service._validate_and_get_qdrant_service(source))
 
 

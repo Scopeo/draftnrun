@@ -395,10 +395,7 @@ class NangoConnectionNotFoundError(ServiceError):
     def __init__(self, organization_id: UUID, provider: str):
         self.organization_id = organization_id
         self.provider = provider
-        super().__init__(
-            f"Connection not found in Nango for organization {organization_id}, provider {provider}. "
-            "OAuth flow may not be complete."
-        )
+        super().__init__(f"OAuth connection for provider '{provider}' is not established.")
 
 
 class NangoTokenMissingError(ServiceError):
@@ -407,9 +404,7 @@ class NangoTokenMissingError(ServiceError):
 
     def __init__(self, connection_id: UUID):
         self.connection_id = connection_id
-        super().__init__(
-            f"Access token not found in Nango credentials for connection {connection_id}",
-        )
+        super().__init__(f"OAuth token for connection {connection_id} is unavailable.")
 
 
 class VariableDefinitionNotFound(ServiceError):
