@@ -72,11 +72,11 @@ def _process_components_with_ports(
         component.parameters = filter_conflicting_parameters(component.parameters or [], input_ports)
 
         for input_port in input_ports:
-            props = input_port.ui_component_properties
+            ui_properties = input_port.ui_component_properties
             if input_port.parameter_type == ParameterType.LLM_MODEL:
-                caps = (props or {}).get("model_capabilities")
-                props = get_ui_component_properties_with_llm_options(
-                    session, caps, props, llm_options_cache,
+                caps = (ui_properties or {}).get("model_capabilities")
+                ui_properties = get_ui_component_properties_with_llm_options(
+                    session, caps, ui_properties, llm_options_cache,
                 )
             component.parameters.append(
                 ComponentParamDefDTO(
@@ -87,7 +87,7 @@ def _process_components_with_ports(
                     nullable=input_port.nullable,
                     default=input_port.get_default() if input_port.default is not None else None,
                     ui_component=input_port.ui_component,
-                    ui_component_properties=props,
+                    ui_component_properties=ui_properties,
                     is_advanced=input_port.is_advanced,
                     is_tool_input=input_port.is_tool_input,
                     drives_output_schema=input_port.drives_output_schema,
