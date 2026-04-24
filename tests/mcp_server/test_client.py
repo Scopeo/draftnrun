@@ -105,15 +105,41 @@ async def test_handle_error_includes_request_path():
 
 
 @pytest.mark.asyncio
-async def test_handle_generic_4xx_with_blank_detail():
-    response = httpx.Response(422, text="")
+async def test_handle_400_returns_actionable_message():
+    body = json.dumps({"detail": "payload is missing required field: name"})
+    response = httpx.Response(400, text=body, headers={"content-type": "application/json"})
 
-    with pytest.raises(ToolError, match="No error detail returned"):
+    with pytest.raises(ToolError, match="Invalid request.*check parameter types"):
         await _handle_response(response)
 
 
 @pytest.mark.asyncio
-async def test_handle_generic_4xx_with_whitespace_only_detail():
+async def test_handle_409_returns_conflict_guidance():
+    body = json.dumps({"detail": "Graph was modified by another client"})
+    response = httpx.Response(409, text=body, headers={"content-type": "application/json"})
+
+    with pytest.raises(ToolError, match="Conflict.*re-fetch the resource.*retry"):
+        await _handle_response(response)
+
+
+@pytest.mark.asyncio
+async def test_handle_422_formats_validation_errors():
+    body = json.dumps(
+        {
+            "detail": [
+                {"loc": ["body", "name"], "msg": "Field required"},
+                {"loc": ["body", "page_size"], "msg": "Input should be greater than 0"},
+            ]
+        }
+    )
+    response = httpx.Response(422, text=body, headers={"content-type": "application/json"})
+
+    with pytest.raises(ToolError, match=r"Input validation failed:[\s\S]*body\.name: Field required"):
+        await _handle_response(response)
+
+
+@pytest.mark.asyncio
+async def test_handle_422_with_blank_detail_falls_back_to_default_message():
     body = json.dumps({"detail": "  \n  "})
     response = httpx.Response(422, text=body, headers={"content-type": "application/json"})
 

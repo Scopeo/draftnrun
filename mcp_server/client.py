@@ -86,6 +86,38 @@ def _extract_error_detail(response: httpx.Response) -> str:
     return text if text else ""
 
 
+def _format_validation_errors(response: httpx.Response) -> str:
+    """Format FastAPI/Pydantic validation errors as 'field.path: message' lines."""
+    try:
+        body = response.json()
+    except (json.JSONDecodeError, ValueError):
+        body = None
+
+    if isinstance(body, dict):
+        detail = body.get("detail")
+        if isinstance(detail, list):
+            lines: list[str] = []
+            for item in detail:
+                if not isinstance(item, dict):
+                    continue
+                msg = item.get("msg")
+                loc = item.get("loc")
+                if not isinstance(msg, str) or not msg.strip():
+                    continue
+                if isinstance(loc, (list, tuple)) and loc:
+                    path = ".".join(str(part) for part in loc)
+                else:
+                    path = "input"
+                lines.append(f"{path}: {msg.strip()}")
+            if lines:
+                return "\n".join(lines)
+
+    fallback = _extract_error_detail(response)
+    if fallback:
+        return fallback
+    return f"No error detail returned by the server (HTTP {response.status_code})"
+
+
 async def _handle_response(response: httpx.Response, *, trim: bool = True) -> Any:
     if response.status_code == 204:
         return {"status": "ok"}
@@ -120,6 +152,28 @@ async def _handle_response(response: httpx.Response, *, trim: bool = True) -> An
             f"Resource not found{request_context}.{f' {detail}' if detail else ''} "
             "Next step: verify the ID came from a list_*/get_* call in this session — "
             "never reuse IDs across projects or orgs."
+        )
+
+    if response.status_code == 400:
+        detail = _extract_error_detail(response)
+        raise ToolError(
+            f"Invalid request{request_context}.{f' {detail}' if detail else ''} "
+            "Next step: check parameter types and required fields in the tool's docstring."
+        )
+
+    if response.status_code == 409:
+        detail = _extract_error_detail(response)
+        raise ToolError(
+            f"Conflict{request_context}.{f' {detail}' if detail else ''} "
+            "Next step: re-fetch the resource (e.g. get_graph) to get the latest state, "
+            "re-apply your changes, and retry."
+        )
+
+    if response.status_code == 422:
+        detail = _format_validation_errors(response)
+        raise ToolError(
+            f"Input validation failed{request_context}:\n{detail}\n"
+            "Next step: fix the values above and retry."
         )
 
     if response.status_code == 429:
