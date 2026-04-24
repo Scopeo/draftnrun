@@ -29,11 +29,11 @@ from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema, ToolDescriptionReadSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
 from ada_backend.schemas.pipeline.tool_port_configuration_schema import ToolPortConfigurationSchema
+from ada_backend.services.errors import ComponentInstanceNotFound, GraphValidationError
 from ada_backend.services.tool_description_generator import (
     _get_tool_eligible_port_definitions,
     generate_tool_description,
 )
-from ada_backend.services.errors import ComponentInstanceNotFound, GraphValidationError
 from ada_backend.utils.component_utils import get_ui_component_properties_with_llm_options
 
 LOGGER = getLogger(__name__)
