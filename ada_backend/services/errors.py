@@ -486,6 +486,15 @@ class QASessionNotFound(ServiceError):
         super().__init__(f"QA session {qa_session_id} not found in project {project_id}")
 
 
+class QADatasetNotFound(ServiceError):
+    status_code = 404
+
+    def __init__(self, dataset_id: UUID, organization_id: UUID):
+        self.dataset_id = dataset_id
+        self.organization_id = organization_id
+        super().__init__(f"Dataset {dataset_id} not found in organization {organization_id}")
+
+
 class QAInputValidationError(ServiceError):
     status_code = 400
 

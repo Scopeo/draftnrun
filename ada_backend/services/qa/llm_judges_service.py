@@ -111,7 +111,6 @@ def create_llm_judge_service(
         LOGGER.info(f"Created LLM judge {llm_judge.id} for organization {organization_id}")
         return _judge_to_response(llm_judge)
     except Exception as e:
-        raise LLMJudgeOperationError(f"Failed to create LLM judge: {str(e)}") from e
         LOGGER.error(f"Error in create_llm_judge_service for organization {organization_id}: {str(e)}")
         raise LLMJudgeOperationError(f"Failed to create LLM judge: {str(e)}") from e
 

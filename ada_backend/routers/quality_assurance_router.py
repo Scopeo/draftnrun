@@ -41,7 +41,13 @@ from ada_backend.schemas.input_groundtruth_schema import (
     QASessionResponseSchema,
 )
 from ada_backend.schemas.qa_metadata_schema import QAColumnResponse
-from ada_backend.services.errors import GraphNotBoundToProjectError, ProjectNotFound
+from ada_backend.services.errors import (
+    GraphNotBoundToProjectError,
+    ProjectNotFound,
+    QADatasetNotFound,
+    QAInputValidationError,
+    QASessionNotFound,
+)
 from ada_backend.services.qa.qa_error import (
     CSVEmptyFileError,
     CSVExportError,
@@ -118,14 +124,7 @@ def get_datasets_by_organization_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> List[DatasetResponse]:
-    try:
-        return get_datasets_by_organization_service(session, organization_id)
-    except ValueError as e:
-        LOGGER.error(f"Failed to get datasets for organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to get datasets for organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return get_datasets_by_organization_service(session, organization_id)
 
 
 @router.post(
@@ -143,14 +142,7 @@ def create_dataset_by_organization_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> DatasetListResponse:
-    try:
-        return create_datasets_service(session, organization_id, dataset_data)
-    except ValueError as e:
-        LOGGER.error(f"Failed to create datasets for organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to create datasets for organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return create_datasets_service(session, organization_id, dataset_data)
 
 
 @router.patch(
@@ -169,14 +161,7 @@ def update_dataset_by_organization_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> DatasetResponse:
-    try:
-        return update_dataset_service(session, organization_id, dataset_id, dataset_name)
-    except ValueError as e:
-        LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return update_dataset_service(session, organization_id, dataset_id, dataset_name)
 
 
 @router.delete(
@@ -193,15 +178,8 @@ def delete_dataset_by_organization_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> dict:
-    try:
-        deleted_count = delete_datasets_service(session, organization_id, delete_data)
-        return {"message": f"Deleted {deleted_count} datasets successfully"}
-    except ValueError as e:
-        LOGGER.error(f"Failed to delete datasets for organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(f"Failed to delete datasets for organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    deleted_count = delete_datasets_service(session, organization_id, delete_data)
+    return {"message": f"Deleted {deleted_count} datasets successfully"}
 
 
 @router.put(
@@ -220,13 +198,7 @@ def set_dataset_projects_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> DatasetResponse:
-    try:
-        return set_dataset_projects_service(session, organization_id, dataset_id, body.project_ids)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(f"Failed to set dataset projects: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return set_dataset_projects_service(session, organization_id, dataset_id, body.project_ids)
 
 
 # ── Organization-scoped QA Metadata (Custom Columns) ────────────────
@@ -658,11 +630,6 @@ async def run_qa_endpoint(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except GraphNotBoundToProjectError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to run QA on dataset {dataset_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post(
@@ -686,8 +653,6 @@ async def run_qa_async_endpoint(
         validate_qa_run_request(session, project_id, dataset_id, run_request)
     except QADatasetNotInProjectError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
 
     qa_session = create_qa_session_service(
         session,
@@ -746,10 +711,7 @@ def get_qa_session_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> QASessionResponseSchema:
-    try:
-        return get_qa_session_service(session, qa_session_id, project_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="QA session not found")
+    return get_qa_session_service(session, qa_session_id, project_id)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -782,14 +744,7 @@ def get_datasets_by_project_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        return get_datasets_by_project_service(session, project_id)
-    except ValueError as e:
-        LOGGER.error(f"Failed to get datasets for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to get datasets for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return get_datasets_by_project_service(session, project_id)
 
 
 @router.post(
@@ -833,12 +788,6 @@ def create_dataset_endpoint(
         return response
     except ProjectNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except ValueError as e:
-        LOGGER.error(f"Failed to create datasets for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to create datasets for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.patch(
@@ -879,12 +828,6 @@ def update_dataset_endpoint(
             status_code=403,
             detail=f"Dataset {dataset_id} is not associated with project {project_id}",
         )
-    except ValueError as e:
-        LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete(
@@ -925,12 +868,6 @@ def delete_dataset_endpoint(
             status_code=403,
             detail=f"Dataset {e.dataset_id} is not associated with project {project_id}",
         ) from e
-    except ValueError as e:
-        LOGGER.error(f"Failed to delete datasets for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to delete datasets for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 # ── Deprecated custom columns ────────────────────────────────────────

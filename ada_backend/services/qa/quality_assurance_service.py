@@ -66,6 +66,7 @@ from ada_backend.schemas.input_groundtruth_schema import (
 from ada_backend.services.agent_runner_service import run_agent
 from ada_backend.services.errors import (
     GraphNotBoundToProjectError,
+    QADatasetNotFound,
     QAInputValidationError,
     QAOperationError,
     QASessionNotFound,
@@ -623,7 +624,7 @@ def get_datasets_by_organization_service(
         return [_dataset_to_response(session, dataset) for dataset in datasets]
     except Exception as e:
         LOGGER.error(f"Error in get_datasets_by_organization_service: {str(e)}")
-        raise ValueError(f"Failed to get datasets: {str(e)}") from e
+        raise QAOperationError(f"Failed to get datasets: {str(e)}") from e
 
 
 def create_datasets_service(
@@ -657,7 +658,7 @@ def update_dataset_service(
         LOGGER.error(
             f"Failed to update dataset {dataset_id}: not found in organization {organization_id}"
         )
-        raise ValueError(f"Dataset {dataset_id} not found in organization {organization_id}")
+        raise QADatasetNotFound(dataset_id, organization_id)
 
     try:
         updated_dataset = update_dataset(
@@ -685,7 +686,7 @@ def delete_datasets_service(
                 f"Failed to delete datasets for organization {organization_id}: "
                 f"Dataset {dataset_id} not found in organization {organization_id}"
             )
-            raise ValueError(f"Dataset {dataset_id} not found in organization {organization_id}")
+            raise QADatasetNotFound(dataset_id, organization_id)
 
     try:
         deleted_count = delete_datasets(
@@ -708,17 +709,19 @@ def set_dataset_projects_service(
     project_ids: List[UUID],
 ) -> DatasetResponse:
     if not check_dataset_belongs_to_organization(session, organization_id, dataset_id):
-        raise ValueError(f"Dataset {dataset_id} not found in organization {organization_id}")
+        raise QADatasetNotFound(dataset_id, organization_id)
 
     if project_ids:
         projects = session.query(Project.id, Project.organization_id).filter(Project.id.in_(project_ids)).all()
         found_ids = {p.id for p in projects}
         missing = set(project_ids) - found_ids
         if missing:
-            raise ValueError(f"Projects not found: {sorted(missing)}")
+            raise QAInputValidationError(f"Projects not found: {sorted(missing)}")
         foreign = {p.id for p in projects if p.organization_id != organization_id}
         if foreign:
-            raise ValueError(f"Projects do not belong to organization {organization_id}: {sorted(foreign)}")
+            raise QAInputValidationError(
+                f"Projects do not belong to organization {organization_id}: {sorted(foreign)}"
+            )
 
     set_dataset_project_associations(session, dataset_id, project_ids)
 

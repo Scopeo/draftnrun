@@ -15,7 +15,7 @@ globs:
 - Workflow creation: `create_workflow` creates workflow-type projects. Agent projects use `create_agent`.
 - Target-org permissions: tools that accept an explicit `org_id` must validate the caller's role on that target organization, not only on the active org session.
 - Component search: `search_components(query)` must reject blank or whitespace-only queries instead of returning the full catalog.
-- Error handling: never bare except. Map HTTP errors to descriptive MCP tool error messages via `ToolError`.
+- Error handling: never bare except. Map HTTP errors to descriptive MCP tool error messages via `ToolError`. `_handle_response` in `client.py` handles 400 (invalid request + docstring hint), 409 (conflict + re-fetch guidance), and 422 (formatted field-level validation errors) in addition to the existing 401/403/404/429/500/502/503 handlers. Tool-level validation errors must raise `ValueError` with a "what failed + what to do" message.
 - Sentry: `MCPIntegration` is auto-configured. Use `sentry_sdk.logger` for structured logging.
 - Response trimming: large payloads (>50KB) are truncated by `DraftnrunClient._trim_response`. Trimming is controllable per-tool via `ToolSpec.trim` (default `True`) and per-call via the `trim` parameter on all HTTP methods. `get_graph` and `list_components` are untrimmed.
 - When adding/removing/renaming MCP tools: update `mcp_server/README.md`, the relevant `docs://` resource in `mcp_server/docs.py`, and this rule file in the same diff.
