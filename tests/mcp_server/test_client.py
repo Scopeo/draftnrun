@@ -139,9 +139,29 @@ async def test_handle_422_formats_validation_errors():
 
 
 @pytest.mark.asyncio
-async def test_handle_422_with_blank_detail_falls_back_to_default_message():
+async def test_handle_422_with_blank_detail_falls_back_to_docstring_guidance():
     body = json.dumps({"detail": "  \n  "})
     response = httpx.Response(422, text=body, headers={"content-type": "application/json"})
 
     with pytest.raises(ToolError, match="No error detail returned"):
+        await _handle_response(response)
+
+
+@pytest.mark.asyncio
+async def test_handle_422_fallback_uses_docstring_guidance_not_fix_above():
+    body = json.dumps({"detail": "  \n  "})
+    response = httpx.Response(422, text=body, headers={"content-type": "application/json"})
+
+    with pytest.raises(ToolError, match="check the request payload against the tool's docstring"):
+        await _handle_response(response)
+
+
+@pytest.mark.asyncio
+async def test_handle_422_with_fields_uses_fix_above_guidance():
+    body = json.dumps({
+        "detail": [{"loc": ["body", "name"], "msg": "Field required"}]
+    })
+    response = httpx.Response(422, text=body, headers={"content-type": "application/json"})
+
+    with pytest.raises(ToolError, match="fix the values above and retry"):
         await _handle_response(response)

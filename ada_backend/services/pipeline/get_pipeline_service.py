@@ -29,7 +29,7 @@ from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema, ToolDescriptionReadSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
 from ada_backend.schemas.pipeline.tool_port_configuration_schema import ToolPortConfigurationSchema
-from ada_backend.services.errors import ComponentInstanceNotFound, GraphValidationError
+from ada_backend.services.errors import ComponentInstanceNotFound, ComponentVersionNotFound, GraphValidationError
 from ada_backend.services.tool_description_generator import (
     _get_tool_eligible_port_definitions,
     generate_tool_description,
@@ -162,7 +162,7 @@ def get_component_instance(
         session, component_version_id=component_instance.component_version_id
     )
     if component_version is None:
-        raise GraphValidationError(f"Component version {component_instance.component_version_id} not found")
+        raise ComponentVersionNotFound(component_instance.component_version_id)
     subcomponent_params = get_subcomponent_param_def_by_component_version(
         session, component_instance.component_version_id
     )

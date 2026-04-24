@@ -137,7 +137,7 @@ def validate_graph_is_draft(session: Session, graph_runner_id: UUID) -> None:
 
     Raises:
         GraphNotBoundToProjectError: If the graph runner is not bound to any project
-        ValueError: If the graph runner is not in draft mode
+        GraphValidationError: If the graph runner is not in draft mode
     """
     env_relationship = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
     if not env_relationship:
@@ -280,7 +280,8 @@ async def update_graph_service(
             if kind == ParameterKind.INPUT:
                 if not instance.id:
                     raise GraphValidationError(
-                        f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
+                        f"Component instance '{instance.name}' is missing an ID, "
+                        f"which is required to set input parameter '{param.name}'."
                     )
                 input_params_by_instance[instance.id].append(param)
             else:
@@ -424,7 +425,8 @@ async def update_graph_service(
         for param in input_params_by_instance.get(instance.id, []):
             if not instance.id:
                 raise GraphValidationError(
-                    f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
+                    f"Component instance '{instance.name}' is missing an ID, "
+                    f"which is required to set input parameter '{param.name}'."
                 )
             if instance.id not in instance_ids:
                 raise GraphValidationError(

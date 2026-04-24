@@ -142,7 +142,7 @@ def register(mcp: FastMCP) -> None:
         if name is not None:
             name = name.strip()
             if not name:
-                raise ValueError("Workflow name must not be empty. Provide a non-empty string.")
+                raise ValueError("Project name must not be empty. Provide a non-empty string.")
             body["name"] = name
         if description is not None:
             body["description"] = description

@@ -203,7 +203,7 @@ def register(mcp: FastMCP) -> None:
           `get_run_result` rather than assuming failure.
         """
         if not isinstance(timeout, int) or timeout <= 0:
-            raise ValueError("timeout must be a positive integer (seconds). Default is typically 120.")
+            raise ValueError("timeout must be a positive integer (seconds). Default is typically 60.")
         if "messages" not in payload:
             raise ValueError(
                 "payload must contain a 'messages' key. "

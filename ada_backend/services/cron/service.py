@@ -243,7 +243,7 @@ def update_cron_job_service(
     cron_data: CronJobUpdate,
     organization_id: UUID,
     **kwargs,  # For user_id, etc.
-) -> Optional[CronJobResponse]:
+) -> CronJobResponse:
     """Update cron job fields in the database."""
     existing_cron = _assert_cron_in_org(session, cron_id, organization_id)
 

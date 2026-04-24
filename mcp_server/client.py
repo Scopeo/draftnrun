@@ -86,8 +86,12 @@ def _extract_error_detail(response: httpx.Response) -> str:
     return text if text else ""
 
 
-def _format_validation_errors(response: httpx.Response) -> str:
-    """Format FastAPI/Pydantic validation errors as 'field.path: message' lines."""
+def _format_validation_errors(response: httpx.Response) -> tuple[str, bool]:
+    """Format FastAPI/Pydantic validation errors as 'field.path: message' lines.
+
+    Returns (detail_text, has_fields) where has_fields is True when at least
+    one structured field error was parsed from the response body.
+    """
     try:
         body = response.json()
     except (json.JSONDecodeError, ValueError):
@@ -110,12 +114,12 @@ def _format_validation_errors(response: httpx.Response) -> str:
                     path = "input"
                 lines.append(f"{path}: {msg.strip()}")
             if lines:
-                return "\n".join(lines)
+                return "\n".join(lines), True
 
     fallback = _extract_error_detail(response)
     if fallback:
-        return fallback
-    return f"No error detail returned by the server (HTTP {response.status_code})"
+        return fallback, False
+    return f"No error detail returned by the server (HTTP {response.status_code})", False
 
 
 async def _handle_response(response: httpx.Response, *, trim: bool = True) -> Any:
@@ -170,11 +174,13 @@ async def _handle_response(response: httpx.Response, *, trim: bool = True) -> An
         )
 
     if response.status_code == 422:
-        detail = _format_validation_errors(response)
-        raise ToolError(
-            f"Input validation failed{request_context}:\n{detail}\n"
+        detail, has_fields = _format_validation_errors(response)
+        next_step = (
             "Next step: fix the values above and retry."
+            if has_fields
+            else "Next step: check the request payload against the tool's docstring and retry."
         )
+        raise ToolError(f"Input validation failed{request_context}:\n{detail}\n{next_step}")
 
     if response.status_code == 429:
         retry_after = response.headers.get("Retry-After", "unknown")

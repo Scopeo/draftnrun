@@ -164,6 +164,14 @@ class GraphValidationError(ServiceError):
         super().__init__(message)
 
 
+class ComponentVersionNotFound(ServiceError):
+    status_code = 404
+
+    def __init__(self, component_version_id: UUID):
+        self.component_version_id = component_version_id
+        super().__init__(f"Component version {component_version_id} not found")
+
+
 class ComponentInstanceNotFound(ServiceError):
     status_code = 404
 
