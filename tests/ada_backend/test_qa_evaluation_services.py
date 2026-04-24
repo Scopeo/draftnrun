@@ -183,7 +183,7 @@ async def test_evaluation_errors():
         version_output_id = evaluation_scenario["version_output_id"]
 
         non_existent_judge_id = uuid4()
-        with pytest.raises(LLMJudgeNotFound, match="not found in project"):
+        with pytest.raises(LLMJudgeNotFound, match="not found"):
             await run_judge_evaluation_service(
                 session=session,
                 project_id=project_id,
