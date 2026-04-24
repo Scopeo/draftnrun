@@ -22,7 +22,7 @@ export interface RunStreamCallbacks {
     message?: string
     response?: string
   }) => void
-  onRunFailed?: (payload: { message: string; type?: string }) => void
+  onRunFailed?: (payload: { message: string; type?: string; trace_id?: string }) => void
   onError?: (message: string) => void
   onClose?: (code: number, reason: string) => void
   /** Called when autoReconnect exhausts all retries without a terminal run event. */
@@ -116,6 +116,7 @@ export function useRunStream() {
                 callbacks.onRunFailed?.({
                   message: payload.error.message,
                   type: payload.error.type,
+                  trace_id: payload.trace_id,
                 })
                 close()
                 break
