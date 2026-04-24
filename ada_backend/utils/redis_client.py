@@ -462,7 +462,12 @@ def push_git_sync_task(config_id: UUID, commit_sha: str) -> bool:
             client, settings.REDIS_GIT_SYNC_QUEUE_NAME, payload, f"git sync task (config {config_id})"
         )
         if not pushed:
-            client.delete(dedup_key)
+            try:
+                fresh = get_redis_client()
+                if fresh:
+                    fresh.delete(dedup_key)
+            except Exception as exc:
+                LOGGER.warning("Best-effort dedup key cleanup failed for %s: %s", dedup_key, exc)
         return pushed
     except _RECONNECT_ERRORS as e:
         LOGGER.error("Redis connection error pushing git sync task %s to queue: %s", config_id, e)
