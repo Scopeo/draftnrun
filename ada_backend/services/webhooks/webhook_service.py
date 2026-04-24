@@ -157,6 +157,7 @@ async def process_direct_trigger_event(
         project_id=project_id,
         trigger=CallType.WEBHOOK,
         event_id=event_id,
+        env=EnvType(env),
     )
     if run.retry_group_id is None:
         raise WebhookServiceError("Run retry group id was not initialized")
@@ -295,6 +296,7 @@ async def _run_trigger(
     event_id: str | None = None,
 ) -> WebhookExecuteResult:
     project_id = UUID(trigger.project_id)
+    env = EnvType.PRODUCTION
     try:
         response = await run_with_tracking(
             project_id=project_id,
@@ -302,10 +304,11 @@ async def _run_trigger(
             webhook_id=UUID(trigger.webhook_id),
             integration_trigger_id=UUID(trigger.id),
             event_id=event_id,
+            env=env,
             runner_coro=run_env_agent(
                 project_id=project_id,
                 input_data=input_base,
-                env=EnvType.PRODUCTION,
+                env=env,
                 call_type=CallType.WEBHOOK,
             ),
         )

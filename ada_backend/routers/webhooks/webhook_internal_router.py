@@ -112,6 +112,7 @@ async def run_project_internal(
             project_id=project_id,
             trigger=trigger,
             event_id=event_id,
+            env=env,
         )
         run_id = run.id
 
@@ -178,14 +179,16 @@ async def run_workflow_internal(
     Internal endpoint for webhook workers, requires webhook API key.
     Deprecated: use POST /internal/webhooks/{webhook_id}/execute instead.
     """
+    env = EnvType.PRODUCTION
     try:
         return await run_with_tracking(
             project_id=project_id,
             trigger=CallType.WEBHOOK,
+            env=env,
             runner_coro=run_env_agent(
                 project_id=project_id,
                 input_data=input_data,
-                env=EnvType.PRODUCTION,
+                env=env,
                 call_type=CallType.WEBHOOK,
             ),
         )

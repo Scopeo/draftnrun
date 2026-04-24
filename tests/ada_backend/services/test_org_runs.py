@@ -56,7 +56,8 @@ class TestGetOrgRuns:
             organization_id=org_id,
             statuses=None,
             project_ids=None,
-            trigger=None,
+            triggers=None,
+            envs=None,
             date_from=None,
             date_to=None,
         )
@@ -76,13 +77,13 @@ class TestGetOrgRuns:
                 organization_id=org_id,
                 statuses=[RunStatus.FAILED],
                 project_ids=[project_id],
-                trigger=CallType.WEBHOOK,
+                triggers=[CallType.WEBHOOK],
             )
 
         call_kwargs = repo.count_runs_by_organization.call_args.kwargs
         assert call_kwargs["statuses"] == [RunStatus.FAILED]
         assert call_kwargs["project_ids"] == [project_id]
-        assert call_kwargs["trigger"] == CallType.WEBHOOK
+        assert call_kwargs["triggers"] == [CallType.WEBHOOK]
 
     def test_string_error_coerced_to_dict(self):
         session = self._make_session()

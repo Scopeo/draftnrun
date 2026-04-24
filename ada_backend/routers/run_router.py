@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import CallType, RunStatus
+from ada_backend.database.models import CallType, EnvType, RunStatus
 from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import (
     UserRights,
@@ -139,7 +139,7 @@ def retry_run_endpoint(
             session=session,
             run_id=run_id,
             project_id=project_id,
-            env=body.env.value if body.env else None,
+            env=body.env,
             graph_runner_id=body.graph_runner_id,
         )
     except RunNotFound as exc:
@@ -167,7 +167,8 @@ def list_organization_runs(
     page_size: int = Query(50, ge=1, le=100),
     statuses: List[RunStatus] = Query(None),
     project_ids: List[UUID] = Query(None),
-    trigger: Optional[CallType] = None,
+    triggers: List[CallType] = Query(None),
+    envs: List[EnvType] = Query(None),
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
 ) -> OrgRunListResponse:
@@ -178,7 +179,8 @@ def list_organization_runs(
         page_size=page_size,
         statuses=statuses,
         project_ids=project_ids,
-        trigger=trigger,
+        triggers=triggers,
+        envs=envs,
         date_from=date_from,
         date_to=date_to,
     )

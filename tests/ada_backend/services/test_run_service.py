@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from ada_backend.database.models import CallType, RunStatus
+from ada_backend.database.models import CallType, EnvType, RunStatus
 from ada_backend.services.errors import InvalidRunStatusTransition, RunNotFound
 from ada_backend.services.run_service import fail_pending_run, retry_run
 
@@ -23,6 +23,7 @@ def _make_fake_run(run_id, project_id, status=RunStatus.FAILED):
     run.trace_id = None
     run.result_id = None
     run.error = {"message": "timeout", "type": "DeadLetter"}
+    run.env = None
     run.retry_group_id = None
     run.attempt_number = 1
     run.started_at = None
@@ -167,7 +168,7 @@ class TestRetryRun:
                 session=session,
                 run_id=run_id,
                 project_id=project_id,
-                env="draft",
+                env=EnvType.DRAFT,
             )
 
         assert result.run_id == new_run_id
@@ -194,4 +195,4 @@ class TestRetryRun:
         ):
             repo.get_run.return_value = existing_run
             with pytest.raises(ValueError, match="Run input not found for retry"):
-                retry_run(session=session, run_id=run_id, project_id=project_id, env="production")
+                retry_run(session=session, run_id=run_id, project_id=project_id, env=EnvType.PRODUCTION)

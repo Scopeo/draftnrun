@@ -1447,6 +1447,7 @@ class Run(Base):
     )
     status = mapped_column(make_pg_enum(RunStatus), nullable=False, default=RunStatus.PENDING)
     trigger = mapped_column(make_pg_enum(CallType), nullable=False, default=CallType.API)
+    env = mapped_column(make_pg_enum(EnvType), nullable=True)
     trace_id = mapped_column(String, nullable=True, index=True)
     webhook_id = mapped_column(
         UUID(as_uuid=True),

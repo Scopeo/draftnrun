@@ -73,7 +73,16 @@ def register(mcp: FastMCP) -> None:
         ] = None,
         trigger: Annotated[
             Optional[str],
-            Field(description="Filter by trigger type: 'api', 'sandbox', 'webhook', 'cron', or 'qa'."),
+            Field(
+                description=(
+                    "Filter by trigger type: 'api', 'sandbox', 'webhook', 'cron', or 'qa'. "
+                    "Comma-separated for multiple."
+                )
+            ),
+        ] = None,
+        env: Annotated[
+            Optional[str],
+            Field(description="Filter by environment: 'draft' or 'production'. Comma-separated for multiple."),
         ] = None,
         date_from: Annotated[
             Optional[str],
@@ -104,7 +113,9 @@ def register(mcp: FastMCP) -> None:
         if status is not None:
             params["statuses"] = status
         if trigger is not None:
-            params["trigger"] = trigger
+            params["triggers"] = [t for t in (t.strip() for t in trigger.split(",")) if t]
+        if env is not None:
+            params["envs"] = [e for e in (e.strip() for e in env.split(",")) if e]
         if date_from is not None:
             params["date_from"] = date_from
         if date_to is not None:
@@ -164,10 +175,7 @@ def register(mcp: FastMCP) -> None:
         payload: Annotated[
             dict,
             Field(
-                description=(
-                    'Request body dict — must contain "messages", may contain additional '
-                    "Start-node fields."
-                ),
+                description=('Request body dict — must contain "messages", may contain additional Start-node fields.'),
             ),
         ],
         timeout: Annotated[int, Field(description="Max seconds to wait for completion.")] = 60,
@@ -242,8 +250,7 @@ def register(mcp: FastMCP) -> None:
                         "status": "completed",
                         "run_id": run_id,
                         "hint": (
-                            f"Run completed but result fetch failed. "
-                            f"Use get_run_result('{project_id}', '{run_id}')."
+                            f"Run completed but result fetch failed. Use get_run_result('{project_id}', '{run_id}')."
                         ),
                     }
             if status == "failed":
