@@ -108,7 +108,9 @@ PROXY_SPECS: list[ToolSpec] = [
             dict,
             description=(
                 "Component definition: {component_id, component_version_id, label, "
-                "is_start_node, parameters, input_port_instances, ...}."
+                "is_start_node, parameters, ...}. Each parameter has a 'kind' field: "
+                "'parameter' for static config values, 'input' for field expressions "
+                "(data wiring). Input-kind parameters carry a 'field_expression' dict."
             ),
         ),
     ),
@@ -118,9 +120,9 @@ PROXY_SPECS: list[ToolSpec] = [
             "Update a single component instance's parameters and ports (v2).\n\n"
             "Only updates the specified component — does not touch topology. "
             "Optionally update label and is_start_node.\n\n"
-            "⚠️ FULL-REPLACE semantics: `parameters` and `input_port_instances` "
-            "replace the existing lists entirely. You MUST include ALL parameters "
-            "from `get_graph` or `get_graph_v2`, not only the ones you want to "
+            "⚠️ FULL-REPLACE semantics: `parameters` replaces the existing list "
+            "entirely. You MUST include ALL parameters (both kind='parameter' and "
+            "kind='input') from `get_graph`, not only the ones you want to "
             "change — omitted parameters will be lost. For single-parameter "
             "changes, prefer `update_component_parameters` which handles the "
             "read-modify-write automatically."
@@ -132,8 +134,9 @@ PROXY_SPECS: list[ToolSpec] = [
             "component_data",
             dict,
             description=(
-                "Component update: {parameters, input_port_instances, label?, is_start_node?, ...}. "
-                "parameters and input_port_instances use full-replace — include the complete lists."
+                "Component update: {parameters, label?, is_start_node?, ...}. "
+                "parameters uses full-replace — include the complete list with "
+                "both kind='parameter' and kind='input' entries."
             ),
         ),
     ),
@@ -266,37 +269,37 @@ def _validate_component_instances(graph_data: dict) -> None:
             )
 
 
-def _convert_field_expressions_to_write_format(instances: list[dict]) -> None:
-    """Convert read-format field_expressions into write-format input_port_instances.
+def _convert_field_expressions_to_unified_params(instances: list[dict]) -> None:
+    """Merge read-format field_expressions into the unified parameters list.
 
-    GET returns expressions in a top-level ``field_expressions`` list per instance,
-    but PUT only processes ``input_port_instances``.  Without this conversion,
-    complex expressions (e.g. json_build) whose ``value`` field is a lossy
-    placeholder get silently corrupted on round-trip.
+    GET returns expressions in a top-level ``field_expressions`` list per instance.
+    The v2 API accepts a single ``parameters`` list where input-kind entries carry
+    a ``field_expression`` dict.  This converts the read format into the write format
+    by attaching ``field_expression`` to existing ``kind='input'`` parameters.
     """
     for inst in instances:
         field_expr_list = inst.pop("field_expressions", None)
         if not field_expr_list:
             continue
 
-        input_port_instances = inst.setdefault("input_port_instances", [])
-        existing_input_port_instance_names = {
-            input_port_instance["name"]
-            for input_port_instance in input_port_instances
-            if "name" in input_port_instance
-        }
+        params = inst.setdefault("parameters", [])
+        input_param_names = {p["name"] for p in params if p.get("kind") == "input"}
 
         for field_expr in field_expr_list:
             field_name = field_expr.get("field_name")
             expression_json = field_expr.get("expression_json")
             if not field_name or not expression_json:
                 continue
-            if field_name in existing_input_port_instance_names:
-                continue
-            input_port_instances.append({
-                "name": field_name,
-                "field_expression": {"expression_json": expression_json},
-            })
+
+            existing_param = next((p for p in params if p["name"] == field_name), None)
+            if existing_param and existing_param.get("kind") == "input":
+                existing_param["field_expression"] = {"expression_json": expression_json}
+            elif field_name not in input_param_names:
+                params.append({
+                    "name": field_name,
+                    "kind": "input",
+                    "field_expression": {"expression_json": expression_json},
+                })
 
 
 _OAUTH_KEYWORDS = ("access_token", "oauth", "integration", "credentials")
@@ -429,11 +432,11 @@ def register(mcp: FastMCP) -> None:
 
         Canonical port auto-wiring: the backend auto-generates a visible RefNode
         field expression for every edge whose canonical input has no user-provided
-        expression. This means you do NOT need to inject `input_port_instances`
-        or field expressions for canonical inputs like `messages` (AI Agent),
-        `markdown_content` (PDF), `query` (Retriever/Search), etc. — just create
-        the edge and the backend handles the rest. The auto-generated expression
-        (e.g. `@{{<source_uuid>.output}}`) is returned in
+        expression. This means you do NOT need to inject field expressions for
+        canonical inputs like `messages` (AI Agent), `markdown_content` (PDF),
+        `query` (Retriever/Search), etc. — just create the edge and the backend
+        handles the rest. The auto-generated expression (e.g.
+        `@{{<source_uuid>.output}}`) is returned in
         `auto_generated_field_expressions` and is visible and editable by the
         user. If you provide your own field expression for a canonical input,
         the backend respects it and skips auto-generation.
@@ -442,9 +445,9 @@ def register(mcp: FastMCP) -> None:
         - Save version creates an immutable snapshot and keeps the current draft.
         - Publish to production creates a fresh draft with new instance IDs.
         - Key-extraction refs like `@{{uuid.port::key}}` are safest through
-          `input_port_instances`.
+          explicit `field_expression` on `kind="input"` parameters.
         - `get_graph` returns `field_expressions` (normalized read format).
-          When writing, use `input_port_instances` on component instances —
+          When writing, use `kind="input"` parameters with `field_expression` —
           do NOT copy `field_expressions` from `get_graph` into `update_graph`.
         """
         jwt, _ = _get_auth()
@@ -537,6 +540,7 @@ def register(mcp: FastMCP) -> None:
             )
 
         field_expr_list = target.get("field_expressions", [])
+        non_literal_conflicts: list[tuple[str, str]] = []
         for param in existing_params:
             if param.get("kind") != "input" or param.get("name") not in parameters:
                 continue
@@ -545,6 +549,7 @@ def register(mcp: FastMCP) -> None:
             existing_fe = next((fe for fe in field_expr_list if fe.get("field_name") == field_name), None)
             existing_type = (existing_fe or {}).get("expression_json", {}).get("type")
             if existing_fe is not None and existing_type not in (None, "literal"):
+                non_literal_conflicts.append((field_name, existing_type))
                 continue
             if new_value is not None:
                 expr = {"type": "literal", "value": str(new_value)}
@@ -561,14 +566,19 @@ def register(mcp: FastMCP) -> None:
                 field_expr_list.remove(existing_fe)
         target["field_expressions"] = field_expr_list
 
-        write_params = [p for p in existing_params if p.get("kind", "parameter") != "input"]
+        if non_literal_conflicts:
+            desc = ", ".join(f"'{n}' (wired as {t})" for n, t in non_literal_conflicts)
+            raise ToolError(
+                f"Cannot update {desc} via update_component_parameters because "
+                f"{'it has a' if len(non_literal_conflicts) == 1 else 'they have'} "
+                f"non-literal field expression (e.g. ref or json_build wiring). "
+                f"Use update_component_v2 to rewire these parameters."
+            )
 
-        _convert_field_expressions_to_write_format([target])
-        input_port_instances = target.get("input_port_instances", [])
+        _convert_field_expressions_to_unified_params([target])
 
         component_data = {
-            "parameters": write_params,
-            "input_port_instances": input_port_instances,
+            "parameters": existing_params,
         }
 
         v2_path = (

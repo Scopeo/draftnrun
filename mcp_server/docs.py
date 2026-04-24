@@ -275,15 +275,7 @@ A graph is a DAG with three top-level arrays and two top-level maps:
   "component_name": "llm_call",
   "parameters": [
     {"name": "prompt", "kind": "parameter", "value": "You are a helpful assistant..."},
-    {"name": "messages", "kind": "input", "is_tool_input": true, "value": "@{{<uuid>.output}}"}
-  ],
-  "input_port_instances": [
-    {
-      "name": "messages",
-      "field_expression": {
-        "expression_json": {"type": "ref", "instance": "<uuid>", "port": "messages"}
-      }
-    }
+    {"name": "messages", "kind": "input", "is_tool_input": true, "value": "@{{<uuid>.messages}}"}
   ],
   "tool_description": {"name": "My_LLM_Call", "description": "...", "tool_properties": {...}},
   "tool_description_override": null,
@@ -301,9 +293,12 @@ A graph is a DAG with three top-level arrays and two top-level maps:
 Key fields:
 - `ref` — human-readable label (display only, not used in expressions)
 - `component_id` + `component_version_id` — which catalog component this is
-- `parameters` — configured values (prompt, model, temperature, etc.). Parameters with \
-`is_tool_input: true` are part of the tool interface when the component is used as an agent tool.
-- `input_port_instances` — input ports with their data sources (field expressions)
+- `parameters` — configured values (prompt, model, temperature, etc.). Each parameter has a \
+`kind` field: `"parameter"` for static config, `"input"` for field-expression-driven data wiring. \
+Input-kind parameters carry a `value` with the human-readable expression text \
+(e.g. `@{{uuid.port}}`); the structured `field_expressions` are at the instance level. \
+Parameters with `is_tool_input: true` are part of the tool interface when the component is \
+used as an agent tool.
 - `tool_description` — read-only, dynamically computed from port configurations. Shows the \
 tool name, description, and JSON Schema properties the AI sees at runtime.
 - `tool_description_override` — optional custom description for the tool (overrides the \
@@ -328,7 +323,7 @@ When you create an edge, the backend auto-generates a visible RefNode field expr
 for each canonical input that has no user-provided expression. \
 This uses the `is_canonical` flag on port definitions: \
 `source.canonical_output → target.canonical_input`. The auto-generated expression \
-(e.g. `@{{<source_uuid>.output}}`) is saved on the target's `input_port_instances` and \
+(e.g. `@{{<source_uuid>.output}}`) is saved on the target's input ports and \
 returned in `auto_generated_field_expressions` so the frontend can display it immediately.
 
 | Component | Canonical output | Canonical input |
@@ -341,13 +336,14 @@ returned in `auto_generated_field_expressions` so the frontend can display it im
 | Gmail Sender | `status` | `mail_body` |
 | Code Execution | `output` | `python_code` |
 
-**You do not need to inject `input_port_instances` or field expressions for canonical inputs.** \
+**You do not need to inject `kind="input"` parameters or field expressions for canonical inputs.** \
 Just create the edge — the backend populates the wiring. If you provide your own field \
 expression for a canonical input, the backend respects it and skips auto-generation, so \
 user edits are never overwritten.
 
-`input_port_instances` are still the right tool for **non-canonical** wiring (concat \
-expressions, key extraction, cross-references to non-adjacent nodes, etc.).
+`kind="input"` parameters with explicit `field_expression` are the right tool for \
+**non-canonical** wiring (concat expressions, key extraction, cross-references to non-adjacent \
+nodes, etc.).
 
 ### Canonical inputs are editable
 
@@ -365,20 +361,17 @@ static instructions with dynamic data from other nodes:
   "name": "initial_prompt",
   "kind": "input",
   "value": null,
-  "input_port_instances": [{
-    "name": "initial_prompt",
-    "field_expression": {
-      "expression_json": {
-        "type": "concat",
-        "parts": [
-          {"type": "literal", "value": "You are a research agent.\\n\\nPerson: "},
-          {"type": "ref", "instance": "<start-uuid>", "port": "full_name"},
-          {"type": "literal", "value": "\\nLinkedIn: "},
-          {"type": "ref", "instance": "<start-uuid>", "port": "linkedin_url"}
-        ]
-      }
+  "field_expression": {
+    "expression_json": {
+      "type": "concat",
+      "parts": [
+        {"type": "literal", "value": "You are a research agent.\\n\\nPerson: "},
+        {"type": "ref", "instance": "<start-uuid>", "port": "full_name"},
+        {"type": "literal", "value": "\\nLinkedIn: "},
+        {"type": "ref", "instance": "<start-uuid>", "port": "linkedin_url"}
+      ]
     }
-  }]
+  }
 }
 ```
 
@@ -444,6 +437,11 @@ update_component_parameters(project_id, graph_runner_id, component_instance_id,
 output ports — modifying those fields deletes and recreates `OutputPortInstance` rows, which \
 may break downstream field expressions.
 
+⚠️ `update_component_parameters` cannot overwrite parameters wired with non-literal field \
+expressions (`ref` or `json_build`). If a parameter is wired to another node's output or uses \
+a `json_build` expression, the tool will raise an error. Use `update_component_v2` to rewire \
+those parameters.
+
 ### Full graph update
 
 `update_graph` sends the full graph structure for the selected runner. The safe pattern:
@@ -471,9 +469,10 @@ The v2 endpoints support two save granularities:
 **Granular save (front/MCP):**
 - `create_component_v2` — add a new component to the graph, returns `instance_id`
 - `update_component_v2` — update a single component's parameters, ports, integration. \
-  **Full-replace semantics**: `parameters` and `input_port_instances` replace the existing lists entirely — \
-  include ALL parameters from `get_graph`, not only the ones you want to change. \
-  For single-parameter changes, prefer `update_component_parameters`
+  **Full-replace semantics**: `parameters` replaces the existing list entirely — \
+  include ALL parameters (both `kind="parameter"` and `kind="input"`) from `get_graph`, \
+  not only the ones you want to change. For single-parameter changes, prefer \
+  `update_component_parameters`
 - `delete_component_v2` — remove a component and cascade-delete its edges/relationships
 - `update_graph_topology_v2` — sync edges, relationships, and node metadata (label, is_start_node); \
   all referenced instance_ids must already exist; edges use full-replace semantics
@@ -495,9 +494,9 @@ After `save_graph_version`, the current draft stays editable and its instance ID
 ### Read format ≠ Write format
 
 `get_graph` returns a **normalized read format** with `field_expressions` at the node level. \
-When writing with `update_graph`, use `input_port_instances` on each component instance. \
-**Do NOT copy `field_expressions` from a `get_graph` response into an `update_graph` call** — \
-the formats are different and the backend expects the write format.
+When writing with `update_graph`, use `kind="input"` parameters with `field_expression` on each \
+component instance. **Do NOT copy `field_expressions` from a `get_graph` response into an \
+`update_graph` call** — the formats are different and the backend expects the write format.
 
 ### Complete example: 3-node workflow (Start → AI Agent → If/Else)
 
@@ -512,8 +511,7 @@ the formats are different and the backend expects the write format.
       "component_id": "<from search_components>",
       "component_version_id": "<from search_components>",
       "component_name": "start_v2",
-      "parameters": [],
-      "input_port_instances": []
+      "parameters": []
     },
     {
       "id": "__GRAPH_DOC_NODE_B__",
@@ -525,8 +523,7 @@ the formats are different and the backend expects the write format.
       "component_name": "ai_agent",
       "parameters": [
         {"name": "initial_prompt", "kind": "parameter", "value": "Analyse this document."}
-      ],
-      "input_port_instances": []
+      ]
     },
     {
       "id": "__GRAPH_DOC_NODE_C__",
@@ -558,8 +555,7 @@ the formats are different and the backend expects the write format.
             }
           }
         }
-      ],
-      "input_port_instances": []
+      ]
     }
   ],
   "edges": [
@@ -586,33 +582,31 @@ in real graphs use IDs from `get_graph`, not copied literals.
 - **Edges** use `"origin"` and `"destination"` as **plain UUID strings** (node IDs), not objects.
 - **Edge `id`** can be `null` — the MCP layer auto-generates UUIDs.
 - **Canonical inputs** (like `messages` on AI Agent) are auto-wired by the backend when an edge \
-exists — no need to provide `input_port_instances` for them.
+exists — no need to provide `kind="input"` parameters for them.
 - **JSON-typed parameters** like `conditions` on If/Else: use `json_build` expressions to \
 reference other node outputs while preserving structure. If you need a static JSON value, \
 pass it as a `kind="parameter"` with the value JSON-encoded as a string.
 - **`component_id` and `component_version_id`** must come from `search_components()` or \
 `list_components()` — never hard-code them.
 
-### Input data wiring: `kind="input"` vs `input_port_instances`
+### Input data wiring with `kind="input"` parameters
 
-Two ways to wire data into a node's input ports:
+Wire data into a node's input ports using `kind="input"` parameters. These carry a \
+`field_expression` dict with the expression JSON:
 
-1. **`kind="input"` parameters** — string values parsed into field expressions.
-2. **`input_port_instances`** — JSON expression objects stored directly.
+```json
+{"name": "messages", "kind": "input",
+"field_expression": {"expression_json": {"type": "ref", "instance": "<uuid>", "port": "output"}}}
+```
 
-Use `kind="input"` for most literal values and simple references between type-compatible ports.
+For simple literal values, you can also set `value` directly (parsed into a field expression):
 
-Use `input_port_instances` when:
+```json
+{"name": "query", "kind": "input", "value": "search term"}
+```
 
-- you need `json_build` or `concat`
-- you need explicit expression JSON
-- you are using key-extraction refs like `@{{uuid.port::key}}`
-
-Reason: key-extraction refs are a backend special case — `kind="input"` skips field expression \
-creation for `::key` refs to avoid false type-coercion errors.
-
-**Priority rule**: if a field name is present in both `input_port_instances` and a `kind="input"` \
-parameter, the `input_port_instances` version wins.
+For complex expressions (`json_build`, `concat`, key-extraction refs like \
+`@{{uuid.port::key}}`), always use the explicit `field_expression` form.
 
 ### Parameter `kind` is critical in `update_graph`
 
@@ -627,7 +621,7 @@ input-like fields.
 ### Required fields in `update_graph` payloads
 
 Component instances require: `id`, `component_id`, `component_version_id`, `name`, `ref`, \
-`is_start_node`, `parameters`, and `input_port_instances`.
+`is_start_node`, and `parameters` (including both `kind="parameter"` and `kind="input"` entries).
 
 Include `integration` on components that use OAuth or linked integrations (for example Gmail \
 Sender) — omitting it can delete the linked integration relationship.

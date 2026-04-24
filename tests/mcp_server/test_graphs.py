@@ -7,7 +7,7 @@ from mcp_server.client import ToolError
 from mcp_server.tools import graphs
 from mcp_server.tools.graphs import (
     _assign_missing_ids,
-    _convert_field_expressions_to_write_format,
+    _convert_field_expressions_to_unified_params,
     _validate_component_instances,
     _warn_unknown_graph_keys,
 )
@@ -243,10 +243,10 @@ def test_promote_version_to_env_registered(fake_mcp):
     assert "update_graph_topology_v2" in fake_mcp.tools
 
 
-# --- _convert_field_expressions_to_write_format ---
+# --- _convert_field_expressions_to_unified_params ---
 
 
-def test_convert_field_expressions_moves_to_input_port_instances():
+def test_convert_field_expressions_merges_into_unified_params():
     json_build_expr = {
         "type": "json_build",
         "template": {"Authorization": "Bearer __REF_0__"},
@@ -255,53 +255,60 @@ def test_convert_field_expressions_moves_to_input_port_instances():
     instances = [
         {
             "id": "inst-1",
-            "parameters": [],
+            "parameters": [
+                {"name": "headers", "kind": "input", "value": "[JSON_BUILD]"},
+            ],
             "field_expressions": [
                 {"field_name": "headers", "expression_json": json_build_expr},
             ],
-            "input_port_instances": [],
         }
     ]
 
-    _convert_field_expressions_to_write_format(instances)
+    _convert_field_expressions_to_unified_params(instances)
 
     assert "field_expressions" not in instances[0]
-    ipis = instances[0]["input_port_instances"]
-    assert len(ipis) == 1
-    assert ipis[0]["name"] == "headers"
-    assert ipis[0]["field_expression"]["expression_json"] == json_build_expr
+    params = instances[0]["parameters"]
+    assert len(params) == 1
+    assert params[0]["name"] == "headers"
+    assert params[0]["kind"] == "input"
+    assert params[0]["field_expression"]["expression_json"] == json_build_expr
 
 
-def test_convert_field_expressions_skips_when_ipi_already_exists():
+def test_convert_field_expressions_adds_new_input_params():
+    """field_expressions for names not in params are added as kind='input' entries."""
     expr_json = {"type": "literal", "value": "hello"}
     instances = [
         {
             "id": "inst-1",
+            "parameters": [
+                {"name": "model", "kind": "parameter", "value": "gpt-4"},
+            ],
             "field_expressions": [
                 {"field_name": "headers", "expression_json": expr_json},
-            ],
-            "input_port_instances": [
-                {"name": "headers", "field_expression": {"expression_json": {"type": "literal", "value": "existing"}}},
             ],
         }
     ]
 
-    _convert_field_expressions_to_write_format(instances)
+    _convert_field_expressions_to_unified_params(instances)
 
-    assert len(instances[0]["input_port_instances"]) == 1
-    assert instances[0]["input_port_instances"][0]["field_expression"]["expression_json"]["value"] == "existing"
+    params = instances[0]["parameters"]
+    assert len(params) == 2
+    headers_param = next(p for p in params if p["name"] == "headers")
+    assert headers_param["kind"] == "input"
+    assert headers_param["field_expression"]["expression_json"] == expr_json
 
 
 def test_convert_field_expressions_no_op_when_empty():
     instances = [{"id": "inst-1", "parameters": []}]
-    _convert_field_expressions_to_write_format(instances)
-    assert "input_port_instances" not in instances[0]
+    _convert_field_expressions_to_unified_params(instances)
+    assert len(instances[0]["parameters"]) == 0
 
 
 def test_convert_field_expressions_handles_multiple_expressions():
     instances = [
         {
             "id": "inst-1",
+            "parameters": [],
             "field_expressions": [
                 {"field_name": "headers", "expression_json": {"type": "var", "name": "token"}},
                 {"field_name": "body", "expression_json": {"type": "literal", "value": "test"}},
@@ -309,12 +316,13 @@ def test_convert_field_expressions_handles_multiple_expressions():
         }
     ]
 
-    _convert_field_expressions_to_write_format(instances)
+    _convert_field_expressions_to_unified_params(instances)
 
-    ipis = instances[0]["input_port_instances"]
-    assert len(ipis) == 2
-    names = {ipi["name"] for ipi in ipis}
+    params = instances[0]["parameters"]
+    assert len(params) == 2
+    names = {p["name"] for p in params}
     assert names == {"headers", "body"}
+    assert all(p["kind"] == "input" for p in params)
 
 
 # --- update_component_parameters field expression round-trip ---
@@ -325,8 +333,8 @@ FAKE_INSTANCE_ID = "00000000-0000-4000-8000-111111111111"
 
 @pytest.mark.asyncio
 async def test_update_component_parameters_preserves_json_build_expressions(monkeypatch, fake_mcp):
-    """Regression: update_component_parameters must convert field_expressions
-    to input_port_instances so complex expressions (json_build) survive the
+    """Regression: update_component_parameters must merge field_expressions
+    into unified parameters so complex expressions (json_build) survive the
     read-modify-write round-trip (DRA-1191)."""
     json_build_expr = {
         "type": "json_build",
@@ -346,7 +354,6 @@ async def test_update_component_parameters_preserves_json_build_expressions(monk
                 "field_expressions": [
                     {"field_name": "headers", "expression_json": json_build_expr},
                 ],
-                "input_port_instances": [],
             }
         ],
         "edges": [],
@@ -382,13 +389,12 @@ async def test_update_component_parameters_preserves_json_build_expressions(monk
     assert f"/components/{FAKE_INSTANCE_ID}" in put_path
 
     assert "component_instances" not in put_payload
-    ipis = put_payload["input_port_instances"]
-    headers_ipi = next(ipi for ipi in ipis if ipi["name"] == "headers")
-    assert headers_ipi["field_expression"]["expression_json"] == json_build_expr
+    assert "input_port_instances" not in put_payload
 
     sent_params = put_payload["parameters"]
-    param_kinds = {p.get("kind", "parameter") for p in sent_params}
-    assert "input" not in param_kinds
+    headers_param = next(p for p in sent_params if p["name"] == "headers")
+    assert headers_param["kind"] == "input"
+    assert headers_param["field_expression"]["expression_json"] == json_build_expr
 
     updated_param = next(p for p in sent_params if p["name"] == "initial_prompt")
     assert updated_param["value"] == "Updated prompt"
@@ -398,7 +404,7 @@ async def test_update_component_parameters_preserves_json_build_expressions(monk
 async def test_update_component_parameters_updates_input_kind_field_expressions(monkeypatch, fake_mcp):
     """Regression: updating a parameter with kind='input' must update the
     corresponding field_expression so the new value reaches the backend
-    via input_port_instances."""
+    via unified parameters."""
     graph_response = {
         "component_instances": [
             {
@@ -422,7 +428,6 @@ async def test_update_component_parameters_updates_input_kind_field_expressions(
                         "expression_text": "sentence is correct",
                     },
                 ],
-                "input_port_instances": [],
             }
         ],
         "edges": [],
@@ -453,18 +458,18 @@ async def test_update_component_parameters_updates_input_kind_field_expressions(
     assert result["status"] == "ok"
     assert sorted(result["updated_parameters"]) == ["additional_context", "criteria"]
 
-    ipis = put_payload["input_port_instances"]
-    criteria_ipi = next(ipi for ipi in ipis if ipi["name"] == "criteria")
-    assert criteria_ipi["field_expression"]["expression_json"] == {"type": "literal", "value": "Hello DIana"}
+    sent_params = put_payload["parameters"]
+    criteria_param = next(p for p in sent_params if p["name"] == "criteria")
+    assert criteria_param["kind"] == "input"
+    assert criteria_param["field_expression"]["expression_json"] == {"type": "literal", "value": "Hello DIana"}
 
-    context_ipi = next(ipi for ipi in ipis if ipi["name"] == "additional_context")
-    assert context_ipi["field_expression"]["expression_json"] == {"type": "literal", "value": "Hi it is me"}
+    context_param = next(p for p in sent_params if p["name"] == "additional_context")
+    assert context_param["kind"] == "input"
+    assert context_param["field_expression"]["expression_json"] == {"type": "literal", "value": "Hi it is me"}
 
-    input_ipi = next(ipi for ipi in ipis if ipi["name"] == "input")
-    assert input_ipi["field_expression"]["expression_json"]["type"] == "ref"
-
-    param_kinds = {p.get("kind", "parameter") for p in put_payload["parameters"]}
-    assert "input" not in param_kinds
+    input_param = next(p for p in sent_params if p["name"] == "input")
+    assert input_param["kind"] == "input"
+    assert input_param["field_expression"]["expression_json"]["type"] == "ref"
 
 
 @pytest.mark.asyncio
@@ -486,7 +491,6 @@ async def test_update_component_parameters_removes_field_expression_on_null(monk
                         "expression_text": "old value",
                     },
                 ],
-                "input_port_instances": [],
             }
         ],
         "edges": [],
@@ -514,6 +518,58 @@ async def test_update_component_parameters_removes_field_expression_on_null(monk
         {"criteria": None},
     )
 
-    ipis = put_payload["input_port_instances"]
-    criteria_ipis = [ipi for ipi in ipis if ipi["name"] == "criteria"]
-    assert len(criteria_ipis) == 0
+    sent_params = put_payload["parameters"]
+    criteria_param = next(p for p in sent_params if p["name"] == "criteria")
+    assert criteria_param["kind"] == "input"
+    assert "field_expression" not in criteria_param or criteria_param.get("field_expression") is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("expr_type", ["ref", "json_build"])
+async def test_update_component_parameters_rejects_overwrite_of_non_literal_expression(
+    monkeypatch, fake_mcp, expr_type,
+):
+    """Attempting to set a literal value on a parameter wired with a non-literal
+    field expression (ref / json_build) must raise ToolError instead of silently
+    keeping the old wiring and claiming success."""
+    non_literal_expr = (
+        {"type": "ref", "instance": "start-id", "port": "output"}
+        if expr_type == "ref"
+        else {
+            "type": "json_build",
+            "template": {"key": "__REF_0__"},
+            "refs": {"__REF_0__": {"type": "var", "name": "tok"}},
+        }
+    )
+    graph_response = {
+        "component_instances": [
+            {
+                "id": FAKE_INSTANCE_ID,
+                "name": "Node",
+                "parameters": [
+                    {"name": "wired_input", "value": "old", "kind": "input"},
+                ],
+                "field_expressions": [
+                    {"field_name": "wired_input", "expression_json": non_literal_expr},
+                ],
+            }
+        ],
+        "edges": [],
+        "relationships": [],
+    }
+
+    async def mock_get(path, token, *, trim=True, **params):
+        return graph_response
+
+    monkeypatch.setattr(graphs, "_get_auth", lambda: ("jwt-token", "user-123"))
+    monkeypatch.setattr(graphs.api, "get", mock_get)
+    monkeypatch.setattr(graphs.api, "put", AsyncMock())
+
+    graphs.register(fake_mcp)
+    with pytest.raises(ToolError, match="non-literal field expression"):
+        await fake_mcp.tools["update_component_parameters"](
+            UUID(FAKE_PROJECT_ID),
+            UUID(FAKE_RUNNER_ID),
+            UUID(FAKE_INSTANCE_ID),
+            {"wired_input": "new value"},
+        )

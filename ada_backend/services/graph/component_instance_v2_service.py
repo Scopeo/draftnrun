@@ -23,11 +23,13 @@ from ada_backend.repositories.input_port_instance_repository import (
     get_input_port_instances_for_component_instance,
     update_input_port_instance,
 )
+from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterSchema, PipelineParameterV2Schema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.schemas.pipeline.graph_schema import (
     ComponentCreateV2Schema,
     ComponentUpdateV2Schema,
 )
+from ada_backend.schemas.pipeline.port_instance_schema import FieldExpressionSchema, InputPortInstanceSchema
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
 from ada_backend.services.pipeline.update_pipeline_service import (
     _normalize_expression_json,
@@ -37,14 +39,54 @@ from ada_backend.services.pipeline.update_pipeline_service import (
 LOGGER = logging.getLogger(__name__)
 
 
+def _split_unified_parameters(
+    parameters: list[PipelineParameterV2Schema],
+) -> tuple[list[PipelineParameterSchema], list[InputPortInstanceSchema]]:
+    """Split a unified v2 parameters list into regular params and input port instances.
+
+    Returns (param_params, input_port_instances) where:
+    - param_params: parameters with kind="parameter" (or missing kind), passed to BasicParameter storage
+    - input_port_instances: parameters with kind="input", converted to InputPortInstanceSchema
+    """
+    param_params: list[PipelineParameterSchema] = []
+    input_port_instances: list[InputPortInstanceSchema] = []
+
+    for param in parameters:
+        if param.kind == ParameterKind.INPUT:
+            field_expression = param.field_expression
+            if field_expression is None and param.value is not None:
+                expression_json = _normalize_expression_json(param.value)
+                if expression_json is not None:
+                    field_expression = FieldExpressionSchema(expression_json=expression_json)
+            input_port_instances.append(
+                InputPortInstanceSchema(
+                    name=param.name,
+                    field_expression=field_expression,
+                    description=param.description,
+                    port_definition_id=param.port_definition_id,
+                )
+            )
+        else:
+            param_params.append(
+                PipelineParameterSchema(
+                    name=param.name,
+                    value=param.value,
+                    display_order=param.display_order,
+                    kind=param.kind,
+                )
+            )
+
+    return param_params, input_port_instances
+
+
 def _to_component_instance_schema(
     instance_id: UUID | None,
     component_id: UUID,
     component_version_id: UUID,
     label: str | None,
     is_start_node: bool,
-    parameters: list[dict],
-    input_port_instances: list[dict],
+    parameters: list[PipelineParameterSchema] | None,
+    input_port_instances: list[InputPortInstanceSchema] | None,
     port_configurations: list[dict] | None,
     integration: dict | None,
     tool_description_override: str | None,
@@ -56,7 +98,7 @@ def _to_component_instance_schema(
         component_id=component_id,
         component_version_id=component_version_id,
         parameters=parameters,
-        input_port_instances=input_port_instances,
+        input_port_instances=input_port_instances or [],
         port_configurations=port_configurations,
         integration=integration,
         tool_description_override=tool_description_override,
@@ -69,19 +111,24 @@ def create_component_in_graph(
     project_id: UUID,
     payload: ComponentCreateV2Schema,
 ) -> UUID:
+    param_params, input_port_instances = _split_unified_parameters(payload.parameters)
     instance_schema = _to_component_instance_schema(
         instance_id=None,
         component_id=payload.component_id,
         component_version_id=payload.component_version_id,
         label=payload.label,
         is_start_node=payload.is_start_node,
-        parameters=payload.parameters,
-        input_port_instances=payload.input_port_instances,
+        parameters=param_params,
+        input_port_instances=input_port_instances,
         port_configurations=payload.port_configurations,
         integration=payload.integration,
         tool_description_override=payload.tool_description_override,
     )
     instance_id = create_or_update_component_instance(session, instance_schema, project_id)
+
+    if input_port_instances:
+        _sync_input_port_field_expressions(session, instance_id, input_port_instances)
+
     upsert_component_node(
         session,
         graph_runner_id=graph_runner_id,
@@ -94,7 +141,7 @@ def create_component_in_graph(
 def _sync_input_port_field_expressions(
     session: Session,
     instance_id: UUID,
-    incoming_port_instances: list[dict],
+    incoming_port_instances: list[InputPortInstanceSchema],
 ) -> None:
     """Sync field expressions on input port instances for a single component.
 
@@ -112,18 +159,16 @@ def _sync_input_port_field_expressions(
     incoming_names: set[str] = set()
 
     for port_data in incoming_port_instances:
-        field_expr_data = port_data.get("field_expression")
-        if not field_expr_data or not field_expr_data.get("expression_json"):
+        if not port_data.field_expression or not port_data.field_expression.expression_json:
             continue
 
-        field_name = port_data["name"]
-        incoming_names.add(field_name)
+        incoming_names.add(port_data.name)
 
-        expression_json = _normalize_expression_json(field_expr_data["expression_json"])
+        expression_json = _normalize_expression_json(port_data.field_expression.expression_json)
         if expression_json is None:
             continue
 
-        existing_port = db_port_by_name.get(field_name)
+        existing_port = db_port_by_name.get(port_data.name)
         if existing_port:
             if existing_port.field_expression_id:
                 update_field_expression(session, existing_port.field_expression_id, expression_json)
@@ -135,7 +180,7 @@ def _sync_input_port_field_expressions(
             create_input_port_instance(
                 session=session,
                 component_instance_id=instance_id,
-                name=field_name,
+                name=port_data.name,
                 field_expression_id=expr.id,
             )
 
@@ -164,22 +209,28 @@ def update_single_component(
     label = payload.label if payload.label is not None else existing.name
     is_start_node = payload.is_start_node if payload.is_start_node is not None else current_node.is_start_node
 
+    if payload.parameters is not None:
+        param_params, input_port_instances = _split_unified_parameters(payload.parameters)
+    else:
+        param_params = None
+        input_port_instances = None
+
     instance_schema = _to_component_instance_schema(
         instance_id=instance_id,
         component_id=existing.component_version.component_id,
         component_version_id=existing.component_version_id,
         label=label,
         is_start_node=is_start_node,
-        parameters=payload.parameters,
-        input_port_instances=payload.input_port_instances,
+        parameters=param_params,
+        input_port_instances=input_port_instances,
         port_configurations=payload.port_configurations,
         integration=payload.integration,
         tool_description_override=payload.tool_description_override,
     )
     create_or_update_component_instance(session, instance_schema, project_id)
 
-    if payload.input_port_instances:
-        _sync_input_port_field_expressions(session, instance_id, payload.input_port_instances)
+    if input_port_instances is not None:
+        _sync_input_port_field_expressions(session, instance_id, input_port_instances)
 
     upsert_component_node(
         session,
