@@ -157,6 +157,21 @@ class GraphNotFound(ServiceError):
         super().__init__(f"Graph not found: {graph_id}")
 
 
+class GraphValidationError(ServiceError):
+    status_code = 400
+
+    def __init__(self, message: str):
+        super().__init__(message)
+
+
+class ComponentInstanceNotFound(ServiceError):
+    status_code = 404
+
+    def __init__(self, component_instance_id: UUID):
+        self.component_instance_id = component_instance_id
+        super().__init__(f"Component instance {component_instance_id} not found")
+
+
 class EnvironmentNotFound(ServiceError):
     status_code = 404
 
@@ -429,6 +444,73 @@ class RunError(ServiceError):
 
     def __init__(self, message: str, trace_id: str | None = None):
         self.trace_id = trace_id
+        super().__init__(message)
+
+
+class RunInputNotFound(ServiceError):
+    status_code = 400
+
+    def __init__(self):
+        super().__init__("Run input not found for retry")
+
+
+class RunEnqueueError(ServiceError):
+    status_code = 503
+
+    def __init__(self):
+        super().__init__("Retry run could not be enqueued")
+
+
+class ProjectTypeMismatchError(ServiceError):
+    status_code = 400
+
+    def __init__(
+        self,
+        project_id: UUID,
+        actual_type: str,
+        operation: str,
+        workflow_hint: str = "use update_graph to modify component parameters directly.",
+    ):
+        self.project_id = project_id
+        self.actual_type = actual_type
+        self.operation = operation
+        self.workflow_hint = workflow_hint
+        super().__init__(
+            f"Project {project_id} is of type '{actual_type}', not 'agent'. "
+            f"{operation} only works for AGENT projects. For WORKFLOW projects, "
+            f"{workflow_hint}"
+        )
+
+
+class QASessionNotFound(ServiceError):
+    status_code = 404
+
+    def __init__(self, qa_session_id: UUID, project_id: UUID):
+        self.qa_session_id = qa_session_id
+        self.project_id = project_id
+        super().__init__(f"QA session {qa_session_id} not found in project {project_id}")
+
+
+class QAInputValidationError(ServiceError):
+    status_code = 400
+
+    def __init__(self, message: str):
+        super().__init__(message)
+
+
+class QAOperationError(ServiceError):
+    status_code = 500
+    _safe_detail = "A QA operation failed."
+
+    def __init__(self, message: str):
+        super().__init__(message)
+
+
+class LLMJudgeOperationError(ServiceError):
+    status_code = 500
+    _safe_detail = "An LLM judge operation failed."
+
+    def __init__(self, message: str):
         super().__init__(message)
 
 

@@ -21,7 +21,9 @@ from ada_backend.services.errors import (
     InvalidRunStatusTransition,
     ProjectNotFound,
     ResultsBucketNotConfigured,
+    RunEnqueueError,
     RunNotFound,
+    RunInputNotFound,
     RunResultNotFound,
 )
 from ada_backend.services.s3_files_service import get_s3_client_and_ensure_bucket
@@ -426,7 +428,7 @@ def retry_run(
     retry_group_id = run.retry_group_id or run.id
     input_data = get_run_input(session, retry_group_id=retry_group_id)
     if input_data is None:
-        raise ValueError("Run input not found for retry")
+        raise RunInputNotFound()
 
     latest_attempt = run_repository.get_latest_run_by_retry_group(session, retry_group_id=retry_group_id)
     next_attempt = (latest_attempt.attempt_number if latest_attempt is not None else run.attempt_number) + 1
@@ -462,6 +464,6 @@ def retry_run(
             status=RunStatus.FAILED,
             error={"message": "Failed to enqueue run; Redis unavailable.", "type": "EnqueueError"},
         )
-        raise ValueError("Retry run could not be enqueued")
+        raise RunEnqueueError()
 
     return AsyncRunAcceptedSchema(run_id=retried_run.id, status="pending")

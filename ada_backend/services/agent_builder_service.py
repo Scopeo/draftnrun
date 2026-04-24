@@ -23,7 +23,7 @@ from ada_backend.repositories.integration_repository import (
 )
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
 from ada_backend.repositories.tool_port_configuration_repository import get_tool_port_configurations
-from ada_backend.services.errors import MissingDataSourceError, MissingIntegrationError
+from ada_backend.services.errors import ComponentInstanceNotFound, MissingDataSourceError, MissingIntegrationError
 from ada_backend.services.registry import FACTORY_REGISTRY
 from ada_backend.services.tool_description_generator import generate_tool_description
 from ada_backend.utils.secret_resolver import replace_secret_placeholders
@@ -201,7 +201,7 @@ async def instantiate_component(
     component_instance = get_component_instance_by_id(session, component_instance_id)
     component_name = get_component_name_from_instance(session, component_instance_id)
     if not component_instance:
-        raise ValueError(f"Component instance {component_instance_id} not found.")
+        raise ComponentInstanceNotFound(component_instance_id)
     component_version_id = component_instance.component_version_id
     LOGGER.debug(f"Init instantiation for component {component_name} version: {component_version_id}\n")
 

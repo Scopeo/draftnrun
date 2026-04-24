@@ -33,6 +33,7 @@ from ada_backend.services.tool_description_generator import (
     _get_tool_eligible_port_definitions,
     generate_tool_description,
 )
+from ada_backend.services.errors import ComponentInstanceNotFound
 from ada_backend.utils.component_utils import get_ui_component_properties_with_llm_options
 
 LOGGER = getLogger(__name__)
@@ -113,7 +114,7 @@ def get_component_instance(
     """Get a component instance by ID"""
     component_instance = get_component_instance_by_id(session, component_instance_id)
     if component_instance is None:
-        raise ValueError(f"Component instance {component_instance_id} not found")
+        raise ComponentInstanceNotFound(component_instance_id)
 
     tool_description = _get_tool_description(session, component_instance)
     port_configurations = _get_port_configurations(

@@ -88,9 +88,9 @@ def _assert_cron_in_org(session: Session, cron_id: UUID, organization_id: UUID) 
     """Ensure the cron job exists and belongs to the given organization."""
     cron_job = get_cron_job(session, cron_id)
     if not cron_job:
-        raise CronJobNotFound(f"Cron job {cron_id} not found")
+        raise CronJobNotFound(cron_id)
     if cron_job.organization_id != organization_id:
-        raise CronJobAccessDenied("Access denied")
+        raise CronJobAccessDenied(cron_id, organization_id)
     return cron_job
 
 
@@ -170,10 +170,10 @@ def get_cron_job_detail(
     """Return cron details; enforce org ownership if organization_id is provided."""
     cron_job = get_cron_job(session, cron_id)
     if not cron_job:
-        raise CronJobNotFound(f"Cron job {cron_id} not found")
+        raise CronJobNotFound(cron_id)
 
     if organization_id is not None and cron_job.organization_id != organization_id:
-        raise CronJobAccessDenied("Access denied")
+        raise CronJobAccessDenied(cron_id, organization_id)
 
     if include_runs:
         runs = get_cron_runs_by_cron_id(session, cron_id, limit=10)
@@ -278,7 +278,7 @@ def update_cron_job_service(
     )
 
     if not updated_cron:
-        raise CronJobNotFound(f"Cron job {cron_id} not found")
+        raise CronJobNotFound(cron_id)
 
     LOGGER.info(f"Updated cron job {cron_id}.")
 

@@ -21,7 +21,7 @@ from ada_backend.schemas.llm_judges_schema import (
     LLMJudgeTemplate,
     LLMJudgeUpdate,
 )
-from ada_backend.services.errors import LLMJudgeNotFound, ProjectNotFound
+from ada_backend.services.errors import LLMJudgeNotFound, LLMJudgeOperationError, ProjectNotFound
 from ada_backend.services.qa.utils import (
     DEFAULT_BOOLEAN_PROMPT,
     DEFAULT_FREE_TEXT_PROMPT,
@@ -57,7 +57,7 @@ def get_llm_judges_by_project_service(
         return [_judge_to_response(judge) for judge in judges]
     except Exception as e:
         LOGGER.error(f"Error in get_llm_judges_by_project_service for project {project_id}: {str(e)}")
-        raise ValueError(f"Failed to list LLM judges: {str(e)}") from e
+        raise LLMJudgeOperationError(f"Failed to list LLM judges: {str(e)}") from e
 
 
 def get_llm_judges_by_organization_service(
@@ -69,7 +69,7 @@ def get_llm_judges_by_organization_service(
         return [_judge_to_response(judge) for judge in judges]
     except Exception as e:
         LOGGER.error(f"Error in get_llm_judges_by_organization_service for org {organization_id}: {str(e)}")
-        raise ValueError(f"Failed to list LLM judges: {str(e)}") from e
+        raise LLMJudgeOperationError(f"Failed to list LLM judges: {str(e)}") from e
 
 
 def get_llm_judge_defaults_service(
@@ -111,8 +111,9 @@ def create_llm_judge_service(
         LOGGER.info(f"Created LLM judge {llm_judge.id} for organization {organization_id}")
         return _judge_to_response(llm_judge)
     except Exception as e:
+        raise LLMJudgeOperationError(f"Failed to create LLM judge: {str(e)}") from e
         LOGGER.error(f"Error in create_llm_judge_service for organization {organization_id}: {str(e)}")
-        raise ValueError(f"Failed to create LLM judge: {str(e)}") from e
+        raise LLMJudgeOperationError(f"Failed to create LLM judge: {str(e)}") from e
 
 
 def update_llm_judge_service(
@@ -141,7 +142,7 @@ def update_llm_judge_service(
         raise
     except Exception as e:
         LOGGER.error(f"Error in update_llm_judge_service for judge {judge_id}: {str(e)}")
-        raise ValueError(f"Failed to update LLM judge: {str(e)}") from e
+        raise LLMJudgeOperationError(f"Failed to update LLM judge: {str(e)}") from e
 
 
 def delete_llm_judges_service(
@@ -158,7 +159,7 @@ def delete_llm_judges_service(
         LOGGER.info(f"Deleted {deleted_count} LLM judges for organization {organization_id}")
     except Exception as e:
         LOGGER.error(f"Error in delete_llm_judges_service for organization {organization_id}: {str(e)}")
-        raise ValueError(f"Failed to delete LLM judges: {str(e)}") from e
+        raise LLMJudgeOperationError(f"Failed to delete LLM judges: {str(e)}") from e
 
 
 def set_judge_projects_service(
