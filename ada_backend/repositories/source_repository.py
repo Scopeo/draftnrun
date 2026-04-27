@@ -1,6 +1,6 @@
 import logging
 import uuid
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from sqlalchemy import and_, exists, func, select
@@ -13,6 +13,17 @@ from ada_backend.repositories.organization_repository import (
 from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _build_source_attribute_entries(source_id: UUID, attributes: dict[str, Any]) -> list[db.SourceAttributeEntry]:
+    return [
+        db.SourceAttributeEntry(
+            source_id=source_id,
+            attribute_name=attribute_name,
+            value=value,
+        )
+        for attribute_name, value in attributes.items()
+    ]
 
 
 def get_data_source_by_id(
@@ -103,6 +114,7 @@ def create_source(
             secret_type=db.OrgSecretType.PASSWORD,
         )
 
+        # TODO(DRA-1273): Remove this legacy wide-table write after the read path switches to EAV.
         source_attributes = db.SourceAttributes(
             source_id=source_data_create.id,
             access_token=attributes.access_token,
@@ -124,7 +136,17 @@ def create_source(
             timestamp_filter=attributes.timestamp_filter,
         )
 
+        eav_attributes = {
+            key: value
+            for key, value in attributes.model_dump(mode="json", exclude_none=True).items()
+            if key in db.SourceAttributeKey.values()
+        }
+        eav_attributes["source_db_url"] = str(org_secret.id)
+
+        source_attribute_entries = _build_source_attribute_entries(source_data_create.id, eav_attributes)
+
         session.add(source_attributes)
+        session.add_all(source_attribute_entries)
         session.commit()
     return source_data_create.id
 
