@@ -448,19 +448,25 @@ definePage({
             <VIcon icon="tabler-refresh" size="14" class="me-1" />
             Retry
           </VBtn>
-          <span v-else-if="item.input_available" class="d-inline-block">
-            <VBtn
-              size="x-small"
-              variant="tonal"
-              disabled
-            >
-              <VIcon icon="tabler-refresh" size="14" class="me-1" />
-              Retry
-            </VBtn>
-            <VTooltip activator="parent" location="top">
-              Environment missing — this legacy run cannot be retried
-            </VTooltip>
-          </span>
+          <VMenu v-else-if="item.input_available" location="bottom">
+            <template #activator="{ props: menuProps }">
+              <VBtn
+                v-bind="menuProps"
+                size="x-small"
+                variant="tonal"
+                :loading="retryLoading === item.id"
+              >
+                <VIcon icon="tabler-refresh" size="14" class="me-1" />
+                Retry
+                <VIcon icon="tabler-chevron-down" size="14" class="ms-1" />
+              </VBtn>
+            </template>
+            <VList density="compact">
+              <VListItem v-for="env in allEnvValues" :key="env" @click="retryRun(item, env)">
+                <VListItemTitle>{{ envLabelMap[env] ?? env }}</VListItemTitle>
+              </VListItem>
+            </VList>
+          </VMenu>
           <span v-else class="text-disabled">--</span>
         </template>
 
