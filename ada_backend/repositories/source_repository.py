@@ -3,7 +3,7 @@ import uuid
 from typing import Any, Optional
 from uuid import UUID
 
-from sqlalchemy import and_, exists, func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
@@ -114,28 +114,6 @@ def create_source(
             secret_type=db.OrgSecretType.PASSWORD,
         )
 
-        # TODO(DRA-1273): Remove this legacy wide-table write after the read path switches to EAV.
-        source_attributes = db.SourceAttributes(
-            source_id=source_data_create.id,
-            access_token=attributes.access_token,
-            path=attributes.path,
-            list_of_files_from_local_folder=attributes.list_of_files_from_local_folder,
-            folder_id=attributes.folder_id,
-            source_db_url=org_secret.id,
-            source_table_name=attributes.source_table_name,
-            id_column_name=attributes.id_column_name,
-            text_column_names=attributes.text_column_names,
-            source_schema_name=attributes.source_schema_name,
-            chunk_size=attributes.chunk_size,
-            chunk_overlap=attributes.chunk_overlap,
-            metadata_column_names=attributes.metadata_column_names,
-            timestamp_column_name=attributes.timestamp_column_name,
-            url_pattern=attributes.url_pattern,
-            update_existing=attributes.update_existing,
-            query_filter=attributes.query_filter,
-            timestamp_filter=attributes.timestamp_filter,
-        )
-
         eav_attributes = {
             key: value
             for key, value in attributes.model_dump(mode="json", exclude_none=True).items()
@@ -145,7 +123,6 @@ def create_source(
 
         source_attribute_entries = _build_source_attribute_entries(source_data_create.id, eav_attributes)
 
-        session.add(source_attributes)
         session.add_all(source_attribute_entries)
         session.commit()
     return source_data_create.id
@@ -190,47 +167,28 @@ def get_source_attributes(
 ) -> SourceAttributes:
     """Get source attributes including decrypted database URL from the SourceAttributes table."""
 
-    result = (
-        session_sql_alchemy.query(db.SourceAttributes, db.OrganizationSecret)
-        .outerjoin(
-            db.OrganizationSecret,
-            and_(
-                db.SourceAttributes.source_db_url == db.OrganizationSecret.id,
-                db.OrganizationSecret.organization_id == organization_id,
-            ),
-        )
-        .filter(db.SourceAttributes.source_id == source_id)
-        .first()
+    rows = (
+        session_sql_alchemy.query(db.SourceAttributeEntry).filter(db.SourceAttributeEntry.source_id == source_id).all()
     )
 
-    if not result:
+    if not rows:
         raise ValueError(f"Source attributes not found for source_id={source_id}")
 
-    source_attributes, org_secret = result
+    attr_dict = {row.attribute_name: row.value for row in rows}
 
-    attributes = SourceAttributes(
-        access_token=source_attributes.access_token,
-        path=source_attributes.path,
-        list_of_files_from_local_folder=source_attributes.list_of_files_from_local_folder,
-        folder_id=source_attributes.folder_id,
-        source_table_name=source_attributes.source_table_name,
-        id_column_name=source_attributes.id_column_name,
-        text_column_names=source_attributes.text_column_names,
-        source_schema_name=source_attributes.source_schema_name,
-        chunk_size=source_attributes.chunk_size,
-        chunk_overlap=source_attributes.chunk_overlap,
-        metadata_column_names=source_attributes.metadata_column_names,
-        timestamp_column_name=source_attributes.timestamp_column_name,
-        url_pattern=source_attributes.url_pattern,
-        update_existing=source_attributes.update_existing,
-        query_filter=source_attributes.query_filter,
-        timestamp_filter=source_attributes.timestamp_filter,
-    )
+    if "source_db_url" in attr_dict:
+        secret_id = UUID(attr_dict["source_db_url"])
+        org_secret = (
+            session_sql_alchemy.query(db.OrganizationSecret)
+            .filter(
+                db.OrganizationSecret.id == secret_id,
+                db.OrganizationSecret.organization_id == organization_id,
+            )
+            .first()
+        )
+        attr_dict["source_db_url"] = org_secret.get_secret() if org_secret else None
 
-    if org_secret:
-        attributes.source_db_url = org_secret.get_secret()
-
-    return attributes
+    return SourceAttributes(**attr_dict)
 
 
 def get_projects_using_source(
