@@ -1576,11 +1576,6 @@ class OrganizationSecret(Base):
         back_populates="organization_secret",
         cascade="all, delete-orphan",
     )
-    source_attributes = relationship(
-        "SourceAttributes",
-        back_populates="source_db_url_secret",
-        passive_deletes=True,
-    )
 
     def __str__(self):
         return f"OrganizationSecret(organization_id={self.organization_id}, key={self.key})"
@@ -1701,12 +1696,6 @@ class DataSource(Base):
     last_ingestion_time = mapped_column(DateTime(timezone=True), nullable=True)
 
     ingestion_tasks = relationship("IngestionTask", back_populates="source")
-    # TODO(DRA-1273): Remove once reads no longer depend on the legacy wide table.
-    attributes = relationship(
-        "SourceAttributes",
-        back_populates="source",
-        cascade="all, delete-orphan",
-    )
     attribute_entries = relationship(
         "SourceAttributeEntry",
         back_populates="source",
@@ -1715,49 +1704,6 @@ class DataSource(Base):
 
     def __str__(self):
         return f"DataSource({self.name})"
-
-
-class SourceAttributes(Base):
-    """
-    Represents attributes for a data source.
-    """
-    # TODO(DRA-1273): Delete after switching reads to EAV and dropping the legacy table.
-
-    __tablename__ = "source_attributes"
-
-    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    source_id = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("data_sources.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    access_token = mapped_column(String, nullable=True)
-    path = mapped_column(String, nullable=True)
-    list_of_files_from_local_folder = mapped_column(JSON, nullable=True)
-    folder_id = mapped_column(String, nullable=True)
-    source_db_url = mapped_column(
-        UUID(as_uuid=True), ForeignKey("organization_secrets.id", ondelete="SET NULL"), nullable=True
-    )
-    source_table_name = mapped_column(String, nullable=True)
-    id_column_name = mapped_column(String, nullable=True)
-    text_column_names = mapped_column(JSON, nullable=True)
-    source_schema_name = mapped_column(String, nullable=True)
-    chunk_size = mapped_column(Integer, nullable=True)
-    chunk_overlap = mapped_column(Integer, nullable=True)
-    metadata_column_names = mapped_column(JSON, nullable=True)
-    timestamp_column_name = mapped_column(String, nullable=True)
-    url_pattern = mapped_column(String, nullable=True)
-    update_existing = mapped_column(Boolean, nullable=False, default=False)
-    query_filter = mapped_column(String, nullable=True)
-    timestamp_filter = mapped_column(String, nullable=True)
-    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-    source = relationship("DataSource", back_populates="attributes")
-    source_db_url_secret = relationship("OrganizationSecret", back_populates="source_attributes")
-
-    def __str__(self):
-        return f"SourceAttributes(source_id={self.source_id})"
 
 
 class SourceAttributeEntry(Base):
