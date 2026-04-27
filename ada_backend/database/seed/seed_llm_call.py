@@ -12,7 +12,6 @@ from ada_backend.database.component_definition_seeding import (
 )
 from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from ada_backend.database.seed.constants import (
-    COMPLETION_MODEL_IN_DB,
     REASONING_IN_DB,
     TEMPERATURE_IN_DB,
     VERBOSITY_IN_DB,
@@ -35,7 +34,6 @@ LLM_CALL_OUTPUT_FORMAT_PARAM_DEF_ID = UUID("d7ee43ab-80f8-4ee5-ac38-938163933610
 LLM_CALL_PARAMETER_IDS = {
     "file_content_key": UUID("a12eb38c-a10e-46f8-bc31-01d3551d954c"),
     "file_url_key": UUID("0dcee65b-d3b7-43e6-8cb4-2ec531c1875c"),
-    COMPLETION_MODEL_IN_DB: UUID("1233f6b4-cfab-44f6-bf62-f6e0a1b95db1"),
     TEMPERATURE_IN_DB: UUID("7645d690-45c1-4b3e-bcdc-babf0808f97d"),
     VERBOSITY_IN_DB: UUID("76c4361d-06f4-41dd-9c6c-cf66292de155"),
     REASONING_IN_DB: UUID("9863153f-d43c-46e5-bec9-9bef1deff2b4"),
@@ -108,10 +106,6 @@ def seed_llm_call_components(session: Session):
             *build_completion_service_config_definitions(
                 component_version_id=llm_call_version.id,
                 params_to_seed=[
-                    ParameterLLMConfig(
-                        param_name=COMPLETION_MODEL_IN_DB,
-                        param_id=LLM_CALL_PARAMETER_IDS[COMPLETION_MODEL_IN_DB],
-                    ),
                     ParameterLLMConfig(
                         param_name=TEMPERATURE_IN_DB,
                         param_id=LLM_CALL_PARAMETER_IDS[TEMPERATURE_IN_DB],

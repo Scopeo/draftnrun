@@ -661,10 +661,6 @@ def seed_rag_components(session: Session):
                 component_version_id=rag_agent_v3_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
-                        param_name=COMPLETION_MODEL_IN_DB,
-                        param_id=UUID("134a4ddb-6906-4a22-b6b9-404f48543cc7"),
-                    ),
-                    ParameterLLMConfig(
                         param_name=TEMPERATURE_IN_DB,
                         param_id=UUID("697a921c-c0b7-4393-a9e1-67f180265226"),
                     ),
@@ -1375,13 +1371,9 @@ def seed_rag_v3_parameter_groups(session: Session):
             "parameter_order_within_group": 5,
         },
         # LLM Parameters Group (Basic)
-        UUID("134a4ddb-6906-4a22-b6b9-404f48543cc7"): {  # completion_model
-            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
-            "parameter_order_within_group": 1,
-        },
         UUID("0bfd2f69-ee7f-44a5-8e1b-84bde9678183"): {  # prompt_template
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
-            "parameter_order_within_group": 2,
+            "parameter_order_within_group": 1,
         },
         # Advanced LLM Parameters Group
         UUID("697a921c-c0b7-4393-a9e1-67f180265226"): {  # temperature

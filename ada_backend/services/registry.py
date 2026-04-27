@@ -2,7 +2,6 @@ from typing import Any
 from uuid import UUID
 
 from ada_backend.database.seed.constants import (
-    COMPLETION_MODEL_IN_DB,
     EMBEDDING_MODEL_IN_DB,
     REASONING_IN_DB,
     TEMPERATURE_IN_DB,
@@ -15,12 +14,11 @@ from ada_backend.services.entity_factory import (
     NonToolCallableBlockFactory,
     OAuthComponentFactory,
     RemoteMCPToolFactory,
-    build_completion_service_processor,
     build_db_service_processor,
     build_formatter_processor,
     build_ignore_tool_description_processor,
     build_llm_capability_resolver_processor,
-    build_ocr_service_processor,
+    build_model_id_resolver_processor,
     build_param_name_translator,
     build_project_reference_processor,
     build_qdrant_service_processor,
@@ -30,7 +28,6 @@ from ada_backend.services.entity_factory import (
     build_synthesizer_processor,
     build_trace_manager_processor,
     build_vocabulary_search_processor,
-    build_web_service_processor,
     compose_processors,
     detect_and_convert_dataclasses,
 )
@@ -159,17 +156,16 @@ def create_factory_registry() -> FactoryRegistry:
 
     trace_manager_processor = build_trace_manager_processor()
 
-    completion_service_processor = compose_processors(
+    llm_params_processor = compose_processors(
         build_param_name_translator({
-            # Name from DB -> Name in processor
-            COMPLETION_MODEL_IN_DB: "completion_model",
             TEMPERATURE_IN_DB: "temperature",
             VERBOSITY_IN_DB: "verbosity",
             REASONING_IN_DB: "reasoning",
             "api_key": "llm_api_key",
         }),
-        build_completion_service_processor(),
+        build_model_id_resolver_processor(),
     )
+
     qdrant_service_processor = compose_processors(
         build_param_name_translator({
             "qdrant_collection_schema": "default_collection_schema",
@@ -177,20 +173,6 @@ def create_factory_registry() -> FactoryRegistry:
             "api_key": "llm_api_key",
         }),
         build_qdrant_service_processor(),
-    )
-    web_service_processor = compose_processors(
-        build_param_name_translator({
-            COMPLETION_MODEL_IN_DB: "completion_model",
-            "api_key": "llm_api_key",
-        }),
-        build_web_service_processor(),
-    )
-    ocr_service_processor = compose_processors(
-        build_param_name_translator({
-            COMPLETION_MODEL_IN_DB: "completion_model",
-            "api_key": "llm_api_key",
-        }),
-        build_ocr_service_processor(),
     )
     synthesizer_processor = compose_processors(
         build_param_name_translator({
@@ -216,9 +198,9 @@ def create_factory_registry() -> FactoryRegistry:
         factory=EntityFactory(
             entity_class=Synthesizer,
             parameter_processors=[
-                completion_service_processor,
-                detect_and_convert_dataclasses,
+                llm_params_processor,
                 trace_manager_processor,
+                detect_and_convert_dataclasses,
             ],
         ),
     )
@@ -227,9 +209,9 @@ def create_factory_registry() -> FactoryRegistry:
         factory=EntityFactory(
             entity_class=HybridSynthesizer,
             parameter_processors=[
-                completion_service_processor,
-                detect_and_convert_dataclasses,
+                llm_params_processor,
                 trace_manager_processor,
+                detect_and_convert_dataclasses,
             ],
         ),
     )
@@ -238,7 +220,8 @@ def create_factory_registry() -> FactoryRegistry:
         factory=EntityFactory(
             entity_class=RelevantChunkSelector,
             parameter_processors=[
-                completion_service_processor,
+                llm_params_processor,
+                trace_manager_processor,
                 detect_and_convert_dataclasses,
             ],
         ),
@@ -302,7 +285,8 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=AIAgent,
             parameter_processors=[
-                completion_service_processor,
+                llm_params_processor,
+                trace_manager_processor,
             ],
         ),
     )
@@ -311,7 +295,8 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=LLMCallAgent,
             parameter_processors=[
-                completion_service_processor,
+                llm_params_processor,
+                trace_manager_processor,
                 llm_capability_resolver_processor,
             ],
         ),
@@ -321,7 +306,8 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=Categorizer,
             parameter_processors=[
-                completion_service_processor,
+                llm_params_processor,
+                trace_manager_processor,
                 llm_capability_resolver_processor,
             ],
         ),
@@ -331,7 +317,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=Scorer,
             parameter_processors=[
-                completion_service_processor,
+                llm_params_processor,
                 llm_capability_resolver_processor,
             ],
         ),
@@ -359,7 +345,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=OCRCall,
             parameter_processors=[
-                ocr_service_processor,
+                llm_params_processor,
             ],
         ),
     )
@@ -406,7 +392,7 @@ def create_factory_registry() -> FactoryRegistry:
     web_search_factory = AgentFactory(
         entity_class=WebSearchOpenAITool,
         parameter_processors=[
-            web_service_processor,
+            llm_params_processor,
         ],
     )
     registry.register(
@@ -461,7 +447,7 @@ def create_factory_registry() -> FactoryRegistry:
             entity_class=SQLTool,
             parameter_processors=[
                 db_service_processor,
-                completion_service_processor,
+                llm_params_processor,
             ],
         ),
     )
@@ -492,7 +478,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=ReactSQLAgent,
             parameter_processors=[
-                completion_service_processor,
+                llm_params_processor,
             ],
         ),
     )
@@ -502,7 +488,7 @@ def create_factory_registry() -> FactoryRegistry:
             entity_class=ReactSQLAgent,
             parameter_processors=[
                 db_service_processor,
-                completion_service_processor,
+                llm_params_processor,
             ],
         ),
     )
@@ -616,7 +602,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=DocxTemplateAgent,
             parameter_processors=[
-                completion_service_processor,
+                llm_params_processor,
             ],
         ),
     )

@@ -30,10 +30,12 @@ def mock_completion_service():
 
 
 @pytest.fixture
-def categorizer(mock_completion_service):
+def categorizer(mock_completion_service, monkeypatch):
+    monkeypatch.setattr(
+        "engine.components.llm_call.CompletionService", MagicMock(return_value=mock_completion_service)
+    )
     trace_manager = MagicMock()
     return Categorizer(
-        completion_service=mock_completion_service,
         trace_manager=trace_manager,
         component_attributes=ComponentAttributes(component_instance_name="test_categorizer"),
         capability_resolver=make_capability_resolver(mock_completion_service),

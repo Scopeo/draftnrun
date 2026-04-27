@@ -68,29 +68,25 @@ def input_payload_with_file():
 
 
 @pytest.fixture
-def llm_call_with_output_format():
-    trace_manager = MagicMock()
-
-    llm_service = MagicMock()
-    llm_service._provider = "openai"
-    llm_service._model_name = "gpt-4.1-mini"
-    llm_service.constrained_complete_with_json_schema_async = AsyncMock(
+def llm_call_with_output_format(monkeypatch):
+    mock_service = MagicMock()
+    mock_service._provider = "openai"
+    mock_service._model_name = "gpt-4.1-mini"
+    mock_service._model_id = None
+    mock_service.constrained_complete_with_json_schema_async = AsyncMock(
         return_value='{"location": "Miami", "unit": "F", "value": 85}'
     )
-    llm_service.complete_async = AsyncMock(return_value="Sample response")
+    mock_service.complete_async = AsyncMock(return_value="Sample response")
 
-    tool_description = MagicMock()
-    component_attributes = ComponentAttributes(
-        component_instance_name="test_component",
-    )
+    monkeypatch.setattr("engine.components.llm_call.CompletionService", MagicMock(return_value=mock_service))
+
     agent = LLMCallAgent(
-        trace_manager,
-        llm_service,
-        tool_description,
-        component_attributes,
-        capability_resolver=make_capability_resolver(llm_service),
+        trace_manager=MagicMock(),
+        tool_description=MagicMock(),
+        component_attributes=ComponentAttributes(component_instance_name="test_component"),
+        capability_resolver=make_capability_resolver(mock_service),
     )
-    return agent
+    return agent, mock_service
 
 
 class TestConvertPropertiesToOpenAIFormat:
@@ -119,18 +115,17 @@ class TestConvertPropertiesToOpenAIFormat:
 
 @pytest.mark.anyio
 async def test_structured_output_with_flat_properties(llm_call_with_output_format, input_payload):
+    agent, mock_service = llm_call_with_output_format
     inputs = LLMCallInputs.model_validate({
         **input_payload,
         "prompt_template": PROMPT_TEMPLATE,
         "output_format": OUTPUT_FORMAT,
     })
-    response = await llm_call_with_output_format._run_without_io_trace(inputs, ctx={})
+    response = await agent._run_without_io_trace(inputs, ctx={})
 
     assert isinstance(response.output, str)
 
-    call_kwargs = (
-        llm_call_with_output_format._completion_service.constrained_complete_with_json_schema_async.call_args[1]
-    )
+    call_kwargs = mock_service.constrained_complete_with_json_schema_async.call_args[1]
     passed_format = call_kwargs["response_format"]
     assert passed_format["name"] == "output_schema"
     assert passed_format["schema"]["type"] == "object"
@@ -141,12 +136,13 @@ async def test_structured_output_with_flat_properties(llm_call_with_output_forma
 
 @pytest.mark.anyio
 async def test_dynamic_output_ports_merged(llm_call_with_output_format, input_payload):
+    agent, _ = llm_call_with_output_format
     inputs = LLMCallInputs.model_validate({
         **input_payload,
         "prompt_template": PROMPT_TEMPLATE,
         "output_format": OUTPUT_FORMAT,
     })
-    response = await llm_call_with_output_format._run_without_io_trace(inputs, ctx={})
+    response = await agent._run_without_io_trace(inputs, ctx={})
 
     assert response.location == "Miami"
     assert response.unit == "F"
@@ -155,21 +151,16 @@ async def test_dynamic_output_ports_merged(llm_call_with_output_format, input_pa
 
 @pytest.mark.anyio
 async def test_chat_completion_to_response(llm_call_with_output_format, input_payload_with_file):
+    agent, _ = llm_call_with_output_format
     inputs = LLMCallInputs.model_validate({
         **input_payload_with_file,
         "prompt_template": PROMPT_TEMPLATE,
         "output_format": OUTPUT_FORMAT,
     })
-    response = await llm_call_with_output_format._run_without_io_trace(inputs, ctx={})
+    response = await agent._run_without_io_trace(inputs, ctx={})
     assert isinstance(response.output, str)
 
-    llm_service_input_messages = (
-        llm_call_with_output_format._completion_service.constrained_complete_with_json_schema_async.call_args[1][
-            "messages"
-        ]
-    )
-    converted_messages = chat_completion_to_response(llm_service_input_messages)
-    assert converted_messages == [
+    expected_messages = [
         {
             "role": "user",
             "content": [
@@ -182,3 +173,20 @@ async def test_chat_completion_to_response(llm_call_with_output_format, input_pa
             ],
         }
     ]
+    input_messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": QUESTION},
+                {
+                    "type": "file",
+                    "file": {
+                        "filename": "weather_data.pdf",
+                        "file_data": f"data:application/pdf;base64,{base64_string}",
+                    },
+                },
+            ],
+        }
+    ]
+    converted_messages = chat_completion_to_response(input_messages)
+    assert converted_messages == expected_messages

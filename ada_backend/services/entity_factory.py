@@ -12,12 +12,6 @@ from pydantic import BaseModel, SecretStr
 
 from ada_backend.context import get_current_project_id, get_run_variables
 from ada_backend.database.models import EnvType
-from ada_backend.database.seed.constants import (
-    COMPLETION_MODEL_IN_DB,
-    REASONING_IN_DB,
-    TEMPERATURE_IN_DB,
-    VERBOSITY_IN_DB,
-)
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.source_repository import get_data_source_by_id
@@ -35,7 +29,8 @@ from engine.components.rag.vocabulary_search import VocabularySearch
 from engine.components.synthesizer import Synthesizer
 from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import ToolDescription
-from engine.llm_services.llm_service import CompletionService, EmbeddingService, OCRService, WebSearchService
+from engine.llm_services.llm_service import EmbeddingService
+from engine.llm_services.utils import get_llm_provider_and_model
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.secret_utils import unwrap_secret, unwrap_secrets
 from engine.storage_service.local_service import SQLLocalService
@@ -139,7 +134,6 @@ class EntityFactory:
         """
         args, kwargs = self._process_parameters(*args, **kwargs)
         if self.constructor_method == "__init__":
-            # Call the constructor directly
             return self.entity_class(*args, **kwargs)
 
         constructor_method = getattr(self.entity_class, self.constructor_method, None)
@@ -588,66 +582,21 @@ def build_param_name_translator(mapping: dict[str, str]) -> ParameterProcessor:
     return translator
 
 
-def get_llm_provider_and_model(llm_model: str) -> tuple[str, str]:
-    """
-    Extracts the LLM provider and model name from a string in the format "provider:model_name".
-
-    Args:
-        llm_model (str): The LLM model string in "provider:model_name" format.
-
-    Returns:
-        tuple[str, str]: A tuple containing the provider and model name.
-
-    Raises:
-        ValueError: If the input string is not in the expected format.
-    """
-    if ":" not in llm_model:
-        raise ValueError(f"Invalid LLM model format: {llm_model}. Expected 'provider:model_name'.")
-    parts = llm_model.split(":")
-    provider = parts[0]
-    model = ":".join(parts[1:])
-    return provider, model
-
-
-def build_completion_service_processor(
-    target_name: str = "completion_service",
+def build_model_id_resolver_processor(
+    target_name: str = "model_id_resolver",
 ) -> ParameterProcessor:
-    """
-    Returns a processor function to inject an LLM service into the parameters.
-
-    This processor consumes and removes the following parameters from the input:
-    - completion_model: Required. String in "provider:model_name" format (e.g., "openai:gpt-4").
-    - temperature: Optional. Float value for sampling temperature.
-    - llm_api_key: Optional. API key for the LLM provider.
-
-    The processor creates an appropriate LLMService instance based on the provider
-    and injects it into the params dictionary under the key specified by target_name.
-
-    Args:
-        target_name (str): The parameter name to use for the created LLM service.
-                          Defaults to "embedding_service".
-
-    Returns:
-        ParameterProcessor: A function that processes parameters to inject an LLM service.
-    """
+    """Injects a callable that resolves model_name to UUID for tracing."""
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
+        params.pop("completion_model", None)
 
-        model_id = fetch_model_id_by_name(model_name)
+        if target_name not in constructor_params:
+            return params
 
-        completion_service = CompletionService(
-            provider=provider,
-            model_name=model_name,
-            trace_manager=get_trace_manager(),
-            temperature=params.pop("temperature", 1.0),
-            api_key=params.pop("llm_api_key", None),
-            verbosity=params.pop("verbosity", None),
-            reasoning=params.pop("reasoning", None),
-            model_id=model_id,
-        )
+        def resolver(model_name: str) -> UUID | None:
+            return fetch_model_id_by_name(model_name)
 
-        params[target_name] = completion_service
+        params[target_name] = resolver
         return params
 
     return processor
@@ -673,58 +622,6 @@ def build_llm_capability_resolver_processor(
             return {option.value for option in options}
 
         params[target_name] = resolve_capabilities
-        return params
-
-    return processor
-
-
-def build_web_service_processor(
-    target_name: str = "web_service",
-) -> ParameterProcessor:
-    """
-    Returns a processor function to inject an LLM service into the parameters.
-    """
-
-    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
-
-        model_id = fetch_model_id_by_name(model_name)
-
-        web_service = WebSearchService(
-            trace_manager=get_trace_manager(),
-            provider=provider,
-            model_name=model_name,
-            api_key=params.pop("llm_api_key", None),
-            model_id=model_id,
-        )
-
-        params[target_name] = web_service
-        return params
-
-    return processor
-
-
-def build_ocr_service_processor(
-    target_name: str = "ocr_service",
-) -> ParameterProcessor:
-    """
-    Returns a processor function to inject an OCR service for OCR processing.
-    """
-
-    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
-
-        model_id = fetch_model_id_by_name(model_name)
-
-        ocr_service = OCRService(
-            trace_manager=get_trace_manager(),
-            provider=provider,
-            model_name=model_name,
-            api_key=params.pop("llm_api_key", None),
-            model_id=model_id,
-        )
-
-        params[target_name] = ocr_service
         return params
 
     return processor
@@ -969,39 +866,12 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
 
 def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterProcessor:
     """
-    Creates a processor that builds a Synthesizer from completion_model, temperature, prompt_template.
-
-    Args:
-        target_name (str): Parameter name for the created Synthesizer.
-
-    Returns:
-        ParameterProcessor: A processor function that handles Synthesizer creation
+    Creates a processor that builds a Synthesizer.
+    Pops LLM-related params so they don't leak to the parent component's constructor.
+    Handles both translated names (temperature) and DB names (default_temperature).
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        completion_model = params.pop(COMPLETION_MODEL_IN_DB)
-        provider, model_name = get_llm_provider_and_model(llm_model=completion_model)
-
-        temperature = params.pop(TEMPERATURE_IN_DB, 1.0)
-        if temperature is not None:
-            try:
-                temperature = float(temperature)
-            except ValueError as e:
-                raise ValueError(f"temperature must be a float, got {temperature}: {e}")
-
-        model_id = fetch_model_id_by_name(model_name)
-
-        completion_service = CompletionService(
-            provider=provider,
-            model_name=model_name,
-            trace_manager=get_trace_manager(),
-            temperature=temperature,
-            api_key=params.pop("llm_api_key", None),
-            verbosity=params.pop(VERBOSITY_IN_DB, None),
-            reasoning=params.pop(REASONING_IN_DB, None),
-            model_id=model_id,
-        )
-
         prompt_template = params.pop("prompt_template", None)
         if prompt_template is None:
             try:
@@ -1011,13 +881,25 @@ def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterPr
             if len(prompt_template) == 0:
                 raise ValueError("prompt_template must be a non-empty string")
 
+        temperature = params.pop("temperature", params.pop("default_temperature", 1.0))
+        if temperature is not None:
+            try:
+                temperature = float(temperature)
+            except (ValueError, TypeError):
+                temperature = 1.0
+
         synthesizer = Synthesizer(
-            completion_service=completion_service,
             trace_manager=get_trace_manager(),
+            temperature=temperature,
+            llm_api_key=params.pop("llm_api_key", None),
+            verbosity=params.pop("verbosity", None),
+            reasoning=params.pop("reasoning", None),
+            model_id_resolver=params.pop("model_id_resolver", None),
             prompt_template=prompt_template,
             component_attributes=None,
         )
 
+        params.pop("completion_model", None)
         params[target_name] = synthesizer
         return params
 

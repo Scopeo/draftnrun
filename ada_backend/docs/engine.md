@@ -128,6 +128,14 @@ untyped inputs/events where `SecretStr` cannot be applied directly. It lives in 
 API, scheduler, engine, and Redis worker processes can all reuse the same scrubbing logic without crossing package
 boundaries.
 
+## Build-Time Field Expression Resolution
+
+**File**: `ada_backend/services/agent_builder_service.py`
+
+Some input ports carry configuration values (e.g. `completion_model` with `parameter_type=LLM_MODEL`) that must be available at component construction time — before the graph executes. These values are stored as `LiteralNode` field expressions. At build time, `instantiate_component()` calls `_get_build_time_port_defaults()` to query `PortDefinition` for ports whose `parameter_type` is in `BUILD_TIME_PARAMETER_TYPES` (currently `{LLM_MODEL}`), returning name→default pairs. Then `_resolve_literal_field_expressions()` resolves only those matching ports. The resolved literal values take priority; if a component instance has no `InputPortInstance` for a build-time port (e.g. a freshly-created sub-component), the `PortDefinition.default` is used as fallback. These values are merged into the constructor kwargs alongside `BasicParameter` values. The factory's parameter processors then consume them normally (e.g. `build_completion_service_processor` pops `completion_model` and creates a `CompletionService`). All other field expressions (runtime inputs like `initial_prompt`, `messages`, etc.) are resolved during graph execution, not at build time.
+
+At runtime, `_gather_inputs()` also evaluates these same field expressions and injects them into `NodeData.data`. Components receive the value in their Pydantic input schema but can safely ignore it since the service was already constructed.
+
 ## Legacy Compatibility
 
 **File**: `engine/legacy_compatibility.py` (marked for deletion after migration)

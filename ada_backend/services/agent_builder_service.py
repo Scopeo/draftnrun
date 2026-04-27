@@ -116,6 +116,7 @@ def _resolve_literal_field_expressions(
     excluded) are included.  Ports with is_tool_input=False are always included as
     they are constructor configuration ports outside the tool interface.
     """
+    # TODO: do not resolve tool inputs here, resolve them in the tool itself
     input_port_instances = get_input_port_instances_for_component_instance(
         session, component_instance_id, eager_load_field_expression=True, eager_load_port_definition=True
     )
@@ -144,9 +145,7 @@ def _resolve_literal_field_expressions(
             resolved_values[ipi.name] = expr_ast.value
         elif isinstance(expr_ast, (VarNode, JsonBuildNode, ConcatNode)) and variables is not None:
             try:
-                resolved_values[ipi.name] = evaluate_expression(
-                    expr_ast, ipi.name, tasks={}, variables=variables
-                )
+                resolved_values[ipi.name] = evaluate_expression(expr_ast, ipi.name, tasks={}, variables=variables)
             except Exception as exc:
                 LOGGER.warning("Failed to evaluate field expression for port %s: %s", ipi.name, exc)
 

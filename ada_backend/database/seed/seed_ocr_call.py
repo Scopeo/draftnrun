@@ -10,7 +10,6 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
-from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
@@ -55,10 +54,6 @@ def seed_ocr_call_components(session: Session):
             *build_ocr_service_config_definitions(
                 component_version_id=ocr_call_version.id,
                 params_to_seed=[
-                    ParameterLLMConfig(
-                        param_name=COMPLETION_MODEL_IN_DB,
-                        param_id=UUID("329f22ec-0382-4fcf-963f-3281e68e6224"),
-                    ),
                     ParameterLLMConfig(
                         param_name="api_key",
                         param_id=UUID("d3e4f5a6-b7c8-9012-3456-789abcdef012"),

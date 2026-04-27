@@ -17,7 +17,6 @@ from ada_backend.database.models import (
     UIComponentProperties,
 )
 from ada_backend.database.seed.constants import (
-    COMPLETION_MODEL_IN_DB,
     TEMPERATURE_IN_DB,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
@@ -84,10 +83,6 @@ def seed_docx_template_components(session: Session):
             *build_function_calling_service_config_definitions(
                 component_version_id=docx_template_component_version.id,
                 params_to_seed=[
-                    ParameterLLMConfig(
-                        param_name=COMPLETION_MODEL_IN_DB,
-                        param_id=UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890"),
-                    ),
                     ParameterLLMConfig(
                         param_name="api_key",
                         param_id=UUID("b2c3d4e5-f6a7-8901-bcde-f23456789012"),

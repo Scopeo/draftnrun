@@ -2,17 +2,20 @@ import json
 import logging
 from collections.abc import Callable
 from typing import Any, Optional, Type
+from uuid import UUID
 
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 
-from ada_backend.database.models import UIComponent, UIComponentProperties
+from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from engine.components.component import Component
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
 from engine.components.utils import load_str_to_json, merge_constrained_output_to_root, parse_openai_message_format
 from engine.components.utils_prompt import fill_prompt_template
+from engine.constants import DEFAULT_MODEL
 from engine.llm_services.llm_service import CompletionService
+from engine.llm_services.utils import get_llm_provider_and_model
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
@@ -100,6 +103,15 @@ class LLMCallInputs(BaseModel):
         default_factory=list,
         description="The input messages",
     )
+    completion_model: str = Field(
+        default=DEFAULT_MODEL,
+        json_schema_extra={
+            "is_tool_input": False,
+            "parameter_type": ParameterType.LLM_MODEL,
+            "ui_component": "Select",
+            "ui_component_properties": {"label": "Model Name", "model_capabilities": ["completion"]},
+        },
+    )
     prompt_template: Optional[str] = Field(
         default=DEFAULT_PROMPT_TEMPLATE,
         description="Prompt template to use for the LLM call.",
@@ -155,9 +167,13 @@ class LLMCallAgent(Component):
     def __init__(
         self,
         trace_manager: TraceManager,
-        completion_service: CompletionService,
         tool_description: ToolDescription,
         component_attributes: ComponentAttributes,
+        temperature: float = 1.0,
+        llm_api_key: Optional[str] = None,
+        verbosity: Optional[str] = None,
+        reasoning: Optional[str] = None,
+        model_id_resolver: Optional[Callable[[str], Optional[UUID]]] = None,
         capability_resolver: Optional[Callable[[list[str]], set[str]]] = None,
         file_content_key: Optional[str] = None,
         file_url_key: Optional[str] = None,
@@ -167,7 +183,11 @@ class LLMCallAgent(Component):
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
-        self._completion_service = completion_service
+        self._temperature = temperature
+        self._llm_api_key = llm_api_key
+        self._verbosity = verbosity
+        self._reasoning = reasoning
+        self._model_id_resolver = model_id_resolver or (lambda _: None)
         self._file_content_key = file_content_key
         self._file_url_key = file_url_key
         self._capability_resolver = capability_resolver
@@ -205,7 +225,22 @@ class LLMCallAgent(Component):
         return []
 
     async def _run_without_io_trace(self, inputs: LLMCallInputs, ctx: Optional[dict] = None) -> LLMCallOutputs:
-        LOGGER.info(f"Running LLM call agent for {self.component_attributes.component_instance_name}")
+        LOGGER.info(f"Running LLM call agent with inputs: {inputs} and ctx: {ctx}")
+
+        provider, model_name = get_llm_provider_and_model(inputs.completion_model)
+        model_id = self._model_id_resolver(model_name)
+
+        completion_service = CompletionService(
+            provider=provider,
+            model_name=model_name,
+            trace_manager=self.trace_manager,
+            temperature=self._temperature,
+            api_key=self._llm_api_key,
+            verbosity=self._verbosity,
+            reasoning=self._reasoning,
+            model_id=model_id,
+        )
+
         prompt_template = inputs.prompt_template
         output_format = inputs.output_format
         if isinstance(output_format, dict):
@@ -249,19 +284,17 @@ class LLMCallAgent(Component):
 
         if (
             len(files_content) > 0
-            and f"{self._completion_service._provider}:{self._completion_service._model_name}"
-            not in file_supported_references
+            and f"{completion_service._provider}:{completion_service._model_name}" not in file_supported_references
         ):
-            raise ValueError(f"File content is not supported for provider '{self._completion_service._provider}'.")
+            raise ValueError(f"File content is not supported for provider '{completion_service._provider}'.")
 
         image_supported_references = self._resolve_capabilities(["image"])
 
         if (
             len(images_content) > 0
-            and f"{self._completion_service._provider}:{self._completion_service._model_name}"
-            not in image_supported_references
+            and f"{completion_service._provider}:{completion_service._model_name}" not in image_supported_references
         ):
-            raise ValueError(f"Image content is not supported for provider '{self._completion_service._provider}'.")
+            raise ValueError(f"Image content is not supported for provider '{completion_service._provider}'.")
 
         content: str | list[dict[str, Any]]
         masked_content: str | list[dict[str, Any]]
@@ -287,25 +320,21 @@ class LLMCallAgent(Component):
             masked_content = masked_text_content
 
         span = get_current_span()
-        span_attributes: dict[str, Any] = {
+        span.set_attributes({
             SpanAttributes.INPUT_VALUE: serialize_to_json(
-                [{"role": "user", "content": masked_content}],
-                shorten_string=True,
+                [{"role": "user", "content": masked_content}], shorten_string=True
             ),
-            SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
-            "model_id": (
-                str(self._completion_service._model_id) if self._completion_service._model_id is not None else None
-            ),
-        }
-        span.set_attributes(span_attributes)
+            SpanAttributes.LLM_MODEL_NAME: completion_service._model_name,
+            "model_id": (str(completion_service._model_id) if completion_service._model_id is not None else None),
+        })
         if output_format:
             openai_response_format = _convert_properties_to_openai_format(output_format)
-            response = await self._completion_service.constrained_complete_with_json_schema_async(
+            response = await completion_service.constrained_complete_with_json_schema_async(
                 messages=[{"role": "user", "content": content}],
                 response_format=openai_response_format,
             )
         else:
-            response = await self._completion_service.complete_async(
+            response = await completion_service.complete_async(
                 messages=[{"role": "user", "content": content}],
             )
 

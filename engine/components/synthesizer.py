@@ -1,4 +1,5 @@
-from typing import Optional
+from typing import Callable, Optional
+from uuid import UUID
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
@@ -10,6 +11,7 @@ from engine.components.synthesizer_prompts import get_base_synthetizer_prompt_te
 from engine.components.types import ComponentAttributes, SourceChunk, SourcedResponse
 from engine.components.utils_prompt import fill_prompt_template
 from engine.llm_services.llm_service import CompletionService
+from engine.llm_services.utils import get_llm_provider_and_model
 from engine.trace.trace_manager import TraceManager
 
 
@@ -21,14 +23,22 @@ class SynthesizerResponse(BaseModel):
 class Synthesizer(CloseMixin):
     def __init__(
         self,
-        completion_service: CompletionService,
         trace_manager: TraceManager,
+        temperature: float = 1.0,
+        llm_api_key: Optional[str] = None,
+        verbosity: Optional[str] = None,
+        reasoning: Optional[str] = None,
+        model_id_resolver: Optional[Callable[[str], Optional[UUID]]] = None,
         prompt_template: str = get_base_synthetizer_prompt_template(),
         response_format: BaseModel = SynthesizerResponse,
         component_attributes: Optional[ComponentAttributes] = None,
     ):
         self._prompt_template = prompt_template
-        self._completion_service = completion_service
+        self._temperature = temperature
+        self._llm_api_key = llm_api_key
+        self._verbosity = verbosity
+        self._reasoning = reasoning
+        self._model_id_resolver = model_id_resolver or (lambda _: None)
         self.response_format = response_format
         self.trace_manager = trace_manager
         self.component_attributes = component_attributes or ComponentAttributes(
@@ -36,8 +46,27 @@ class Synthesizer(CloseMixin):
         )
 
     async def get_response(
-        self, chunks: list[SourceChunk], query_str: str, optional_contexts: Optional[dict]
+        self,
+        chunks: list[SourceChunk],
+        query_str: str,
+        optional_contexts: Optional[dict],
+        completion_model: str,
     ) -> SourcedResponse:
+
+        provider, model_name = get_llm_provider_and_model(completion_model)
+        model_id = self._model_id_resolver(model_name)
+
+        completion_service = CompletionService(
+            provider=provider,
+            model_name=model_name,
+            trace_manager=self.trace_manager,
+            temperature=self._temperature,
+            api_key=self._llm_api_key,
+            verbosity=self._verbosity,
+            reasoning=self._reasoning,
+            model_id=model_id,
+        )
+
         context_str = build_context_from_source_chunks(sources=chunks)
 
         with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
@@ -56,17 +85,15 @@ class Synthesizer(CloseMixin):
             span.set_attributes({
                 SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
                 SpanAttributes.INPUT_VALUE: masked_input_str,
-                SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
+                SpanAttributes.LLM_MODEL_NAME: completion_service._model_name,
                 "component_instance_id": (
                     str(self.component_attributes.component_instance_id)
                     if self.component_attributes.component_instance_id is not None
                     else None
                 ),
-                "model_id": (
-                    str(self._completion_service._model_id) if self._completion_service._model_id is not None else None
-                ),
+                "model_id": (str(completion_service._model_id) if completion_service._model_id is not None else None),
             })
-            response = await self._completion_service.constrained_complete_with_pydantic_async(
+            response = await completion_service.constrained_complete_with_pydantic_async(
                 messages=input_str,
                 response_format=self.response_format,
             )

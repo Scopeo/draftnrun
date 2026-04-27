@@ -8,7 +8,6 @@ from engine.components.tools.google_calendar_mcp_tool import GoogleCalendarMCPTo
 from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.integrations.providers import OAuthProvider
-from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_context import set_trace_manager
 from tests.mocks.trace_manager import MockTraceManager
 
@@ -21,15 +20,12 @@ async def test_synthesizer_registration():
 
     synthesizer = await factory(
         trace_manager=MockTraceManager(project_name="test_project"),
-        completion_model="openai:gpt-4.1-mini",
         temperature=0.99,
     )
     assert synthesizer is not None
     assert isinstance(synthesizer, Synthesizer)
-    assert synthesizer._completion_service is not None
-    assert isinstance(synthesizer._completion_service, CompletionService)
-    assert synthesizer._completion_service._model_name == "gpt-4.1-mini"
-    assert synthesizer._completion_service._invocation_parameters.get("temperature") == 0.99
+    assert synthesizer._temperature == 0.99
+    assert callable(synthesizer._model_id_resolver)
 
 
 @pytest.mark.asyncio

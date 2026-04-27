@@ -51,7 +51,12 @@ def create_mock_chat_completion(content: str = "Hello! I'm doing well, thank you
     "engine.llm_services.providers.openai_provider.OpenAIProvider.constrained_complete_with_json_schema",
     new_callable=AsyncMock,
 )
+@patch(
+    "engine.llm_services.providers.anthropic_provider.AnthropicProvider.constrained_complete_with_pydantic",
+    new_callable=AsyncMock,
+)
 def test_monitor_service(
+    mock_anthropic_pydantic,
     mock_constrained_complete,
     mock_function_call,
     mock_complete,
@@ -62,6 +67,13 @@ def test_monitor_service(
     mock_complete.return_value = ("Hello! I'm doing well, thank you for asking.", 10, 20, 30)
     mock_function_call.return_value = (create_mock_chat_completion(), 10, 20, 30)
     mock_constrained_complete.return_value = ('{"response": "test"}', 10, 20, 30)
+
+    from engine.components.synthesizer import SynthesizerResponse
+
+    mock_anthropic_pydantic.return_value = (
+        SynthesizerResponse(response="Hello! I'm doing well, thank you for asking.", is_successful=True),
+        10, 20, 30,
+    )
 
     trace_manager = TraceManager(project_name="ada-backend-test", use_simple_processor=True)
     set_trace_manager(trace_manager)

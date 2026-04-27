@@ -92,11 +92,6 @@ def test_update_graph_runner():
                             kind=ParameterKind.INPUT,
                             order=None,
                         ),
-                        PipelineParameterSchema(
-                            value="openai:gpt-5-mini",
-                            name="completion_model",
-                            order=None,
-                        ),
                     ],
                     tool_description_override="Graph Test for Revaline",
                 ),
@@ -112,11 +107,6 @@ def test_update_graph_runner():
                             value="Add polite expressions to the question: {question} \n",
                             name="prompt_template",
                             kind=ParameterKind.INPUT,
-                            order=None,
-                        ),
-                        PipelineParameterSchema(
-                            value="openai:gpt-5-mini",
-                            name="completion_model",
                             order=None,
                         ),
                     ],
