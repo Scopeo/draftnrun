@@ -174,8 +174,9 @@ def get_source_attributes(
 
     attr_dict = {row.attribute_name: row.value for row in rows}
 
-    if "source_db_url" in attr_dict:
-        secret_id = UUID(attr_dict["source_db_url"])
+    source_db_url_key = db.SourceAttributeKey.SOURCE_DB_URL.value
+    if source_db_url_key in attr_dict:
+        secret_id = UUID(attr_dict[source_db_url_key])
         org_secret = (
             session_sql_alchemy.query(db.OrganizationSecret)
             .filter(
@@ -184,7 +185,7 @@ def get_source_attributes(
             )
             .first()
         )
-        attr_dict["source_db_url"] = org_secret.get_secret() if org_secret else None
+        attr_dict[source_db_url_key] = org_secret.get_secret() if org_secret else None
 
     return SourceAttributes(**attr_dict)
 
