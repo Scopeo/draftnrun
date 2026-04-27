@@ -1696,8 +1696,8 @@ class DataSource(Base):
     last_ingestion_time = mapped_column(DateTime(timezone=True), nullable=True)
 
     ingestion_tasks = relationship("IngestionTask", back_populates="source")
-    attribute_entries = relationship(
-        "SourceAttributeEntry",
+    attributes = relationship(
+        "SourceAttribute",
         back_populates="source",
         cascade="all, delete-orphan",
     )
@@ -1706,9 +1706,10 @@ class DataSource(Base):
         return f"DataSource({self.name})"
 
 
-class SourceAttributeEntry(Base):
+class SourceAttribute(Base):
     """Represents a single persisted source attribute in the EAV transition table."""
 
+    # TODO: rename to source_attributes (index too) for consistency.
     __tablename__ = "source_attribute_entries"
     __table_args__ = (
         UniqueConstraint(
@@ -1730,7 +1731,7 @@ class SourceAttributeEntry(Base):
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    source = relationship("DataSource", back_populates="attribute_entries")
+    source = relationship("DataSource", back_populates="attributes")
 
     @validates("attribute_name")
     def validate_attribute_name(self, _, attribute_name: str) -> str:
@@ -1739,7 +1740,7 @@ class SourceAttributeEntry(Base):
         return attribute_name
 
     def __str__(self):
-        return f"SourceAttributeEntry(source_id={self.source_id}, attribute_name={self.attribute_name})"
+        return f"SourceAttribute(source_id={self.source_id}, attribute_name={self.attribute_name})"
 
 
 class CronJob(Base):
@@ -1883,9 +1884,7 @@ class DatasetProject(Base):
     project = relationship("Project", back_populates="datasets")
     input_groundtruths = relationship("InputGroundtruth", back_populates="dataset", cascade="all, delete-orphan")
     qa_metadata = relationship("QADatasetMetadata", back_populates="dataset", cascade="all, delete-orphan")
-    project_associations = relationship(
-        "DatasetProjectAssociation", cascade="all, delete-orphan", lazy="selectin"
-    )
+    project_associations = relationship("DatasetProjectAssociation", cascade="all, delete-orphan", lazy="selectin")
 
     def __str__(self):
         return f"DatasetProject(id={self.id}, name={self.dataset_name})"
@@ -2028,9 +2027,7 @@ class LLMJudge(Base):
 
     project = relationship("Project")
     evaluations = relationship("JudgeEvaluation", back_populates="judge", cascade="all, delete-orphan")
-    project_associations = relationship(
-        "LLMJudgeProjectAssociation", cascade="all, delete-orphan", lazy="selectin"
-    )
+    project_associations = relationship("LLMJudgeProjectAssociation", cascade="all, delete-orphan", lazy="selectin")
 
     def __str__(self):
         return f"LLMJudge(id={self.id}, name={self.name}, evaluation_type={self.evaluation_type})"

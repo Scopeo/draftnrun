@@ -15,9 +15,9 @@ from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 LOGGER = logging.getLogger(__name__)
 
 
-def _build_source_attribute_entries(source_id: UUID, attributes: dict[str, Any]) -> list[db.SourceAttributeEntry]:
+def _build_source_attribute_entries(source_id: UUID, attributes: dict[str, Any]) -> list[db.SourceAttribute]:
     return [
-        db.SourceAttributeEntry(
+        db.SourceAttribute(
             source_id=source_id,
             attribute_name=attribute_name,
             value=value,
@@ -167,9 +167,7 @@ def get_source_attributes(
 ) -> SourceAttributes:
     """Get source attributes including decrypted database URL from the SourceAttributes table."""
 
-    rows = (
-        session_sql_alchemy.query(db.SourceAttributeEntry).filter(db.SourceAttributeEntry.source_id == source_id).all()
-    )
+    rows = session_sql_alchemy.query(db.SourceAttribute).filter(db.SourceAttribute.source_id == source_id).all()
 
     if not rows:
         raise ValueError(f"Source attributes not found for source_id={source_id}")

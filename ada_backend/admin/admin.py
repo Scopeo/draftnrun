@@ -552,7 +552,7 @@ class SourceAdmin(EnhancedModelView, model=db.DataSource):
     ]
 
 
-class SourceAttributesAdmin(EnhancedModelView, model=db.SourceAttributeEntry):
+class SourceAttributesAdmin(EnhancedModelView, model=db.SourceAttribute):
     category = AdminCategory.SOURCES
     icon = "fas fa-database"
     column_list = [
