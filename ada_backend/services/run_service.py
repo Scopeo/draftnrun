@@ -242,6 +242,7 @@ def create_run(
     event_id: str | None = None,
     retry_group_id: UUID | None = None,
     env: EnvType | None = None,
+    graph_runner_id: UUID | None = None,
 ) -> RunResponseSchema:
     project = get_project(session, project_id=project_id)
     if not project:
@@ -256,6 +257,7 @@ def create_run(
         attempt_number=attempt_number,
         retry_group_id=retry_group_id,
         env=env,
+        graph_runner_id=graph_runner_id,
     )
     return RunResponseSchema.model_validate(run, from_attributes=True)
 
@@ -379,6 +381,7 @@ def update_run_status(
     result_id: Optional[str] = None,
     started_at: Optional[datetime] = None,
     finished_at: Optional[datetime] = None,
+    graph_runner_id: Optional[UUID] = None,
 ) -> RunResponseSchema:
     run = run_repository.get_run(session, run_id)
     if not run:
@@ -403,6 +406,7 @@ def update_run_status(
         result_id=result_id,
         started_at=started_at,
         finished_at=finished_at,
+        graph_runner_id=graph_runner_id,
     )
     if status == RunStatus.FAILED:
         maybe_send_run_failure_alert(run, project_id, error=error, finished_at=finished_at)
@@ -413,15 +417,17 @@ def retry_run(
     session: Session,
     run_id: UUID,
     project_id: UUID,
-    env: EnvType | None = None,
-    graph_runner_id: UUID | None = None,
+    # TODO: remove legacy_env once all runs without graph_runner_id have expired
+    legacy_env: EnvType | None = None,
 ) -> AsyncRunAcceptedSchema:
-    if env is None and graph_runner_id is None:
-        raise ValueError("Either env or graph_runner_id must be provided")
-
     run = run_repository.get_run(session, run_id)
     if not run or run.project_id != project_id:
         raise RunNotFound(run_id)
+
+    graph_runner_id = run.graph_runner_id
+    env = run.env or legacy_env
+    if graph_runner_id is None and env is None:
+        raise ValueError("Original run has no graph_runner_id or env; cannot retry")
 
     retry_group_id = run.retry_group_id or run.id
     input_data = get_run_input(session, retry_group_id=retry_group_id)
@@ -441,6 +447,7 @@ def retry_run(
         retry_group_id=retry_group_id,
         attempt_number=next_attempt,
         env=env,
+        graph_runner_id=graph_runner_id,
     )
 
     setup_tracing_context(session=session, project_id=project_id)

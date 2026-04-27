@@ -201,13 +201,13 @@ const openInputDialog = async (run: OrgRun) => {
 // --- Retry ---
 const retryLoading = ref<string | null>(null)
 
-const retryRun = async (run: OrgRun, env: string) => {
+const retryRun = async (run: OrgRun, legacyEnv?: string) => {
   retryLoading.value = run.id
   try {
-    await scopeoApi.runs.retry(run.project_id, run.id, { env })
+    await scopeoApi.runs.retry(run.project_id, run.id, legacyEnv ? { env: legacyEnv } : {})
     queryClient.invalidateQueries({ queryKey: ['org-runs'] })
   } catch (err) {
-    logger.error('retryRun failed', { error: err, runId: run.id, projectId: run.project_id, env })
+    logger.error('retryRun failed', { error: err, runId: run.id, projectId: run.project_id })
     notify.error(`Failed to retry run ${run.id}`)
   } finally {
     retryLoading.value = null
@@ -439,15 +439,16 @@ definePage({
 
         <template #item.retry="{ item }">
           <VBtn
-            v-if="item.input_available && item.env"
+            v-if="item.input_available && (item.graph_runner_id || item.env)"
             size="x-small"
             variant="tonal"
             :loading="retryLoading === item.id"
-            @click="retryRun(item, item.env)"
+            @click="retryRun(item)"
           >
             <VIcon icon="tabler-refresh" size="14" class="me-1" />
             Retry
           </VBtn>
+          <!-- TODO: remove legacy env dropdown once all runs without graph_runner_id have expired -->
           <VMenu v-else-if="item.input_available" location="bottom">
             <template #activator="{ props: menuProps }">
               <VBtn
