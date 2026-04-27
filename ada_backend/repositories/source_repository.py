@@ -167,7 +167,15 @@ def get_source_attributes(
 ) -> SourceAttributes:
     """Get source attributes including decrypted database URL from the SourceAttributes table."""
 
-    rows = session_sql_alchemy.query(db.SourceAttribute).filter(db.SourceAttribute.source_id == source_id).all()
+    rows = (
+        session_sql_alchemy.query(db.SourceAttribute)
+        .join(db.DataSource, db.SourceAttribute.source_id == db.DataSource.id)
+        .filter(
+            db.SourceAttribute.source_id == source_id,
+            db.DataSource.organization_id == organization_id,
+        )
+        .all()
+    )
 
     if not rows:
         raise ValueError(f"Source attributes not found for source_id={source_id}")
