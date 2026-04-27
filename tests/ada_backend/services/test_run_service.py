@@ -30,6 +30,7 @@ def _make_fake_run(run_id, project_id, status=RunStatus.FAILED):
     run.finished_at = datetime.now(timezone.utc)
     run.created_at = datetime.now(timezone.utc)
     run.updated_at = datetime.now(timezone.utc)
+    run.graph_runner_id = None
     return run
 
 
@@ -168,7 +169,7 @@ class TestRetryRun:
                 session=session,
                 run_id=run_id,
                 project_id=project_id,
-                env=EnvType.DRAFT,
+                legacy_env=EnvType.DRAFT,
             )
 
         assert result.run_id == new_run_id
@@ -195,4 +196,4 @@ class TestRetryRun:
         ):
             repo.get_run.return_value = existing_run
             with pytest.raises(ValueError, match="Run input not found for retry"):
-                retry_run(session=session, run_id=run_id, project_id=project_id, env=EnvType.PRODUCTION)
+                retry_run(session=session, run_id=run_id, project_id=project_id, legacy_env=EnvType.PRODUCTION)

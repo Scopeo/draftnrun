@@ -1465,6 +1465,12 @@ class Run(Base):
     result_id = mapped_column(String, nullable=True)
     error = mapped_column(JSONB, nullable=True)
     retry_group_id = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    graph_runner_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("graph_runners.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     attempt_number = mapped_column(Integer, nullable=False, server_default="1")
     started_at = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at = mapped_column(DateTime(timezone=True), nullable=True)
@@ -1474,6 +1480,7 @@ class Run(Base):
     project = relationship("Project", back_populates="runs")
     webhook = relationship("Webhook", back_populates="runs")
     integration_trigger = relationship("IntegrationTrigger", back_populates="runs")
+    graph_runner = relationship("GraphRunner")
     __table_args__ = (
         sa.UniqueConstraint("retry_group_id", "attempt_number", name="uq_runs_retry_group_id_attempt_number"),
     )

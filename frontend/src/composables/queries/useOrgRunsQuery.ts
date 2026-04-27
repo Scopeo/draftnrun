@@ -17,6 +17,7 @@ export interface OrgRun {
   attempt_number: number
   attempt_count: number
   input_available: boolean
+  graph_runner_id: string | null
   started_at: string | null
   finished_at: string | null
   created_at: string

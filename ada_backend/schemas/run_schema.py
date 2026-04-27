@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ada_backend.database.models import CallType, EnvType, RunStatus
 
@@ -34,6 +34,7 @@ class RunResponseSchema(BaseModel):
     result_id: Optional[str] = None
     error: Optional[dict] = None
     retry_group_id: Optional[UUID] = None
+    graph_runner_id: Optional[UUID] = None
     attempt_number: int = Field(default=1, ge=1)
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
@@ -79,6 +80,7 @@ class OrgRunResponseSchema(BaseModel):
     attempt_number: int = Field(default=1, ge=1)
     attempt_count: int = Field(default=1, ge=1)
     input_available: bool = False
+    graph_runner_id: Optional[UUID] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     created_at: datetime
@@ -97,11 +99,5 @@ class OrgRunListResponse(BaseModel):
 
 
 class RunRetrySchema(BaseModel):
+    # TODO: remove env once all legacy runs (before graph_runner_id migration) have expired
     env: Optional[EnvType] = None
-    graph_runner_id: Optional[UUID] = None
-
-    @model_validator(mode="after")
-    def validate_target(self):
-        if self.env is None and self.graph_runner_id is None:
-            raise ValueError("Either env or graph_runner_id must be provided")
-        return self

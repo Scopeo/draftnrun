@@ -871,9 +871,13 @@ Call `get_run_result(project_id, run_id)` to retrieve the final output.
 
 ## Retry a Failed Run
 
-Use `retry_run(project_id, run_id, env=... | graph_runner_id=...)` to enqueue a new
-attempt for a specific run. The backend reuses persisted `run_inputs` data for the
-retry group and returns a new pending `run_id`.
+Signature: `retry_run(project_id, run_id, env=None)`.
+The backend reuses the original run's `graph_runner_id` and persisted `run_inputs`
+data, and returns a new pending `run_id`. For normal runs, call
+`retry_run(project_id, run_id)` — no third argument needed.
+The optional `env` parameter is a legacy fallback only required for old runs where
+both `graph_runner_id` and `env` are null; pass the target environment as the third
+argument in that case (e.g. `retry_run(project_id, run_id, env="production")`).
 
 ## Retrieve Run Input
 

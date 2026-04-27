@@ -132,30 +132,22 @@ def register(mcp: FastMCP) -> None:
             UUID,
             Field(description="The run ID to retry (from list_runs or get_run)."),
         ],
+        # TODO: remove env once all legacy runs without graph_runner_id have expired
         env: Annotated[
             Optional[str],
-            Field(description="Execution env for retry. Typically 'draft' or 'production'."),
-        ] = None,
-        graph_runner_id: Annotated[
-            Optional[UUID],
-            Field(description="Optional explicit graph runner to execute the retry against."),
+            Field(description="Legacy fallback: env for old runs without graph_runner_id. Usually not needed."),
         ] = None,
     ) -> dict:
         """Retry a specific run using persisted input payload.
 
-        The backend creates a new run attempt in the same retry group and enqueues
-        it asynchronously. Provide either `env` or `graph_runner_id`.
+        The backend creates a new run attempt in the same retry group, reusing the
+        original run's graph_runner_id and env, and enqueues it asynchronously.
+        For legacy runs without graph_runner_id, pass env as fallback.
         """
-        if env is None and graph_runner_id is None:
-            raise ValueError("Either env or graph_runner_id must be provided")
-
         jwt, _ = _get_auth()
         body: dict = {}
         if env is not None:
             body["env"] = env
-        if graph_runner_id is not None:
-            body["graph_runner_id"] = str(graph_runner_id)
-
         return await api.post(
             f"/projects/{project_id}/runs/{run_id}/retry",
             jwt,
