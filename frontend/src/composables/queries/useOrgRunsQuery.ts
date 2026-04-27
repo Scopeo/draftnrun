@@ -10,6 +10,7 @@ export interface OrgRun {
   project_name: string
   status: 'pending' | 'running' | 'completed' | 'failed'
   trigger: string
+  env: 'draft' | 'production' | null
   trace_id: string | null
   error: Record<string, any> | null
   retry_group_id: string | null

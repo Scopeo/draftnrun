@@ -70,7 +70,7 @@ Complete endpoint reference for the Draft'n Run backend.
 | GET | `.../runs/{run_id}/result` | JWT(Member) | Get run result |
 | PATCH | `.../runs/{run_id}` | JWT(Member) | Update run status |
 | POST | `.../runs/{run_id}/retry` | JWT(Member) | Retry a specific run (202) |
-| GET | `/org/{organization_id}/runs` | JWT(Member) | List runs for org (paginated, filterable). Filters: `statuses` (list), `project_ids` (list), `trigger`, `date_from`, `date_to` |
+| GET | `/org/{organization_id}/runs` | JWT(Member) | List runs for org (paginated, filterable). Filters: `statuses` (list), `project_ids` (list), `triggers` (list), `envs` (list), `date_from`, `date_to` |
 | GET | `/org/{organization_id}/runs/{run_id}/input` | JWT(Member) | Get run input data (if available) |
 
 ### Run Retry

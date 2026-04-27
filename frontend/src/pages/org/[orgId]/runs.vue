@@ -32,7 +32,8 @@ const page = ref(1)
 const pageSize = ref(50)
 const selectedStatuses = ref<string[]>(['pending', 'running', 'completed', 'failed'])
 const selectedProjectIds = ref<string[]>([])
-const triggerFilter = ref<string | undefined>(undefined)
+const selectedTriggers = ref<string[]>(['api', 'sandbox', 'webhook', 'cron', 'qa'])
+const selectedEnvs = ref<string[]>(['draft', 'production'])
 const dateFrom = ref<string | undefined>(undefined)
 const dateTo = ref<string | undefined>(undefined)
 
@@ -53,12 +54,23 @@ const allStatusesSelected = computed(() =>
   selectedStatuses.value.length === allStatusValues.length
 )
 
+const allTriggerValues = ['api', 'sandbox', 'webhook', 'cron', 'qa']
+const allTriggersSelected = computed(() =>
+  selectedTriggers.value.length === allTriggerValues.length
+)
+
+const allEnvValues = ['draft', 'production']
+const allEnvsSelected = computed(() =>
+  selectedEnvs.value.length === allEnvValues.length
+)
+
 const params = computed<OrgRunsParams>(() => ({
   page: page.value,
   page_size: pageSize.value,
   ...(!allStatusesSelected.value && selectedStatuses.value.length > 0 && { statuses: selectedStatuses.value }),
   ...(!allProjectsSelected.value && selectedProjectIds.value.length > 0 && { project_ids: selectedProjectIds.value }),
-  ...(triggerFilter.value && { trigger: triggerFilter.value }),
+  ...(!allTriggersSelected.value && selectedTriggers.value.length > 0 && { triggers: selectedTriggers.value }),
+  ...(!allEnvsSelected.value && selectedEnvs.value.length > 0 && { envs: selectedEnvs.value }),
   ...(dateFrom.value && { date_from: dateFrom.value }),
   ...(dateTo.value && { date_to: dateTo.value }),
 }))
@@ -70,13 +82,51 @@ const totalItems = computed(() => data.value?.pagination.total_items ?? 0)
 
 const headers = [
   { title: 'Project', key: 'project_name', sortable: false },
+  { title: 'Trigger', key: 'trigger', sortable: false, width: '100px' },
+  { title: 'Env', key: 'env', sortable: false, width: '110px' },
   { title: 'Date', key: 'created_at', sortable: false },
   { title: 'Status', key: 'status', sortable: false },
   { title: 'Input', key: 'input', sortable: false, width: '80px' },
-  { title: 'Retry', key: 'retry', sortable: false, width: '140px' },
+  { title: 'Retry', key: 'retry', sortable: false, width: '100px' },
   { title: 'Attempts', key: 'attempt_count', sortable: false, width: '100px' },
   { title: 'Trace', key: 'trace', sortable: false, width: '80px' },
 ]
+
+const triggerLabelMap: Record<string, string> = {
+  api: 'API',
+  sandbox: 'Sandbox',
+  webhook: 'Webhook',
+  cron: 'Cron',
+  qa: 'QA',
+}
+
+const envColorMap: Record<string, string> = {
+  draft: 'warning',
+  production: 'success',
+}
+
+const envLabelMap: Record<string, string> = {
+  draft: 'Draft',
+  production: 'Prod',
+}
+
+const agentIdByProjectId = computed(() => {
+  const map = new Map<string, string>()
+  if (agents.value) {
+    for (const a of agents.value) {
+      if (a.project_id) map.set(a.project_id, a.id)
+    }
+  }
+  return map
+})
+
+const getProjectUrl = (projectId: string): string => {
+  const orgId = selectedOrgId.value
+  if (!orgId) return '#'
+  const agentId = agentIdByProjectId.value.get(projectId)
+  if (agentId) return `/org/${orgId}/agents/${agentId}`
+  return `/org/${orgId}/projects/${projectId}`
+}
 
 const statusOptions = [
   { title: 'Pending', value: 'pending' },
@@ -86,12 +136,16 @@ const statusOptions = [
 ]
 
 const triggerOptions = [
-  { title: 'All', value: undefined },
   { title: 'API', value: 'api' },
   { title: 'Sandbox', value: 'sandbox' },
   { title: 'Webhook', value: 'webhook' },
   { title: 'Cron', value: 'cron' },
   { title: 'QA', value: 'qa' },
+]
+
+const envOptions = [
+  { title: 'Draft', value: 'draft' },
+  { title: 'Production', value: 'production' },
 ]
 
 const statusColorMap: Record<string, string> = {
@@ -107,12 +161,13 @@ const resetFilters = () => {
   page.value = 1
   selectedStatuses.value = [...allStatusValues]
   selectedProjectIds.value = [...allProjectIds.value]
-  triggerFilter.value = undefined
+  selectedTriggers.value = [...allTriggerValues]
+  selectedEnvs.value = [...allEnvValues]
   dateFrom.value = undefined
   dateTo.value = undefined
 }
 
-watch([selectedStatuses, selectedProjectIds, triggerFilter, dateFrom, dateTo], () => {
+watch([selectedStatuses, selectedProjectIds, selectedTriggers, selectedEnvs, dateFrom, dateTo], () => {
   page.value = 1
 })
 
@@ -233,14 +288,54 @@ definePage({
           </VSelect>
 
           <VSelect
-            v-model="triggerFilter"
+            v-model="selectedTriggers"
             :items="triggerOptions"
-            label="Trigger"
+            multiple
             density="compact"
             variant="outlined"
             hide-details
-            style="min-inline-size: 140px; max-inline-size: 160px"
-          />
+            label="Trigger"
+            style="min-inline-size: 160px; max-inline-size: 220px"
+          >
+            <template #prepend-item>
+              <VListItem @click="selectedTriggers = allTriggersSelected ? [] : [...allTriggerValues]">
+                <template #prepend>
+                  <VCheckboxBtn :model-value="allTriggersSelected" :indeterminate="selectedTriggers.length > 0 && !allTriggersSelected" />
+                </template>
+                <VListItemTitle>All Triggers</VListItemTitle>
+              </VListItem>
+              <VDivider />
+            </template>
+            <template #selection="{ index }">
+              <span v-if="allTriggersSelected && index === 0">All Triggers</span>
+              <span v-else-if="!allTriggersSelected && index === 0">{{ selectedTriggers.length }} trigger{{ selectedTriggers.length > 1 ? 's' : '' }}</span>
+            </template>
+          </VSelect>
+
+          <VSelect
+            v-model="selectedEnvs"
+            :items="envOptions"
+            multiple
+            density="compact"
+            variant="outlined"
+            hide-details
+            label="Env"
+            style="min-inline-size: 140px; max-inline-size: 200px"
+          >
+            <template #prepend-item>
+              <VListItem @click="selectedEnvs = allEnvsSelected ? [] : [...allEnvValues]">
+                <template #prepend>
+                  <VCheckboxBtn :model-value="allEnvsSelected" :indeterminate="selectedEnvs.length > 0 && !allEnvsSelected" />
+                </template>
+                <VListItemTitle>All Envs</VListItemTitle>
+              </VListItem>
+              <VDivider />
+            </template>
+            <template #selection="{ index }">
+              <span v-if="allEnvsSelected && index === 0">All Envs</span>
+              <span v-else-if="!allEnvsSelected && index === 0">{{ selectedEnvs.length }} env{{ selectedEnvs.length > 1 ? 's' : '' }}</span>
+            </template>
+          </VSelect>
 
           <VTextField
             v-model="dateFrom"
@@ -263,7 +358,7 @@ definePage({
           />
 
           <VBtn
-            v-if="!allStatusesSelected || !allProjectsSelected || triggerFilter || dateFrom || dateTo"
+            v-if="!allStatusesSelected || !allProjectsSelected || !allTriggersSelected || !allEnvsSelected || dateFrom || dateTo"
             variant="text"
             size="small"
             @click="resetFilters"
@@ -298,7 +393,24 @@ definePage({
         @update:items-per-page="pageSize = $event"
       >
         <template #item.project_name="{ item }">
-          <span class="font-weight-medium">{{ item.project_name }}</span>
+          <RouterLink
+            :to="getProjectUrl(item.project_id)"
+            class="font-weight-medium text-primary text-decoration-none"
+            @click.stop
+          >
+            {{ item.project_name }}
+          </RouterLink>
+        </template>
+
+        <template #item.trigger="{ item }">
+          <span class="text-medium-emphasis text-caption">{{ triggerLabelMap[item.trigger] || item.trigger }}</span>
+        </template>
+
+        <template #item.env="{ item }">
+          <VChip v-if="item.env" :color="envColorMap[item.env] || 'default'" size="small" variant="tonal">
+            {{ envLabelMap[item.env] ?? item.env }}
+          </VChip>
+          <span v-else class="text-disabled">--</span>
         </template>
 
         <template #item.created_at="{ item }">
@@ -326,29 +438,35 @@ definePage({
         </template>
 
         <template #item.retry="{ item }">
-          <template v-if="item.input_available">
-            <VMenu location="bottom">
-              <template #activator="{ props: menuProps }">
-                <VBtn
-                  v-bind="menuProps"
-                  size="x-small"
-                  variant="tonal"
-                  :loading="retryLoading === item.id"
-                >
-                  Retry
-                  <VIcon icon="tabler-chevron-down" size="14" class="ms-1" />
-                </VBtn>
-              </template>
-              <VList density="compact">
-                <VListItem @click="retryRun(item, 'draft')">
-                  <VListItemTitle>Draft</VListItemTitle>
-                </VListItem>
-                <VListItem @click="retryRun(item, 'production')">
-                  <VListItemTitle>Production</VListItemTitle>
-                </VListItem>
-              </VList>
-            </VMenu>
-          </template>
+          <VBtn
+            v-if="item.input_available && item.env"
+            size="x-small"
+            variant="tonal"
+            :loading="retryLoading === item.id"
+            @click="retryRun(item, item.env)"
+          >
+            <VIcon icon="tabler-refresh" size="14" class="me-1" />
+            Retry
+          </VBtn>
+          <VMenu v-else-if="item.input_available" location="bottom">
+            <template #activator="{ props: menuProps }">
+              <VBtn
+                v-bind="menuProps"
+                size="x-small"
+                variant="tonal"
+                :loading="retryLoading === item.id"
+              >
+                <VIcon icon="tabler-refresh" size="14" class="me-1" />
+                Retry
+                <VIcon icon="tabler-chevron-down" size="14" class="ms-1" />
+              </VBtn>
+            </template>
+            <VList density="compact">
+              <VListItem v-for="env in allEnvValues" :key="env" @click="retryRun(item, env)">
+                <VListItemTitle>{{ envLabelMap[env] ?? env }}</VListItemTitle>
+              </VListItem>
+            </VList>
+          </VMenu>
           <span v-else class="text-disabled">--</span>
         </template>
 

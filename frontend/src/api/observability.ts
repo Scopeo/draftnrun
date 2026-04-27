@@ -15,7 +15,8 @@ export interface OrgRunsParams {
   page_size?: number
   statuses?: string[]
   project_ids?: string[]
-  trigger?: string
+  triggers?: string[]
+  envs?: string[]
   date_from?: string
   date_to?: string
 }

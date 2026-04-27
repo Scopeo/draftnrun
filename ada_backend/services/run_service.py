@@ -7,7 +7,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import CallType, RunStatus
+from ada_backend.database.models import CallType, EnvType, RunStatus
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.mixpanel_analytics import track_run_completed
 from ada_backend.repositories import run_repository
@@ -79,6 +79,7 @@ async def run_with_tracking(
     integration_trigger_id: UUID | None = None,
     run_id: UUID | None = None,
     event_id: str | None = None,
+    env: EnvType | None = None,
 ) -> ChatResponse:
     """
     Create a run record (or use existing run_id), set it to RUNNING, execute the runner coroutine,
@@ -97,6 +98,7 @@ async def run_with_tracking(
                 webhook_id=webhook_id,
                 integration_trigger_id=integration_trigger_id,
                 event_id=event_id,
+                env=env,
             )
             run_id = run.id
         set_tracing_span(run_id=str(run_id))
@@ -239,6 +241,7 @@ def create_run(
     attempt_number: int = 1,
     event_id: str | None = None,
     retry_group_id: UUID | None = None,
+    env: EnvType | None = None,
 ) -> RunResponseSchema:
     project = get_project(session, project_id=project_id)
     if not project:
@@ -252,6 +255,7 @@ def create_run(
         event_id=event_id,
         attempt_number=attempt_number,
         retry_group_id=retry_group_id,
+        env=env,
     )
     return RunResponseSchema.model_validate(run, from_attributes=True)
 
@@ -291,7 +295,8 @@ def get_org_runs(
     page_size: int = 50,
     statuses: list[RunStatus] | None = None,
     project_ids: list[UUID] | None = None,
-    trigger: CallType | None = None,
+    triggers: list[CallType] | None = None,
+    envs: list[EnvType] | None = None,
     date_from=None,
     date_to=None,
 ) -> tuple[list[OrgRunResponseSchema], int]:
@@ -300,7 +305,8 @@ def get_org_runs(
         organization_id=organization_id,
         statuses=statuses,
         project_ids=project_ids,
-        trigger=trigger,
+        triggers=triggers,
+        envs=envs,
         date_from=date_from,
         date_to=date_to,
     )
@@ -312,7 +318,8 @@ def get_org_runs(
         offset=offset,
         statuses=statuses,
         project_ids=project_ids,
-        trigger=trigger,
+        triggers=triggers,
+        envs=envs,
         date_from=date_from,
         date_to=date_to,
     )
@@ -406,7 +413,7 @@ def retry_run(
     session: Session,
     run_id: UUID,
     project_id: UUID,
-    env: str | None = None,
+    env: EnvType | None = None,
     graph_runner_id: UUID | None = None,
 ) -> AsyncRunAcceptedSchema:
     if env is None and graph_runner_id is None:
@@ -433,6 +440,7 @@ def retry_run(
         event_id=run.event_id,
         retry_group_id=retry_group_id,
         attempt_number=next_attempt,
+        env=env,
     )
 
     setup_tracing_context(session=session, project_id=project_id)
@@ -441,7 +449,7 @@ def retry_run(
     pushed = push_run_task(
         run_id=retried_run.id,
         project_id=project_id,
-        env=env,
+        env=env.value if env else None,
         input_data=input_data,
         trigger=run.trigger.value,
         graph_runner_id=graph_runner_id,

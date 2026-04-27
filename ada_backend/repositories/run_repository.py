@@ -20,6 +20,7 @@ def create_run(
     attempt_number: int = 1,
     event_id: str | None = None,
     retry_group_id: UUID | None = None,
+    env: db.EnvType | None = None,
 ) -> db.Run:
     """Create a new run with status pending. Caller manages transaction."""
     run_id = uuid4()
@@ -33,6 +34,7 @@ def create_run(
         "integration_trigger_id": integration_trigger_id,
         "attempt_number": attempt_number,
         "retry_group_id": run_retry_group_id,
+        "env": env,
     }
     if event_id is not None:
         kwargs["event_id"] = event_id
@@ -60,7 +62,8 @@ def _apply_run_filters(
     query,
     statuses: list[db.RunStatus] | None = None,
     project_ids: list[UUID] | None = None,
-    trigger: db.CallType | None = None,
+    triggers: list[db.CallType] | None = None,
+    envs: list[db.EnvType] | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ):
@@ -68,8 +71,10 @@ def _apply_run_filters(
         query = query.filter(db.Run.status.in_(statuses))
     if project_ids:
         query = query.filter(db.Run.project_id.in_(project_ids))
-    if trigger is not None:
-        query = query.filter(db.Run.trigger == trigger)
+    if triggers:
+        query = query.filter(db.Run.trigger.in_(triggers))
+    if envs:
+        query = query.filter(db.Run.env.in_(envs))
     if date_from is not None:
         query = query.filter(db.Run.created_at >= date_from)
     if date_to is not None:
@@ -82,14 +87,16 @@ def count_runs_by_organization(
     organization_id: UUID,
     statuses: list[db.RunStatus] | None = None,
     project_ids: list[UUID] | None = None,
-    trigger: db.CallType | None = None,
+    triggers: list[db.CallType] | None = None,
+    envs: list[db.EnvType] | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ) -> int:
     query = session.query(db.Run).join(db.Project, db.Run.project_id == db.Project.id)
     query = query.filter(db.Project.organization_id == organization_id)
     query = _apply_run_filters(
-        query, statuses=statuses, project_ids=project_ids, trigger=trigger, date_from=date_from, date_to=date_to
+        query, statuses=statuses, project_ids=project_ids, triggers=triggers, envs=envs,
+        date_from=date_from, date_to=date_to,
     )
     return query.count()
 
@@ -101,7 +108,8 @@ def get_runs_by_organization(
     offset: int = 0,
     statuses: list[db.RunStatus] | None = None,
     project_ids: list[UUID] | None = None,
-    trigger: db.CallType | None = None,
+    triggers: list[db.CallType] | None = None,
+    envs: list[db.EnvType] | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ) -> list[OrgRunResponseSchema]:
@@ -133,7 +141,8 @@ def get_runs_by_organization(
         .filter(db.Project.organization_id == organization_id)
     )
     query = _apply_run_filters(
-        query, statuses=statuses, project_ids=project_ids, trigger=trigger, date_from=date_from, date_to=date_to
+        query, statuses=statuses, project_ids=project_ids, triggers=triggers, envs=envs,
+        date_from=date_from, date_to=date_to,
     )
 
     rows = query.order_by(db.Run.created_at.desc()).limit(limit).offset(offset).all()
@@ -145,6 +154,7 @@ def get_runs_by_organization(
             project_name=project_name,
             status=run.status,
             trigger=run.trigger,
+            env=run.env,
             trace_id=run.trace_id,
             error=run.error,
             retry_group_id=run.retry_group_id,

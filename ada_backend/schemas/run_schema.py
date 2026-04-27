@@ -26,6 +26,7 @@ class RunResponseSchema(BaseModel):
     project_id: UUID
     status: RunStatus
     trigger: CallType
+    env: Optional[EnvType] = None
     webhook_id: Optional[UUID] = None
     integration_trigger_id: Optional[UUID] = None
     event_id: Optional[str] = None
@@ -71,6 +72,7 @@ class OrgRunResponseSchema(BaseModel):
     project_name: str
     status: RunStatus
     trigger: CallType
+    env: Optional[EnvType] = None
     trace_id: Optional[str] = None
     error: Optional[dict] = None
     retry_group_id: Optional[UUID] = None

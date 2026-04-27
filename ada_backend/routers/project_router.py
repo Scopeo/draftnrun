@@ -254,6 +254,7 @@ async def run_env_agent_endpoint(
         return await run_with_tracking(
             project_id=project_id,
             trigger=CallType.API,
+            env=env,
             runner_coro=run_env_agent(
                 project_id=project_id,
                 input_data=input_data,
@@ -361,6 +362,7 @@ async def chat(
         return await run_with_tracking(
             project_id=project_id,
             trigger=CallType.SANDBOX,
+            env=environment,
             runner_coro=run_agent(
                 project_id=project_id,
                 graph_runner_id=graph_runner_id,
@@ -431,6 +433,7 @@ async def chat_async(
         session,
         project_id=project_id,
         trigger=CallType.SANDBOX,
+        env=environment,
     )
     setup_tracing_context(session=session, project_id=project_id)
     set_tracing_span(run_id=str(run.id))
@@ -485,6 +488,7 @@ async def chat_env(
         return await run_with_tracking(
             project_id=project_id,
             trigger=CallType.SANDBOX,
+            env=env,
             runner_coro=run_env_agent(
                 project_id=project_id,
                 input_data=input_data,
