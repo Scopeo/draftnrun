@@ -10,12 +10,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
-from ada_backend.database.models import (
-    ParameterType,
-    UIComponent,
-    UIComponentProperties,
-)
-from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
+from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
@@ -156,10 +151,6 @@ def seed_sql_tool_components(session: Session):
             *build_completion_service_config_definitions(
                 component_version_id=sql_tool_version.id,
                 params_to_seed=[
-                    ParameterLLMConfig(
-                        param_name=COMPLETION_MODEL_IN_DB,
-                        param_id=UUID("978afae2-4a79-4f26-a3a1-0a64cbd75b82"),
-                    ),
                     ParameterLLMConfig(
                         param_name="api_key",
                         param_id=UUID("2d093471-cfcc-42ee-a520-5d1d8c9f3d01"),

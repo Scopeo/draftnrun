@@ -2,6 +2,7 @@ import json
 import logging
 from collections.abc import Callable
 from typing import Optional, Type
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -10,7 +11,7 @@ from engine.components.component import Component
 from engine.components.errors import CategorizationError
 from engine.components.llm_call import LLMCallAgent, LLMCallInputs
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
-from engine.llm_services.llm_service import CompletionService
+from engine.constants import DEFAULT_MODEL
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -74,6 +75,15 @@ def _build_output_format(categories: dict[str, str]) -> str:
 
 
 class CategorizerInputs(BaseModel):
+    completion_model: str = Field(
+        default=DEFAULT_MODEL,
+        json_schema_extra={
+            "is_tool_input": False,
+            "parameter_type": ParameterType.LLM_MODEL,
+            "ui_component": "Select",
+            "ui_component_properties": {"label": "Model Name", "model_capabilities": ["completion"]},
+        },
+    )
     content_to_categorize: str = Field(
         default="",
         description="The content to categorize",
@@ -170,10 +180,14 @@ class Categorizer(Component):
 
     def __init__(
         self,
-        completion_service: CompletionService,
         trace_manager: TraceManager,
         tool_description: ToolDescription = DEFAULT_CATEGORIZER_TOOL_DESCRIPTION,
         component_attributes: Optional[ComponentAttributes] = None,
+        temperature: float = 1.0,
+        llm_api_key: Optional[str] = None,
+        verbosity: Optional[str] = None,
+        reasoning: Optional[str] = None,
+        model_id_resolver: Optional[Callable[[str], Optional[UUID]]] = None,
         capability_resolver: Optional[Callable[[list[str]], set[str]]] = None,
     ):
         if component_attributes is None:
@@ -184,10 +198,14 @@ class Categorizer(Component):
             component_attributes=component_attributes,
         )
         self._llm_call_agent = LLMCallAgent(
-            completion_service=completion_service,
             trace_manager=trace_manager,
             tool_description=tool_description,
             component_attributes=component_attributes,
+            temperature=temperature,
+            llm_api_key=llm_api_key,
+            verbosity=verbosity,
+            reasoning=reasoning,
+            model_id_resolver=model_id_resolver,
             capability_resolver=capability_resolver,
         )
 
@@ -203,6 +221,7 @@ class Categorizer(Component):
             messages=[ChatMessage(role="user", content=inputs.content_to_categorize)],
             prompt_template=prompt_template,
             output_format=output_format,
+            completion_model=inputs.completion_model,
         )
 
         llm_outputs = await self._llm_call_agent._run_without_io_trace(inputs=llm_inputs, ctx=ctx)

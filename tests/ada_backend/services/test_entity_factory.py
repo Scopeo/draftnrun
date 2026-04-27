@@ -12,10 +12,10 @@ from ada_backend.services.entity_factory import (
     build_project_reference_processor,
     build_trace_manager_processor,
     detect_and_convert_dataclasses,
-    get_llm_provider_and_model,
     pydantic_processor,
 )
 from engine.components.types import ToolDescription
+from engine.llm_services.utils import get_llm_provider_and_model
 from engine.trace.trace_context import get_trace_manager
 from engine.trace.trace_manager import TraceManager
 

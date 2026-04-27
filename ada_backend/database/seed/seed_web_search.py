@@ -11,9 +11,6 @@ from ada_backend.database.component_definition_seeding import (
     upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
-from ada_backend.database.seed.constants import (
-    COMPLETION_MODEL_IN_DB,
-)
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
@@ -57,10 +54,6 @@ def seed_web_search_components(session: Session):
             *build_web_service_config_definitions(
                 component_version_id=web_search_openai_agent_version.id,
                 params_to_seed=[
-                    ParameterLLMConfig(
-                        param_name=COMPLETION_MODEL_IN_DB,
-                        param_id=UUID("329f22ec-0382-4fcf-963f-3281e68e6222"),
-                    ),
                     ParameterLLMConfig(
                         param_name="api_key",
                         param_id=UUID("f1e57044-3762-4791-bc4d-32fcfb9d87ce"),

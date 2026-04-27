@@ -11,18 +11,19 @@ def _make_tool_description(name: str = "test_tool") -> ToolDescription:
 
 
 def _make_ai_agent(agent_tools: list, skip_tools_with_missing_oauth: bool = True) -> AIAgent:
-    completion_service = MagicMock()
     trace_manager = MagicMock()
     trace_manager.start_span.return_value.__enter__ = MagicMock(return_value=MagicMock())
     trace_manager.start_span.return_value.__exit__ = MagicMock(return_value=False)
     return AIAgent(
-        completion_service=completion_service,
         trace_manager=trace_manager,
         tool_description=_make_tool_description("agent"),
         component_attributes=ComponentAttributes(
             component_instance_name="test_agent",
             component_instance_id=None,
         ),
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         agent_tools=agent_tools,
         skip_tools_with_missing_oauth=skip_tools_with_missing_oauth,
     )

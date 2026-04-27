@@ -88,7 +88,9 @@ def agent_input():
 def react_agent(mock_agent, mock_trace_manager, mock_tool_description, mock_llm_service):
     """ReAct agent fixture with all dependencies."""
     return AIAgent(
-        completion_service=mock_llm_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_instance_name="Test React Agent",
         agent_tools=[mock_agent],
         trace_manager=mock_trace_manager,
@@ -102,7 +104,9 @@ def react_agent_with_tool_calls(
 ):
     """ReAct agent fixture configured for tool call testing."""
     return AIAgent(
-        completion_service=mock_llm_service_with_tool_calls,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_instance_name="Test React Agent With Tool Calls",
         agent_tools=[mock_agent],
         trace_manager=mock_trace_manager,
@@ -114,7 +118,9 @@ def react_agent_with_tool_calls(
 def react_agent_sequential(mock_agent, mock_trace_manager, mock_tool_description, mock_llm_service_sequential):
     """ReAct agent fixture configured for sequential response testing."""
     return AIAgent(
-        completion_service=mock_llm_service_sequential,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
         component_instance_name="Test React Agent Sequential",
         agent_tools=[mock_agent],
         trace_manager=mock_trace_manager,
