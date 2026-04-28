@@ -269,10 +269,13 @@ async def run_env_agent_endpoint(
         )
         raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
     except RunError as e:
-        raise HTTPException(status_code=400, detail=f"Agent run failed for project {project_id}") from e
+        raise HTTPException(
+            status_code=400,
+            detail=f"Agent run failed for project {project_id}: {str(e)}",
+        ) from e
     except ValueError as e:
         LOGGER.error(f"Failed to run agent for project {project_id} in environment {env}: %s", e, exc_info=True)
-        raise HTTPException(status_code=400, detail="Invalid request parameters") from e
+        raise HTTPException(status_code=400, detail=f"Error: {str(e)}") from e
 
 
 @router.get("/{project_id}/charts", response_model=ChartsResponse, tags=["Metrics"], deprecated=True)
@@ -380,7 +383,10 @@ async def chat(
         )
         raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
     except RunError as e:
-        raise HTTPException(status_code=400, detail=f"Agent run failed for project {project_id}") from e
+        raise HTTPException(
+            status_code=400,
+            detail=f"Agent run failed for project {project_id}: {str(e)}",
+        ) from e
     except ValueError as e:
         LOGGER.error(
             "Failed to run agent chat for project %s, graph_runner %s: %s",
@@ -389,7 +395,7 @@ async def chat(
             e,
             exc_info=True,
         )
-        raise HTTPException(status_code=400, detail="Invalid request parameters") from e
+        raise HTTPException(status_code=400, detail=f"Error: {str(e)}") from e
 
 
 @router.post(
@@ -506,9 +512,12 @@ async def chat_env(
         )
         raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
     except RunError as e:
-        raise HTTPException(status_code=400, detail=f"Agent run failed for project {project_id}") from e
+        raise HTTPException(
+            status_code=400,
+            detail=f"Agent run failed for project {project_id}: {str(e)}",
+        ) from e
     except ValueError as e:
         LOGGER.error(
             "Failed to run agent chat for project %s in environment %s: %s", project_id, env, e, exc_info=True
         )
-        raise HTTPException(status_code=400, detail="Invalid request parameters") from e
+        raise HTTPException(status_code=400, detail=f"Error: {str(e)}") from e
