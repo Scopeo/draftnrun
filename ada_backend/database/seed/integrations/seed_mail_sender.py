@@ -33,6 +33,7 @@ from engine.integrations.gmail.gmail_sender import (
 from engine.integrations.providers import OAuthProvider
 
 MAIL_SENDER_PARAMETER_GROUP_UUIDS: dict[str, UUID] = {
+    "connection": UUID("1afcebb8-c315-4638-8717-959319efd81e"),
     "email_content": GMAIL_GROUP_EMAIL_CONTENT_ID,
     "recipients": GMAIL_GROUP_RECIPIENTS_ID,
     "attachments": GMAIL_GROUP_ATTACHMENTS_ID,
@@ -68,11 +69,12 @@ def seed_mail_sender_components(session: Session):
             type=ParameterType.STRING,
             nullable=True,
             display_order=0,
+            parameter_group_id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["connection"],
             parameter_order_within_group=0,
             ui_component=UIComponent.OAUTH_CONNECTION,
             ui_component_properties={
                 "label": "Gmail Connection",
-                "description": "Connect Gmail (leave Outlook disconnected if you use Gmail)",
+                "description": "Select a Gmail connection.",
                 "provider": OAuthProvider.GMAIL.value,
                 "icon": "logos-google-gmail",
             },
@@ -84,11 +86,12 @@ def seed_mail_sender_components(session: Session):
             type=ParameterType.STRING,
             nullable=True,
             display_order=1,
+            parameter_group_id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["connection"],
             parameter_order_within_group=1,
             ui_component=UIComponent.OAUTH_CONNECTION,
             ui_component_properties={
                 "label": "Outlook Connection",
-                "description": "Connect Outlook (leave Gmail disconnected if you use Outlook)",
+                "description": "Select an Outlook connection.",
                 "provider": OAuthProvider.OUTLOOK.value,
                 "icon": "custom-microsoft-outlook",
             },
@@ -127,6 +130,10 @@ def seed_mail_sender_components(session: Session):
 def seed_mail_sender_parameter_groups(session: Session):
     parameter_groups = [
         db.ParameterGroup(
+            id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["connection"],
+            name="Connection (use exactly one)",
+        ),
+        db.ParameterGroup(
             id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["email_content"],
             name="Email Content",
         ),
@@ -142,6 +149,11 @@ def seed_mail_sender_parameter_groups(session: Session):
     build_parameters_group(session, parameter_groups)
 
     component_parameter_groups = [
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["mail_sender"],
+            parameter_group_id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["connection"],
+            group_order_within_component=0,
+        ),
         db.ComponentParameterGroup(
             component_version_id=COMPONENT_VERSION_UUIDS["mail_sender"],
             parameter_group_id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["email_content"],
