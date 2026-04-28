@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
+from engine.errors import EngineError
 from engine.integrations.gmail.gmail_sender import GmailSenderInputs
 from engine.integrations.gmail.gmail_sender_v2 import GmailSenderV2
 from engine.integrations.outlook.outlook_sender import OutlookSender, OutlookSenderInputs
@@ -72,6 +73,10 @@ class MailSenderOutputs(BaseModel):
     )
 
 
+class MailSenderConfigurationError(EngineError):
+    """Raised when Mail Sender has an invalid provider configuration."""
+
+
 class MailSender(Component):
     """Unified mail sender: delegates to Gmail or Outlook based on OAuth configuration."""
 
@@ -109,25 +114,22 @@ class MailSender(Component):
         return {"input": "mail_body", "output": "status"}
 
     def is_available(self) -> bool:
-        g = bool(self._gmail_access_token)
-        o = bool(self._outlook_access_token)
-        return g ^ o
+        has_gmail_connection = bool(self._gmail_access_token)
+        has_outlook_connection = bool(self._outlook_access_token)
+        return has_gmail_connection ^ has_outlook_connection
 
     async def _run_without_io_trace(self, inputs: BaseModel, ctx: dict) -> MailSenderOutputs:
-        gi = GmailSenderInputs.model_validate(inputs.model_dump())
-        g = bool(self._gmail_access_token)
-        o = bool(self._outlook_access_token)
-        if g and o:
-            raise ValueError(
+        gmail_inputs = GmailSenderInputs.model_validate(inputs.model_dump())
+        has_gmail_connection = bool(self._gmail_access_token)
+        has_outlook_connection = bool(self._outlook_access_token)
+
+        if has_gmail_connection and has_outlook_connection:
+            raise MailSenderConfigurationError(
                 "Mail Sender allows only one provider: disconnect either Gmail or Outlook "
                 "and keep a single connection."
             )
-        if not g and not o:
-            raise ValueError(
-                "Mail Sender requires a Gmail or Outlook connection. "
-                "Please connect one provider in the component settings."
-            )
-        if g:
+
+        if has_gmail_connection:
             gmail_inner = GmailSenderV2(
                 trace_manager=self.trace_manager,
                 component_attributes=self.component_attributes,
@@ -135,15 +137,22 @@ class MailSender(Component):
                 save_as_draft=self.save_as_draft,
                 tool_description=self.tool_description,
             )
-            out = await gmail_inner._run_without_io_trace(gi, ctx)
+            out = await gmail_inner._run_without_io_trace(gmail_inputs, ctx)
             return MailSenderOutputs(status=out.status, message_id=out.message_id)
-        outlook_inner = OutlookSender(
-            trace_manager=self.trace_manager,
-            component_attributes=self.component_attributes,
-            access_token=self._outlook_access_token,
-            save_as_draft=self.save_as_draft,
-            tool_description=self.tool_description,
+
+        if has_outlook_connection:
+            outlook_inner = OutlookSender(
+                trace_manager=self.trace_manager,
+                component_attributes=self.component_attributes,
+                access_token=self._outlook_access_token,
+                save_as_draft=self.save_as_draft,
+                tool_description=self.tool_description,
+            )
+            outlook_inputs = OutlookSenderInputs.model_validate(gmail_inputs.model_dump())
+            out = await outlook_inner._run_without_io_trace(outlook_inputs, ctx)
+            return MailSenderOutputs(status=out.status, message_id=out.message_id)
+
+        raise MailSenderConfigurationError(
+            "Mail Sender requires a Gmail or Outlook connection. "
+            "Please connect one provider in the component settings."
         )
-        outlook_inputs = OutlookSenderInputs.model_validate(gi.model_dump())
-        out = await outlook_inner._run_without_io_trace(outlook_inputs, ctx)
-        return MailSenderOutputs(status=out.status, message_id=out.message_id)
