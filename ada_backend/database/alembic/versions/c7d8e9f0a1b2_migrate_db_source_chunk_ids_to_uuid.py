@@ -8,7 +8,7 @@ Create Date: 2026-04-27
 
 import logging
 from typing import Sequence, Union
-from uuid import NAMESPACE_DNS, uuid4, uuid5
+from uuid import uuid4
 
 import httpx
 from alembic import op
@@ -63,10 +63,6 @@ def _batch_update_db(ingestion_conn, table_name: str, mapping: list[tuple[str, s
         LOGGER.info(f"  DB batch {i // DB_BATCH_SIZE + 1}: updated {len(batch)} rows")
 
 
-def _build_legacy_point_id(chunk_id: str, source_id: str) -> str:
-    return str(uuid5(NAMESPACE_DNS, f"{source_id}:{chunk_id}"))
-
-
 def _scroll_and_update_qdrant(
     client: httpx.Client,
     qdrant_url: str,
@@ -74,7 +70,6 @@ def _scroll_and_update_qdrant(
     collection_name: str,
     source_id: str,
     chunk_id_map: dict[str, str],
-    compute_point_id=None,
 ):
     offset = None
     updated = 0
@@ -84,8 +79,8 @@ def _scroll_and_update_qdrant(
     while True:
         scroll_body: dict = {
             "limit": QDRANT_SCROLL_BATCH,
-            "with_payload": True,
-            "with_vector": True,
+            "with_payload": ["chunk_id", "source_id"],
+            "with_vector": False,
             "filter": {"must": [{"key": "source_id", "match": {"value": source_id}}]},
         }
         if offset is not None:
@@ -104,57 +99,33 @@ def _scroll_and_update_qdrant(
             break
 
         page_num += 1
-        new_points = []
-        old_ids = []
+        page_updated = 0
+        page_failed = 0
 
         for point in points:
             old_cid = point.get("payload", {}).get("chunk_id")
             new_cid = chunk_id_map.get(old_cid)
             if new_cid is None:
                 continue
-            new_point_id = compute_point_id(new_cid, source_id) if compute_point_id else new_cid
-            payload = {**point["payload"], "chunk_id": new_cid}
-            new_points.append({"id": new_point_id, "payload": payload, "vector": point["vector"]})
-            old_ids.append(point["id"])
-
-        page_updated = 0
-        page_failed = 0
-
-        if new_points:
             try:
-                client.put(
-                    f"{qdrant_url}/collections/{collection_name}/points?wait=true",
+                client.post(
+                    f"{qdrant_url}/collections/{collection_name}/points/payload",
                     headers=headers,
-                    json={"points": new_points},
+                    json={"payload": {"chunk_id": new_cid}, "points": [point["id"]]},
                 ).raise_for_status()
+                page_updated += 1
             except httpx.HTTPStatusError as exc:
                 LOGGER.warning(
-                    f"    Qdrant upsert failed for page {page_num} "
+                    f"    Qdrant set_payload failed for point {point['id']} "
                     f"(source {source_id}): {exc.response.status_code}"
                 )
-                failed_ids.extend(str(pid) for pid in old_ids)
-                page_failed = len(old_ids)
-            else:
-                try:
-                    client.post(
-                        f"{qdrant_url}/collections/{collection_name}/points/delete",
-                        headers=headers,
-                        json={"points": old_ids},
-                    ).raise_for_status()
-                except httpx.HTTPStatusError as exc:
-                    LOGGER.warning(
-                        f"    Qdrant delete-old failed for page {page_num} "
-                        f"(source {source_id}): {exc.response.status_code}"
-                    )
-                    failed_ids.extend(str(pid) for pid in old_ids)
-                    page_failed = len(old_ids)
-                else:
-                    page_updated = len(new_points)
+                failed_ids.append(str(point["id"]))
+                page_failed += 1
 
         updated += page_updated
         LOGGER.info(
             f"    Qdrant source {source_id} page {page_num}: "
-            f"{page_updated} replaced, {page_failed} failed, {updated} total"
+            f"{page_updated} updated, {page_failed} failed, {updated} total"
         )
 
         offset = result.get("next_page_offset")
@@ -400,8 +371,7 @@ def downgrade() -> None:
                         f"  Source {source_id}: reverting {len(chunk_id_map)} chunks in collection '{collection_name}'"
                     )
                     updated = _scroll_and_update_qdrant(
-                        qdrant_client, qdrant_url, headers, collection_name, source_id, chunk_id_map,
-                        compute_point_id=_build_legacy_point_id,
+                        qdrant_client, qdrant_url, headers, collection_name, source_id, chunk_id_map
                     )
                     total_updated += updated
                     LOGGER.info(f"  Source {source_id}: {updated} Qdrant points reverted")
