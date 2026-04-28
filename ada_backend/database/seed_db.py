@@ -16,6 +16,10 @@ from ada_backend.database.seed.integrations.seed_integration import seed_integra
 from ada_backend.database.seed.integrations.seed_mcp_google_calendar import seed_mcp_google_calendar_components
 from ada_backend.database.seed.integrations.seed_mcp_hubspot import seed_mcp_hubspot_components
 from ada_backend.database.seed.integrations.seed_mcp_hubspot_neverdrop import seed_mcp_hubspot_neverdrop_components
+from ada_backend.database.seed.integrations.seed_mail_sender import (
+    seed_mail_sender_components,
+    seed_mail_sender_parameter_groups,
+)
 from ada_backend.database.seed.integrations.seed_outlook import seed_outlook_components, seed_outlook_parameter_groups
 from ada_backend.database.seed.integrations.seed_slack import seed_slack_components
 from ada_backend.database.seed.seed_ai_agent import seed_ai_agent_components, seed_ai_agent_parameter_groups
@@ -143,6 +147,10 @@ def seed_db(session: Session):
 
         seed_outlook_components(session)
         seed_outlook_parameter_groups(session)
+        session.commit()
+
+        seed_mail_sender_components(session)
+        seed_mail_sender_parameter_groups(session)
         session.commit()
 
         seed_project_reference_components(session)
