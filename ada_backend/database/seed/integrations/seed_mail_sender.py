@@ -148,6 +148,8 @@ def seed_mail_sender_parameter_groups(session: Session):
     ]
     build_parameters_group(session, parameter_groups)
 
+
+def seed_mail_sender_component_parameter_groups(session: Session):
     component_parameter_groups = [
         db.ComponentParameterGroup(
             component_version_id=COMPONENT_VERSION_UUIDS["mail_sender"],
