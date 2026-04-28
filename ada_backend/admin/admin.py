@@ -552,12 +552,14 @@ class SourceAdmin(EnhancedModelView, model=db.DataSource):
     ]
 
 
-class SourceAttributesAdmin(EnhancedModelView, model=db.SourceAttributes):
+class SourceAttributesAdmin(EnhancedModelView, model=db.SourceAttribute):
     category = AdminCategory.SOURCES
     icon = "fas fa-database"
     column_list = [
         "id",
         "source_id",
+        "attribute_name",
+        "value",
         "created_at",
         "updated_at",
     ]
