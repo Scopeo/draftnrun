@@ -11,6 +11,7 @@ from typing import Sequence, Union
 from uuid import uuid4
 
 import httpx
+from alembic import op
 from sqlalchemy import create_engine, text
 
 from settings import settings
@@ -72,6 +73,8 @@ def _scroll_and_update_qdrant(
 ):
     offset = None
     updated = 0
+    failed_ids: list[str] = []
+    page_num = 0
 
     while True:
         scroll_body: dict = {
@@ -95,24 +98,42 @@ def _scroll_and_update_qdrant(
         if not points:
             break
 
+        page_num += 1
+        page_updated = 0
+        page_failed = 0
+
         for point in points:
             old_cid = point.get("payload", {}).get("chunk_id")
             new_uuid = chunk_id_map.get(old_cid)
             if new_uuid is None:
                 continue
-            client.post(
-                f"{qdrant_url}/collections/{collection_name}/points/payload?wait=true",
-                headers=headers,
-                json={"payload": {"chunk_id": new_uuid}, "points": [point["id"]]},
-            ).raise_for_status()
-            updated += 1
+            try:
+                client.post(
+                    f"{qdrant_url}/collections/{collection_name}/points/payload",
+                    headers=headers,
+                    json={"payload": {"chunk_id": new_uuid}, "points": [point["id"]]},
+                ).raise_for_status()
+                page_updated += 1
+            except httpx.HTTPStatusError as exc:
+                LOGGER.warning(
+                    f"    Qdrant set_payload failed for point {point['id']} "
+                    f"(source {source_id}): {exc.response.status_code}"
+                )
+                failed_ids.append(str(point["id"]))
+                page_failed += 1
 
-        if updated and updated % 500 == 0:
-            LOGGER.info(f"    Qdrant source {source_id}: {updated} points updated so far")
+        updated += page_updated
+        LOGGER.info(
+            f"    Qdrant source {source_id} page {page_num}: "
+            f"{page_updated} updated, {page_failed} failed, {updated} total"
+        )
 
         offset = result.get("next_page_offset")
         if offset is None:
             break
+
+    if failed_ids:
+        LOGGER.warning(f"    Qdrant source {source_id}: {len(failed_ids)} points failed: {failed_ids[:20]}")
 
     return updated
 
@@ -155,7 +176,7 @@ def upgrade() -> None:
             rows = ingestion_conn.execute(
                 text(
                     f'SELECT chunk_id, source_id::text FROM public."{table_name}" '
-                    f"WHERE sync_id IS NOT NULL AND chunk_id !~ '{UUID_REGEX}'"
+                    f"WHERE sync_id IS NOT NULL AND chunk_id !~* '{UUID_REGEX}'"
                 )
             ).fetchall()
 
@@ -215,8 +236,6 @@ def upgrade() -> None:
         qdrant_url = settings.QDRANT_CLUSTER_URL.rstrip("/")
         headers = {"api-key": settings.QDRANT_API_KEY, "Content-Type": "application/json"}
 
-        from alembic import op
-
         backend_conn = op.get_bind()
         db_sources = backend_conn.execute(
             text(
@@ -232,9 +251,11 @@ def upgrade() -> None:
             return
 
         source_chunk_maps: dict[str, dict[str, str]] = {}
-        for mapping in all_mappings.values():
-            for old_cid, sid, new_uuid in mapping:
-                source_chunk_maps.setdefault(sid, {})[old_cid] = new_uuid
+        log_rows = ingestion_conn.execute(
+            text(f"SELECT old_chunk_id, source_id, new_chunk_id FROM public.{MIGRATION_LOG_TABLE}")
+        ).fetchall()
+        for old_cid, sid, new_uuid in log_rows:
+            source_chunk_maps.setdefault(sid, {})[old_cid] = new_uuid
 
         with httpx.Client(timeout=60) as qdrant_client:
             resp = qdrant_client.get(f"{qdrant_url}/collections", headers=headers)
@@ -319,8 +340,6 @@ def downgrade() -> None:
             LOGGER.info("Phase 2: Reverting Qdrant payloads...")
             qdrant_url = settings.QDRANT_CLUSTER_URL.rstrip("/")
             headers = {"api-key": settings.QDRANT_API_KEY, "Content-Type": "application/json"}
-
-            from alembic import op
 
             backend_conn = op.get_bind()
             db_sources = backend_conn.execute(
