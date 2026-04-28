@@ -1,7 +1,7 @@
 """migrate_db_source_chunk_ids_to_uuid
 
 Revision ID: c7d8e9f0a1b2
-Revises: 67df5c87b638
+Revises: k2l3m4n5o6p7
 Create Date: 2026-04-27
 
 """
@@ -16,7 +16,7 @@ from sqlalchemy import create_engine, text
 from settings import settings
 
 revision: str = "c7d8e9f0a1b2"
-down_revision: Union[str, None] = "67df5c87b638"
+down_revision: Union[str, None] = "k2l3m4n5o6p7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

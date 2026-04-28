@@ -508,7 +508,7 @@ def test_search_vectors():
     )
 
     assert len(filtered_results) >= 1
-    assert filtered_results[0][0] == qdrant_service.get_uuid("1")
+    assert filtered_results[0][0] == "1"
 
     qdrant_service.delete_collection(TEST_COLLECTION_NAME_SEARCH)
 
@@ -560,11 +560,8 @@ def test_get_chunk_data_by_id():
     qdrant_service.add_chunks(list_chunks=chunks, collection_name=TEST_COLLECTION_NAME_GET)
 
     # Get chunk data by IDs
-    chunk_1_uuid = qdrant_service.get_uuid("1")
-    chunk_2_uuid = qdrant_service.get_uuid("2")
-
     results = qdrant_service.get_chunk_data_by_id(
-        vector_ids=[chunk_1_uuid, chunk_2_uuid],
+        vector_ids=["1", "2"],
         collection_name=TEST_COLLECTION_NAME_GET,
     )
 
@@ -574,7 +571,7 @@ def test_get_chunk_data_by_id():
 
     # Test with single ID
     single_result = qdrant_service.get_chunk_data_by_id(
-        vector_ids=[chunk_1_uuid],
+        vector_ids=["1"],
         collection_name=TEST_COLLECTION_NAME_GET,
     )
 
@@ -749,7 +746,7 @@ def test_insert_points_in_collection():
 
     points = [
         {
-            "id": qdrant_service.get_uuid("1"),
+            "id": "1",
             "payload": {
                 "chunk_id": "1",
                 "content": "test content 1",
@@ -762,7 +759,7 @@ def test_insert_points_in_collection():
             },
         },
         {
-            "id": qdrant_service.get_uuid("2"),
+            "id": "2",
             "payload": {
                 "chunk_id": "2",
                 "content": "test content 2",
