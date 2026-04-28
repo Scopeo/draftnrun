@@ -275,10 +275,10 @@ class OAuthComponentFactory:
 
         Args:
             entity_class: The component class to instantiate
-            provider_config_key: OAuth provider key (e.g., "slack", "gmail") for the
-                backward-compatible single-OAuth mode.
+            provider_config_key: OAuth provider key (e.g., "slack", "gmail").
+                Shortcut for the common single-OAuth configuration.
             target_param_name: Parameter name for the resolved token (default: "access_token")
-                for the backward-compatible single-OAuth mode.
+                used with the single-OAuth shortcut.
             oauth_bindings: Optional list of (param_name, provider_config_key, target_kwarg_name).
                 When provided, the factory resolves one token per binding.
             parameter_processors: Additional parameter processors to apply after token resolution
