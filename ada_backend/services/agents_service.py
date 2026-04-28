@@ -26,7 +26,7 @@ from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParamete
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
 from ada_backend.schemas.project_schema import GraphRunnerEnvDTO, ProjectWithGraphRunnersSchema
-from ada_backend.services.errors import InvalidAgentTemplate, ProjectNotFound
+from ada_backend.services.errors import InvalidAgentTemplate, ProjectNotFound, ProjectTypeMismatchError
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_with_history_service
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
@@ -98,10 +98,11 @@ def get_agent_by_id_service(session: Session, agent_id: UUID, graph_runner_id: U
     if not agent_project:
         raise ProjectNotFound(agent_id)
     if agent_project.type != db.ProjectType.AGENT:
-        raise ValueError(
-            f"Project {agent_id} is of type '{agent_project.type}', not 'agent'. "
-            f"configure_agent only works for AGENT projects. For WORKFLOW projects, "
-            f"use update_graph to modify component parameters directly."
+        raise ProjectTypeMismatchError(
+            project_id=agent_id,
+            actual_type=getattr(agent_project.type, "value", str(agent_project.type)),
+            operation="configure_agent",
+            workflow_hint="use update_graph to modify component parameters directly.",
         )
 
     graph_data = get_graph_service(session, project_id=agent_id, graph_runner_id=graph_runner_id)
@@ -275,10 +276,11 @@ async def update_agent_service(
     if not agent_project:
         raise ProjectNotFound(agent_id)
     if agent_project.type != db.ProjectType.AGENT:
-        raise ValueError(
-            f"Project {agent_id} is of type '{agent_project.type}', not 'agent'. "
-            f"update_agent only works for AGENT projects. For WORKFLOW projects, "
-            f"use update_graph to modify the graph directly."
+        raise ProjectTypeMismatchError(
+            project_id=agent_id,
+            actual_type=getattr(agent_project.type, "value", str(agent_project.type)),
+            operation="update_agent",
+            workflow_hint="use update_graph to modify the graph directly.",
         )
 
     ai_agent_component = build_ai_agent_component(

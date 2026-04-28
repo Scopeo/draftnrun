@@ -61,7 +61,7 @@ def register(mcp: FastMCP) -> None:
         """
         name = name.strip()
         if not name:
-            raise ValueError("Agent name must not be empty or whitespace-only.")
+            raise ValueError("Agent name must not be empty. Provide a non-empty string.")
 
         jwt, user_id = _get_auth()
         org = await require_role(user_id, "developer", "admin", "super_admin")

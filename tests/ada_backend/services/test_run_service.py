@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 
 from ada_backend.database.models import CallType, EnvType, RunStatus
-from ada_backend.services.errors import InvalidRunStatusTransition, RunNotFound
+from ada_backend.services.errors import InvalidRunStatusTransition, RunInputNotFound, RunNotFound
 from ada_backend.services.run_service import fail_pending_run, retry_run
 
 MODULE = "ada_backend.services.run_service"
@@ -194,5 +194,5 @@ class TestRetryRun:
             patch(f"{MODULE}.get_run_input", return_value=None),
         ):
             repo.get_run.return_value = existing_run
-            with pytest.raises(ValueError, match="Run input not found for retry"):
+            with pytest.raises(RunInputNotFound, match="Run input not found for retry"):
                 retry_run(session=session, run_id=run_id, project_id=project_id, env=EnvType.PRODUCTION)

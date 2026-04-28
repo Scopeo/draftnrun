@@ -46,6 +46,7 @@ from ada_backend.services.errors import (
     GraphNotBoundToProjectError,
     GraphNotFound,
     GraphRunnerAlreadyInEnvironmentError,
+    GraphValidationError,
     GraphVersionSavingFromNonDraftError,
 )
 from ada_backend.services.field_expression_remap_service import remap_field_expressions_for_cloning
@@ -159,17 +160,17 @@ def clone_graph_runner(
             relation.parent_component_instance_id in ids_map.keys()
             and relation.child_component_instance_id in ids_map.keys()
         ):
-            raise ValueError("Invalid relationship: component instance not found")
+            raise GraphValidationError("Invalid relationship: component instance not found")
 
         # Get parameter definition ID from name
         parent = get_component_instance_by_id(session, ids_map[relation.parent_component_instance_id])
         if not parent:
-            raise ValueError("Invalid relationship: parent component instance not found")
+            raise GraphValidationError("Invalid relationship: parent component instance not found")
         # TODO: Refactor to repository function that takes name and component_id or with dictionary for faster lookup
         param_defs = get_component_parameter_definition_by_component_version(session, parent.component_version_id)
         param_def = next((p for p in param_defs if p.name == relation.parameter_name), None)
         if not param_def:
-            raise ValueError(
+            raise GraphValidationError(
                 f"Parameter '{relation.parameter_name}' not found in "
                 f"component definitions for component '{parent.component_version_id}'"
             )

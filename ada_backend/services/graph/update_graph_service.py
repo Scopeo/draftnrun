@@ -54,7 +54,12 @@ from ada_backend.schemas.pipeline.graph_schema import (
     GraphUpdateSchema,
 )
 from ada_backend.services.agent_runner_service import get_agent_for_project
-from ada_backend.services.errors import GraphConflictError, GraphNotBoundToProjectError
+from ada_backend.services.errors import (
+    ComponentInstanceNotFound,
+    GraphConflictError,
+    GraphNotBoundToProjectError,
+    GraphValidationError,
+)
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
 from ada_backend.services.graph.output_port_instance_sync import sync_output_port_instances_from_schema
 from ada_backend.services.graph.playground_utils import extract_playground_configuration
@@ -105,7 +110,7 @@ def resolve_component_version_id_from_instance_id(session: Session, instance_id:
     """Resolve component version ID from a component instance ID"""
     instance = get_component_instance_by_id(session, instance_id)
     if not instance:
-        raise ValueError(f"Component instance {instance_id} not found")
+        raise ComponentInstanceNotFound(instance_id)
     return instance.component_version_id
 
 
@@ -115,14 +120,14 @@ def validate_port_definition_types(session: Session, source_port_def_id: UUID, t
     target_port = get_port_definition_by_id(session, target_port_def_id)
 
     if not source_port:
-        raise ValueError(f"Source port definition {source_port_def_id} not found")
+        raise GraphValidationError(f"Source port definition {source_port_def_id} not found")
     if not target_port:
-        raise ValueError(f"Target port definition {target_port_def_id} not found")
+        raise GraphValidationError(f"Target port definition {target_port_def_id} not found")
 
     if source_port.port_type != db.PortType.OUTPUT:
-        raise ValueError(f"Source port must be OUTPUT type, got {source_port.port_type}")
+        raise GraphValidationError(f"Source port must be OUTPUT type, got {source_port.port_type}")
     if target_port.port_type != db.PortType.INPUT:
-        raise ValueError(f"Target port must be INPUT type, got {target_port.port_type}")
+        raise GraphValidationError(f"Target port must be INPUT type, got {target_port.port_type}")
 
 
 def validate_graph_is_draft(session: Session, graph_runner_id: UUID) -> None:
@@ -132,7 +137,7 @@ def validate_graph_is_draft(session: Session, graph_runner_id: UUID) -> None:
 
     Raises:
         GraphNotBoundToProjectError: If the graph runner is not bound to any project
-        ValueError: If the graph runner is not in draft mode
+        GraphValidationError: If the graph runner is not in draft mode
     """
     env_relationship = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
     if not env_relationship:
@@ -141,7 +146,7 @@ def validate_graph_is_draft(session: Session, graph_runner_id: UUID) -> None:
     # Get the graph runner to check tag_version
     graph_runner = session.query(db.GraphRunner).filter(db.GraphRunner.id == graph_runner_id).first()
     if not graph_runner:
-        raise ValueError(f"Graph runner {graph_runner_id} not found")
+        raise GraphValidationError(f"Graph runner {graph_runner_id} not found")
 
     # Check if this is the draft version (env='draft' AND tag_version=null)
     is_draft = env_relationship.environment == EnvType.DRAFT and graph_runner.tag_version is None
@@ -149,7 +154,7 @@ def validate_graph_is_draft(session: Session, graph_runner_id: UUID) -> None:
     if not is_draft:
         env_name = env_relationship.environment.value if env_relationship.environment else None
         tag = graph_runner.tag_version or None
-        raise ValueError(
+        raise GraphValidationError(
             f"Cannot modify graph runner {graph_runner_id}: only draft versions"
             "(env='draft' AND tag_version=null) can be modified. "
             f"Current state: env='{env_name}', tag_version='{tag}'. "
@@ -274,8 +279,9 @@ async def update_graph_service(
             kind = getattr(param, "kind", ParameterKind.PARAMETER)
             if kind == ParameterKind.INPUT:
                 if not instance.id:
-                    raise ValueError(
-                        f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
+                    raise GraphValidationError(
+                        f"Component instance '{instance.name}' is missing an ID, "
+                        f"which is required to set input parameter '{param.name}'."
                     )
                 input_params_by_instance[instance.id].append(param)
             else:
@@ -298,17 +304,17 @@ async def update_graph_service(
             relation.parent_component_instance_id in instance_ids
             and relation.child_component_instance_id in instance_ids
         ):
-            raise ValueError("Invalid relationship: component instance not found")
+            raise GraphValidationError("Invalid relationship: component instance not found")
 
         # Get parameter definition ID from name
         parent = get_component_instance_by_id(session, relation.parent_component_instance_id)
         if not parent:
-            raise ValueError("Invalid relationship: parent component instance not found")
+            raise GraphValidationError("Invalid relationship: parent component instance not found")
         # TODO: Refactor to repository function that takes name and component_id or with dictionary for faster lookup
         param_defs = get_component_parameter_definition_by_component_version(session, parent.component_version_id)
         param_def = next((p for p in param_defs if p.name == relation.parameter_name), None)
         if not param_def:
-            raise ValueError(
+            raise GraphValidationError(
                 f"Parameter '{relation.parameter_name}' not found in "
                 f"component definitions for component version '{parent.component_version_id}'"
             )
@@ -324,7 +330,7 @@ async def update_graph_service(
 
     for edge in graph_project.edges:
         if graph_runner_exists(session, edge.destination) or graph_runner_exists(session, edge.origin):
-            raise ValueError("Nested graphs are not supported")
+            raise GraphValidationError("Nested graphs are not supported")
 
         upsert_edge(
             session,
@@ -418,11 +424,14 @@ async def update_graph_service(
         # TODO: this mixes API-level `kind="input"` with service-level types; needs decoupling.
         for param in input_params_by_instance.get(instance.id, []):
             if not instance.id:
-                raise ValueError(
-                    f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
+                raise GraphValidationError(
+                    f"Component instance '{instance.name}' is missing an ID, "
+                    f"which is required to set input parameter '{param.name}'."
                 )
             if instance.id not in instance_ids:
-                raise ValueError(f"Invalid field expression target: component instance {instance.id} not in update")
+                raise GraphValidationError(
+                    f"Invalid field expression target: component instance {instance.id} not in update"
+                )
 
             field_name = param.name
 
@@ -603,7 +612,7 @@ def _ensure_canonical_expressions_for_edges(
             source_instance_id not in instance_to_component_version
             or target_instance_id not in instance_to_component_version
         ):
-            raise ValueError("Unable to infer component version ids for one or more edges in the graph.")
+            raise GraphValidationError("Unable to infer component version ids for one or more edges in the graph.")
 
         source_component_version_id = instance_to_component_version[source_instance_id]
         target_component_version_id = instance_to_component_version[target_instance_id]
@@ -616,11 +625,15 @@ def _ensure_canonical_expressions_for_edges(
 
         source_port_def_id = get_output_port_definition_id(session, source_component_version_id, source_port_name)
         if not source_port_def_id:
-            raise ValueError(f"Output port '{source_port_name}' not found for component {source_component_version_id}")
+            raise GraphValidationError(
+                f"Output port '{source_port_name}' not found for component {source_component_version_id}"
+            )
 
         target_port_def_id = get_input_port_definition_id(session, target_component_version_id, target_port_name)
         if not target_port_def_id:
-            raise ValueError(f"Input port '{target_port_name}' not found for component {target_component_version_id}")
+            raise GraphValidationError(
+                f"Input port '{target_port_name}' not found for component {target_component_version_id}"
+            )
 
         validate_port_definition_types(session, source_port_def_id, target_port_def_id)
 

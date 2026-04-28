@@ -1,4 +1,3 @@
-import logging
 from typing import Annotated, List
 from uuid import UUID
 
@@ -34,7 +33,6 @@ from ada_backend.services.qa.llm_judges_service import (
 )
 
 router = APIRouter(tags=["QA Evaluation"])
-LOGGER = logging.getLogger(__name__)
 
 
 @router.get(
@@ -50,11 +48,7 @@ def get_llm_judges_by_organization_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> List[LLMJudgeResponse]:
-    try:
-        return get_llm_judges_by_organization_service(session=session, organization_id=organization_id)
-    except Exception as e:
-        LOGGER.error(f"Failed to get LLM judges for organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return get_llm_judges_by_organization_service(session=session, organization_id=organization_id)
 
 
 @router.get(
@@ -83,13 +77,7 @@ def create_llm_judge_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> LLMJudgeResponse:
-    try:
-        return create_llm_judge_service(session=session, organization_id=organization_id, judge_data=judge_data)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to create LLM judge for organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return create_llm_judge_service(session=session, organization_id=organization_id, judge_data=judge_data)
 
 
 @router.patch(
@@ -107,20 +95,12 @@ def update_llm_judge_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> LLMJudgeResponse:
-    try:
-        return update_llm_judge_service(
-            session=session,
-            organization_id=organization_id,
-            judge_id=judge_id,
-            judge_data=judge_data,
-        )
-    except LLMJudgeNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to update LLM judge {judge_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return update_llm_judge_service(
+        session=session,
+        organization_id=organization_id,
+        judge_id=judge_id,
+        judge_data=judge_data,
+    )
 
 
 @router.delete(
@@ -137,14 +117,8 @@ def delete_llm_judges_endpoint(
     session: Session = Depends(get_db),
     judge_ids: List[UUID] = Body(...),
 ):
-    try:
-        delete_llm_judges_service(session=session, organization_id=organization_id, judge_ids=judge_ids)
-        return None
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to delete LLM judges for organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    delete_llm_judges_service(session=session, organization_id=organization_id, judge_ids=judge_ids)
+    return None
 
 
 @router.put(
@@ -162,15 +136,7 @@ def set_judge_projects_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> LLMJudgeResponse:
-    try:
-        return set_judge_projects_service(session, organization_id, judge_id, body.project_ids)
-    except (LLMJudgeNotFound, ProjectNotFound) as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(f"Failed to set judge projects: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return set_judge_projects_service(session, organization_id, judge_id, body.project_ids)
 
 
 # ── Deprecated project-scoped endpoints (use org-scoped equivalents) ──────────
@@ -190,11 +156,7 @@ def get_llm_judges_by_project_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> List[LLMJudgeResponse]:
-    try:
-        return get_llm_judges_by_project_service(session=session, project_id=project_id)
-    except Exception as e:
-        LOGGER.error(f"Failed to get LLM judges for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    return get_llm_judges_by_project_service(session=session, project_id=project_id)
 
 
 @router.post(
@@ -225,8 +187,6 @@ def create_llm_judge_by_project_endpoint(
         )
     except ProjectNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail="Bad request") from e
 
 
 @router.patch(
@@ -255,11 +215,6 @@ def update_llm_judge_by_project_endpoint(
         )
     except (ProjectNotFound, LLMJudgeNotFound) as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to update LLM judge {judge_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete(
@@ -283,5 +238,3 @@ def delete_llm_judges_by_project_endpoint(
         return None
     except ProjectNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail="Bad request") from e

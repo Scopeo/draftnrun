@@ -4,6 +4,7 @@ from uuid import uuid4
 import pytest
 
 from ada_backend.schemas.pipeline.graph_schema import ComponentCreateV2Schema, ComponentUpdateV2Schema
+from ada_backend.services.errors import ComponentInstanceNotFound, GraphValidationError
 from ada_backend.services.graph.component_instance_v2_service import (
     create_component_in_graph,
     delete_component_from_graph,
@@ -96,7 +97,7 @@ class TestUpdateSingleComponent:
         mock_get_nodes.return_value = []
 
         payload = ComponentUpdateV2Schema(parameters=[])
-        with pytest.raises(ValueError, match="does not belong to graph"):
+        with pytest.raises(GraphValidationError, match="does not belong to graph"):
             update_single_component(session, ids["graph_runner_id"], ids["project_id"], ids["instance_id"], payload)
 
     @patch("ada_backend.services.graph.component_instance_v2_service.get_component_nodes")
@@ -105,7 +106,7 @@ class TestUpdateSingleComponent:
         mock_get_inst.return_value = None
 
         payload = ComponentUpdateV2Schema(parameters=[])
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(ComponentInstanceNotFound, match="not found"):
             update_single_component(session, ids["graph_runner_id"], ids["project_id"], ids["instance_id"], payload)
 
 
@@ -132,7 +133,7 @@ class TestDeleteComponentFromGraph:
     def test_raises_if_not_in_graph(self, mock_get_nodes, session, ids):
         mock_get_nodes.return_value = []
 
-        with pytest.raises(ValueError, match="does not belong to graph"):
+        with pytest.raises(GraphValidationError, match="does not belong to graph"):
             delete_component_from_graph(session, ids["graph_runner_id"], ids["instance_id"])
 
     @patch("ada_backend.services.graph.component_instance_v2_service.delete_node")

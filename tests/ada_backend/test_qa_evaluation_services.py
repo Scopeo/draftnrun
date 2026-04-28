@@ -12,7 +12,7 @@ from ada_backend.repositories.quality_assurance_repository import (
 from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate
 from ada_backend.schemas.llm_judges_schema import LLMJudgeCreate, LLMJudgeUpdate
 from ada_backend.schemas.qa_evaluation_schema import BooleanEvaluationResult, ErrorEvaluationResult
-from ada_backend.services.errors import LLMJudgeNotFound
+from ada_backend.services.errors import LLMJudgeNotFound, QAOperationError
 from ada_backend.services.project_service import delete_project_service
 from ada_backend.services.qa.llm_judges_service import (
     create_llm_judge_service,
@@ -183,7 +183,7 @@ async def test_evaluation_errors():
         version_output_id = evaluation_scenario["version_output_id"]
 
         non_existent_judge_id = uuid4()
-        with pytest.raises(ValueError, match="Failed to run judge evaluation"):
+        with pytest.raises(LLMJudgeNotFound, match="not found"):
             await run_judge_evaluation_service(
                 session=session,
                 project_id=project_id,
@@ -203,7 +203,7 @@ async def test_validation_errors_version_output():
         evaluation_scenario = _create_evaluation_scenario(session, project_id, graph_runner_id)
 
         non_existent_version_output_id = uuid4()
-        with pytest.raises(ValueError, match="Failed to run judge evaluation"):
+        with pytest.raises(QAOperationError, match="Failed to run judge evaluation"):
             await run_judge_evaluation_service(
                 session=session,
                 project_id=evaluation_scenario["project_id"],

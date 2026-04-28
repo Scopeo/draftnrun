@@ -88,9 +88,9 @@ def _assert_cron_in_org(session: Session, cron_id: UUID, organization_id: UUID) 
     """Ensure the cron job exists and belongs to the given organization."""
     cron_job = get_cron_job(session, cron_id)
     if not cron_job:
-        raise CronJobNotFound(f"Cron job {cron_id} not found")
+        raise CronJobNotFound(cron_id)
     if cron_job.organization_id != organization_id:
-        raise CronJobAccessDenied("Access denied")
+        raise CronJobAccessDenied(cron_id, organization_id)
     return cron_job
 
 
@@ -170,10 +170,10 @@ def get_cron_job_detail(
     """Return cron details; enforce org ownership if organization_id is provided."""
     cron_job = get_cron_job(session, cron_id)
     if not cron_job:
-        raise CronJobNotFound(f"Cron job {cron_id} not found")
+        raise CronJobNotFound(cron_id)
 
     if organization_id is not None and cron_job.organization_id != organization_id:
-        raise CronJobAccessDenied("Access denied")
+        raise CronJobAccessDenied(cron_id, organization_id)
 
     if include_runs:
         runs = get_cron_runs_by_cron_id(session, cron_id, limit=10)
@@ -243,7 +243,7 @@ def update_cron_job_service(
     cron_data: CronJobUpdate,
     organization_id: UUID,
     **kwargs,  # For user_id, etc.
-) -> Optional[CronJobResponse]:
+) -> CronJobResponse:
     """Update cron job fields in the database."""
     existing_cron = _assert_cron_in_org(session, cron_id, organization_id)
 
@@ -278,7 +278,7 @@ def update_cron_job_service(
     )
 
     if not updated_cron:
-        raise CronJobNotFound(f"Cron job {cron_id} not found")
+        raise CronJobNotFound(cron_id)
 
     LOGGER.info(f"Updated cron job {cron_id}.")
 
@@ -290,7 +290,7 @@ def delete_cron_job_service(
     cron_id: UUID,
     organization_id: UUID,
     user_id: UUID | None = None,
-) -> Optional[CronJobDeleteResponse]:
+) -> CronJobDeleteResponse:
     _assert_cron_in_org(session, cron_id, organization_id)
 
     success = delete_cron_job(session, cron_id)
@@ -301,7 +301,7 @@ def delete_cron_job_service(
             track_cron_job_deleted(user_id, organization_id)
         return CronJobDeleteResponse(id=cron_id)
 
-    return None
+    raise CronJobNotFound(cron_id)
 
 
 def permanently_delete_cron_jobs_by_project_service(session: Session, project_id: UUID) -> None:
@@ -327,11 +327,11 @@ def pause_cron_job(
     cron_id: UUID,
     organization_id: UUID,
     user_id: UUID | None = None,
-) -> Optional[CronJobPauseResponse]:
+) -> CronJobPauseResponse:
     _assert_cron_in_org(session, cron_id, organization_id)
     updated_cron = update_cron_job(session, cron_id, is_enabled=False)
     if not updated_cron:
-        return None
+        raise CronJobNotFound(cron_id)
 
     if user_id:
         track_cron_job_toggled(user_id, organization_id, enabled=False)
@@ -348,11 +348,11 @@ def resume_cron_job(
     cron_id: UUID,
     organization_id: UUID,
     user_id: UUID | None = None,
-) -> Optional[CronJobPauseResponse]:
+) -> CronJobPauseResponse:
     _assert_cron_in_org(session, cron_id, organization_id)
     updated_cron = update_cron_job(session, cron_id, is_enabled=True)
     if not updated_cron:
-        return None
+        raise CronJobNotFound(cron_id)
 
     if user_id:
         track_cron_job_toggled(user_id, organization_id, enabled=True)

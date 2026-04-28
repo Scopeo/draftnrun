@@ -13,6 +13,7 @@ from ada_backend.schemas.pipeline.graph_schema import (
     GraphSaveV2Schema,
     GraphUpdateSchema,
 )
+from ada_backend.services.errors import GraphValidationError
 
 
 def _node_ref_to_instance_id(
@@ -22,12 +23,12 @@ def _node_ref_to_instance_id(
 ) -> UUID:
     if ref.id:
         if ref.id not in known_instance_ids:
-            raise ValueError(f"Referenced id '{ref.id}' is not part of the current graph payload")
+            raise GraphValidationError(f"Referenced id '{ref.id}' is not part of the current graph payload")
         return ref.id
     if not ref.file_key:
-        raise ValueError("Node reference must include either 'id' or 'file_key'")
+        raise GraphValidationError("Node reference must include either 'id' or 'file_key'")
     if ref.file_key not in file_key_to_instance_id:
-        raise ValueError(f"Unknown file_key '{ref.file_key}' in graph map reference")
+        raise GraphValidationError(f"Unknown file_key '{ref.file_key}' in graph map reference")
     return file_key_to_instance_id[ref.file_key]
 
 
@@ -40,7 +41,7 @@ def _resolve_expression_file_keys(expr: Any, file_key_to_instance_id: dict[str, 
     if expr.get("type") == "ref" and "file_key" in expr and "instance" not in expr:
         fk = expr["file_key"]
         if fk not in file_key_to_instance_id:
-            raise ValueError(f"Unknown file_key '{fk}' in field expression ref")
+            raise GraphValidationError(f"Unknown file_key '{fk}' in field expression ref")
         resolved = {k: v for k, v in expr.items() if k != "file_key"}
         resolved["instance"] = str(file_key_to_instance_id[fk])
         return resolved
@@ -77,7 +78,7 @@ def _resolve_input_port_file_keys(
 def graph_save_v2_to_graph_update(payload: GraphSaveV2Schema) -> GraphUpdateSchema:
     component_by_file_key: dict[str, GraphComponentFileSchema] = {comp.file_key: comp for comp in payload.components}
     if len(component_by_file_key) != len(payload.components):
-        raise ValueError("Duplicate component file_key in components payload")
+        raise GraphValidationError("Duplicate component file_key in components payload")
 
     file_key_to_instance_id: dict[str, UUID] = {}
     instance_ids: set[UUID] = set()
@@ -85,14 +86,14 @@ def graph_save_v2_to_graph_update(payload: GraphSaveV2Schema) -> GraphUpdateSche
     node_component_pairs: list[tuple] = []
     for node in payload.graph_map.nodes:
         if not node.file_key:
-            raise ValueError("Each node in graph_map must have a file_key when saving")
+            raise GraphValidationError("Each node in graph_map must have a file_key when saving")
         component_file = component_by_file_key.get(node.file_key)
         if component_file is None:
-            raise ValueError(f"Missing component file for node file_key '{node.file_key}'")
+            raise GraphValidationError(f"Missing component file for node file_key '{node.file_key}'")
 
         resolved_id = node.instance_id or component_file.id or uuid4()
         if node.file_key in file_key_to_instance_id:
-            raise ValueError(
+            raise GraphValidationError(
                 f"Duplicate file_key '{node.file_key}' in graph_map.nodes: "
                 f"instance ids {file_key_to_instance_id[node.file_key]} and {resolved_id}"
             )

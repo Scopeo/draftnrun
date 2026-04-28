@@ -22,7 +22,7 @@ from ada_backend.schemas.pipeline.graph_schema import (
     GraphMapRelationshipSchema,
     GraphTopologyNodeSchema,
 )
-from ada_backend.services.errors import GraphConflictError
+from ada_backend.services.errors import ComponentInstanceNotFound, GraphConflictError, GraphValidationError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def sync_graph_topology(
     payload_node_ids = {node.instance_id for node in nodes}
     missing = payload_node_ids - existing_node_ids
     if missing:
-        raise ValueError(f"Nodes referenced in topology do not exist in graph: {missing}")
+        raise GraphValidationError(f"Nodes referenced in topology do not exist in graph: {missing}")
 
     for node in nodes:
         upsert_component_node(
@@ -63,7 +63,7 @@ def sync_graph_topology(
         destination = _resolve_edge_ref(edge.to_node, payload_node_ids)
 
         if graph_runner_exists(session, destination) or graph_runner_exists(session, origin):
-            raise ValueError("Nested graphs are not supported")
+            raise GraphValidationError("Nested graphs are not supported")
 
         edge_id = edge.id or uuid4()
         new_edge_ids.add(edge_id)
@@ -85,9 +85,9 @@ def sync_graph_topology(
 def _resolve_edge_ref(ref: GraphMapNodeRefSchema, valid_ids: set[UUID]) -> UUID:
     if ref.id:
         if ref.id not in valid_ids:
-            raise ValueError(f"Edge references unknown node id '{ref.id}'")
+            raise GraphValidationError(f"Edge references unknown node id '{ref.id}'")
         return ref.id
-    raise ValueError("Edge node references must use 'id' in topology save")
+    raise GraphValidationError("Edge node references must use 'id' in topology save")
 
 
 def _sync_relationships(
@@ -101,14 +101,14 @@ def _sync_relationships(
 
         parent = get_component_instance_by_id(session, parent_id)
         if not parent:
-            raise ValueError(f"Relationship parent component instance {parent_id} not found")
+            raise ComponentInstanceNotFound(parent_id)
 
         param_defs = (
             get_component_parameter_definition_by_component_version(session, parent.component_version_id) or []
         )
         param_def = next((p for p in param_defs if p.name == relation.parameter_name), None)
         if not param_def:
-            raise ValueError(
+            raise GraphValidationError(
                 f"Parameter '{relation.parameter_name}' not found in "
                 f"component definitions for component version '{parent.component_version_id}'"
             )

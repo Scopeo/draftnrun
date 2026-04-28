@@ -6,6 +6,7 @@ from ada_backend.schemas.parameter_schema import ParameterKind
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphLoadResponse
+from ada_backend.services.errors import ComponentInstanceNotFound, GraphValidationError
 from ada_backend.services.field_expression_remap_service import (
     remap_instance_ids_in_expression,
 )
@@ -25,7 +26,7 @@ def instanciate_copy_component_instance(
         is_start_node=is_start_node,
     )
     if not component_instance_to_copy:
-        raise ValueError("Component instance not found")
+        raise ComponentInstanceNotFound(component_instance_id_to_copy)
     return component_instance_to_copy.model_copy(update={"id": uuid4(), "field_expressions": []})
 
 
@@ -41,7 +42,7 @@ def load_copy_graph_service(
     for component_instance_to_copy in graph_get_response.component_instances:
         source_id = component_instance_to_copy.id
         if source_id is None:
-            raise ValueError("Component instance missing id in GET response")
+            raise GraphValidationError("Component instance missing id in GET response")
         component_instance = component_instance_to_copy.model_copy(update={"id": uuid4(), "field_expressions": []})
         component_instance_map[source_id] = component_instance
 
@@ -51,7 +52,7 @@ def load_copy_graph_service(
         for source_id in source_instance_ids:
             target_id = component_instance_map[source_id].id
             if target_id is None:
-                raise ValueError("Target component instance missing id during load-copy")
+                raise GraphValidationError("Target component instance missing id during load-copy")
             id_mapping[source_id] = target_id
 
         id_mapping_str: dict[str, str] = {str(src): str(dst) for src, dst in id_mapping.items()}
@@ -82,12 +83,12 @@ def load_copy_graph_service(
             old_relation.parent_component_instance_id in component_instance_map.keys()
             and old_relation.child_component_instance_id in component_instance_map.keys()
         ):
-            raise ValueError("Invalid relationship: component instance not found")
+            raise GraphValidationError("Invalid relationship: component instance not found")
 
         parent_new_id = component_instance_map[old_relation.parent_component_instance_id].id
         child_new_id = component_instance_map[old_relation.child_component_instance_id].id
         if parent_new_id is None or child_new_id is None:
-            raise ValueError("New relationship endpoint missing id during load-copy")
+            raise GraphValidationError("New relationship endpoint missing id during load-copy")
         load_copy_relationships.append(
             ComponentRelationshipSchema(
                 parent_component_instance_id=parent_new_id,
@@ -102,7 +103,7 @@ def load_copy_graph_service(
         origin_new_id = component_instance_map[edge.origin].id
         destination_new_id = component_instance_map[edge.destination].id
         if origin_new_id is None or destination_new_id is None:
-            raise ValueError("New edge endpoint missing id during load-copy")
+            raise GraphValidationError("New edge endpoint missing id during load-copy")
         load_copy_edges.append(
             EdgeSchema(
                 id=uuid4(),  # Generate a new UUID for the edge

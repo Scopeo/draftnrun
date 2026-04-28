@@ -70,7 +70,10 @@ def get_project_graph(
         raise HTTPException(status_code=503, detail="Database connection failed, please retry") from e
     except ValueError as e:
         LOGGER.error(
-            "Failed to get graph for project %s and runner %s: %s", project_id, graph_runner_id, e, exc_info=True
+            "Unexpected value error while loading graph for project %s and runner %s",
+            project_id,
+            graph_runner_id,
+            exc_info=True,
         )
         raise HTTPException(
             status_code=400, detail="Failed to load graph: the graph data may be corrupted or incomplete"
@@ -104,12 +107,6 @@ def get_graph_modification_history(
             "Database connection failed for project %s and runner %s", project_id, graph_runner_id, exc_info=True
         )
         raise HTTPException(status_code=503, detail="Database connection failed, please retry") from e
-    except ValueError as e:
-        LOGGER.error(
-            "Failed to get modification history for project %s and runner %s: %s",
-            project_id, graph_runner_id, e, exc_info=True,
-        )
-        raise HTTPException(status_code=400, detail="Failed to load modification history for this graph") from e
 
 
 @router.put(
@@ -143,14 +140,6 @@ async def update_project_pipeline(
             "Database connection failed for project %s runner %s", project_id, graph_runner_id, exc_info=True
         )
         raise HTTPException(status_code=503, detail="Database connection failed, please retry") from e
-    except ValueError as e:
-        error_msg = str(e)
-        LOGGER.error(
-            "Failed to update graph for project %s runner %s: %s", project_id, graph_runner_id, e, exc_info=True
-        )
-        if "only draft versions" in error_msg.lower():
-            raise HTTPException(status_code=403, detail="Only the draft version can be modified") from e
-        raise HTTPException(status_code=400, detail="Invalid graph update request") from e
 
 
 @router.get(
@@ -216,7 +205,10 @@ def deploy_graph(
         ) from e
     except ValueError as e:
         LOGGER.error(
-            "Failed to deploy graph for project %s runner %s: %s", project_id, graph_runner_id, e, exc_info=True
+            "Unexpected value error deploying graph for project %s runner %s",
+            project_id,
+            graph_runner_id,
+            exc_info=True,
         )
         raise HTTPException(
             status_code=400,
@@ -259,7 +251,10 @@ def save_graph_version(
         raise HTTPException(status_code=503, detail="Database connection failed, please retry") from e
     except ValueError as e:
         LOGGER.error(
-            "Failed to save version for project %s runner %s: %s", project_id, graph_runner_id, e, exc_info=True
+            "Unexpected value error saving version for project %s runner %s",
+            project_id,
+            graph_runner_id,
+            exc_info=True,
         )
         raise HTTPException(
             status_code=400,
@@ -297,7 +292,10 @@ def load_copy_graph_runner(
         )
     except ValueError as e:
         LOGGER.error(
-            "Failed to copy graph for project %s runner %s: %s", project_id, graph_runner_id, e, exc_info=True
+            "Unexpected value error copying graph for project %s runner %s",
+            project_id,
+            graph_runner_id,
+            exc_info=True,
         )
         raise HTTPException(
             status_code=400,
@@ -363,8 +361,10 @@ def load_version_as_draft(
         )
     except ValueError as e:
         LOGGER.error(
-            "Failed to load version as draft for project %s runner %s: %s",
-            project_id, graph_runner_id, e, exc_info=True,
+            "Unexpected value error loading version as draft for project %s runner %s",
+            project_id,
+            graph_runner_id,
+            exc_info=True,
         )
         raise HTTPException(
             status_code=400,

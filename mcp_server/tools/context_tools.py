@@ -42,12 +42,16 @@ async def _require_target_org_role(jwt: str, user_id: str, org_id: str, *allowed
     orgs = await list_user_organizations(jwt, user_id)
     match = next((org for org in orgs if org["id"] == org_id), None)
     if not match:
-        raise ValueError(f"Organization {org_id} not found in your memberships.")
+        raise ValueError(
+            f"Organization {org_id} not found in your memberships. "
+            "Next step: call list_my_organizations() to see available orgs."
+        )
     if match["role"] not in allowed_roles:
         context = f"{action} in organization {org_id}" if action else f"This operation on organization {org_id}"
         raise ValueError(
             f"{context} requires one of {allowed_roles} role, "
-            f"but your role there is '{match['role']}'."
+            f"but your role there is '{match['role']}'. "
+            "Next step: call get_current_context() to verify your role."
         )
     return match
 
@@ -79,7 +83,10 @@ def register(mcp: FastMCP) -> None:
         orgs = await list_user_organizations(jwt, user_id)
         match = next((o for o in orgs if o["id"] == str(organization_id)), None)
         if not match:
-            raise ValueError(f"Organization {organization_id} not found in your memberships.")
+            raise ValueError(
+                f"Organization {organization_id} not found in your memberships. "
+                "Next step: call list_my_organizations() to see available orgs."
+            )
         release_stage = await fetch_org_release_stage(jwt, match["id"])
         await set_active_org(user_id, match["id"], match["name"], match["role"], release_stage)
         return {

@@ -156,5 +156,8 @@ async def require_role(user_id: str, *allowed_roles: str) -> dict[str, Any]:
     """Return active org if the user's role is in allowed_roles, else raise."""
     org = await require_org_context(user_id)
     if org["role"] not in allowed_roles:
-        raise ValueError(f"This operation requires one of {allowed_roles} role, but your role is '{org['role']}'.")
+        raise ValueError(
+            f"This operation requires one of {allowed_roles} role, but your role is '{org['role']}'. "
+            "Next step: call get_current_context() to verify your role."
+        )
     return org

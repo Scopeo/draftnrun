@@ -28,6 +28,7 @@ from ada_backend.schemas.pipeline.graph_schema import (
     ComponentCreateV2Schema,
     ComponentUpdateV2Schema,
 )
+from ada_backend.services.errors import ComponentInstanceNotFound, GraphValidationError
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
 from ada_backend.services.pipeline.update_pipeline_service import (
     _normalize_expression_json,
@@ -154,12 +155,12 @@ def update_single_component(
 ) -> None:
     existing = get_component_instance_by_id(session, instance_id)
     if not existing:
-        raise ValueError(f"Component instance {instance_id} not found")
+        raise ComponentInstanceNotFound(instance_id)
 
     nodes = get_component_nodes(session, graph_runner_id)
     current_node = next((n for n in nodes if n.id == instance_id), None)
     if current_node is None:
-        raise ValueError(f"Component instance {instance_id} does not belong to graph {graph_runner_id}")
+        raise GraphValidationError(f"Component instance {instance_id} does not belong to graph {graph_runner_id}")
 
     label = payload.label if payload.label is not None else existing.name
     is_start_node = payload.is_start_node if payload.is_start_node is not None else current_node.is_start_node
@@ -196,7 +197,7 @@ def delete_component_from_graph(
 ) -> None:
     node_ids = {node.id for node in get_component_nodes(session, graph_runner_id)}
     if instance_id not in node_ids:
-        raise ValueError(f"Component instance {instance_id} does not belong to graph {graph_runner_id}")
+        raise GraphValidationError(f"Component instance {instance_id} does not belong to graph {graph_runner_id}")
 
     edges = get_edges(session, graph_runner_id)
     for edge in edges:

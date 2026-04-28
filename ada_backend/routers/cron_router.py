@@ -133,11 +133,7 @@ def delete_organization_cron_job(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    result = delete_cron_job_service(session, cron_id, organization_id, user_id=user.id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Cron job not found")
-
-    return result
+    return delete_cron_job_service(session, cron_id, organization_id, user_id=user.id)
 
 
 @router.post("/{organization_id}/crons/{cron_id}/pause", response_model=CronJobPauseResponse)
@@ -156,11 +152,7 @@ def pause_organization_cron_job(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    result = pause_cron_job(session, cron_id, organization_id=organization_id, user_id=user.id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Cron job not found")
-
-    return result
+    return pause_cron_job(session, cron_id, organization_id=organization_id, user_id=user.id)
 
 
 @router.post("/{organization_id}/crons/{cron_id}/resume", response_model=CronJobPauseResponse)
@@ -178,11 +170,7 @@ def resume_organization_cron_job(
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    result = resume_cron_job(session, cron_id, organization_id=organization_id, user_id=user.id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Cron job not found")
-
-    return result
+    return resume_cron_job(session, cron_id, organization_id=organization_id, user_id=user.id)
 
 
 @router.get("/{organization_id}/crons/{cron_id}/runs", response_model=CronRunListResponse)
@@ -201,10 +189,7 @@ def get_cron_job_runs(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    result = get_cron_runs(session, cron_id, organization_id=organization_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Cron job not found")
-    return result
+    return get_cron_runs(session, cron_id, organization_id=organization_id)
 
 
 @router.post("/{organization_id}/crons/{cron_id}/trigger", response_model=CronJobTriggerResponse, status_code=202)

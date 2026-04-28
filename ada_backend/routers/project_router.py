@@ -269,9 +269,12 @@ async def run_env_agent_endpoint(
         )
         raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
     except RunError as e:
-        raise HTTPException(status_code=400, detail=f"Agent run failed for project {project_id}") from e
+        raise HTTPException(
+            status_code=400,
+            detail=f"Agent run failed for project {project_id}: {str(e)}",
+        ) from e
     except ValueError as e:
-        LOGGER.error(f"Failed to run agent for project {project_id} in environment {env}: {str(e)}", exc_info=True)
+        LOGGER.error(f"Failed to run agent for project {project_id} in environment {env}: %s", e, exc_info=True)
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}") from e
 
 
@@ -380,10 +383,16 @@ async def chat(
         )
         raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
     except RunError as e:
-        raise HTTPException(status_code=400, detail=f"Agent run failed for project {project_id}") from e
+        raise HTTPException(
+            status_code=400,
+            detail=f"Agent run failed for project {project_id}: {str(e)}",
+        ) from e
     except ValueError as e:
         LOGGER.error(
-            f"Failed to run agent chat for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
+            "Failed to run agent chat for project %s, graph_runner %s: %s",
+            project_id,
+            graph_runner_id,
+            e,
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}") from e
@@ -503,9 +512,12 @@ async def chat_env(
         )
         raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
     except RunError as e:
-        raise HTTPException(status_code=400, detail=f"Agent run failed for project {project_id}") from e
+        raise HTTPException(
+            status_code=400,
+            detail=f"Agent run failed for project {project_id}: {str(e)}",
+        ) from e
     except ValueError as e:
         LOGGER.error(
-            f"Failed to run agent chat for project {project_id} in environment {env}: {str(e)}", exc_info=True
+            "Failed to run agent chat for project %s in environment %s: %s", project_id, env, e, exc_info=True
         )
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}") from e

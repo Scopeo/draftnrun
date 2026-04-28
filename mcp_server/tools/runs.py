@@ -101,9 +101,9 @@ def register(mcp: FastMCP) -> None:
         project_name, attempt_count, and input_available (whether retry is possible).
         """
         if page < 1:
-            raise ValueError("Page must be >= 1.")
+            raise ValueError("Page must be >= 1 (1-indexed). Pass page=1 for the first page.")
         if page_size < 1:
-            raise ValueError("Page size must be >= 1.")
+            raise ValueError("Page size must be >= 1. Recommended range: 10-50.")
 
         jwt, user_id = _get_auth()
         org = await require_org_context(user_id)
@@ -203,7 +203,7 @@ def register(mcp: FastMCP) -> None:
           `get_run_result` rather than assuming failure.
         """
         if not isinstance(timeout, int) or timeout <= 0:
-            raise ValueError("timeout must be a positive integer")
+            raise ValueError("timeout must be a positive integer (seconds). Default is typically 60.")
         if "messages" not in payload:
             raise ValueError(
                 "payload must contain a 'messages' key. "

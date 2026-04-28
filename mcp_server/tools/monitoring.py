@@ -73,9 +73,9 @@ def register(mcp: FastMCP) -> None:
     ) -> dict:
         """List execution traces for a project. Filter by duration (days lookback) or by explicit date range."""
         if page < 1:
-            raise ValueError("page must be >= 1")
+            raise ValueError("Page must be >= 1 (1-indexed). Pass page=1 for the first page.")
         if page_size < 1:
-            raise ValueError("page_size must be >= 1")
+            raise ValueError("Page size must be >= 1. Recommended range: 10-50.")
 
         params: dict = {"page": page, "page_size": min(page_size, 100)}
 

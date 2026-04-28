@@ -258,7 +258,15 @@ Any Streamable-HTTP-compatible MCP client can connect to `https://mcp.draftnrun.
 
 **401 on tool calls** — Token expired. The MCP client should handle token refresh via Supabase. Reconnect if refresh fails.
 
-**Tools returning 403** — Your role in the organization may not have sufficient permissions, or the org's release stage may not include the requested resource. Check with `get_current_context`. The error message now includes the backend's detail when available.
+**Tools returning 403** — Your role in the organization may not have sufficient permissions, or the org's release stage may not include the requested resource. Check with `get_current_context()`. The error message includes the backend's detail when available.
+
+**Tools returning 400 ("Invalid request")** — A required field is missing or has the wrong type. The error message includes the specific backend detail. Re-read the tool's docstring and fix the value described in the error, then retry.
+
+**Tools returning 409 ("Conflict")** — The resource was modified by another client since you last fetched it. Re-fetch the resource (e.g. `get_graph`) to get the current state, re-apply your changes, and retry.
+
+**Tools returning 422 ("Input validation failed")** — Pydantic validation rejected one or more fields. The error lists each failing field as `field.path: message`. Fix the listed fields and retry.
+
+**"A QA operation failed." / "An LLM judge operation failed."** — An internal backend error occurred in the QA or judge service. This is a server-side issue, not caused by your input. Retry the call; if it persists, report it.
 
 **"access_token is required" on `update_graph`** — The graph contains an integration-backed component (e.g. Gmail, Slack, HubSpot) whose OAuth connection is not set up. The backend validates integration dependencies at save time, not just at run time. Fix: connect the integration in the web UI first, or save the graph without the integration component and add it later. See `docs://integrations` preflight checklist.
 

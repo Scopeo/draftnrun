@@ -64,7 +64,13 @@ from ada_backend.schemas.input_groundtruth_schema import (
     QARunSummary,
 )
 from ada_backend.services.agent_runner_service import run_agent
-from ada_backend.services.errors import GraphNotBoundToProjectError
+from ada_backend.services.errors import (
+    GraphNotBoundToProjectError,
+    QADatasetNotFound,
+    QAInputValidationError,
+    QAOperationError,
+    QASessionNotFound,
+)
 from ada_backend.services.metrics.utils import query_conversation_messages
 from ada_backend.services.qa.csv_processing import get_headers_from_csv, process_csv
 from ada_backend.services.qa.qa_error import (
@@ -126,7 +132,7 @@ def get_inputs_groundtruths_with_version_outputs_service(
         )
     except Exception as e:
         LOGGER.error(f"Error in get_inputs_groundtruths_with_version_outputs_service: {str(e)}")
-        raise ValueError(f"Failed to get input-groundtruth entries with version outputs: {str(e)}") from e
+        raise QAOperationError(f"Failed to get input-groundtruth entries with version outputs: {str(e)}") from e
 
 
 def get_outputs_by_graph_runner_service(
@@ -149,7 +155,7 @@ def get_outputs_by_graph_runner_service(
         return {input_id: output for input_id, output in outputs}
     except Exception as e:
         LOGGER.error(f"Error in get_outputs_by_graph_runner_service: {str(e)}")
-        raise ValueError(f"Failed to get outputs for graph runner: {str(e)}") from e
+        raise QAOperationError(f"Failed to get outputs for graph runner: {str(e)}") from e
 
 
 def get_version_output_ids_by_input_ids_and_graph_runner_service(
@@ -202,14 +208,14 @@ def validate_qa_run_request(
     if not run_request.run_all:
         input_entries = get_inputs_groundtruths_by_ids(session, run_request.input_ids)
         if not input_entries:
-            raise ValueError("No input entries found for the provided input_ids")
+            raise QAInputValidationError("No input entries found for the provided input_ids")
         returned_ids = {entry.id for entry in input_entries}
         missing_ids = set(run_request.input_ids) - returned_ids
         if missing_ids:
-            raise ValueError(f"Input IDs not found: {sorted(missing_ids)}")
+            raise QAInputValidationError(f"Input IDs not found: {sorted(missing_ids)}")
         for entry in input_entries:
             if entry.dataset_id != dataset_id:
-                raise ValueError(f"Input {entry.id} does not belong to dataset {dataset_id}")
+                raise QAInputValidationError(f"Input {entry.id} does not belong to dataset {dataset_id}")
 
     _validate_env_binding(session, project_id, run_request.graph_runner_id)
 
@@ -229,20 +235,20 @@ def resolve_qa_entries_and_environment(
             session, dataset_id, skip=0, limit=number_of_dataset_inputs
         )
         if not input_entries:
-            raise ValueError(f"No input entries found in dataset {dataset_id}")
+            raise QAInputValidationError(f"No input entries found in dataset {dataset_id}")
     else:
         input_entries = get_inputs_groundtruths_by_ids(session, run_request.input_ids)
         if not input_entries:
-            raise ValueError("No input entries found for the provided input_ids")
+            raise QAInputValidationError("No input entries found for the provided input_ids")
 
         returned_ids = {entry.id for entry in input_entries}
         missing_ids = set(run_request.input_ids) - returned_ids
         if missing_ids:
-            raise ValueError(f"Input IDs not found: {sorted(missing_ids)}")
+            raise QAInputValidationError(f"Input IDs not found: {sorted(missing_ids)}")
 
         for entry in input_entries:
             if entry.dataset_id != dataset_id:
-                raise ValueError(f"Input {entry.id} does not belong to dataset {dataset_id}")
+                raise QAInputValidationError(f"Input {entry.id} does not belong to dataset {dataset_id}")
 
     env_relationship = _validate_env_binding(session, project_id, run_request.graph_runner_id)
 
@@ -372,7 +378,7 @@ async def run_qa_service(
     try:
         input_entries, environment = resolve_qa_entries_and_environment(session, project_id, dataset_id, run_request)
         return await _execute_qa_entries(project_id, run_request, input_entries, environment)
-    except (ValueError, GraphNotBoundToProjectError, QADatasetNotInProjectError):
+    except (QAInputValidationError, GraphNotBoundToProjectError, QADatasetNotInProjectError):
         raise
     except Exception as e:
         LOGGER.error(f"Error in run_qa_service: {str(e)}")
@@ -459,7 +465,7 @@ def get_qa_session_service(
 ) -> QASession:
     qa_session = get_qa_session(session, qa_session_id)
     if not qa_session or qa_session.project_id != project_id:
-        raise ValueError(f"QA session {qa_session_id} not found in project {project_id}")
+        raise QASessionNotFound(qa_session_id, project_id)
     return qa_session
 
 
@@ -506,7 +512,7 @@ def create_inputs_groundtruths_service(
         raise
     except Exception as e:
         LOGGER.error(f"Error in create_inputs_groundtruths_service: {str(e)}")
-        raise ValueError(f"Failed to create input-groundtruth entries: {str(e)}") from e
+        raise QAOperationError(f"Failed to create input-groundtruth entries: {str(e)}") from e
 
 
 def update_inputs_groundtruths_service(
@@ -551,7 +557,7 @@ def update_inputs_groundtruths_service(
     except Exception as e:
         session.rollback()
         LOGGER.error(f"Error in update_inputs_groundtruths_service: {str(e)}")
-        raise ValueError(f"Failed to update input-groundtruth entries: {str(e)}") from e
+        raise QAOperationError(f"Failed to update input-groundtruth entries: {str(e)}") from e
 
 
 def delete_inputs_groundtruths_service(
@@ -582,7 +588,7 @@ def delete_inputs_groundtruths_service(
         return deleted_count
     except Exception as e:
         LOGGER.error(f"Error in delete_inputs_groundtruths_service: {str(e)}")
-        raise ValueError(f"Failed to delete input-groundtruth entries: {str(e)}") from e
+        raise QAOperationError(f"Failed to delete input-groundtruth entries: {str(e)}") from e
 
 
 def _dataset_to_response(session: Session, dataset) -> DatasetResponse:
@@ -606,7 +612,7 @@ def get_datasets_by_project_service(
         return [DatasetResponse.model_validate(dataset) for dataset in datasets]
     except Exception as e:
         LOGGER.error(f"Error in get_datasets_by_project_service: {str(e)}")
-        raise ValueError(f"Failed to get datasets: {str(e)}") from e
+        raise QAOperationError(f"Failed to get datasets: {str(e)}") from e
 
 
 def get_datasets_by_organization_service(
@@ -618,7 +624,7 @@ def get_datasets_by_organization_service(
         return [_dataset_to_response(session, dataset) for dataset in datasets]
     except Exception as e:
         LOGGER.error(f"Error in get_datasets_by_organization_service: {str(e)}")
-        raise ValueError(f"Failed to get datasets: {str(e)}") from e
+        raise QAOperationError(f"Failed to get datasets: {str(e)}") from e
 
 
 def create_datasets_service(
@@ -639,7 +645,7 @@ def create_datasets_service(
         )
     except Exception as e:
         LOGGER.error(f"Error in create_datasets_service: {str(e)}")
-        raise ValueError(f"Failed to create datasets: {str(e)}") from e
+        raise QAOperationError(f"Failed to create datasets: {str(e)}") from e
 
 
 def update_dataset_service(
@@ -652,7 +658,7 @@ def update_dataset_service(
         LOGGER.error(
             f"Failed to update dataset {dataset_id}: not found in organization {organization_id}"
         )
-        raise ValueError(f"Dataset {dataset_id} not found in organization {organization_id}")
+        raise QADatasetNotFound(dataset_id, organization_id)
 
     try:
         updated_dataset = update_dataset(
@@ -666,7 +672,7 @@ def update_dataset_service(
         return _dataset_to_response(session, updated_dataset)
     except Exception as e:
         LOGGER.error(f"Error in update_dataset_service: {str(e)}")
-        raise ValueError(f"Failed to update dataset: {str(e)}") from e
+        raise QAOperationError(f"Failed to update dataset: {str(e)}") from e
 
 
 def delete_datasets_service(
@@ -680,7 +686,7 @@ def delete_datasets_service(
                 f"Failed to delete datasets for organization {organization_id}: "
                 f"Dataset {dataset_id} not found in organization {organization_id}"
             )
-            raise ValueError(f"Dataset {dataset_id} not found in organization {organization_id}")
+            raise QADatasetNotFound(dataset_id, organization_id)
 
     try:
         deleted_count = delete_datasets(
@@ -693,7 +699,7 @@ def delete_datasets_service(
         return deleted_count
     except Exception as e:
         LOGGER.error(f"Error in delete_datasets_service: {str(e)}")
-        raise ValueError(f"Failed to delete datasets: {str(e)}") from e
+        raise QAOperationError(f"Failed to delete datasets: {str(e)}") from e
 
 
 def set_dataset_projects_service(
@@ -703,17 +709,19 @@ def set_dataset_projects_service(
     project_ids: List[UUID],
 ) -> DatasetResponse:
     if not check_dataset_belongs_to_organization(session, organization_id, dataset_id):
-        raise ValueError(f"Dataset {dataset_id} not found in organization {organization_id}")
+        raise QADatasetNotFound(dataset_id, organization_id)
 
     if project_ids:
         projects = session.query(Project.id, Project.organization_id).filter(Project.id.in_(project_ids)).all()
         found_ids = {p.id for p in projects}
         missing = set(project_ids) - found_ids
         if missing:
-            raise ValueError(f"Projects not found: {sorted(missing)}")
+            raise QAInputValidationError(f"Projects not found: {sorted(missing)}")
         foreign = {p.id for p in projects if p.organization_id != organization_id}
         if foreign:
-            raise ValueError(f"Projects do not belong to organization {organization_id}: {sorted(foreign)}")
+            raise QAInputValidationError(
+                f"Projects do not belong to organization {organization_id}: {sorted(foreign)}"
+            )
 
     set_dataset_project_associations(session, dataset_id, project_ids)
 

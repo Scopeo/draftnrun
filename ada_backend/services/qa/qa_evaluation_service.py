@@ -22,7 +22,7 @@ from ada_backend.schemas.qa_evaluation_schema import (
 )
 from ada_backend.services.agent_runner_service import setup_tracing_context
 from ada_backend.services.entity_factory import get_llm_provider_and_model
-from ada_backend.services.errors import LLMJudgeNotFound
+from ada_backend.services.errors import LLMJudgeNotFound, QAOperationError
 from ada_backend.services.qa.deterministic_evaluators_service import run_deterministic_evaluation_service
 from ada_backend.services.qa.qa_error import VersionOutputEmptyError
 from engine.components.utils_prompt import fill_prompt_template
@@ -58,7 +58,7 @@ def delete_judge_evaluations_service(
         LOGGER.info(f"Deleted {deleted_count} judge evaluations")
     except Exception as e:
         LOGGER.error(f"Error in delete_judge_evaluations_service: {str(e)}")
-        raise ValueError(f"Failed to delete judge evaluations: {str(e)}") from e
+        raise QAOperationError(f"Failed to delete judge evaluations: {str(e)}") from e
 
 
 def _setup_judge_evaluation_context(
@@ -175,6 +175,8 @@ async def run_judge_evaluation_service(
             LOGGER.info(f"Judge evaluation completed for judge {judge_id} and version_output {version_output_id}")
 
             return result
+    except LLMJudgeNotFound:
+        raise
     except Exception as e:
         LOGGER.error(f"Error in run_judge_evaluation_service: {str(e)}", exc_info=True)
-        raise ValueError(f"Failed to run judge evaluation: {str(e)}") from e
+        raise QAOperationError(f"Failed to run judge evaluation: {str(e)}") from e
