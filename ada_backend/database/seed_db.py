@@ -13,14 +13,14 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.database.seed.integrations.seed_gmail import seed_gmail_components, seed_gmail_parameter_groups
 from ada_backend.database.seed.integrations.seed_integration import seed_integrations
-from ada_backend.database.seed.integrations.seed_mcp_google_calendar import seed_mcp_google_calendar_components
-from ada_backend.database.seed.integrations.seed_mcp_hubspot import seed_mcp_hubspot_components
-from ada_backend.database.seed.integrations.seed_mcp_hubspot_neverdrop import seed_mcp_hubspot_neverdrop_components
 from ada_backend.database.seed.integrations.seed_mail_sender import (
     seed_mail_sender_component_parameter_groups,
     seed_mail_sender_components,
     seed_mail_sender_parameter_groups,
 )
+from ada_backend.database.seed.integrations.seed_mcp_google_calendar import seed_mcp_google_calendar_components
+from ada_backend.database.seed.integrations.seed_mcp_hubspot import seed_mcp_hubspot_components
+from ada_backend.database.seed.integrations.seed_mcp_hubspot_neverdrop import seed_mcp_hubspot_neverdrop_components
 from ada_backend.database.seed.integrations.seed_outlook import seed_outlook_components, seed_outlook_parameter_groups
 from ada_backend.database.seed.integrations.seed_slack import seed_slack_components
 from ada_backend.database.seed.seed_ai_agent import seed_ai_agent_components, seed_ai_agent_parameter_groups
