@@ -372,7 +372,7 @@ async def run_endpoint_polling(
                     body = {
                         "input_data": {
                             "messages": [{"role": "user", "content": input_message}],
-                            "item": item,
+                            **item,
                         },
                         "cron_id": str(cron_id),
                     }
