@@ -259,9 +259,6 @@ async def resolve_oauth_access_token(
 class OAuthComponentFactory:
     """
     Generic async factory for components that require OAuth access tokens via Nango.
-
-    Backward-compatible with the original single-OAuth API and can also resolve
-    multiple OAuth bindings for components that expose more than one connection input.
     """
 
     def __init__(
