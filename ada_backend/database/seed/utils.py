@@ -65,6 +65,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "router": UUID("8c9d0e1f-2a3b-4c5d-6e7f-8a9b0c1d2e3f"),
     "categorizer": UUID("1962862d-bbd5-4bc5-bb4a-d267feadc6f8"),
     "outlook_sender": UUID("62979492-b4ef-4cfe-96f1-67a960a1e8d4"),
+    "mail_sender": UUID("83c061db-1506-4636-95d1-9254ee23283e"),
     "scorer": UUID("f1a2b3c4-d5e6-7890-abcd-ef1234567891"),
 }
 COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
@@ -120,6 +121,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "router": UUID("9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a"),
     "categorizer": UUID("c4a1e2f3-5d6b-4c7a-8e9f-1a2b3c4d5e6f"),
     "outlook_sender": UUID("6e3b9e9b-ab98-4189-88b7-41b8bf2aa07c"),
+    "mail_sender": UUID("ced15521-e358-4b57-a9ac-47672dd1657b"),
     "scorer": UUID("f1a2b3c4-d5e6-7890-abcd-ef1234567892"),
 }
 
