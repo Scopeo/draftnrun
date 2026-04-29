@@ -3,6 +3,7 @@ import { useAbility } from '@casl/vue'
 import { Icon } from '@iconify/vue'
 import { isProviderLogo } from '../utils/node-factory.utils'
 import EditSidebarParameterField from './EditSidebarParameterField.vue'
+import ExclusiveOAuthGroup from './ExclusiveOAuthGroup.vue'
 import EditSidebarGmail from './EditSidebarGmail.vue'
 import EditSidebarOptionalTools from './EditSidebarOptionalTools.vue'
 import EditSidebarConfigContent from './EditSidebarConfigContent.vue'
@@ -13,6 +14,7 @@ import { useEditSidebarSubmit } from '@/composables/useEditSidebarSubmit'
 import { useEditSidebarOAuth } from '@/composables/useEditSidebarOAuth'
 import { useEditSidebarComponentConfig } from '@/composables/useEditSidebarComponentConfig'
 import { getComponentDefinitionFromCache } from '@/composables/queries/useComponentDefinitionsQuery'
+import { normalizeUiComponent } from './edit-sidebar/types'
 import { logger } from '@/utils/logger'
 
 interface Props {
@@ -110,6 +112,9 @@ const getComponentIcon = computed(() => {
 })
 
 const color = computed(() => (isWorker.value ? 'secondary' : 'primary'))
+
+const isExclusiveOAuthGroup = (group: any): boolean =>
+  group.parameters.some((p: any) => normalizeUiComponent(p.ui_component) === 'EXCLUSIVEOAUTHCONNECTION')
 </script>
 
 <template>
@@ -206,17 +211,25 @@ const color = computed(() => (isWorker.value ? 'secondary' : 'primary'))
                   </div>
                   <VExpandTransition>
                     <div v-show="form.groupVisibility.value[group.group.id]">
-                      <EditSidebarParameterField
-                        v-for="param in group.parameters.filter((p: any) => !p.is_advanced || form.showAdvanced.value)"
-                        :key="param.name"
-                        v-model="form.formData.value.parameters[param.name]"
-                        :param="param"
-                        :component-config="componentConfig.getComponentConfig(param)"
-                        :color="color"
-                        :json-validation-state="form.jsonValidationState.value[param.name]"
-                        @file-update="form.onFileModelUpdate(param.name, $event)"
-                        @json-blur="form.handleJsonFieldBlur(param.name)"
+                      <ExclusiveOAuthGroup
+                        v-if="isExclusiveOAuthGroup(group)"
+                        :parameters="group.parameters"
+                        :form-data="form.formData.value.parameters"
+                        :readonly="isReadOnlyMode"
                       />
+                      <template v-else>
+                        <EditSidebarParameterField
+                          v-for="param in group.parameters.filter((p: any) => !p.is_advanced || form.showAdvanced.value)"
+                          :key="param.name"
+                          v-model="form.formData.value.parameters[param.name]"
+                          :param="param"
+                          :component-config="componentConfig.getComponentConfig(param)"
+                          :color="color"
+                          :json-validation-state="form.jsonValidationState.value[param.name]"
+                          @file-update="form.onFileModelUpdate(param.name, $event)"
+                          @json-blur="form.handleJsonFieldBlur(param.name)"
+                        />
+                      </template>
                     </div>
                   </VExpandTransition>
                 </VCard>
