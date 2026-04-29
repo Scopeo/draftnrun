@@ -268,10 +268,10 @@ class TestSyncGraphFromGithub:
         component_agent = json.dumps({
             "component_id": str(uuid4()),
             "component_version_id": str(uuid4()),
-            "parameters": [],
-            "input_port_instances": [
+            "parameters": [
                 {
                     "name": "input",
+                    "kind": "input",
                     "field_expression": {
                         "expression_json": {"type": "ref", "file_key": "start", "port": "output"},
                     },

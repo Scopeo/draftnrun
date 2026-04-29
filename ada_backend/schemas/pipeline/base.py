@@ -30,7 +30,7 @@ class ComponentInstanceSchema(BaseModel):
     is_start_node: bool = False
     component_id: UUID
     component_version_id: UUID
-    parameters: list[PipelineParameterSchema]
+    parameters: Optional[list[PipelineParameterSchema]] = None
     tool_description_override: Optional[str] = None
     integration: Optional[GraphIntegrationSchema] = None
     field_expressions: list[FieldExpressionUpdateSchema] = Field(

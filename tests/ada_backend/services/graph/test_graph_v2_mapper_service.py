@@ -170,10 +170,10 @@ class TestMapperResolvesFieldExpressionFileKeys:
                     "file_key": "scorer",
                     "component_id": comp_id,
                     "component_version_id": comp_ver_id,
-                    "parameters": [],
-                    "input_port_instances": [
+                    "parameters": [
                         {
                             "name": "input",
+                            "kind": "input",
                             "field_expression": {
                                 "expression_json": {"type": "ref", "file_key": "start", "port": "lead_text"},
                             },
@@ -192,3 +192,38 @@ class TestMapperResolvesFieldExpressionFileKeys:
         assert resolved_expr["instance"] == str(start_id)
         assert resolved_expr["port"] == "lead_text"
         assert "file_key" not in resolved_expr
+
+    def test_unified_params_split_into_params_and_ports(self):
+        """Unified parameters with kind='input' are split into input_port_instances."""
+        comp_id = uuid4()
+        comp_ver_id = uuid4()
+        payload = GraphSaveV2Schema(
+            graph_map={
+                "nodes": [{"file_key": "node1", "is_start_node": True}],
+                "edges": [],
+            },
+            components=[
+                {
+                    "file_key": "node1",
+                    "component_id": comp_id,
+                    "component_version_id": comp_ver_id,
+                    "parameters": [
+                        {"name": "model", "kind": "parameter", "value": "gpt-4"},
+                        {
+                            "name": "messages",
+                            "kind": "input",
+                            "field_expression": {
+                                "expression_json": {"type": "literal", "value": "hello"},
+                            },
+                        },
+                    ],
+                },
+            ],
+        )
+
+        result = graph_save_v2_to_graph_update(payload)
+        instance = result.component_instances[0]
+        assert len(instance.parameters) == 1
+        assert instance.parameters[0].name == "model"
+        assert len(instance.input_port_instances) == 1
+        assert instance.input_port_instances[0].name == "messages"

@@ -2,6 +2,7 @@ import copy
 from typing import Any
 from uuid import UUID, uuid4
 
+from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterV2Schema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.graph_schema import (
     EdgeSchema,
@@ -13,6 +14,7 @@ from ada_backend.schemas.pipeline.graph_schema import (
     GraphSaveV2Schema,
     GraphUpdateSchema,
 )
+from ada_backend.services.graph.component_instance_v2_service import _split_unified_parameters
 
 
 def _node_ref_to_instance_id(
@@ -74,6 +76,27 @@ def _resolve_input_port_file_keys(
     return resolved
 
 
+def _resolve_unified_params_file_keys(
+    parameters: list[PipelineParameterV2Schema],
+    file_key_to_instance_id: dict[str, UUID],
+) -> list[PipelineParameterV2Schema]:
+    """Resolve file_key references in field_expression of input-kind unified parameters."""
+    resolved: list[PipelineParameterV2Schema] = []
+    for param in parameters:
+        field_expr = param.field_expression
+        if not field_expr or "expression_json" not in field_expr or param.kind != ParameterKind.INPUT:
+            resolved.append(param)
+            continue
+        new_expr = _resolve_expression_file_keys(field_expr["expression_json"], file_key_to_instance_id)
+        if new_expr is field_expr["expression_json"]:
+            resolved.append(param)
+        else:
+            param_copy = param.model_copy(deep=True)
+            param_copy.field_expression["expression_json"] = new_expr
+            resolved.append(param_copy)
+    return resolved
+
+
 def graph_save_v2_to_graph_update(payload: GraphSaveV2Schema) -> GraphUpdateSchema:
     component_by_file_key: dict[str, GraphComponentFileSchema] = {comp.file_key: comp for comp in payload.components}
     if len(component_by_file_key) != len(payload.components):
@@ -102,7 +125,8 @@ def graph_save_v2_to_graph_update(payload: GraphSaveV2Schema) -> GraphUpdateSche
 
     component_instances: list[ComponentInstanceSchema] = []
     for node, component_file, resolved_id in node_component_pairs:
-        resolved_ports = _resolve_input_port_file_keys(component_file.input_port_instances, file_key_to_instance_id)
+        resolved_params = _resolve_unified_params_file_keys(component_file.parameters, file_key_to_instance_id)
+        param_params, input_port_instances = _split_unified_parameters(resolved_params)
         component_instances.append(
             ComponentInstanceSchema(
                 id=resolved_id,
@@ -110,8 +134,8 @@ def graph_save_v2_to_graph_update(payload: GraphSaveV2Schema) -> GraphUpdateSche
                 is_start_node=node.is_start_node,
                 component_id=component_file.component_id,
                 component_version_id=component_file.component_version_id,
-                parameters=component_file.parameters,
-                input_port_instances=resolved_ports,
+                parameters=param_params,
+                input_port_instances=input_port_instances,
                 integration=component_file.integration,
                 tool_description_override=component_file.tool_description_override,
                 port_configurations=component_file.port_configurations,

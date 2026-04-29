@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
+from ada_backend.schemas.parameter_schema import PipelineParameterV2Schema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
 
@@ -115,8 +116,7 @@ class GraphComponentFileSchema(BaseModel):
     id: Optional[UUID] = None
     component_id: UUID
     component_version_id: UUID
-    parameters: list[dict] = Field(default_factory=list)
-    input_port_instances: list[dict] = Field(default_factory=list)
+    parameters: list[PipelineParameterV2Schema] = Field(default_factory=list)
     port_configurations: Optional[list[dict]] = None
     integration: Optional[dict] = None
     tool_description_override: Optional[str] = None
@@ -133,16 +133,14 @@ class ComponentCreateV2Schema(BaseModel):
     component_version_id: UUID
     label: str
     is_start_node: bool = False
-    parameters: list[dict] = Field(default_factory=list)
-    input_port_instances: list[dict] = Field(default_factory=list)
+    parameters: list[PipelineParameterV2Schema] = Field(default_factory=list)
     port_configurations: Optional[list[dict]] = None
     integration: Optional[dict] = None
     tool_description_override: Optional[str] = None
 
 
 class ComponentUpdateV2Schema(BaseModel):
-    parameters: list[dict] = Field(default_factory=list)
-    input_port_instances: list[dict] = Field(default_factory=list)
+    parameters: Optional[list[PipelineParameterV2Schema]] = None
     port_configurations: Optional[list[dict]] = None
     integration: Optional[dict] = None
     tool_description_override: Optional[str] = None

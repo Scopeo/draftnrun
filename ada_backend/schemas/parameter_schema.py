@@ -43,6 +43,19 @@ class PipelineParameterSchema(ParameterBase, WithValue):
     """Represents a parameter value in the pipeline input"""
 
 
+class PipelineParameterV2Schema(ParameterBase, WithValue):
+    """Unified parameter for API v2: carries both static values and field expressions.
+
+    kind="parameter" uses ``value`` for the static config value.
+    kind="input" uses ``field_expression`` for the wiring data.
+    """
+
+    field_expression: Optional[dict] = None
+    is_tool_input: bool = False
+    description: Optional[str] = None
+    port_definition_id: Optional[UUID] = None
+
+
 class ParameterGroupSchema(BaseModel):
     id: UUID
     name: str
