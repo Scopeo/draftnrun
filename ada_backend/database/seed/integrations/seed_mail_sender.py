@@ -71,7 +71,7 @@ def seed_mail_sender_components(session: Session):
             display_order=0,
             parameter_group_id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["connection"],
             parameter_order_within_group=0,
-            ui_component=UIComponent.OAUTH_CONNECTION,
+            ui_component=UIComponent.EXCLUSIVE_OAUTH_CONNECTION,
             ui_component_properties={
                 "label": "Gmail Connection",
                 "description": "Select a Gmail connection.",
@@ -88,7 +88,7 @@ def seed_mail_sender_components(session: Session):
             display_order=1,
             parameter_group_id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["connection"],
             parameter_order_within_group=1,
-            ui_component=UIComponent.OAUTH_CONNECTION,
+            ui_component=UIComponent.EXCLUSIVE_OAUTH_CONNECTION,
             ui_component_properties={
                 "label": "Outlook Connection",
                 "description": "Select an Outlook connection.",
@@ -131,7 +131,7 @@ def seed_mail_sender_parameter_groups(session: Session):
     parameter_groups = [
         db.ParameterGroup(
             id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["connection"],
-            name="Connection (use exactly one)",
+            name="Connection",
         ),
         db.ParameterGroup(
             id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["email_content"],
