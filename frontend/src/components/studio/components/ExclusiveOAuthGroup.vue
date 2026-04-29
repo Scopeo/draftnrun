@@ -3,7 +3,6 @@ import { Icon } from '@iconify/vue'
 import { computed, ref, watch } from 'vue'
 import { VDivider } from 'vuetify/components/VDivider'
 import { VLabel } from 'vuetify/components/VLabel'
-import { VRadio, VRadioGroup } from 'vuetify/components/VRadioGroup'
 import OAuthConnectionInput from '@/components/studio/inputs/OAuthConnectionInput.vue'
 import type { SidebarParameter } from './edit-sidebar/types'
 
