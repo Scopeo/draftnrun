@@ -16,6 +16,7 @@ def create_input_port_instance(
     port_definition_id: Optional[UUID] = None,
     field_expression_id: Optional[UUID] = None,
     description: Optional[str] = None,
+    prompt_version_id: Optional[UUID] = None,
 ) -> db.InputPortInstance:
     input_port = db.InputPortInstance(
         component_instance_id=component_instance_id,
@@ -23,6 +24,7 @@ def create_input_port_instance(
         port_definition_id=port_definition_id,
         field_expression_id=field_expression_id,
         description=description,
+        prompt_version_id=prompt_version_id,
     )
     session.add(input_port)
     session.commit()
@@ -62,6 +64,7 @@ def update_input_port_instance(
     port_definition_id: Union[UUID, None, object] = _UNSET,
     field_expression_id: Union[UUID, None, object] = _UNSET,
     description: Union[str, None, object] = _UNSET,
+    prompt_version_id: Union[UUID, None, object] = _UNSET,
 ) -> Optional[db.InputPortInstance]:
     """Update an input port instance.
 
@@ -90,6 +93,8 @@ def update_input_port_instance(
         input_port.field_expression_id = field_expression_id
     if description is not _UNSET:
         input_port.description = description
+    if prompt_version_id is not _UNSET:
+        input_port.prompt_version_id = prompt_version_id
 
     session.add(input_port)
     session.commit()

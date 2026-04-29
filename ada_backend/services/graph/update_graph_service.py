@@ -272,7 +272,7 @@ async def update_graph_service(
         parameter_params = []
         for param in instance.parameters:
             kind = getattr(param, "kind", ParameterKind.PARAMETER)
-            if kind == ParameterKind.INPUT:
+            if kind in (ParameterKind.INPUT, ParameterKind.PROMPT):
                 if not instance.id:
                     raise ValueError(
                         f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
@@ -490,6 +490,8 @@ async def update_graph_service(
             for field_name in fields_to_delete:
                 port_id = db_port_instances_by_instance[instance_id][field_name]
                 port = get_input_port_instance(session, port_id)
+                if port and port.prompt_version_id:
+                    continue
                 if port and port.field_expression_id:
                     delete_field_expression_by_id(session, port.field_expression_id)
                 delete_input_port_instance(session, port_id)
@@ -588,7 +590,7 @@ def _ensure_canonical_expressions_for_edges(
                     incoming_fe_targets.add((inst.id, port_inst.name))
         for param in getattr(inst, "parameters", []) or []:
             kind = getattr(param, "kind", None)
-            if kind == ParameterKind.INPUT and param.value:
+            if kind in (ParameterKind.INPUT, ParameterKind.PROMPT) and param.value:
                 incoming_fe_targets.add((inst.id, param.name))
     if input_params_by_instance:
         for inst_id, params in input_params_by_instance.items():

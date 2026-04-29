@@ -10,6 +10,7 @@ from ada_backend.database.models import ParameterType, UIComponent
 class ParameterKind(StrEnum):
     PARAMETER = "parameter"
     INPUT = "input"
+    PROMPT = "prompt"
 
 
 class ParameterBase(BaseModel):
@@ -33,10 +34,21 @@ class WithValue(BaseModel):
     value: str | int | float | bool | dict | list | None = None
 
 
+class PromptPinInfo(BaseModel):
+    prompt_id: UUID
+    prompt_name: str
+    pinned_version_id: UUID
+    pinned_version_number: int
+    latest_version_number: int
+    is_latest: bool
+
+
 class PipelineParameterReadSchema(ParameterDefinition, WithValue):
     """Represents a parameter value in the pipeline input with its definition"""
 
     is_tool_input: bool = False
+    is_prompt_eligible: bool = False
+    prompt_pin: Optional[PromptPinInfo] = None
 
 
 class PipelineParameterSchema(ParameterBase, WithValue):

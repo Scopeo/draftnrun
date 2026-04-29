@@ -12,7 +12,8 @@ from ada_backend.repositories.graph_runner_repository import (
     get_latest_modification_history,
 )
 from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
-from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterReadSchema
+from ada_backend.repositories.prompt_repository import get_latest_version_number, get_input_port_instances_with_prompt_pins
+from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterReadSchema, PromptPinInfo
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionReadSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphGetResponse
 from ada_backend.services.graph.graph_validation_utils import validate_graph_runner_belongs_to_project
@@ -105,17 +106,44 @@ def get_graph_service(
         if port.port_type == PortType.INPUT:
             input_ports_by_component_version[port.component_version_id].append(port)
 
+    pinned_ports_by_instance: dict[UUID, dict[str, object]] = {}
+    pinned_ports = get_input_port_instances_with_prompt_pins(session, component_instance_ids)
+    for pp in pinned_ports:
+        ci_id = pp.component_instance_id
+        if ci_id not in pinned_ports_by_instance:
+            pinned_ports_by_instance[ci_id] = {}
+        pinned_ports_by_instance[ci_id][pp.name] = pp
+
     for comp_instance in component_instances_with_definitions:
         field_expression_by_name = {fe.field_name: fe.expression_text for fe in comp_instance.field_expressions}
         input_ports = input_ports_by_component_version.get(comp_instance.component_version_id, [])
 
         comp_instance.parameters = filter_conflicting_parameters(comp_instance.parameters or [], input_ports)
 
+        instance_pins = pinned_ports_by_instance.get(comp_instance.id, {})
         for input_port in input_ports:
+            pinned_port = instance_pins.get(input_port.name)
+            kind = ParameterKind.INPUT
+            prompt_pin = None
+            if pinned_port and pinned_port.prompt_version:
+                kind = ParameterKind.PROMPT
+                pv = pinned_port.prompt_version
+                latest_vn = get_latest_version_number(session, pv.prompt_id)
+                prompt_pin = PromptPinInfo(
+                    prompt_id=pv.prompt_id,
+                    prompt_name=pv.prompt.name if pv.prompt else "",
+                    pinned_version_id=pv.id,
+                    pinned_version_number=pv.version_number,
+                    latest_version_number=latest_vn,
+                    is_latest=pv.version_number == latest_vn,
+                )
+
             comp_instance.parameters.append(
                 PipelineParameterReadSchema(
-                    kind=ParameterKind.INPUT,
+                    kind=kind,
                     is_tool_input=input_port.is_tool_input,
+                    is_prompt_eligible=input_port.is_prompt,
+                    prompt_pin=prompt_pin,
                     id=input_port.id,
                     name=input_port.name,
                     type=input_port.parameter_type or ParameterType.STRING,

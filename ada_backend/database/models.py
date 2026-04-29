@@ -1141,6 +1141,7 @@ class PortDefinition(Base):
     )
     parameter_order_within_group = mapped_column(Integer, nullable=True)
     default_tool_json_schema = mapped_column(JSONB, nullable=True)
+    is_prompt = mapped_column(Boolean, nullable=False, default=False)
 
     component_version = relationship("ComponentVersion", back_populates="port_definitions")
 
@@ -1260,9 +1261,16 @@ class InputPortInstance(PortInstance):
         nullable=True,
         index=True,
     )
+    prompt_version_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("prompt_versions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     description = mapped_column(Text, nullable=True)
 
     field_expression = relationship("FieldExpression")
+    prompt_version = relationship("PromptVersion")
 
     __mapper_args__ = {"polymorphic_identity": PortType.INPUT}
 
@@ -2521,4 +2529,67 @@ class GitSyncConfig(Base):
         ),
         UniqueConstraint("project_id", name="uq_git_sync_project"),
         Index("ix_git_sync_configs_repo_branch", "github_owner", "github_repo_name", "branch"),
+    )
+
+
+class Prompt(Base):
+    __tablename__ = "prompts"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    name = mapped_column(String, nullable=False)
+    description = mapped_column(Text, nullable=True)
+    created_by = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    versions = relationship("PromptVersion", back_populates="prompt", order_by="PromptVersion.version_number")
+
+    __table_args__ = (UniqueConstraint("organization_id", "name", name="uq_prompt_org_name"),)
+
+
+class PromptVersion(Base):
+    __tablename__ = "prompt_versions"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    prompt_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("prompts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version_number = mapped_column(Integer, nullable=False)
+    content = mapped_column(Text, nullable=False)
+    change_description = mapped_column(Text, nullable=True)
+    created_by = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    prompt = relationship("Prompt", back_populates="versions")
+    sections = relationship(
+        "PromptSection", back_populates="prompt_version", foreign_keys="[PromptSection.prompt_version_id]"
+    )
+
+    __table_args__ = (UniqueConstraint("prompt_id", "version_number", name="uq_prompt_version_number"),)
+
+
+class PromptSection(Base):
+    __tablename__ = "prompt_sections"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    prompt_version_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("prompt_versions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    section_prompt_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("prompts.id", ondelete="RESTRICT"), nullable=False
+    )
+    section_prompt_version_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("prompt_versions.id", ondelete="RESTRICT"), nullable=False
+    )
+    placeholder = mapped_column(String, nullable=False)
+    position = mapped_column(Integer, nullable=False)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    prompt_version = relationship("PromptVersion", back_populates="sections", foreign_keys=[prompt_version_id])
+    section_prompt = relationship("Prompt", foreign_keys=[section_prompt_id])
+    section_prompt_version = relationship("PromptVersion", foreign_keys=[section_prompt_version_id])
+
+    __table_args__ = (
+        UniqueConstraint("prompt_version_id", "placeholder", name="uq_prompt_section_placeholder"),
     )

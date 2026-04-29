@@ -55,6 +55,7 @@ class AIAgentInputs(BaseModel):
         ),
         json_schema_extra={
             "is_tool_input": False,
+            "is_prompt": True,
             "ui_component": UIComponent.TEXTAREA,
             "ui_component_properties": UIComponentProperties(
                 label="System Prompt",

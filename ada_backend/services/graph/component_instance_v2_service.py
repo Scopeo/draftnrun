@@ -52,7 +52,7 @@ def _split_unified_parameters(
     input_port_instances: list[InputPortInstanceSchema] = []
 
     for param in parameters:
-        if param.kind == ParameterKind.INPUT:
+        if param.kind in (ParameterKind.INPUT, ParameterKind.PROMPT):
             field_expression = param.field_expression
             if field_expression is None and param.value is not None:
                 expression_json = _normalize_expression_json(param.value)
@@ -185,7 +185,7 @@ def _sync_input_port_field_expressions(
             )
 
     for port in db_ports:
-        if port.name not in incoming_names and port.field_expression_id:
+        if port.name not in incoming_names and port.field_expression_id and not port.prompt_version_id:
             delete_field_expression_by_id(session, port.field_expression_id)
             update_input_port_instance(session, port.id, field_expression_id=None)
 
