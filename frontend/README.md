@@ -4,7 +4,6 @@ Vue 3 + Vuetify SaaS back-office for a no-code workflow and agent builder.
 Desktop-only (no mobile/tablet).
 
 - **Package:** `draftnrun-frontend` v1.0.0
-- **Production:** [app.draftnrun.com](https://app.draftnrun.com)
 
 ## Tech stack
 
@@ -56,31 +55,77 @@ src/
 
 ## Getting started
 
+> All commands below are run from the `frontend/` directory of the monorepo:
+>
+> ```bash
+> cd frontend
+> ```
+
 ### Prerequisites
 
-- Node 18+
-- pnpm 8+
+- Node 18.18+
+- pnpm 8+ (`corepack enable` then `corepack prepare pnpm@8.15.3 --activate`)
+- Docker + Docker Compose (only required for the prod-on-local-server flow)
 
-### Setup
+### Install
 
 ```bash
 pnpm install
-cp .env.example .env   # fill in values
-pnpm dev               # dev server at localhost:5173
+cp .env.example .env   # fill in values — see "Environment variables" below
 ```
 
-### Scripts
+## Running the frontend
 
-| Command         | Description                |
-| --------------- | -------------------------- |
-| `pnpm dev`      | Start dev server           |
-| `pnpm build`    | Production build           |
-| `pnpm preview`  | Preview production build   |
-| `pnpm test`     | Run tests (Vitest)         |
-| `pnpm typecheck`| Type-check without emit    |
-| `pnpm lint`     | Lint with ESLint           |
-| `pnpm format`   | Format with Prettier       |
-| `pnpm fix`      | Format + lint              |
+There are **two** ways to run the frontend locally, and they are **not interchangeable**.
+Pick the one that matches what you're trying to do.
+
+### 1. Development mode — `pnpm dev`
+
+Use this **only** while writing code on your laptop. It runs the Vite dev server with hot module replacement, source maps, no minification, and dev-only warnings — it is **not** a production server.
+
+```bash
+pnpm dev          # http://localhost:5173
+```
+
+> ⚠️ **`pnpm dev` is not a production server.**
+> The dev server is unbundled, single-process, and exposes dev tooling. It exists to give you fast feedback while editing code — nothing else. Never use it to host the app for anyone (yourself included) as a "prod-like" environment, even on `localhost`. Build and serve the static bundle instead — see below.
+
+### 2. Production build, served locally
+
+This is the right way to run "prod on a local server." It produces a real production bundle (minified, tree-shaken, hashed asset filenames) and serves the resulting static files. Pick whichever option you prefer.
+
+**Option A — `pnpm build && pnpm preview` (simplest, no Docker):**
+
+```bash
+pnpm build        # produces frontend/dist/
+pnpm preview      # http://localhost:5050 — serves dist/ as static files
+```
+
+**Option B — Docker + nginx (containerized, closer to a real deploy):**
+
+```bash
+docker compose -f docker-compose.prod.yml up --build
+# http://localhost:8080
+```
+
+This uses [`prod.Dockerfile`](./prod.Dockerfile) — a multi-stage build that runs `pnpm build` and copies `dist/` into an `nginx:stable-alpine` image configured by [`nginx.conf`](./nginx.conf) (with SPA fallback to `index.html`).
+
+Either way, this is what real users get, just running on your machine. If something works in `pnpm dev` but breaks here, that's a real bug — fix it before shipping.
+
+> ❌ `pnpm dev` is **not** "prod on a local server." If you're tempted to run `pnpm dev` and call it production, stop and run one of the two options above instead.
+
+### Scripts reference
+
+| Command          | Use it for                                                  |
+| ---------------- | ----------------------------------------------------------- |
+| `pnpm dev`       | Local development only (hot reload, unbundled)              |
+| `pnpm build`     | Produce a production bundle in `dist/`                      |
+| `pnpm preview`   | Serve `dist/` locally on `:5050` for a quick smoke test     |
+| `pnpm test`      | Run tests (Vitest)                                          |
+| `pnpm typecheck` | Type-check without emit                                     |
+| `pnpm lint`      | Lint with ESLint                                            |
+| `pnpm format`    | Format with Prettier                                        |
+| `pnpm fix`       | Format + lint                                               |
 
 ### Environment variables
 
@@ -146,11 +191,6 @@ Primary color: `#22577A`.
 `VNavigationDrawer` sidebar (`AppSidebar.vue`) with collapsible rail mode.
 No global top bar — navigation lives entirely in the sidebar.
 
-## Deployment
+## Sentry source maps (optional)
 
-| Target     | Platform |
-| ---------- | -------- |
-| Production | Netlify  |
-| Local      | Docker   |
-
-For Sentry source map uploads during build, set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` environment variables.
+To upload source maps to Sentry during `pnpm build`, set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` in your environment. If unset, the build skips the upload step and still produces a working bundle.
