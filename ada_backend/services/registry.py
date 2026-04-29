@@ -554,7 +554,7 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["gmail_sender_v2"],
         factory=OAuthComponentFactory(
             entity_class=GmailSenderV2,
-            provider_config_key=OAuthProvider.GMAIL,
+            oauth_bindings=[("oauth_connection_id", OAuthProvider.GMAIL, "access_token")],
         ),
     )
 
@@ -562,7 +562,7 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["gmail_sender_v3"],
         factory=OAuthComponentFactory(
             entity_class=GmailSenderV2,
-            provider_config_key=OAuthProvider.GMAIL,
+            oauth_bindings=[("oauth_connection_id", OAuthProvider.GMAIL, "access_token")],
         ),
     )
 
@@ -570,7 +570,7 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["outlook_sender"],
         factory=OAuthComponentFactory(
             entity_class=OutlookSender,
-            provider_config_key=OAuthProvider.OUTLOOK,
+            oauth_bindings=[("oauth_connection_id", OAuthProvider.OUTLOOK, "access_token")],
         ),
     )
 
@@ -589,7 +589,7 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["slack_sender"],
         factory=OAuthComponentFactory(
             entity_class=SlackSender,
-            provider_config_key=OAuthProvider.SLACK,
+            oauth_bindings=[("oauth_connection_id", OAuthProvider.SLACK, "access_token")],
         ),
     )
 
@@ -597,7 +597,7 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["hubspot_mcp_tool"],
         factory=OAuthComponentFactory(
             entity_class=HubSpotMCPTool,
-            provider_config_key=OAuthProvider.HUBSPOT,
+            oauth_bindings=[("oauth_connection_id", OAuthProvider.HUBSPOT, "access_token")],
             constructor_method="from_access_token",
             parameter_processors=[build_ignore_tool_description_processor()],
         ),
@@ -607,7 +607,7 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["hubspot_neverdrop_mcp_tool"],
         factory=OAuthComponentFactory(
             entity_class=HubSpotMCPTool,
-            provider_config_key=OAuthProvider.HUBSPOT_NEVERDROP,
+            oauth_bindings=[("oauth_connection_id", OAuthProvider.HUBSPOT_NEVERDROP, "access_token")],
             constructor_method="from_access_token",
             parameter_processors=[build_ignore_tool_description_processor()],
         ),
@@ -617,7 +617,7 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["google_calendar_mcp_tool"],
         factory=OAuthComponentFactory(
             entity_class=GoogleCalendarMCPTool,
-            provider_config_key=OAuthProvider.GOOGLE_CALENDAR,
+            oauth_bindings=[("oauth_connection_id", OAuthProvider.GOOGLE_CALENDAR, "access_token")],
             constructor_method="from_access_token",
             parameter_processors=[build_ignore_tool_description_processor()],
         ),

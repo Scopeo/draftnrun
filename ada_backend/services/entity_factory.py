@@ -264,9 +264,7 @@ class OAuthComponentFactory:
     def __init__(
         self,
         entity_class: Type,
-        provider_config_key: str | None = None,
-        target_param_name: str = "access_token",
-        oauth_bindings: list[tuple[str, str, str]] | None = None,
+        oauth_bindings: list[tuple[str, str, str]],
         parameter_processors: list[ParameterProcessor] | None = None,
         constructor_method: str = "__init__",
     ):
@@ -275,29 +273,17 @@ class OAuthComponentFactory:
 
         Args:
             entity_class: The component class to instantiate
-            provider_config_key: OAuth provider key (e.g., "slack", "gmail").
-                Shortcut for the common single-OAuth configuration.
-            target_param_name: Parameter name for the resolved token (default: "access_token")
-                used with the single-OAuth shortcut.
-            oauth_bindings: Optional list of (param_name, provider_config_key, target_kwarg_name).
-                When provided, the factory resolves one token per binding.
+            oauth_bindings: List of (param_name, provider_config_key, target_kwarg_name).
+                The factory resolves one token per binding.
             parameter_processors: Additional parameter processors to apply after token resolution
             constructor_method: Method to use for instantiation (default: "__init__")
         """
         self.entity_class = entity_class
         self.parameter_processors = parameter_processors or []
         self.constructor_method = constructor_method
-        self.provider_config_key = provider_config_key
-        self.target_param_name = target_param_name
-
-        if oauth_bindings is not None:
-            if provider_config_key is not None:
-                raise ValueError("Provide either provider_config_key or oauth_bindings, not both.")
-            self.oauth_bindings = oauth_bindings
-        else:
-            if provider_config_key is None:
-                raise ValueError("provider_config_key is required when oauth_bindings is not provided.")
-            self.oauth_bindings = [("oauth_connection_id", provider_config_key, target_param_name)]
+        if not oauth_bindings:
+            raise ValueError("oauth_bindings is required.")
+        self.oauth_bindings = oauth_bindings
 
         if constructor_method == "__init__":
             self.constructor_params = signature(entity_class.__init__).parameters
