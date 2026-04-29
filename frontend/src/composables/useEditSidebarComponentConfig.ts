@@ -225,6 +225,18 @@ export function useEditSidebarComponentConfig(
             description: param.ui_component_properties?.description,
           },
         }
+      case 'EXCLUSIVE_OAUTH_CONNECTION':
+      case 'EXCLUSIVEOAUTHCONNECTION':
+        return {
+          component: OAuthConnectionInput,
+          props: {
+            readonly: isReadOnlyMode.value || !!param.ui_component_properties?.readonly,
+            provider: param.ui_component_properties?.provider || 'unknown',
+            icon: param.ui_component_properties?.icon,
+            label: param.ui_component_properties?.label || param.name,
+            description: param.ui_component_properties?.description,
+          },
+        }
       case 'ROUTEBUILDER':
         return {
           component: RouterConfigBuilder,
