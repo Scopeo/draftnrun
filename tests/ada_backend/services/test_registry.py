@@ -66,7 +66,9 @@ def test_google_calendar_mcp_tool_registered():
     assert factory is not None
     assert isinstance(factory, OAuthComponentFactory)
     assert factory.entity_class is GoogleCalendarMCPTool
-    assert factory.provider_config_key == OAuthProvider.GOOGLE_CALENDAR
+    assert factory.oauth_bindings == [
+        ("oauth_connection_id", OAuthProvider.GOOGLE_CALENDAR, "access_token"),
+    ]
     assert factory.constructor_method == "from_access_token"
 
 
