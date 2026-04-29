@@ -1,6 +1,5 @@
 import { type ComputedRef, type Ref, computed, ref, watch } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
-import { v4 as uuidv4 } from 'uuid'
 import type { SubcomponentInfo } from '@/components/studio/data/component-definitions'
 import {
   EXCLUDED_PARAM_NAMES,
@@ -11,11 +10,41 @@ import {
   normalizeUiComponent,
 } from '@/components/studio/components/edit-sidebar/types'
 import type { FormDataShape } from '@/components/studio/components/edit-sidebar/form-initializer'
-import { createNodeData, processToolsRecursively } from '@/components/studio/utils/node-factory.utils'
+import {
+  type CreateComponentFn,
+  buildCreatePayload,
+  createNodeData,
+  processToolsRecursively,
+} from '@/components/studio/utils/node-factory.utils'
 import { parseJsonStringToJsonBuild, transformConditionsToJsonBuild } from '@/composables/useFieldExpressions'
 import { getComponentDefinitionFromCache } from '@/composables/queries/useComponentDefinitionsQuery'
 import { useNotifications } from '@/composables/useNotifications'
 import { logger } from '@/utils/logger'
+
+export interface AddToolsPayload {
+  nodes: Array<{
+    id: string
+    type: string
+    data: Record<string, unknown>
+    position: { x: number; y: number }
+  }>
+  relationships: Array<{
+    parent_component_instance_id: string
+    child_component_instance_id: string
+    parameter_name: string
+  }>
+}
+
+export interface RemoveToolPayload {
+  nodeIds: string[]
+  parentId: string
+}
+
+export type EditSidebarEmit = {
+  (event: 'save', component: Record<string, unknown>): void
+  (event: 'add-tools', payload: AddToolsPayload): void
+  (event: 'remove-tool', payload: RemoveToolPayload): void
+}
 
 export function useEditSidebarSubmit(
   componentData: ComputedRef<any>,
@@ -29,7 +58,8 @@ export function useEditSidebarSubmit(
     get: () => boolean
     set: (v: boolean) => void
   },
-  emit: (event: string, ...args: any[]) => void
+  emit: EditSidebarEmit,
+  createComponent?: CreateComponentFn
 ) {
   const { nodes, edges, removeEdges } = useVueFlow()
   const { notify } = useNotifications()
@@ -222,6 +252,15 @@ export function useEditSidebarSubmit(
   }
 
   async function processPendingToolAdditions() {
+    if (!createComponent) {
+      if (pendingToolChanges.value.toAdd.length > 0) {
+        logger.error('processPendingToolAdditions: createComponent callback not provided')
+        notify.error('Unable to add tools: the component creation callback is unavailable.')
+        throw new Error('Cannot process tool additions: createComponent callback not provided')
+      }
+      return
+    }
+
     for (const toolId of pendingToolChanges.value.toAdd) {
       const toolDef = getComponentDefinitionFromCache(componentDefinitions.value, toolId)
       if (!toolDef) continue
@@ -232,7 +271,9 @@ export function useEditSidebarSubmit(
 
       if (!subcompInfo) continue
 
-      const mainNodeId = uuidv4()
+      const payload = buildCreatePayload(toolDef, toolDef.name)
+      const response = await createComponent(payload)
+      const mainNodeId = response.instance_id
 
       const mainNode = {
         id: mainNodeId,
@@ -250,9 +291,10 @@ export function useEditSidebarSubmit(
       const requiredTools = toolDef.subcomponents_info?.filter((tool: any) => !tool.is_optional) || []
       if (requiredTools.length > 0) {
         const { nodes: toolNodes, relationships } = await processToolsRecursively(
-          mainNode.id,
+          mainNodeId,
           requiredTools,
           componentDefinitions.value,
+          createComponent,
           { filterRequired: true }
         )
 
@@ -261,7 +303,7 @@ export function useEditSidebarSubmit(
           relationships: [
             {
               parent_component_instance_id: componentData.value.id,
-              child_component_instance_id: mainNode.id,
+              child_component_instance_id: mainNodeId,
               parameter_name: subcompInfo.parameter_name,
             },
             ...relationships,
@@ -273,7 +315,7 @@ export function useEditSidebarSubmit(
           relationships: [
             {
               parent_component_instance_id: componentData.value.id,
-              child_component_instance_id: mainNode.id,
+              child_component_instance_id: mainNodeId,
               parameter_name: subcompInfo.parameter_name,
             },
           ],

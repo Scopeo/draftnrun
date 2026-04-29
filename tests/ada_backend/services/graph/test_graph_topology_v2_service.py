@@ -11,6 +11,8 @@ from ada_backend.schemas.pipeline.graph_schema import (
 )
 from ada_backend.services.graph.graph_topology_v2_service import sync_graph_topology
 
+_M = "ada_backend.services.graph.graph_topology_v2_service"
+
 
 @pytest.fixture
 def session():
@@ -23,11 +25,12 @@ def graph_runner_id():
 
 
 class TestSyncGraphTopology:
-    @patch("ada_backend.services.graph.graph_topology_v2_service.upsert_edge")
-    @patch("ada_backend.services.graph.graph_topology_v2_service.get_edges")
-    @patch("ada_backend.services.graph.graph_topology_v2_service.upsert_component_node")
-    @patch("ada_backend.services.graph.graph_topology_v2_service.get_component_nodes")
-    @patch("ada_backend.services.graph.graph_topology_v2_service.graph_runner_exists")
+    @patch(f"{_M}._ensure_canonical_expressions_for_edges", return_value=[])
+    @patch(f"{_M}.upsert_edge")
+    @patch(f"{_M}.get_edges")
+    @patch(f"{_M}.upsert_component_node")
+    @patch(f"{_M}.get_component_nodes")
+    @patch(f"{_M}.graph_runner_exists")
     def test_syncs_edges_and_nodes(
         self,
         mock_gr_exists,
@@ -35,6 +38,7 @@ class TestSyncGraphTopology:
         mock_upsert_node,
         mock_get_edges,
         mock_upsert_edge,
+        mock_ensure_canonical,
         session,
         graph_runner_id,
     ):
@@ -65,8 +69,9 @@ class TestSyncGraphTopology:
 
         assert mock_upsert_node.call_count == 2
         mock_upsert_edge.assert_called_once()
+        mock_ensure_canonical.assert_called_once()
 
-    @patch("ada_backend.services.graph.graph_topology_v2_service.get_component_nodes")
+    @patch(f"{_M}.get_component_nodes")
     def test_raises_on_missing_node(self, mock_get_nodes, session, graph_runner_id):
         mock_get_nodes.return_value = []
 
@@ -75,12 +80,20 @@ class TestSyncGraphTopology:
         with pytest.raises(ValueError, match="do not exist in graph"):
             sync_graph_topology(session, graph_runner_id, nodes=nodes, edges=[], relationships=[])
 
-    @patch("ada_backend.services.graph.graph_topology_v2_service.delete_edge")
-    @patch("ada_backend.services.graph.graph_topology_v2_service.get_edges")
-    @patch("ada_backend.services.graph.graph_topology_v2_service.upsert_component_node")
-    @patch("ada_backend.services.graph.graph_topology_v2_service.get_component_nodes")
+    @patch(f"{_M}._ensure_canonical_expressions_for_edges", return_value=[])
+    @patch(f"{_M}.delete_edge")
+    @patch(f"{_M}.get_edges")
+    @patch(f"{_M}.upsert_component_node")
+    @patch(f"{_M}.get_component_nodes")
     def test_deletes_removed_edges(
-        self, mock_get_nodes, mock_upsert_node, mock_get_edges, mock_del_edge, session, graph_runner_id
+        self,
+        mock_get_nodes,
+        mock_upsert_node,
+        mock_get_edges,
+        mock_del_edge,
+        mock_ensure_canonical,
+        session,
+        graph_runner_id,
     ):
         id_a = uuid4()
         node_a = MagicMock()
@@ -97,14 +110,13 @@ class TestSyncGraphTopology:
 
         mock_del_edge.assert_called_once_with(session, old_edge.id)
 
-    @patch("ada_backend.services.graph.graph_topology_v2_service.upsert_sub_component_input")
-    @patch(
-        "ada_backend.services.graph.graph_topology_v2_service.get_component_parameter_definition_by_component_version"
-    )
-    @patch("ada_backend.services.graph.graph_topology_v2_service.get_component_instance_by_id")
-    @patch("ada_backend.services.graph.graph_topology_v2_service.get_edges")
-    @patch("ada_backend.services.graph.graph_topology_v2_service.upsert_component_node")
-    @patch("ada_backend.services.graph.graph_topology_v2_service.get_component_nodes")
+    @patch(f"{_M}._ensure_canonical_expressions_for_edges", return_value=[])
+    @patch(f"{_M}.upsert_sub_component_input")
+    @patch(f"{_M}.get_component_parameter_definition_by_component_version")
+    @patch(f"{_M}.get_component_instance_by_id")
+    @patch(f"{_M}.get_edges")
+    @patch(f"{_M}.upsert_component_node")
+    @patch(f"{_M}.get_component_nodes")
     def test_syncs_relationships(
         self,
         mock_get_nodes,
@@ -113,6 +125,7 @@ class TestSyncGraphTopology:
         mock_get_inst,
         mock_get_param_defs,
         mock_upsert_sub,
+        mock_ensure_canonical,
         session,
         graph_runner_id,
     ):

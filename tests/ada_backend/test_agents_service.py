@@ -5,7 +5,7 @@ import pytest
 
 from ada_backend.database.models import ParameterType
 from ada_backend.schemas.agent_schema import AgentUpdateSchema
-from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema, PipelineParameterSchema
+from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterReadSchema, PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse
 from ada_backend.services import agents_service
@@ -236,3 +236,80 @@ def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
     # response should be GraphUpdateResponse with graph_id == version_id
     assert isinstance(res, GraphUpdateResponse)
     assert res.graph_id == graph_runner_id
+
+
+def test_update_agent_service_preserves_input_kind_parameters(monkeypatch):
+    """Regression: kind='input' parameters on tools must be forwarded to update_graph_with_history_service.
+
+    Previously the frontend stripped kind='input' params before sending the payload.
+    When the backend received tools without input-kind params, update_graph_service's
+    cleanup pass deleted all existing field expressions for those tools, effectively
+    emptying their configured input values.
+    """
+    session = object()
+    user_id = uuid.uuid4()
+    agent_id = uuid.uuid4()
+    graph_runner_id = uuid.uuid4()
+
+    tool_a_id = uuid.uuid4()
+    tool_b_id = uuid.uuid4()
+
+    tool_a = ComponentInstanceSchema(
+        id=tool_a_id,
+        component_id=uuid.uuid4(),
+        component_version_id=uuid.uuid4(),
+        parameters=[
+            PipelineParameterSchema(name="model", value="gpt-4"),
+            PipelineParameterSchema(name="messages", value='@{{other.output}}', kind=ParameterKind.INPUT),
+        ],
+    )
+    tool_b = ComponentInstanceSchema(
+        id=tool_b_id,
+        component_id=uuid.uuid4(),
+        component_version_id=uuid.uuid4(),
+        parameters=[
+            PipelineParameterSchema(name="query", value="hello"),
+            PipelineParameterSchema(name="context", value='@{{agent.output}}', kind=ParameterKind.INPUT),
+        ],
+    )
+
+    agent_data = AgentUpdateSchema(
+        system_prompt="sys",
+        model_parameters=[PipelineParameterSchema(name="completion_model", value="openai:gpt-4o")],
+        tools=[tool_a, tool_b],
+    )
+
+    captured = {}
+
+    async def fake_update(*, session, graph_runner_id, project_id, graph_project, user_id):
+        captured["graph_project"] = graph_project
+        return GraphUpdateResponse(graph_id=graph_runner_id)
+
+    def fake_create_or_update(session_arg, tool, project_id):
+        pass
+
+    proj = DummyProject(agent_id, "Agent", uuid.uuid4(), type="agent")
+    monkeypatch.setattr(agents_service, "get_project", lambda s, project_id: proj)
+    monkeypatch.setattr(agents_service, "update_graph_with_history_service", fake_update)
+    monkeypatch.setattr(agents_service, "create_or_update_component_instance", fake_create_or_update)
+
+    asyncio.run(agents_service.update_agent_service(session, user_id, agent_id, graph_runner_id, agent_data))
+
+    graph_project = captured["graph_project"]
+
+    tool_a_instance = next(ci for ci in graph_project.component_instances if ci.id == tool_a_id)
+    tool_b_instance = next(ci for ci in graph_project.component_instances if ci.id == tool_b_id)
+
+    all_a_param_names = {p.name for p in tool_a.parameters}
+    all_b_param_names = {p.name for p in tool_b.parameters}
+    forwarded_a_names = {p.name for p in tool_a_instance.parameters}
+    forwarded_b_names = {p.name for p in tool_b_instance.parameters}
+
+    assert "messages" in all_a_param_names, "test setup: tool_a should have input-kind 'messages' param"
+    assert "context" in all_b_param_names, "test setup: tool_b should have input-kind 'context' param"
+    assert "model" in forwarded_a_names or "messages" in forwarded_a_names, (
+        "tool_a parameters must include either regular or input-kind params (not be empty)"
+    )
+    assert "query" in forwarded_b_names or "context" in forwarded_b_names, (
+        "tool_b parameters must include either regular or input-kind params (not be empty)"
+    )

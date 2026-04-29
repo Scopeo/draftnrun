@@ -23,7 +23,7 @@ from ada_backend.schemas.components_schema import (
 )
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO, ParameterKind
 from ada_backend.services.errors import EntityInUseDeletionError
-from ada_backend.services.parameter_synthesis_utils import filter_conflicting_parameters
+from ada_backend.services.parameter_synthesis_utils import filter_conflicting_parameters, sort_parameters
 from ada_backend.services.tool_description_generator import sanitize_tool_name
 
 LOGGER = logging.getLogger(__name__)
@@ -91,14 +91,7 @@ def _process_components_with_ports(
                 )
             )
 
-        # TODO: Temporary patch to ensure 'messages' appears first. Clean later.
-        component.parameters.sort(
-            key=lambda p: (
-                0 if p.name == "messages" else 1,
-                p.display_order if p.display_order is not None else 999,
-                p.name,
-            )
-        )
+        sort_parameters(component.parameters)
 
     categories = get_all_categories(session)
     categories_list = [

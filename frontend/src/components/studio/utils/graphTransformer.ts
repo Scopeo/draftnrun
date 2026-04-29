@@ -1,49 +1,35 @@
 import { Position } from '@vue-flow/core'
-import type { ComponentDefinition, Integration } from '../data/component-definitions'
+import type { ComponentDefinition } from '../data/component-definitions'
 import type { Edge } from '../types/edge.types'
-import type { ApiComponentInstance, ApiEdge, ApiRelationship, GraphData } from '../types/graph.types'
+import type {
+  ApiComponentInstance,
+  ApiEdge,
+  ApiRelationship,
+  ComponentUpdateV2Data,
+  GraphData,
+  GraphV2Response,
+  TopologyUpdateV2Data,
+} from '../types/graph.types'
 import type { Node, NodeData, Parameter, ToolDescription } from '../types/node.types'
 import { createComponentDefinitionMap } from './componentLookup'
 import { isRouterComponent } from './routerDetection'
 import { generateRouterOutputs } from './routerTransformer'
 import { logger } from '@/utils/logger'
 
-// Update Edge data interface to include order property
-interface EnhancedEdgeData {
-  parameter?: string
-  order?: number
-}
-
-// Extended node data interface
-interface EnhancedNodeData extends NodeData {
-  positionedByUser?: boolean
-  can_use_function_calling?: boolean
-  function_callable?: boolean
-  tools?: any[]
-  component_name?: string
-  component_description?: string
-  is_start_node?: boolean
-  subcomponents_info?: any[]
-  tool_parameter_name?: string | null
-  integration?: Integration
-}
-
 // Type for graphTransformer to avoid circular reference
 interface GraphTransformerType {
   toFlow: (apiData: GraphData, componentDefinitions?: ComponentDefinition[]) => { nodes: Node[]; edges: Edge[] }
-  fromFlow: (flowData: { nodes: Node[]; edges: Edge[] }) => {
-    component_instances: ApiComponentInstance[]
-    relationships: ApiRelationship[]
-    edges: ApiEdge[]
-  }
-  prepareGraphDataForSave: (
-    nodes: Node[],
-    edges: Edge[]
-  ) => {
-    component_instances: ApiComponentInstance[]
-    relationships: ApiRelationship[]
-    edges: ApiEdge[]
-  }
+  prepareTopologyForSaveV2: (nodes: Node[], edges: Edge[]) => TopologyUpdateV2Data
+  extractComponentUpdateV2: (node: Node) => ComponentUpdateV2Data
+  mergeV2Topology: (
+    existingNodes: Node[],
+    existingEdges: Edge[],
+    v2Response: GraphV2Response
+  ) => { nodes: Node[]; edges: Edge[]; unknownNodeIds: string[] }
+  transformSingleInstanceData: (
+    instance: ApiComponentInstance,
+    componentDefinitions?: ComponentDefinition[]
+  ) => Record<string, any>
 }
 
 export const graphTransformer: GraphTransformerType = {
@@ -340,212 +326,400 @@ export const graphTransformer: GraphTransformerType = {
     return { nodes, edges }
   },
 
-  // Convert VueFlow format back to API format
-  fromFlow(flowData: { nodes: Node[]; edges: Edge[]; playgroundConfig?: any }) {
-    // Ensure nodes passed to this function have valid positions
-    const nodesWithPosition = flowData.nodes.map(node => ({
-      ...node,
-      position: node.position ?? { x: 0, y: 0 }, // Ensure position exists TODO: Check if this is not preventing edges cases
-    }))
-
-    // Calculate is_start_node: a component is a start node if it has no incoming left-handle connections
+  /**
+   * Prepare topology-only payload for V2 PUT /map.
+   * Converts VueFlow nodes/edges into the V2 topology format
+   * ({nodes, edges with from/to refs, relationships with parent/child refs}).
+   */
+  prepareTopologyForSaveV2(nodes: Node[], edges: Edge[]): TopologyUpdateV2Data {
     const targetNodeIdsWithLeftConnection = new Set(
-      flowData.edges.filter(edge => edge.targetHandle === 'left').map(edge => edge.target)
+      edges.filter(edge => edge.targetHandle === 'left').map(edge => edge.target)
     )
 
-    // --- Calculate relationship order ---
-    const relationshipEdges = flowData.edges.filter(
+    const topologyNodes = nodes.map(node => {
+      const isStartNode =
+        node.type === 'component' ? !targetNodeIdsWithLeftConnection.has(node.id) : (node.data?.is_start_node ?? false)
+      return {
+        instance_id: node.id,
+        label: node.data?.name || node.data?.label || null,
+        is_start_node: isStartNode,
+      }
+    })
+
+    const topologyEdges = edges
+      .filter(
+        edge =>
+          (edge.sourceHandle === 'right' && edge.targetHandle === 'left') ||
+          (/^\d+$/.test(edge.sourceHandle || '') && edge.targetHandle === 'left')
+      )
+      .map(edge => {
+        let edgeOrder = edge.order ?? null
+        if (edgeOrder === null && /^\d+$/.test(edge.sourceHandle || '')) {
+          edgeOrder = parseInt(edge.sourceHandle!, 10)
+        }
+        return {
+          id: edge.id,
+          from: { id: edge.source },
+          to: { id: edge.target },
+          order: edgeOrder,
+        }
+      })
+
+    const relationshipEdges = edges.filter(
       edge => edge.sourceHandle === 'bottom' && edge.targetHandle === 'top'
     )
 
     const parentChildMap = new Map<string, Edge[]>()
-
-    // Group children by parent
     relationshipEdges.forEach(edge => {
       const children = parentChildMap.get(edge.source) || []
-
       children.push(edge)
       parentChildMap.set(edge.source, children)
     })
 
-    // Assign order within each parent group
-    const edgeOrderMap = new Map<string, number | null>()
-
-    parentChildMap.forEach((childEdges, parentId) => {
-      // Get parent node to check its static subcomponents definition
-      const parentNode = flowData.nodes.find(n => n.id === parentId)
-
-      // Assuming subcomponents_info holds definition IDs of static subcomponents
+    const topologyRelationships = relationshipEdges.map(edge => {
+      const parentNode = nodes.find(n => n.id === edge.source)
+      const childNode = nodes.find(n => n.id === edge.target)
       const staticSubcomponentDefIds = new Set(
-        (parentNode?.data?.subcomponents_info || []).map(sub => sub.component_version_id)
+        (parentNode?.data?.subcomponents_info || []).map((sub: any) => sub.component_version_id)
       )
+      const childComponentDefId = childNode?.data?.component_version_id
+      const isStaticSubcomponent = childComponentDefId && staticSubcomponentDefIds.has(childComponentDefId)
 
-      const toolEdges: Edge[] = [] // Collect edges representing tools
+      let order: number | null = null
+      if (!isStaticSubcomponent) {
+        const siblings = parentChildMap.get(edge.source) || []
+        const toolSiblings = siblings.filter(e => {
+          const cn = nodes.find(n => n.id === e.target)
+          return !(cn?.data?.component_version_id && staticSubcomponentDefIds.has(cn.data.component_version_id))
+        })
+        toolSiblings.sort((a, b) => {
+          const yA = nodes.find(n => n.id === a.target)?.position?.y ?? 0
+          const yB = nodes.find(n => n.id === b.target)?.position?.y ?? 0
+          return yA - yB
+        })
+        order = toolSiblings.findIndex(e => e.id === edge.id)
+        if (order === -1) order = null
+      }
 
-      childEdges.forEach(edge => {
-        // Find the child node instance
-
-        const childNode = flowData.nodes.find(n => n.id === edge.target)
-        const childComponentDefId = childNode?.data?.component_version_id
-
-        // Check if the child's component definition ID is in the parent's static list
-        if (childComponentDefId && staticSubcomponentDefIds.has(childComponentDefId)) {
-          // It's a static subcomponent, order should be null
-          edgeOrderMap.set(edge.id, null)
-        } else {
-          // It's not found in the static list, treat as a tool
-          toolEdges.push(edge)
-        }
-      })
-
-      // Sort and assign numerical order only to the identified tool edges
-      toolEdges.sort((a, b) => {
-        const nodeA = flowData.nodes.find(n => n.id === a.target)
-        const nodeB = flowData.nodes.find(n => n.id === b.target)
-        const yA = nodeA?.position?.y ?? 0
-        const yB = nodeB?.position?.y ?? 0
-
-        return yA - yB
-      })
-
-      toolEdges.forEach((edge, index) => {
-        // Assign 0, 1, 2... order to tools
-        edgeOrderMap.set(edge.id, index)
-      })
+      return {
+        parent: { id: edge.source },
+        child: { id: edge.target },
+        parameter_name: edge.parameter_name || edge.data?.parameter_name || 'agent_tools',
+        order,
+      }
     })
 
-    // --- End Calculate relationship order ---
-
-    const result: any = {
-      component_instances: nodesWithPosition.map(node => {
-        const nodeData = (node.data || {}) as EnhancedNodeData
-
-        // Create a clean copy of the tool_description to avoid issues with proxies
-        // Note: tool_properties and required_tool_properties are generated by backend from port_configurations
-        // Do NOT send these fields - backend generates them automatically
-        const toolDescription = nodeData.tool_description
-          ? {
-              name: nodeData.tool_description.name || '',
-              description: nodeData.tool_description.description || '',
-            }
-          : undefined
-
-        // Map parameters carefully, ensuring properties exist
-        const parameters = (nodeData.parameters || []).map((param: Parameter) => {
-          // Convert empty strings and "None" to null when sending to backend
-          let value = param.value
-          if (value === '' || value === 'None') value = null
-
-          return {
-            name: param.name,
-            value,
-            order: param.display_order ?? null,
-            type: param.type ?? typeof param.value, // Use type from param or infer
-            nullable: param.nullable ?? false,
-            default: param.default, // Include default if needed by backend
-            ui_component: param.ui_component ?? null,
-            ui_component_properties: param.ui_component_properties ?? null,
-            is_advanced: param.is_advanced ?? false,
-            parameter_group_id: param.parameter_group_id ?? null,
-            parameter_order_within_group: param.parameter_order_within_group ?? null,
-            parameter_group_name: param.parameter_group_name ?? null,
-            kind: param.kind ?? 'parameter',
-            is_tool_input: param.is_tool_input ?? true,
-          }
-        })
-
-        // Calculate is_start_node: component nodes without incoming left-handle connections are start nodes
-        const isStartNode =
-          node.type === 'component' ? !targetNodeIdsWithLeftConnection.has(node.id) : (nodeData.is_start_node ?? false)
-
-        return {
-          id: node.id,
-          ref: nodeData.ref || '', // Provide default empty string
-          name: nodeData.name || '', // Provide default empty string
-          component_id: nodeData.component_id,
-          component_version_id: nodeData.component_version_id, // Include component_version_id from node data
-          is_agent: nodeData.is_agent ?? false,
-          is_start_node: isStartNode,
-          component_name: nodeData.component_name || nodeData.name,
-          component_description: nodeData.component_description || '',
-          can_use_function_calling: nodeData.can_use_function_calling ?? false,
-          function_callable: nodeData.function_callable ?? false,
-          tool_parameter_name: nodeData.tool_parameter_name ?? null, // Include this
-          tools: nodeData.tools || [],
-          icon: nodeData.icon || null,
-          subcomponents_info: nodeData.subcomponents_info || [],
-          parameters, // Use mapped parameters
-          tool_description: toolDescription,
-          ...(nodeData.integration && { integration: nodeData.integration }),
-          // Include field_expressions only if they exist AND are not empty
-          ...((nodeData as any).field_expressions &&
-            Array.isArray((nodeData as any).field_expressions) &&
-            (nodeData as any).field_expressions.length > 0 && {
-              field_expressions: (nodeData as any).field_expressions,
-            }),
-          // Include port_configurations even when empty so "discard all" persists
-          ...((nodeData as any).port_configurations &&
-            Array.isArray((nodeData as any).port_configurations) && {
-              port_configurations: (nodeData as any).port_configurations,
-            }),
-          // Only include position if it was originally set by the user
-          position: nodeData.positionedByUser ? node.position : null,
-        }
-      }),
-      relationships: relationshipEdges // Use the original filtered list for mapping
-        .map(edge => ({
-          parent_component_instance_id: edge.source,
-          child_component_instance_id: edge.target,
-          parameter_name: edge.parameter_name || edge.data?.parameter_name, // Check both places
-          // Get the calculated order (null for subcomponents, 0+ for tools)
-          order: edgeOrderMap.get(edge.id) ?? null,
-        })),
-      edges: flowData.edges
-        .filter(
-          edge =>
-            // Include regular component-to-component edges
-            (edge.sourceHandle === 'right' && edge.targetHandle === 'left') ||
-            // Include router output edges (numeric handles: 0, 1, 2, etc.)
-            (/^\d+$/.test(edge.sourceHandle || '') && edge.targetHandle === 'left')
-        )
-        .map(edge => {
-          // Calculate order from sourceHandle for router edges if not already set
-          let edgeOrder = edge.order ?? null
-          if (edgeOrder === null && /^\d+$/.test(edge.sourceHandle || '')) {
-            edgeOrder = parseInt(edge.sourceHandle!, 10)
-          }
-
-          return {
-            id: edge.id,
-            origin: edge.source,
-            destination: edge.target,
-            parameter_name: edge.parameter_name || edge.data?.parameter_name,
-            order: edgeOrder,
-          }
-        }),
+    return {
+      nodes: topologyNodes,
+      edges: topologyEdges,
+      relationships: topologyRelationships,
     }
-
-    if (flowData.playgroundConfig?.playground_input_schema) {
-      result.playground_input_schema = flowData.playgroundConfig.playground_input_schema
-    }
-    if (flowData.playgroundConfig?.playground_field_types) {
-      result.playground_field_types = flowData.playgroundConfig.playground_field_types
-    }
-
-    return result
   },
 
   /**
-   * Prepare graph data for saving — delegates transformation to fromFlow()
+   * Extract V2 component update payload from a VueFlow node.
+   * Used for PUT /v2/.../components/{instance_id}.
    */
-  prepareGraphDataForSave(
-    nodes: Node[],
-    edges: Edge[]
-  ): {
-    component_instances: ApiComponentInstance[]
-    relationships: ApiRelationship[]
-    edges: ApiEdge[]
-  } {
-    return graphTransformer.fromFlow({ nodes, edges })
+  extractComponentUpdateV2(node: Node): ComponentUpdateV2Data {
+    const nodeData = (node.data || {}) as any
+
+    const handledFieldExprNames = new Set<string>()
+
+    const parameters = (nodeData.parameters || []).map((param: any) => {
+      let value = param.value
+      if (value === '' || value === 'None') value = null
+
+      if ((param.kind ?? 'parameter') === 'input') {
+        handledFieldExprNames.add(param.name)
+      }
+
+      return {
+        name: param.name,
+        value,
+        order: param.display_order ?? null,
+        type: param.type ?? typeof param.value,
+        nullable: param.nullable ?? false,
+        default: param.default,
+        ui_component: param.ui_component ?? null,
+        ui_component_properties: param.ui_component_properties ?? null,
+        is_advanced: param.is_advanced ?? false,
+        parameter_group_id: param.parameter_group_id ?? null,
+        parameter_order_within_group: param.parameter_order_within_group ?? null,
+        parameter_group_name: param.parameter_group_name ?? null,
+        kind: param.kind ?? 'parameter',
+        is_tool_input: param.is_tool_input ?? true,
+      }
+    })
+
+    if (nodeData.field_expressions && Array.isArray(nodeData.field_expressions)) {
+      for (const fe of nodeData.field_expressions) {
+        if (handledFieldExprNames.has(fe.field_name)) continue
+        const exprJson = fe.expression_json ?? fe.expression_text
+        if (exprJson) {
+          parameters.push({
+            name: fe.field_name,
+            value: exprJson,
+            order: null,
+            type: 'string',
+            nullable: true,
+            default: null,
+            ui_component: null,
+            ui_component_properties: null,
+            is_advanced: false,
+            parameter_group_id: null,
+            parameter_order_within_group: null,
+            parameter_group_name: null,
+            kind: 'input',
+            is_tool_input: true,
+          })
+        }
+      }
+    }
+
+    const toolDescription = nodeData.tool_description
+      ? nodeData.tool_description.description || null
+      : null
+
+    return {
+      parameters,
+      input_port_instances: [],
+      port_configurations: nodeData.port_configurations || null,
+      integration: nodeData.integration || null,
+      tool_description_override: toolDescription,
+      label: nodeData.name || null,
+    }
+  },
+
+  /**
+   * Merge a V2 topology response into existing VueFlow nodes/edges.
+   * Preserves full component data (parameters, field expressions, etc.)
+   * while updating topology (edges, relationships, node metadata).
+   */
+  mergeV2Topology(
+    existingNodes: Node[],
+    existingEdges: Edge[],
+    v2Response: GraphV2Response
+  ): { nodes: Node[]; edges: Edge[]; unknownNodeIds: string[] } {
+    const { graph_map } = v2Response
+    const existingNodeMap = new Map(existingNodes.map(n => [n.id, n]))
+
+    const unknownNodeIds: string[] = []
+    const mergedNodes: Node[] = []
+
+    for (const v2Node of graph_map.nodes) {
+      const nodeId = v2Node.instance_id!
+      const existing = existingNodeMap.get(nodeId)
+      if (existing) {
+        mergedNodes.push({
+          ...existing,
+          data: {
+            ...existing.data,
+            name: v2Node.label ?? existing.data?.name,
+            is_start_node: v2Node.is_start_node ?? existing.data?.is_start_node,
+          },
+        })
+      } else {
+        unknownNodeIds.push(nodeId)
+        logger.warn(`[mergeV2Topology] Node ${nodeId} not found in existing nodes — full graph reload required`)
+      }
+    }
+
+    const v2NodeIds = new Set(graph_map.nodes.map(n => n.instance_id))
+
+    const componentEdges: Edge[] = (graph_map.edges || []).map(v2Edge => {
+      const sourceId = v2Edge.from?.id || ''
+      const targetId = v2Edge.to?.id || ''
+      const sourceNode = mergedNodes.find(n => n.id === sourceId)
+      let sourceHandle = 'right'
+      if (sourceNode?.type === 'router' && v2Edge.order !== null && v2Edge.order !== undefined) {
+        sourceHandle = String(v2Edge.order)
+      }
+      return {
+        id: v2Edge.id || `e-${sourceId}-${targetId}`,
+        source: sourceId,
+        target: targetId,
+        type: 'smoothstep',
+        animated: true,
+        hidden: false,
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
+        sourceHandle,
+        targetHandle: 'left',
+        selectable: true,
+        deletable: true,
+        order: v2Edge.order ?? null,
+      }
+    })
+
+    const relationshipEdges: Edge[] = (graph_map.relationships || []).map(v2Rel => {
+      const parentId = v2Rel.parent?.id || ''
+      const childId = v2Rel.child?.id || ''
+      return {
+        id: `r-${parentId}-${childId}`,
+        source: parentId,
+        target: childId,
+        type: 'smoothstep',
+        animated: true,
+        hidden: false,
+        sourcePosition: Position.Bottom,
+        targetPosition: Position.Top,
+        sourceHandle: 'bottom',
+        targetHandle: 'top',
+        selectable: true,
+        deletable: true,
+        order: v2Rel.order ?? null,
+        parameter_name: v2Rel.parameter_name,
+        data: { parameter_name: v2Rel.parameter_name },
+      }
+    })
+
+    const relationshipChildIds = new Set((graph_map.relationships || []).map(r => r.child?.id).filter(Boolean))
+
+    const childToRelationship = new Map(
+      (graph_map.relationships || []).filter(r => r.child?.id).map(r => [r.child!.id!, r] as const)
+    )
+
+    for (const node of mergedNodes) {
+      if (relationshipChildIds.has(node.id)) {
+        if (node.type !== 'worker') {
+          node.type = 'worker'
+        }
+        const v2Rel = childToRelationship.get(node.id)!
+
+        node.data.parent_component_id = v2Rel.parent?.id || null
+        node.data.parameter_name = v2Rel.parameter_name
+        node.data.is_optional = true
+        node.data.is_required_tool = false
+      } else if (node.data) {
+        node.type = isRouterComponent(node.data) ? 'router' : 'component'
+        node.data.parent_component_id = null
+        node.data.parameter_name = undefined
+        node.data.is_optional = false
+        node.data.is_required_tool = false
+      }
+    }
+
+    return {
+      nodes: mergedNodes.filter(n => v2NodeIds.has(n.id)),
+      edges: [...componentEdges, ...relationshipEdges],
+      unknownNodeIds,
+    }
+  },
+
+  transformSingleInstanceData(
+    instance: ApiComponentInstance,
+    componentDefinitions?: ComponentDefinition[]
+  ): Record<string, any> {
+    const componentDefMap = createComponentDefinitionMap(componentDefinitions)
+    const instanceAny = instance as any
+
+    const {
+      id,
+      ref,
+      name,
+      component_id,
+      component_version_id,
+      parameters = [],
+      tool_description,
+      inputs = [],
+      outputs = [],
+      tools = [],
+    } = instance
+
+    const componentDef =
+      componentDefMap.get(component_version_id) || componentDefMap.get(component_id) || componentDefMap.get(id)
+
+    const formattedParameters: Parameter[] = parameters.map(param => {
+      let finalValue = param.value
+
+      if (finalValue === '[JSON_BUILD]' && Array.isArray(instanceAny.field_expressions)) {
+        const fieldExpr = instanceAny.field_expressions.find((expr: any) => expr.field_name === param.name)
+        if (fieldExpr?.expression_json) {
+          finalValue = fieldExpr.expression_json
+        }
+      }
+
+      if (finalValue === null && param.nullable === false && param.default != null) finalValue = param.default
+      else if (param.type === 'boolean' && finalValue == null) finalValue = param.default ?? false
+
+      let groupId = (param as any).parameter_group_id ?? null
+      let groupOrder = (param as any).parameter_order_within_group ?? null
+      let groupName = (param as any).parameter_group_name ?? null
+      let displayOrder = (param as any).display_order ?? (param as any).order ?? null
+
+      if ((!groupId || displayOrder == null) && componentDef?.parameters) {
+        const defParam = componentDef.parameters.find((p: any) => p.name === param.name)
+        if (defParam) {
+          if (!groupId) {
+            groupId = defParam.parameter_group_id ?? null
+            groupOrder = defParam.parameter_order_within_group ?? null
+            groupName = defParam.parameter_group_name ?? null
+          }
+          if (displayOrder == null && defParam.order != null) {
+            displayOrder = defParam.order
+          }
+        }
+      }
+
+      return {
+        name: param.name,
+        value: finalValue,
+        display_order: displayOrder,
+        type: param.type ?? typeof param.value,
+        nullable: param.nullable ?? false,
+        default: param.type === 'boolean' ? (param.default ?? false) : (param.default ?? null),
+        ui_component: param.ui_component ?? null,
+        ui_component_properties: param.ui_component_properties ?? null,
+        is_advanced: param.is_advanced ?? false,
+        parameter_group_id: groupId,
+        parameter_order_within_group: groupOrder,
+        parameter_group_name: groupName,
+        kind: (param.kind ?? 'parameter') as 'parameter' | 'input',
+        is_tool_input: param.is_tool_input ?? true,
+      }
+    })
+
+    const formattedToolDescription: ToolDescription | null = tool_description
+      ? {
+          name: tool_description.name,
+          description: tool_description.description,
+          tool_properties: tool_description.tool_properties || {},
+          required_tool_properties: tool_description.required_tool_properties || [],
+        }
+      : null
+
+    const isRouter = isRouterComponent(instance)
+    let finalOutputs = outputs
+    if (isRouter) {
+      const { outputs: routerOutputs, routesCount } = generateRouterOutputs(formattedParameters, outputs)
+      if (routesCount > 0) {
+        finalOutputs = routerOutputs
+      }
+    }
+
+    return {
+      id,
+      ref,
+      name: name || ref,
+      component_id,
+      component_version_id,
+      is_agent: instanceAny.is_agent ?? false,
+      parameters: formattedParameters,
+      tool_description: formattedToolDescription,
+      inputs,
+      outputs: finalOutputs,
+      can_use_function_calling: instanceAny.can_use_function_calling ?? false,
+      function_callable: instanceAny.function_callable ?? false,
+      tool_parameter_name: instanceAny.tool_parameter_name ?? null,
+      tools,
+      component_name: instanceAny.component_name || name,
+      component_description: instanceAny.component_description || '',
+      is_start_node: instanceAny.is_start_node ?? false,
+      subcomponents_info: instanceAny.subcomponents_info || [],
+      icon: instanceAny.icon || null,
+      ...(instanceAny.integration && { integration: instanceAny.integration }),
+      ...(instanceAny.field_expressions && { field_expressions: instanceAny.field_expressions }),
+      ...(instanceAny.port_configurations && { port_configurations: instanceAny.port_configurations }),
+    }
   },
 }

@@ -15,13 +15,22 @@ import type { Edge as StudioEdge } from '@/components/studio/types/edge.types'
 import type { Parameter } from '@/components/studio/types/node.types'
 import { isValidRouterConnection } from '@/components/studio/utils/connectionValidation'
 import { graphTransformer } from '@/components/studio/utils/graphTransformer'
-import { createNodeData, processToolsRecursively } from '@/components/studio/utils/node-factory.utils'
+import { buildCreatePayload, createNodeData, processToolsRecursively } from '@/components/studio/utils/node-factory.utils'
 import { isRouterComponent } from '@/components/studio/utils/routerDetection'
+import { useNotifications } from '@/composables/useNotifications'
 import { logger } from '@/utils/logger'
 import { scopeoApi } from '@/api'
 import { parseRoutes } from '@/utils/routeHelpers'
-import { useUpdateGraphMutation } from '@/composables/queries/useStudioQuery'
+import {
+  useCreateComponentV2Mutation,
+  useDeleteComponentV2Mutation,
+  useFetchComponentV2,
+  useFetchGraphV2,
+  useUpdateComponentV2Mutation,
+  useUpdateGraphTopologyV2Mutation,
+} from '@/composables/queries/useStudioQuery'
 import type { GraphRunner } from '@/composables/queries/useProjectsQuery'
+import type { ComponentCreateV2Data, GraphV2Response } from '@/components/studio/types/graph.types'
 
 type Edge = VueFlowEdge & { data?: any } & Record<string, any>
 
@@ -53,7 +62,13 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
   } = options
 
   const queryClient = useQueryClient()
-  const updateGraphMutation = useUpdateGraphMutation()
+  const updateTopologyV2Mutation = useUpdateGraphTopologyV2Mutation()
+  const { fetchGraphV2 } = useFetchGraphV2()
+  const { fetchComponentV2 } = useFetchComponentV2()
+  const createComponentV2Mutation = useCreateComponentV2Mutation()
+  const updateComponentV2Mutation = useUpdateComponentV2Mutation()
+  const deleteComponentV2Mutation = useDeleteComponentV2Mutation()
+  const { notify } = useNotifications()
 
   // ─── State ─────────────────────────────────────────────────────────
   const activeComponentId = ref<string | null>(null)
@@ -65,6 +80,7 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
   const showAllNodes = ref(false)
   const isLoadingGraph = ref(false)
   const isTransformingGraph = ref(false)
+  let pendingTopologyRefreshPid: string | null = null
 
   // ─── VueFlow ───────────────────────────────────────────────────────
   function checkConnectionValidity(connection: any): boolean {
@@ -402,6 +418,7 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
         }
 
         const graphRunnerId = currentGraphRunner.value.graph_runner_id
+        // TODO: replace V1 getGraph with V2 endpoint once all component data is available from V2
         const response = await scopeoApi.studio.getGraph(pid, graphRunnerId)
 
         sourceData = response
@@ -462,6 +479,50 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
     } finally {
       isLoadingGraph.value = false
       isTransformingGraph.value = false
+    }
+  }
+
+  // ─── V2 lightweight topology refresh (used by WS reload) ──────────
+  async function refreshGraphTopologyV2(pid: string) {
+    if (!currentGraphRunner.value) return
+
+    if (hasUnsavedChanges.value || isSaving.value) {
+      pendingTopologyRefreshPid = pid
+      return
+    }
+    pendingTopologyRefreshPid = null
+
+    const graphRunnerId = currentGraphRunner.value.graph_runner_id
+    try {
+      const v2Response: GraphV2Response = await fetchGraphV2(pid, graphRunnerId)
+
+      if (v2Response?.last_edited_time !== null && v2Response?.last_edited_time !== undefined) {
+        setGraphLastEditedInfo(
+          v2Response.last_edited_time,
+          v2Response.last_edited_user_id || null,
+          selectedOrgId.value || undefined
+        )
+      }
+
+      const { nodes: mergedNodes, edges: mergedEdges, unknownNodeIds } = graphTransformer.mergeV2Topology(
+        nodes.value,
+        edges.value as unknown as StudioEdge[],
+        v2Response
+      )
+
+      if (unknownNodeIds.length > 0) {
+        logger.info(
+          `V2 topology contains ${unknownNodeIds.length} unknown node(s), falling back to full graph load`,
+          { unknownNodeIds }
+        )
+        await loadGraphData(pid)
+        return
+      }
+
+      setNodes(mergedNodes as any)
+      setEdges(mergedEdges as unknown as GraphEdge[])
+    } catch (error) {
+      logger.error(`Error during V2 topology refresh for project ${pid}`, { error })
     }
   }
 
@@ -540,35 +601,42 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
     try {
       if (!currentGraphRunner.value) throw new Error('Cannot save graph: No graph runner selected.')
 
-      const apiData = graphTransformer.prepareGraphDataForSave(nodes.value, edges.value as StudioEdge[])
+      const pid = projectId.value
+      const runnerId = currentGraphRunner.value.graph_runner_id
 
-      const response = await updateGraphMutation.mutateAsync({
-        projectId: projectId.value,
-        graphRunnerId: currentGraphRunner.value.graph_runner_id,
-        data: apiData,
+      const topologyData = graphTransformer.prepareTopologyForSaveV2(nodes.value, edges.value as StudioEdge[])
+
+      const topologyResponse = await updateTopologyV2Mutation.mutateAsync({
+        projectId: pid,
+        graphRunnerId: runnerId,
+        data: topologyData,
       })
 
-      if (response?.playground_input_schema || response?.playground_field_types) {
+      if (topologyResponse?.playground_input_schema || topologyResponse?.playground_field_types) {
         const newConfig = {
-          ...(response.playground_input_schema && { playground_input_schema: response.playground_input_schema }),
-          ...(response.playground_field_types && { playground_field_types: response.playground_field_types }),
+          ...(topologyResponse.playground_input_schema && {
+            playground_input_schema: topologyResponse.playground_input_schema,
+          }),
+          ...(topologyResponse.playground_field_types && {
+            playground_field_types: topologyResponse.playground_field_types,
+          }),
         }
 
         setPlaygroundConfig(newConfig)
       }
 
-      if (response?.last_edited_time !== null && response?.last_edited_time !== undefined) {
+      if (topologyResponse?.last_edited_time !== null && topologyResponse?.last_edited_time !== undefined) {
         setGraphLastEditedInfo(
-          response.last_edited_time,
-          response.last_edited_user_id || null,
+          topologyResponse.last_edited_time,
+          topologyResponse.last_edited_user_id || null,
           selectedOrgId.value || undefined
         )
       }
 
-      applyAutoGeneratedFieldExpressions(response?.auto_generated_field_expressions)
+      applyAutoGeneratedFieldExpressions(topologyResponse?.auto_generated_field_expressions)
 
       queryClient.invalidateQueries({
-        queryKey: ['modification-history', projectId.value, currentGraphRunner.value?.graph_runner_id],
+        queryKey: ['modification-history', pid, runnerId],
       })
 
       hasUnsavedChanges.value = false
@@ -605,7 +673,7 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
     return descendantIds
   }
 
-  function handleNodeDelete(nodeData: any) {
+  async function handleNodeDelete(nodeData: any) {
     if (!isDraftMode.value) return
     const nodeId = nodeData.id
 
@@ -623,6 +691,24 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
     const descendantIds = getAllDescendantIds(nodeId)
     const allIdsToDelete = [nodeId, ...descendantIds]
 
+    if (currentGraphRunner.value) {
+      const pid = projectId.value
+      const runnerId = currentGraphRunner.value.graph_runner_id
+      const results = await Promise.allSettled(
+        allIdsToDelete.map(id =>
+          deleteComponentV2Mutation.mutateAsync({ projectId: pid, graphRunnerId: runnerId, instanceId: id })
+        )
+      )
+      const failures = results.filter(r => r.status === 'rejected')
+      if (failures.length > 0) {
+        logger.error(`Failed to delete ${failures.length}/${allIdsToDelete.length} component(s), reloading graph`, {
+          reasons: failures.map(f => (f as PromiseRejectedResult).reason),
+        })
+        await loadGraphData(pid)
+        return
+      }
+    }
+
     setNodes(nodes.value.filter(node => !allIdsToDelete.includes(node.id)))
     setEdges(edges.value.filter(edge => !allIdsToDelete.includes(edge.source) && !allIdsToDelete.includes(edge.target)))
 
@@ -636,9 +722,22 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
     markDirty()
   }
 
+  function createComponentOnServer(data: ComponentCreateV2Data) {
+    if (!currentGraphRunner.value) throw new Error('Cannot create component: No graph runner selected.')
+    return createComponentV2Mutation.mutateAsync({
+      projectId: projectId.value,
+      graphRunnerId: currentGraphRunner.value.graph_runner_id,
+      data,
+    })
+  }
+
   async function createNodeFromTemplate(template: any) {
-    const newInstanceId = uuidv4()
+    if (!currentGraphRunner.value) throw new Error('Cannot create node: No graph runner selected.')
+
     const isRouter = isRouterComponent(template)
+    const payload = buildCreatePayload(template, template.name)
+    const response = await createComponentOnServer(payload)
+    const newInstanceId = response.instance_id
 
     const mainNode = {
       id: newInstanceId,
@@ -654,9 +753,11 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
     let toolRelationships: any[] = []
 
     if (requiredTools.length > 0 && componentDefinitions.value) {
-      const result = await processToolsRecursively(newInstanceId, requiredTools, componentDefinitions.value, {
-        includeIconIntegration: true,
-      })
+      const result = await processToolsRecursively(
+        newInstanceId, requiredTools, componentDefinitions.value, createComponentOnServer, {
+          includeIconIntegration: true,
+        }
+      )
 
       toolNodes = result.nodes
       toolRelationships = result.relationships
@@ -665,8 +766,9 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
     return { nodes: [mainNode, ...toolNodes], relationships: toolRelationships }
   }
 
-  function addComponentToGraph(newNodeData: any, isToolMode: boolean) {
+  async function addComponentToGraph(newNodeData: any, isToolMode: boolean) {
     const parentNodeId = activeComponentId.value
+    let addedNodeIds: string[] = []
 
     if (Array.isArray(newNodeData.nodes) && newNodeData.nodes.length > 0) {
       const { nodes: newNodes, relationships: newRelationshipsFromDialog } = newNodeData
@@ -738,6 +840,7 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
       })
 
       addNodes(positionedNodes)
+      addedNodeIds = positionedNodes.map(n => n.id)
 
       const newEdges = finalRelationships.map((rel: any) => ({
         id: rel.id || uuidv4(),
@@ -759,7 +862,9 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
     } else {
       logger.warn('addComponentToGraph received unexpected data format', { data: newNodeData })
       if (newNodeData && !Array.isArray(newNodeData) && typeof newNodeData === 'object' && newNodeData.id) {
-        addNodes([positionNewNode(nodes.value, newNodeData)])
+        const positioned = positionNewNode(nodes.value, newNodeData)
+        addNodes([positioned])
+        addedNodeIds = [positioned.id]
         setTimeout(() => fitView({ padding: 0.4 }), 100)
       }
     }
@@ -775,12 +880,62 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
 
     updatedNodes[nodeIndex] = { ...nodes.value[nodeIndex], data } as GraphNode
     setNodes(updatedNodes)
-    markDirty()
 
     return updatedNodes[nodeIndex] as GraphNode
   }
 
-  function handleAddTools({ nodes: newNodes, relationships }: { nodes: any[]; relationships: any[] }) {
+  async function saveComponentV2(nodeId: string) {
+    if (!isDraftMode.value || isSaving.value) return
+    if (!currentGraphRunner.value) return
+
+    const node = nodes.value.find(n => n.id === nodeId)
+    if (!node) return
+
+    isSaving.value = true
+    saveError.value = null
+    validationStatus.value = 'saving'
+
+    try {
+      const pid = projectId.value
+      const runnerId = currentGraphRunner.value.graph_runner_id
+      const componentData = graphTransformer.extractComponentUpdateV2(node)
+      const response = await updateComponentV2Mutation.mutateAsync({
+        projectId: pid,
+        graphRunnerId: runnerId,
+        instanceId: nodeId,
+        data: componentData,
+      })
+
+      if (response?.last_edited_time !== null && response?.last_edited_time !== undefined) {
+        setGraphLastEditedInfo(
+          response.last_edited_time,
+          response.last_edited_user_id || null,
+          selectedOrgId.value || undefined
+        )
+      }
+
+      queryClient.invalidateQueries({
+        queryKey: ['modification-history', pid, runnerId],
+      })
+
+      validationStatus.value = 'just_saved'
+      saveError.value = null
+      if (validationResetTimeout) clearTimeout(validationResetTimeout)
+      validationResetTimeout = setTimeout(() => {
+        if (validationStatus.value === 'just_saved') validationStatus.value = 'valid'
+      }, 2000)
+    } catch (error: unknown) {
+      logger.error(`[StudioFlow] Error saving component ${nodeId}`, { error })
+      const message = error instanceof Error ? error.message : 'Failed to save component. Please try again.'
+      saveError.value = message
+      notify.error(message)
+      validationStatus.value = 'invalid'
+    } finally {
+      isSaving.value = false
+    }
+  }
+
+  async function handleAddTools({ nodes: newNodes, relationships }: { nodes: any[]; relationships: any[] }) {
     const positionedNodes = newNodes.map((node: any) => ({
       ...node,
       position: { x: 0, y: 0 },
@@ -812,10 +967,29 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
 
     setNodes(layoutedNodes)
     setEdges(layoutedEdges)
-    hasUnsavedChanges.value = true
+
+    markDirty()
   }
 
-  function handleRemoveTool({ nodeIds, parentId }: { nodeIds: string[]; parentId: string }) {
+  async function handleRemoveTool({ nodeIds, parentId }: { nodeIds: string[]; parentId: string }) {
+    if (currentGraphRunner.value) {
+      const pid = projectId.value
+      const runnerId = currentGraphRunner.value.graph_runner_id
+      const results = await Promise.allSettled(
+        nodeIds.map(id =>
+          deleteComponentV2Mutation.mutateAsync({ projectId: pid, graphRunnerId: runnerId, instanceId: id })
+        )
+      )
+      const failures = results.filter(r => r.status === 'rejected')
+      if (failures.length > 0) {
+        logger.error(`Failed to delete ${failures.length}/${nodeIds.length} tool(s), reloading graph`, {
+          reasons: failures.map(f => (f as PromiseRejectedResult).reason),
+        })
+        await loadGraphData(pid)
+        return
+      }
+    }
+
     setNodes(nodes.value.filter(node => !nodeIds.includes(node.id)))
     setEdges(
       edges.value.filter(edge => {
@@ -840,7 +1014,7 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
 
     setNodes(layoutedNodes)
     setEdges(layoutedEdges)
-    hasUnsavedChanges.value = true
+    markDirty()
   }
 
   // ─── Layout ────────────────────────────────────────────────────────
@@ -921,6 +1095,49 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
     return { ...fullNode, data: { ...fullNode.data, canEditToolDescription } } as GraphNode
   }
 
+  async function refreshNodeFromServer(nodeId: string): Promise<GraphNode | null> {
+    if (!currentGraphRunner.value) return null
+
+    const existingNode = nodes.value.find(n => n.id === nodeId)
+    if (!existingNode) return null
+
+    try {
+      const response = await fetchComponentV2(
+        projectId.value,
+        currentGraphRunner.value.graph_runner_id,
+        nodeId
+      )
+
+      const freshData = graphTransformer.transformSingleInstanceData(
+        response.component_instance,
+        componentDefinitions.value
+      )
+
+      const structuralFields = {
+        parent_component_id: existingNode.data?.parent_component_id,
+        parent_info: existingNode.data?.parent_info,
+        is_required_tool: existingNode.data?.is_required_tool,
+        is_optional: existingNode.data?.is_optional,
+        parameter_name: existingNode.data?.parameter_name,
+        positionedByUser: existingNode.data?.positionedByUser,
+        label: existingNode.data?.label,
+      }
+
+      const mergedData = { ...freshData, ...structuralFields }
+
+      const updatedNodes = nodes.value.map(n =>
+        n.id === nodeId ? { ...n, data: mergedData } as GraphNode : n
+      )
+      setNodes(updatedNodes)
+
+      return getEnhancedNode(nodeId)
+    } catch (error) {
+      logger.error(`Failed to refresh node ${nodeId} from server`, { error })
+      notify.error('Could not refresh component; showing cached data.')
+      return getEnhancedNode(nodeId)
+    }
+  }
+
   function getNodeName(id: string): string {
     return nodes.value.find(n => n.id === id)?.data?.label || id
   }
@@ -952,6 +1169,14 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
     },
     { deep: true }
   )
+
+  watch(isSaving, (saving) => {
+    if (!saving && pendingTopologyRefreshPid) {
+      const pid = pendingTopologyRefreshPid
+      pendingTopologyRefreshPid = null
+      refreshGraphTopologyV2(pid)
+    }
+  })
 
   watch(
     isDraftMode,
@@ -992,9 +1217,11 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
     handleEdgeDelete,
 
     // Node CRUD
+    createComponentOnServer,
     createNodeFromTemplate,
     addComponentToGraph,
     updateNodeData,
+    saveComponentV2,
     handleAddTools,
     handleRemoveTool,
 
@@ -1003,12 +1230,14 @@ export function useStudioGraph(options: UseStudioGraphOptions) {
     setActiveComponent,
     nodeHasChildren,
     getEnhancedNode,
+    refreshNodeFromServer,
     getNodeName,
     getNodeType,
     getActiveName,
 
     // Persistence
     loadGraphData,
+    refreshGraphTopologyV2,
     saveChanges,
     autoSave,
     handleDeployConfirm,

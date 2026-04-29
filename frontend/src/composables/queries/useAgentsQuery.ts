@@ -6,7 +6,6 @@ import { logNetworkCall, logQueryStart } from '@/utils/queryLogger'
 import {
   ensureProviderModelFormat,
   extractToolData,
-  filterInputParameters,
   transformBackendParametersToLegacy,
   transformModelParametersToConfig,
 } from '@/utils/agentUtils'
@@ -418,7 +417,7 @@ export function useUpdateAgentMutation() {
                   component_version_id: componentVersionId,
                   component_name: savedToolInfo.name,
                   component_description: savedToolInfo.component_description,
-                  parameters: filterInputParameters(savedToolInfo.parameters)
+                  parameters: (savedToolInfo.parameters || [])
                     .filter(param => validParamNames.size === 0 || validParamNames.has(param.name))
                     .map(param => ({
                       ...param,
@@ -444,7 +443,7 @@ export function useUpdateAgentMutation() {
                     component_name: componentDef.name,
                     component_description: componentDef.description || null,
                     parameters:
-                      filterInputParameters(componentDef.parameters).map((param: any) => ({
+                      (componentDef.parameters || []).map((param: any) => ({
                         id: param.name,
                         name: param.name,
                         type: param.type,
@@ -458,6 +457,7 @@ export function useUpdateAgentMutation() {
                         ui_component: param.ui_component ?? null,
                         ui_component_properties: param.ui_component_properties ?? null,
                         is_advanced: param.is_advanced ?? false,
+                        kind: param.kind ?? 'parameter',
                       })) || [],
                     tool_description: componentDef.tool_description || null,
                     is_start_node: false,

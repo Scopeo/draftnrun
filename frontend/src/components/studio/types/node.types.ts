@@ -48,6 +48,7 @@ export interface NodeData {
     is_optional: boolean
     parameter_name: string
   } | null
+  parent_component_id?: string | null
   is_required_tool?: boolean
   is_optional?: boolean
   parameter_name?: string
