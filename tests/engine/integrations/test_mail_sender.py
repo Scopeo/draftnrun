@@ -4,7 +4,7 @@ import pytest
 
 from engine.components.types import ComponentAttributes
 from engine.integrations.gmail.gmail_sender import GmailSenderInputs
-from engine.integrations.mail_sender import MailSender, MailSenderOutputs
+from engine.integrations.mail_sender import MailSender, MailSenderConfigurationError, MailSenderOutputs
 
 
 @pytest.fixture
@@ -55,14 +55,14 @@ async def test_run_requires_exactly_one_provider(component_attrs: ComponentAttri
         gmail_access_token="g",
         outlook_access_token="o",
     )
-    with pytest.raises(ValueError, match="only one provider"):
+    with pytest.raises(MailSenderConfigurationError, match="only one provider"):
         await sender._run_without_io_trace(GmailSenderInputs(mail_subject="s"), {})
 
 
 @pytest.mark.asyncio
 async def test_run_requires_any_provider(component_attrs: ComponentAttributes):
     sender = MailSender(MagicMock(), component_attrs)
-    with pytest.raises(ValueError, match="Gmail or Outlook"):
+    with pytest.raises(MailSenderConfigurationError, match="Gmail or Outlook"):
         await sender._run_without_io_trace(GmailSenderInputs(mail_subject="s"), {})
 
 
@@ -70,9 +70,7 @@ async def test_run_requires_any_provider(component_attrs: ComponentAttributes):
 async def test_delegates_to_gmail(component_attrs: ComponentAttributes):
     with patch("engine.integrations.mail_sender.GmailSenderV2") as mock_cls:
         inner = mock_cls.return_value
-        inner._run_without_io_trace = AsyncMock(
-            return_value=MailSenderOutputs(status="sent", message_id="mid-g")
-        )
+        inner._run_without_io_trace = AsyncMock(return_value=MailSenderOutputs(status="sent", message_id="mid-g"))
         sender = MailSender(
             MagicMock(),
             component_attrs,
@@ -88,9 +86,7 @@ async def test_delegates_to_gmail(component_attrs: ComponentAttributes):
 async def test_delegates_to_outlook(component_attrs: ComponentAttributes):
     with patch("engine.integrations.mail_sender.OutlookSender") as mock_cls:
         inner = mock_cls.return_value
-        inner._run_without_io_trace = AsyncMock(
-            return_value=MailSenderOutputs(status="sent", message_id=None)
-        )
+        inner._run_without_io_trace = AsyncMock(return_value=MailSenderOutputs(status="sent", message_id=None))
         sender = MailSender(
             MagicMock(),
             component_attrs,
