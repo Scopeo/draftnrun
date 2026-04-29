@@ -309,7 +309,7 @@ class OAuthComponentFactory:
             #       after migration d4e5f6a7b8c9 — rename column to oauth_definition_id
             definition_id = kwargs.pop(param_name, None)
             if isinstance(definition_id, list):
-                definition_id = definition_id[0]
+                definition_id = definition_id[0] if definition_id else None
             access_token = await resolve_oauth_access_token(definition_id, provider_config_key)
             # may be None; component raises at run if required
             kwargs[resolved_param_name] = SecretStr(access_token) if access_token is not None else None
