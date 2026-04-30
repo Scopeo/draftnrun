@@ -9,6 +9,7 @@ from ada_backend.database.models import CallType, CronRun, CronStatus, EnvType, 
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories import run_repository
 from ada_backend.repositories.cron_repository import update_cron_run
+from ada_backend.repositories.graph_runner_repository import get_graph_runner_for_env
 from ada_backend.repositories.run_input_repository import save_run_input
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent
 from ada_backend.services.run_service import _upload_result_to_s3, update_run_status
@@ -124,6 +125,13 @@ class RunQueueWorker(BaseQueueWorker):
                     retry_group = run.retry_group_id or run.id
                     save_run_input(session, retry_group_id=retry_group, project_id=project_id, input_data=input_data)
 
+                    if env:
+                        gr = get_graph_runner_for_env(session=session, project_id=project_id, env=env)
+                        resolved_gr_id = gr.id if gr else None
+                    else:
+                        raw_gr_id = payload.get("graph_runner_id")
+                        resolved_gr_id = UUID(raw_gr_id) if raw_gr_id else None
+
                     now = datetime.now(timezone.utc)
                     update_run_status(
                         session,
@@ -131,6 +139,7 @@ class RunQueueWorker(BaseQueueWorker):
                         project_id=project_id,
                         status=RunStatus.RUNNING,
                         started_at=now,
+                        graph_runner_id=resolved_gr_id,
                     )
 
                 async def event_callback(evt: dict):
@@ -145,19 +154,18 @@ class RunQueueWorker(BaseQueueWorker):
                             call_type=call_type,
                             response_format=response_format,
                             event_callback=event_callback,
+                            graph_runner_id=resolved_gr_id,
                         )
-                    raw_gr_id = payload.get("graph_runner_id")
-                    if not raw_gr_id:
+                    if not resolved_gr_id:
                         raise ValueError("Payload has no env and no graph_runner_id")
-                    graph_runner_id = UUID(raw_gr_id)
                     with get_db_session() as sess:
-                        graph_runner = sess.get(GraphRunner, graph_runner_id)
+                        graph_runner = sess.get(GraphRunner, resolved_gr_id)
                         if graph_runner is None:
-                            raise ValueError(f"GraphRunner {graph_runner_id} not found for project {project_id}")
+                            raise ValueError(f"GraphRunner {resolved_gr_id} not found for project {project_id}")
                         tag_name = compose_tag_name(graph_runner.tag_version, graph_runner.version_name)
                     return await run_agent(
                         project_id=project_id,
-                        graph_runner_id=graph_runner_id,
+                        graph_runner_id=resolved_gr_id,
                         input_data=input_data,
                         environment=None,
                         call_type=call_type,

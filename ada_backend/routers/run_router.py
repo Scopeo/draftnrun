@@ -139,8 +139,7 @@ def retry_run_endpoint(
             session=session,
             run_id=run_id,
             project_id=project_id,
-            env=body.env,
-            graph_runner_id=body.graph_runner_id,
+            legacy_env=body.env,
         )
     except RunNotFound as exc:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found for project {project_id}") from exc
@@ -148,7 +147,7 @@ def retry_run_endpoint(
         LOGGER.warning("Invalid retry request for run %s in project %s: %s", run_id, project_id, exc)
         raise HTTPException(
             status_code=400,
-            detail="Invalid retry request. Provide env or graph_runner_id and ensure run input exists.",
+            detail="Invalid retry request. Ensure run input exists and original run has env or graph_runner_id.",
         ) from exc
 
 

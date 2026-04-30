@@ -34,7 +34,7 @@ DAG of ComponentInstances connected via FieldExpressions (JSON AST). See `ada_ba
 
 ### Environments
 
-`draft` / `production` bound to specific GraphRunner versions via `ProjectEnvironmentBinding`.
+`draft` / `production` bound to specific GraphRunner versions via `ProjectEnvironmentBinding`. Each `Run` records its `graph_runner_id` (set when the worker transitions the run to `RUNNING`).
 
 ### Project Tags
 

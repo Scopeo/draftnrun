@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.context import set_run_variables
 from ada_backend.database.models import CallType, EnvType, OrgSecretType, ResponseFormat
+from ada_backend.database.models import GraphRunner as GraphRunnerModel
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.credits_repository import get_organization_limit, get_organization_total_credits
 from ada_backend.repositories.edge_repository import get_edges
@@ -221,13 +222,19 @@ async def run_env_agent(
     call_type: CallType,
     response_format: Optional[ResponseFormat] = None,
     event_callback=None,
+    graph_runner_id: Optional[UUID] = None,
 ) -> ChatResponse:
     set_ids = _extract_set_ids(input_data)
     with get_db_session() as session:
-        graph_runner = get_graph_runner_for_env(session=session, project_id=project_id, env=env)
-        if not graph_runner:
-            raise EnvironmentNotFound(project_id, env.value)
-        graph_runner_id = graph_runner.id
+        if graph_runner_id is not None:
+            graph_runner = session.get(GraphRunnerModel, graph_runner_id)
+            if not graph_runner:
+                raise EnvironmentNotFound(project_id, env.value)
+        else:
+            graph_runner = get_graph_runner_for_env(session=session, project_id=project_id, env=env)
+            if not graph_runner:
+                raise EnvironmentNotFound(project_id, env.value)
+            graph_runner_id = graph_runner.id
         tag_name = compose_tag_name(graph_runner.tag_version, graph_runner.version_name)
     return await run_agent(
         project_id=project_id,

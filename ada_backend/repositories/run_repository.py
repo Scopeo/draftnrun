@@ -21,6 +21,7 @@ def create_run(
     event_id: str | None = None,
     retry_group_id: UUID | None = None,
     env: db.EnvType | None = None,
+    graph_runner_id: UUID | None = None,
 ) -> db.Run:
     """Create a new run with status pending. Caller manages transaction."""
     run_id = uuid4()
@@ -35,6 +36,7 @@ def create_run(
         "attempt_number": attempt_number,
         "retry_group_id": run_retry_group_id,
         "env": env,
+        "graph_runner_id": graph_runner_id,
     }
     if event_id is not None:
         kwargs["event_id"] = event_id
@@ -161,6 +163,7 @@ def get_runs_by_organization(
             attempt_number=run.attempt_number,
             attempt_count=attempt_count or 1,
             input_available=bool(input_available),
+            graph_runner_id=run.graph_runner_id,
             started_at=run.started_at,
             finished_at=run.finished_at,
             created_at=run.created_at,
@@ -197,8 +200,9 @@ def update_run_status(
     result_id: Optional[str] = None,
     started_at: Optional[datetime] = None,
     finished_at: Optional[datetime] = None,
+    graph_runner_id: Optional[UUID] = None,
 ) -> Optional[db.Run]:
-    """Update run status and optionally error/trace_id/result_id/started_at/finished_at."""
+    """Update run status and optionally error/trace_id/result_id/started_at/finished_at/graph_runner_id."""
     run = get_run(session, run_id)
     if run is None:
         return None
@@ -213,6 +217,8 @@ def update_run_status(
         run.started_at = started_at
     if finished_at is not None:
         run.finished_at = finished_at
+    if graph_runner_id is not None:
+        run.graph_runner_id = graph_runner_id
     session.commit()
     session.refresh(run)
     return run

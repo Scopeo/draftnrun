@@ -70,15 +70,6 @@ async def test_run_rejects_payload_without_messages(fake_mcp, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_retry_run_rejects_missing_target(fake_mcp, monkeypatch):
-    monkeypatch.setattr(runs, "_get_auth", lambda: ("jwt", "uid-1"))
-    runs.register(fake_mcp)
-
-    with pytest.raises(ValueError, match="Either env or graph_runner_id must be provided"):
-        await fake_mcp.tools["retry_run"](project_id=FAKE_PROJECT_ID, run_id=FAKE_RUN_ID)
-
-
-@pytest.mark.asyncio
 async def test_retry_run_posts_body(fake_mcp, monkeypatch):
     post_mock = AsyncMock(return_value={"run_id": "new-run", "status": "pending"})
     monkeypatch.setattr(runs, "_get_auth", lambda: ("jwt", "uid-1"))
