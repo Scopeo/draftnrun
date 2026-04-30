@@ -10,7 +10,14 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import CallType, DatasetProject, Project, QASession, RunStatus
+from ada_backend.database.models import (
+    CallType,
+    DatasetProject,
+    DatasetProjectAssociation,
+    Project,
+    QASession,
+    RunStatus,
+)
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.qa_evaluation_repository import delete_evaluations_for_input_ids
@@ -24,10 +31,12 @@ from ada_backend.repositories.quality_assurance_repository import (
     check_dataset_belongs_to_organization,
     check_dataset_belongs_to_project,
     clear_version_outputs_for_input_ids,
+    create_column_mappings_for_association,
     create_datasets,
     create_inputs_groundtruths,
     delete_datasets,
     delete_inputs_groundtruths,
+    get_cell_values_for_rows,
     get_dataset_project_associations,
     get_datasets_by_organization,
     get_datasets_by_project,
@@ -74,6 +83,7 @@ from ada_backend.services.qa.qa_error import (
     CSVInvalidPositionError,
     CSVMissingDatasetColumnError,
     CSVNonUniquePositionError,
+    QADatasetNotInOrganizationError,
     QADatasetNotInProjectError,
     QADuplicatePositionError,
     QAPartialPositionError,
@@ -82,6 +92,24 @@ from ada_backend.services.qa.qa_metadata_service import create_qa_column_service
 from ada_backend.utils.redis_client import publish_qa_event
 
 LOGGER = logging.getLogger(__name__)
+
+_IG_COLUMN_KEYS = (
+    "id",
+    "dataset_id",
+    "position",
+    "input",
+    "groundtruth",
+    "custom_columns",
+    "created_at",
+    "updated_at",
+)
+
+
+def _ig_to_response(ig, cell_values: Optional[Dict[str, Optional[str]]] = None) -> InputGroundtruthResponse:
+    data = {k: getattr(ig, k) for k in _IG_COLUMN_KEYS}
+    data["cell_values"] = cell_values
+    return InputGroundtruthResponse.model_validate(data)
+
 
 MAX_CSV_EXPORT_SIZE_MB = 10
 MAX_CSV_EXPORT_SIZE_BYTES = MAX_CSV_EXPORT_SIZE_MB * 1024 * 1024
@@ -113,7 +141,10 @@ def get_inputs_groundtruths_with_version_outputs_service(
         )
         inputs = get_inputs_groundtruths_by_dataset(session, dataset_id, skip, page_size)
 
-        response_list = [InputGroundtruthResponse.model_validate(input_groundtruth) for input_groundtruth in inputs]
+        row_ids = [ig.id for ig in inputs]
+        cell_values_map = get_cell_values_for_rows(session, row_ids) if row_ids else {}
+
+        response_list = [_ig_to_response(ig, cell_values_map.get(ig.id)) for ig in inputs]
 
         return PaginatedInputGroundtruthResponse(
             pagination=Pagination(
@@ -176,9 +207,7 @@ def _validate_env_binding(
     project_id: UUID,
     graph_runner_id: UUID,
 ):
-    env_relationship = get_env_relationship_by_graph_runner_id(
-        session=session, graph_runner_id=graph_runner_id
-    )
+    env_relationship = get_env_relationship_by_graph_runner_id(session=session, graph_runner_id=graph_runner_id)
     if not env_relationship:
         raise GraphNotBoundToProjectError(graph_runner_id)
     if env_relationship.project_id != project_id:
@@ -225,9 +254,7 @@ def resolve_qa_entries_and_environment(
 
     if run_request.run_all:
         number_of_dataset_inputs = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
-        input_entries = get_inputs_groundtruths_by_dataset(
-            session, dataset_id, skip=0, limit=number_of_dataset_inputs
-        )
+        input_entries = get_inputs_groundtruths_by_dataset(session, dataset_id, skip=0, limit=number_of_dataset_inputs)
         if not input_entries:
             raise ValueError(f"No input entries found in dataset {dataset_id}")
     else:
@@ -246,10 +273,7 @@ def resolve_qa_entries_and_environment(
 
     env_relationship = _validate_env_binding(session, project_id, run_request.graph_runner_id)
 
-    qa_entries = [
-        QAEntry(id=entry.id, input=entry.input, groundtruth=entry.groundtruth)
-        for entry in input_entries
-    ]
+    qa_entries = [QAEntry(id=entry.id, input=entry.input, groundtruth=entry.groundtruth) for entry in input_entries]
     return qa_entries, env_relationship.environment
 
 
@@ -268,12 +292,15 @@ async def _execute_qa_entries(
     with get_db_session() as db_session:
         for index, input_entry in enumerate(input_entries):
             if session_id:
-                publish_qa_event(session_id, {
-                    "type": "qa.entry.started",
-                    "input_id": str(input_entry.id),
-                    "index": index,
-                    "total": total,
-                })
+                publish_qa_event(
+                    session_id,
+                    {
+                        "type": "qa.entry.started",
+                        "input_id": str(input_entry.id),
+                        "index": index,
+                        "total": total,
+                    },
+                )
 
             try:
                 chat_response = await run_agent(
@@ -336,13 +363,16 @@ async def _execute_qa_entries(
             results.append(result)
 
             if session_id:
-                publish_qa_event(session_id, {
-                    "type": "qa.entry.completed",
-                    "input_id": str(input_entry.id),
-                    "output": result.output,
-                    "success": result.success,
-                    "error": result.error,
-                })
+                publish_qa_event(
+                    session_id,
+                    {
+                        "type": "qa.entry.completed",
+                        "input_id": str(input_entry.id),
+                        "output": result.output,
+                        "success": result.success,
+                        "error": result.error,
+                    },
+                )
 
     total_processed = len(results)
     success_rate = (successful_runs / total_processed * 100) if total_processed > 0 else 0.0
@@ -355,10 +385,7 @@ async def _execute_qa_entries(
     )
 
     run_mode = "all entries" if run_request.run_all else f"{len(run_request.input_ids)} selected entries"
-    LOGGER.info(
-        f"QA run completed for project {project_id}, "
-        f"dataset {run_request.graph_runner_id}, mode: {run_mode}"
-    )
+    LOGGER.info(f"QA run completed for project {project_id}, dataset {run_request.graph_runner_id}, mode: {run_mode}")
 
     return QARunResponse(results=results, summary=summary)
 
@@ -388,20 +415,29 @@ async def run_qa_background(
     try:
         with get_db_session() as session:
             input_entries, environment = resolve_qa_entries_and_environment(
-                session, project_id, dataset_id, run_request,
+                session,
+                project_id,
+                dataset_id,
+                run_request,
             )
             update_qa_session_status(
-                session, session_id,
+                session,
+                session_id,
                 status=RunStatus.RUNNING,
                 started_at=datetime.now(timezone.utc),
             )
         response = await _execute_qa_entries(
-            project_id, run_request, input_entries, environment, session_id=session_id,
+            project_id,
+            run_request,
+            input_entries,
+            environment,
+            session_id=session_id,
         )
 
         with get_db_session() as session:
             update_qa_session_status(
-                session, session_id,
+                session,
+                session_id,
                 status=RunStatus.COMPLETED,
                 finished_at=datetime.now(timezone.utc),
                 total=response.summary.total,
@@ -409,27 +445,34 @@ async def run_qa_background(
                 failed=response.summary.failed,
             )
 
-        publish_qa_event(session_id, {
-            "type": "qa.completed",
-            "summary": response.summary.model_dump(),
-        })
+        publish_qa_event(
+            session_id,
+            {
+                "type": "qa.completed",
+                "summary": response.summary.model_dump(),
+            },
+        )
 
     except Exception as e:
         LOGGER.error(f"Background QA run failed for session {session_id}: {str(e)}", exc_info=True)
         try:
             with get_db_session() as session:
                 update_qa_session_status(
-                    session, session_id,
+                    session,
+                    session_id,
                     status=RunStatus.FAILED,
                     finished_at=datetime.now(timezone.utc),
                     error={"message": str(e), "type": type(e).__name__},
                 )
         except Exception as status_err:
             LOGGER.error(f"Failed to update QA session status to FAILED for {session_id}: {status_err}")
-        publish_qa_event(session_id, {
-            "type": "qa.failed",
-            "error": {"message": str(e), "type": type(e).__name__},
-        })
+        publish_qa_event(
+            session_id,
+            {
+                "type": "qa.failed",
+                "error": {"message": str(e), "type": type(e).__name__},
+            },
+        )
 
 
 def create_qa_session_service(
@@ -440,7 +483,10 @@ def create_qa_session_service(
     graph_runner_id: UUID,
 ) -> QASession:
     return create_qa_session(
-        session, project_id=project_id, dataset_id=dataset_id, graph_runner_id=graph_runner_id,
+        session,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        graph_runner_id=graph_runner_id,
     )
 
 
@@ -499,9 +545,12 @@ def create_inputs_groundtruths_service(
 
         LOGGER.info(f"Created {len(created_inputs_groundtruths)} input-groundtruth entries for dataset {dataset_id}")
 
-        return InputGroundtruthResponseList(
-            inputs_groundtruths=[InputGroundtruthResponse.model_validate(ig) for ig in created_inputs_groundtruths]
-        )
+        row_ids = [ig.id for ig in created_inputs_groundtruths]
+        cell_values_map = get_cell_values_for_rows(session, row_ids) if row_ids else {}
+
+        responses = [_ig_to_response(ig, cell_values_map.get(ig.id)) for ig in created_inputs_groundtruths]
+
+        return InputGroundtruthResponseList(inputs_groundtruths=responses)
     except (QADuplicatePositionError, QAPartialPositionError):
         raise
     except Exception as e:
@@ -545,9 +594,12 @@ def update_inputs_groundtruths_service(
 
         LOGGER.info(f"Updated {len(updated_inputs_groundtruths)} input-groundtruth entries for dataset {dataset_id}")
 
-        return InputGroundtruthResponseList(
-            inputs_groundtruths=[InputGroundtruthResponse.model_validate(ig) for ig in updated_inputs_groundtruths]
-        )
+        row_ids = [ig.id for ig in updated_inputs_groundtruths]
+        cell_values_map = get_cell_values_for_rows(session, row_ids) if row_ids else {}
+
+        responses = [_ig_to_response(ig, cell_values_map.get(ig.id)) for ig in updated_inputs_groundtruths]
+
+        return InputGroundtruthResponseList(inputs_groundtruths=responses)
     except Exception as e:
         session.rollback()
         LOGGER.error(f"Error in update_inputs_groundtruths_service: {str(e)}")
@@ -621,25 +673,66 @@ def get_datasets_by_organization_service(
         raise ValueError(f"Failed to get datasets: {str(e)}") from e
 
 
+def validate_dataset_in_organization(session: Session, organization_id: UUID, dataset_id: UUID) -> None:
+    if not check_dataset_belongs_to_organization(session, organization_id, dataset_id):
+        raise QADatasetNotInOrganizationError(organization_id, dataset_id)
+
+
+def validate_dataset_in_project(session: Session, project_id: UUID, dataset_id: UUID) -> None:
+    if not check_dataset_belongs_to_project(session, project_id, dataset_id):
+        raise QADatasetNotInProjectError(project_id, dataset_id)
+
+
+def fail_qa_session_service(session: Session, session_id: UUID, error: dict) -> None:
+    update_qa_session_status(session, session_id, status=RunStatus.FAILED, error=error)
+
+
 def create_datasets_service(
     session: Session,
     organization_id: UUID,
     datasets_data: DatasetCreateList,
+    *,
+    commit: bool = True,
 ) -> DatasetListResponse:
     try:
         created_datasets = create_datasets(
             session,
             organization_id,
             datasets_data.datasets_name,
+            commit=commit,
         )
 
         LOGGER.info(f"Created {len(created_datasets)} datasets for organization {organization_id}")
-        return DatasetListResponse(
-            datasets=[_dataset_to_response(session, dataset) for dataset in created_datasets]
-        )
+        return DatasetListResponse(datasets=[_dataset_to_response(session, dataset) for dataset in created_datasets])
     except Exception as e:
         LOGGER.error(f"Error in create_datasets_service: {str(e)}")
         raise ValueError(f"Failed to create datasets: {str(e)}") from e
+
+
+def create_datasets_for_project_service(
+    session: Session,
+    organization_id: UUID,
+    project_id: UUID,
+    datasets_data: DatasetCreateList,
+) -> DatasetListResponse:
+    try:
+        response = create_datasets_service(session, organization_id, datasets_data, commit=False)
+        dataset_ids = [dataset_resp.id for dataset_resp in response.datasets]
+        session.query(DatasetProject).filter(DatasetProject.id.in_(dataset_ids)).update(
+            {"project_id": project_id}, synchronize_session=False
+        )
+        assocs = [DatasetProjectAssociation(dataset_id=did, project_id=project_id) for did in dataset_ids]
+        session.add_all(assocs)
+        session.flush()
+        for assoc in assocs:
+            create_column_mappings_for_association(session, assoc.id, assoc.dataset_id)
+        session.commit()
+        for dataset_resp in response.datasets:
+            dataset_resp.project_ids = [project_id]
+        return response
+    except Exception:
+        session.rollback()
+        raise
 
 
 def update_dataset_service(
@@ -649,9 +742,7 @@ def update_dataset_service(
     dataset_name: str,
 ) -> DatasetResponse:
     if not check_dataset_belongs_to_organization(session, organization_id, dataset_id):
-        LOGGER.error(
-            f"Failed to update dataset {dataset_id}: not found in organization {organization_id}"
-        )
+        LOGGER.error(f"Failed to update dataset {dataset_id}: not found in organization {organization_id}")
         raise ValueError(f"Dataset {dataset_id} not found in organization {organization_id}")
 
     try:
@@ -754,7 +845,7 @@ def export_qa_data_to_csv_service(
         input_entries = get_inputs_groundtruths_by_dataset(session, dataset_id, skip=0, limit=total_count)
         outputs_dict = dict(get_outputs_by_graph_runner(session, dataset_id, graph_runner_id))
 
-        custom_columns = get_qa_columns_by_dataset(session, dataset_id)
+        custom_columns = get_qa_columns_by_dataset(session, dataset_id, user_only=True)
 
         header_row = DEFAULT_HEADERS.copy()
         custom_column_names = [col.column_name for col in custom_columns]
@@ -811,7 +902,7 @@ def import_qa_data_from_csv_service(
         headers_from_csv = get_headers_from_csv(csv_file)
         expected_columns = set(DEFAULT_HEADERS.copy())
         custom_columns_from_csv = set(headers_from_csv) - expected_columns
-        dataset_custom_columns = get_qa_columns_by_dataset(session, dataset_id)
+        dataset_custom_columns = get_qa_columns_by_dataset(session, dataset_id, user_only=True)
         dataset_column_names = {col.column_name for col in dataset_custom_columns}
 
         missing_custom_columns_from_csv = dataset_column_names - custom_columns_from_csv
@@ -833,7 +924,7 @@ def import_qa_data_from_csv_service(
                 column_name=column_name,
             )
 
-        updated_dataset_custom_columns_list = get_qa_columns_by_dataset(session, dataset_id)
+        updated_dataset_custom_columns_list = get_qa_columns_by_dataset(session, dataset_id, user_only=True)
         updated_dataset_custom_columns = {
             str(col.column_id): col.column_name for col in updated_dataset_custom_columns_list
         }

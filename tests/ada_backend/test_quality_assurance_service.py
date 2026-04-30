@@ -1,15 +1,19 @@
 import csv
 import io
 import json
+from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
 
-from ada_backend.database.models import EnvType
+from ada_backend.database.models import ColumnRole, DatasetProjectAssociation, EnvType
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.quality_assurance_repository import (
+    get_column_mappings_for_association,
     get_qa_columns_by_dataset,
+    remove_column_mapping,
     set_dataset_project_associations,
 )
 from ada_backend.schemas.dataset_schema import DatasetCreateList, DatasetDeleteList
@@ -43,6 +47,7 @@ from ada_backend.services.qa.qa_metadata_service import (
     rename_qa_column_service,
 )
 from ada_backend.services.qa.quality_assurance_service import (
+    _ig_to_response,
     create_datasets_service,
     create_inputs_groundtruths_service,
     delete_datasets_service,
@@ -207,8 +212,8 @@ def test_dataset_management():
         create_qa_column_service(session, ORGANIZATION_ID, dataset_with_columns, "Priority")
         create_qa_column_service(session, ORGANIZATION_ID, dataset_with_columns, "Category")
 
-        # Verify columns exist
-        columns_before = get_qa_columns_by_dataset(session, dataset_with_columns)
+        # Verify custom columns exist (system columns are created automatically)
+        columns_before = get_qa_columns_by_dataset(session, dataset_with_columns, user_only=True)
         assert len(columns_before) == 2
 
         # Delete the dataset
@@ -771,7 +776,7 @@ def test_csv_import_creates_new_custom_columns_and_values():
         dataset_id = dataset_data.datasets[0].id
 
         # Verify no custom columns exist initially
-        initial_columns = get_qa_columns_by_dataset(session, dataset_id)
+        initial_columns = get_qa_columns_by_dataset(session, dataset_id, user_only=True)
         assert len(initial_columns) == 0
 
         # CSV with custom columns that don't exist yet
@@ -791,7 +796,7 @@ def test_csv_import_creates_new_custom_columns_and_values():
         assert len(imported_entries) == 2
 
         # Verify custom columns were created
-        columns_after_import = get_qa_columns_by_dataset(session, dataset_id)
+        columns_after_import = get_qa_columns_by_dataset(session, dataset_id, user_only=True)
         assert len(columns_after_import) == 2
         column_names = {col.column_name for col in columns_after_import}
         assert column_names == {"my_flag", "score"}
@@ -838,7 +843,7 @@ def test_csv_import_requires_all_existing_custom_columns_in_header():
         create_qa_column_service(session, ORGANIZATION_ID, dataset_id, "col_b")
 
         # Verify columns exist
-        existing_columns = get_qa_columns_by_dataset(session, dataset_id)
+        existing_columns = get_qa_columns_by_dataset(session, dataset_id, user_only=True)
         assert len(existing_columns) == 2
         column_names = {col.column_name for col in existing_columns}
         assert column_names == {"col_a", "col_b"}
@@ -893,7 +898,7 @@ def test_csv_import_adds_new_columns_while_preserving_existing():
         assert len(import_response.inputs_groundtruths) == 1
 
         # Verify both columns exist
-        columns_after_import = get_qa_columns_by_dataset(session, dataset_id)
+        columns_after_import = get_qa_columns_by_dataset(session, dataset_id, user_only=True)
         assert len(columns_after_import) == 2
         column_names = {col.column_name for col in columns_after_import}
         assert column_names == {"existing_col", "new_col"}
@@ -946,7 +951,7 @@ def test_csv_import_handles_missing_cell_values_for_custom_columns():
         assert len(import_response.inputs_groundtruths) == 2
 
         # Verify column was created
-        columns = get_qa_columns_by_dataset(session, dataset_id)
+        columns = get_qa_columns_by_dataset(session, dataset_id, user_only=True)
         assert len(columns) == 1
         assert columns[0].column_name == "optional_col"
         column_id_str = str(columns[0].column_id)
@@ -1007,7 +1012,7 @@ def test_csv_import_uses_get_headers_from_csv_and_processes_all_rows():
         assert positions == [1, 2, 3]
 
         # Verify all entries have custom column values
-        columns = get_qa_columns_by_dataset(session, dataset_id)
+        columns = get_qa_columns_by_dataset(session, dataset_id, user_only=True)
         assert len(columns) == 1
         column_id_str = str(columns[0].column_id)
 
@@ -1095,7 +1100,7 @@ def test_create_qa_column_service():
         assert col3_response.column_display_position == 2
 
         # Verify all columns exist and positions are sequential
-        columns = get_qa_columns_by_dataset(session, dataset_id)
+        columns = get_qa_columns_by_dataset(session, dataset_id, user_only=True)
         assert len(columns) == 3
         positions = [col.column_display_position for col in columns]
         assert positions == [0, 1, 2]
@@ -1139,7 +1144,7 @@ def test_rename_qa_column_service():
         )  # column_display_position should not change
 
         # Verify the rename persisted
-        columns = get_qa_columns_by_dataset(session, dataset_id)
+        columns = get_qa_columns_by_dataset(session, dataset_id, user_only=True)
         assert len(columns) == 1
         assert columns[0].column_name == "NewName"
         assert columns[0].column_id == original_column_id
@@ -1180,7 +1185,7 @@ def test_delete_qa_column_service():
         col2 = create_qa_column_service(session, ORGANIZATION_ID, dataset_id, "Category")
 
         # Verify both exist
-        columns = get_qa_columns_by_dataset(session, dataset_id)
+        columns = get_qa_columns_by_dataset(session, dataset_id, user_only=True)
         assert len(columns) == 2
 
         # Delete one column
@@ -1189,7 +1194,7 @@ def test_delete_qa_column_service():
         assert "successfully" in delete_response["message"].lower()
 
         # Verify only one column remains
-        columns_after = get_qa_columns_by_dataset(session, dataset_id)
+        columns_after = get_qa_columns_by_dataset(session, dataset_id, user_only=True)
         assert len(columns_after) == 1
         assert columns_after[0].column_id == col2.column_id
         assert columns_after[0].column_name == "Category"
@@ -1225,7 +1230,7 @@ def test_delete_qa_column_service():
         delete_qa_column_service(session, ORGANIZATION_ID, dataset_id, col2.column_id)
 
         # Verify column is gone
-        columns = get_qa_columns_by_dataset(session, dataset_id)
+        columns = get_qa_columns_by_dataset(session, dataset_id, user_only=True)
         assert len(columns) == 0
 
         # Verify values were removed from entries
@@ -1502,3 +1507,124 @@ def test_csv_export_error_cases():
         assert "No data to export" in str(exc_info.value)
 
         delete_project_service(session=session, project_id=project_id)
+
+
+def test_association_column_mappings_auto_populated():
+    """Verify set_dataset_project_associations auto-populates column mappings from system columns."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session, project_name_prefix="col_mapping_test", description="Column mapping test"
+        )
+        dataset_data = create_datasets_service(
+            session, ORGANIZATION_ID, DatasetCreateList(datasets_name=[f"col_mapping_ds_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        set_dataset_project_associations(session, dataset_id, [project_id])
+
+        assoc = (
+            session.query(DatasetProjectAssociation)
+            .filter(
+                DatasetProjectAssociation.dataset_id == dataset_id,
+                DatasetProjectAssociation.project_id == project_id,
+            )
+            .one()
+        )
+        mappings = get_column_mappings_for_association(session, assoc.id)
+        roles = {m.role for m in mappings}
+        assert ColumnRole.INPUT in roles
+        assert ColumnRole.EXPECTED_OUTPUT in roles
+        assert len(mappings) == 2
+
+        delete_project_service(session=session, project_id=project_id)
+
+
+def test_association_column_mapping_remove():
+    """Verify removing a column mapping works and does not affect others."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session, project_name_prefix="col_mapping_rm_test", description="Column mapping remove test"
+        )
+        dataset_data = create_datasets_service(
+            session, ORGANIZATION_ID, DatasetCreateList(datasets_name=[f"col_mapping_rm_ds_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        set_dataset_project_associations(session, dataset_id, [project_id])
+
+        assoc = (
+            session.query(DatasetProjectAssociation)
+            .filter(
+                DatasetProjectAssociation.dataset_id == dataset_id,
+                DatasetProjectAssociation.project_id == project_id,
+            )
+            .one()
+        )
+        mappings = get_column_mappings_for_association(session, assoc.id)
+        input_mapping = next(m for m in mappings if m.role == ColumnRole.INPUT)
+
+        remove_column_mapping(session, assoc.id, input_mapping.column_id)
+        session.commit()
+
+        remaining = get_column_mappings_for_association(session, assoc.id)
+        assert len(remaining) == 1
+        assert remaining[0].role == ColumnRole.EXPECTED_OUTPUT
+
+        delete_project_service(session=session, project_id=project_id)
+
+
+def test_association_column_mappings_cascade_on_association_delete():
+    """Verify column mappings are cascade-deleted when the association is deleted."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session, project_name_prefix="col_mapping_cascade_test", description="Cascade delete test"
+        )
+        dataset_data = create_datasets_service(
+            session, ORGANIZATION_ID, DatasetCreateList(datasets_name=[f"col_mapping_cascade_ds_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        set_dataset_project_associations(session, dataset_id, [project_id])
+
+        assoc = (
+            session.query(DatasetProjectAssociation)
+            .filter(
+                DatasetProjectAssociation.dataset_id == dataset_id,
+                DatasetProjectAssociation.project_id == project_id,
+            )
+            .one()
+        )
+        assoc_id = assoc.id
+        assert len(get_column_mappings_for_association(session, assoc_id)) == 2
+
+        set_dataset_project_associations(session, dataset_id, [])
+
+        assert len(get_column_mappings_for_association(session, assoc_id)) == 0
+
+        delete_project_service(session=session, project_id=project_id)
+
+
+def test_ig_to_response_skips_orm_relationship():
+    """_ig_to_response builds a response from ORM columns, ignoring the cell_values relationship."""
+    now = datetime.now(tz=timezone.utc)
+    row_id = uuid4()
+    ds_id = uuid4()
+
+    fake_row = SimpleNamespace(
+        id=row_id,
+        dataset_id=ds_id,
+        position=1,
+        input={"key": "value"},
+        groundtruth="expected",
+        custom_columns=None,
+        cell_values=[],
+        created_at=now,
+        updated_at=now,
+    )
+
+    resp = _ig_to_response(fake_row, {"col1": "val1"})
+    assert resp.cell_values == {"col1": "val1"}
+    assert resp.id == row_id
+
+    resp_none = _ig_to_response(fake_row)
+    assert resp_none.cell_values is None
