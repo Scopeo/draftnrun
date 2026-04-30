@@ -22,6 +22,7 @@ class InputPortInstanceSchema(BaseModel):
     field_expression_id: Optional[UUID] = None
     field_expression: Optional[FieldExpressionSchema] = None
     description: Optional[str] = None
+    prompt_version_id: Optional[UUID] = None
 
 
 class InputPortInstanceCreateSchema(BaseModel):

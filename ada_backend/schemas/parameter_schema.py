@@ -60,12 +60,14 @@ class PipelineParameterV2Schema(ParameterBase, WithValue):
 
     kind="parameter" uses ``value`` for the static config value.
     kind="input" uses ``field_expression`` for the wiring data.
+    kind="prompt" uses ``field_expression`` + ``prompt_version_id`` for library-pinned prompts.
     """
 
     field_expression: Optional[dict] = None
     is_tool_input: bool = False
     description: Optional[str] = None
     port_definition_id: Optional[UUID] = None
+    prompt_version_id: Optional[UUID] = None
 
 
 class ParameterGroupSchema(BaseModel):

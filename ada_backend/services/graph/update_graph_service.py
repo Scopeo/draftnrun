@@ -459,15 +459,18 @@ async def update_graph_service(
 
             expression_json = expr_to_json(ast)
 
+            prompt_version_id = getattr(param, "prompt_version_id", None)
+
             existing_port_id = db_port_instances_by_instance[instance.id].get(field_name)
             if existing_port_id:
                 port = get_input_port_instance(session, existing_port_id)
                 if port and port.field_expression_id:
                     update_field_expression(session, port.field_expression_id, expression_json)
                 else:
-                    # Create new field expression and link it
                     expr = create_field_expression(session, expression_json)
                     update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
+                if prompt_version_id is not None:
+                    update_input_port_instance(session, existing_port_id, prompt_version_id=prompt_version_id)
             else:
                 expr = create_field_expression(session, expression_json)
                 create_input_port_instance(
@@ -475,6 +478,7 @@ async def update_graph_service(
                     component_instance_id=instance.id,
                     name=field_name,
                     field_expression_id=expr.id,
+                    prompt_version_id=prompt_version_id,
                 )
             sync_output_port_instances_from_schema(
                 session=session,
