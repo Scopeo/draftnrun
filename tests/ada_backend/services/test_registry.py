@@ -81,3 +81,38 @@ def test_mail_sender_registered():
         ("gmail_oauth_connection_id", OAuthProvider.GMAIL, "gmail_access_token"),
         ("outlook_oauth_connection_id", OAuthProvider.OUTLOOK, "outlook_access_token"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_mail_sender_factory_resolves_oauth_bindings(monkeypatch):
+    set_trace_manager(MockTraceManager(project_name="test_project"))
+
+    resolved_requests: list[tuple[str | None, str]] = []
+
+    async def fake_resolve_oauth_access_token(definition_id: str | None, provider_config_key: str) -> str | None:
+        resolved_requests.append((definition_id, provider_config_key))
+        tokens = {
+            OAuthProvider.GMAIL: "gmail-access-token",
+            OAuthProvider.OUTLOOK: "outlook-access-token",
+        }
+        return tokens[provider_config_key]
+
+    monkeypatch.setattr(
+        "ada_backend.services.entity_factory.resolve_oauth_access_token",
+        fake_resolve_oauth_access_token,
+    )
+
+    component = await FACTORY_REGISTRY.create(
+        component_version_id=COMPONENT_VERSION_UUIDS["mail_sender"],
+        component_attributes=ComponentAttributes(component_instance_name="mail_sender"),
+        gmail_oauth_connection_id="gmail-definition-id",
+        outlook_oauth_connection_id="outlook-definition-id",
+    )
+
+    assert isinstance(component, MailSender)
+    assert resolved_requests == [
+        ("gmail-definition-id", OAuthProvider.GMAIL),
+        ("outlook-definition-id", OAuthProvider.OUTLOOK),
+    ]
+    assert component._gmail_access_token == "gmail-access-token"
+    assert component._outlook_access_token == "outlook-access-token"
