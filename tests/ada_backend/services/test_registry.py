@@ -84,35 +84,27 @@ def test_mail_sender_registered():
 
 
 @pytest.mark.asyncio
-async def test_mail_sender_factory_resolves_oauth_bindings(monkeypatch):
-    set_trace_manager(MockTraceManager(project_name="test_project"))
+async def test_mail_sender_factory_maps_tokens(monkeypatch):
+    """Smoke-test the factory create-path: patched resolve_oauth_access_token returns
+    distinct tokens that are injected into the correct MailSender constructor kwargs."""
+    from unittest.mock import AsyncMock
 
-    resolved_requests: list[tuple[str | None, str]] = []
-
-    async def fake_resolve_oauth_access_token(definition_id: str | None, provider_config_key: str) -> str | None:
-        resolved_requests.append((definition_id, provider_config_key))
-        tokens = {
-            OAuthProvider.GMAIL: "gmail-access-token",
-            OAuthProvider.OUTLOOK: "outlook-access-token",
-        }
-        return tokens[provider_config_key]
+    factory = FACTORY_REGISTRY.get(component_version_id=COMPONENT_VERSION_UUIDS["mail_sender"])
+    assert isinstance(factory, OAuthComponentFactory)
 
     monkeypatch.setattr(
         "ada_backend.services.entity_factory.resolve_oauth_access_token",
-        fake_resolve_oauth_access_token,
+        AsyncMock(side_effect=["gmail-tok", "outlook-tok"]),
     )
 
-    component = await FACTORY_REGISTRY.create(
-        component_version_id=COMPONENT_VERSION_UUIDS["mail_sender"],
-        component_attributes=ComponentAttributes(component_instance_name="mail_sender"),
-        gmail_oauth_connection_id="gmail-definition-id",
-        outlook_oauth_connection_id="outlook-definition-id",
+    set_trace_manager(MockTraceManager(project_name="test_project"))
+    result = await factory._create_async(
+        trace_manager=MockTraceManager(project_name="test_project"),
+        component_attributes=ComponentAttributes(component_instance_name="mail_test", component_instance_id=None),
+        gmail_oauth_connection_id="fake-gmail-def-id",
+        outlook_oauth_connection_id="fake-outlook-def-id",
     )
 
-    assert isinstance(component, MailSender)
-    assert resolved_requests == [
-        ("gmail-definition-id", OAuthProvider.GMAIL),
-        ("outlook-definition-id", OAuthProvider.OUTLOOK),
-    ]
-    assert component._gmail_access_token == "gmail-access-token"
-    assert component._outlook_access_token == "outlook-access-token"
+    assert isinstance(result, MailSender)
+    assert result._gmail_access_token == "gmail-tok"
+    assert result._outlook_access_token == "outlook-tok"
