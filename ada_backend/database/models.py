@@ -172,6 +172,7 @@ class UIComponent(StrEnum):
     #       not OAuthConnection.id. Rename the parameter to "oauth_definition_id" in all
     #       seed files + a DB migration to update component_parameter_definitions.name.
     OAUTH_CONNECTION = "OAuthConnection"
+    EXCLUSIVE_OAUTH_CONNECTION = "ExclusiveOAuthConnection"
     CODE = "Code"
     ROUTE_BUILDER = "RouteBuilder"
     CATEGORIES_BUILDER = "CategoriesBuilder"

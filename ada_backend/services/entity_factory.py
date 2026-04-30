@@ -259,15 +259,12 @@ async def resolve_oauth_access_token(
 class OAuthComponentFactory:
     """
     Generic async factory for components that require OAuth access tokens via Nango.
-
-    Resolves oauth_connection_id to access_token asynchronously before instantiating the component.
     """
 
     def __init__(
         self,
         entity_class: Type,
-        provider_config_key: str,
-        target_param_name: str = "access_token",
+        oauth_bindings: list[tuple[str, str, str]],
         parameter_processors: list[ParameterProcessor] | None = None,
         constructor_method: str = "__init__",
     ):
@@ -276,16 +273,17 @@ class OAuthComponentFactory:
 
         Args:
             entity_class: The component class to instantiate
-            provider_config_key: OAuth provider key (e.g., "slack", "gmail")
-            target_param_name: Parameter name for the resolved token (default: "access_token")
+            oauth_bindings: List of (param_name, provider_config_key, target_kwarg_name).
+                The factory resolves one token per binding.
             parameter_processors: Additional parameter processors to apply after token resolution
             constructor_method: Method to use for instantiation (default: "__init__")
         """
         self.entity_class = entity_class
-        self.provider_config_key = provider_config_key
-        self.target_param_name = target_param_name
         self.parameter_processors = parameter_processors or []
         self.constructor_method = constructor_method
+        if not oauth_bindings:
+            raise ValueError("oauth_bindings is required.")
+        self.oauth_bindings = oauth_bindings
 
         if constructor_method == "__init__":
             self.constructor_params = signature(entity_class.__init__).parameters
@@ -306,14 +304,15 @@ class OAuthComponentFactory:
             Instantiated component with resolved OAuth token (access_token may be None;
             component raises at run time if a connection is required but not configured).
         """
-        # TODO: DB column is still named "oauth_connection_id" but stores OrgVariableDefinition.id
-        #       after migration d4e5f6a7b8c9 — rename column to oauth_definition_id
-        definition_id = kwargs.pop("oauth_connection_id", None)
-        if isinstance(definition_id, list):
-            definition_id = definition_id[0]
-        access_token = await resolve_oauth_access_token(definition_id, self.provider_config_key)
-        # may be None; component raises at run if required
-        kwargs[self.target_param_name] = SecretStr(access_token) if access_token is not None else None
+        for param_name, provider_config_key, resolved_param_name in self.oauth_bindings:
+            # TODO: DB column is still named "oauth_connection_id" but stores OrgVariableDefinition.id
+            #       after migration d4e5f6a7b8c9 — rename column to oauth_definition_id
+            definition_id = kwargs.pop(param_name, None)
+            if isinstance(definition_id, list):
+                definition_id = definition_id[0] if definition_id else None
+            access_token = await resolve_oauth_access_token(definition_id, provider_config_key)
+            # may be None; component raises at run if required
+            kwargs[resolved_param_name] = SecretStr(access_token) if access_token is not None else None
 
         for processor in self.parameter_processors:
             kwargs = processor(kwargs, self.constructor_params)

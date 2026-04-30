@@ -27,6 +27,7 @@ from engine.components.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.components.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
 from engine.integrations.gmail.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
+from engine.integrations.mail_sender import MAIL_SENDER_TOOL_DESCRIPTION
 from engine.integrations.outlook.outlook_sender import OUTLOOK_SENDER_TOOL_DESCRIPTION
 from engine.integrations.slack.slack_sender import SLACK_SENDER_TOOL_DESCRIPTION
 
@@ -57,6 +58,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "hubspot_neverdrop_mcp_tool_description": UUID("a1e7f624-6c98-4546-b769-3607819ebad2"),
     "google_calendar_mcp_tool_description": UUID("d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"),
     "outlook_sender_tool_description": UUID("31344b0e-4949-42b6-98a8-6b1dcec98f3c"),
+    "mail_sender_tool_description": UUID("7fe2178e-36c6-4195-aa5b-9a9178be70e8"),
     "default_sql_tool_description": UUID("7a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d"),
     "scorer_tool_description": UUID("8f9d4c3e-7a2b-4e1d-9c8f-5b6a3d2e1f0b"),
 }
@@ -161,6 +163,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["outlook_sender_tool_description"],
         **OUTLOOK_SENDER_TOOL_DESCRIPTION.model_dump(),
     )
+    mail_sender_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["mail_sender_tool_description"],
+        **MAIL_SENDER_TOOL_DESCRIPTION.model_dump(),
+    )
     default_sql_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["default_sql_tool_description"],
         **DEFAULT_SQL_TOOL_DESCRIPTION.model_dump(),
@@ -198,6 +204,7 @@ def seed_tool_description(session: Session):
             hubspot_neverdrop_mcp_tool_description,
             google_calendar_mcp_tool_description,
             outlook_sender_tool_description,
+            mail_sender_tool_description,
             default_sql_tool_description,
             scorer_tool_description,
         ],
