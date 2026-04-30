@@ -171,6 +171,7 @@ def seed_port_definitions(session: Session):
             parameter_group_id = None
             parameter_order_within_group = None
             default_tool_json_schema = None
+            is_prompt = False
             if isinstance(extra, dict):
                 ui_component = extra.get("ui_component")
                 ui_component_properties = extra.get("ui_component_properties")
@@ -181,6 +182,7 @@ def seed_port_definitions(session: Session):
                 parameter_group_id = extra.get("parameter_group_id")
                 parameter_order_within_group = extra.get("parameter_order_within_group")
                 default_tool_json_schema = extra.get("default_tool_json_schema")
+                is_prompt = extra.get("is_prompt", False)
 
             port_description = field_info.description
             parameter_type = get_parameter_type(field_info)
@@ -217,6 +219,7 @@ def seed_port_definitions(session: Session):
                 port.parameter_group_id = parameter_group_id
                 port.parameter_order_within_group = parameter_order_within_group
                 port.default_tool_json_schema = default_tool_json_schema
+                port.is_prompt = is_prompt
                 LOGGER.info(f"  - Updating INPUT port: {field_name}")
             else:
                 port = db.PortDefinition(
@@ -237,6 +240,7 @@ def seed_port_definitions(session: Session):
                     parameter_group_id=parameter_group_id,
                     parameter_order_within_group=parameter_order_within_group,
                     default_tool_json_schema=default_tool_json_schema,
+                    is_prompt=is_prompt,
                 )
                 session.add(port)
                 LOGGER.info(f"  - Creating INPUT port: {field_name}")

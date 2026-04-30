@@ -272,7 +272,7 @@ async def update_graph_service(
         parameter_params = []
         for param in instance.parameters:
             kind = getattr(param, "kind", ParameterKind.PARAMETER)
-            if kind == ParameterKind.INPUT:
+            if kind in (ParameterKind.INPUT, ParameterKind.PROMPT):
                 if not instance.id:
                     raise ValueError(
                         f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
@@ -459,15 +459,18 @@ async def update_graph_service(
 
             expression_json = expr_to_json(ast)
 
+            prompt_version_id = getattr(param, "prompt_version_id", None)
+
             existing_port_id = db_port_instances_by_instance[instance.id].get(field_name)
             if existing_port_id:
                 port = get_input_port_instance(session, existing_port_id)
                 if port and port.field_expression_id:
                     update_field_expression(session, port.field_expression_id, expression_json)
                 else:
-                    # Create new field expression and link it
                     expr = create_field_expression(session, expression_json)
                     update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
+                if prompt_version_id is not None:
+                    update_input_port_instance(session, existing_port_id, prompt_version_id=prompt_version_id)
             else:
                 expr = create_field_expression(session, expression_json)
                 create_input_port_instance(
@@ -475,6 +478,7 @@ async def update_graph_service(
                     component_instance_id=instance.id,
                     name=field_name,
                     field_expression_id=expr.id,
+                    prompt_version_id=prompt_version_id,
                 )
             sync_output_port_instances_from_schema(
                 session=session,
@@ -490,6 +494,8 @@ async def update_graph_service(
             for field_name in fields_to_delete:
                 port_id = db_port_instances_by_instance[instance_id][field_name]
                 port = get_input_port_instance(session, port_id)
+                if port and port.prompt_version_id:
+                    continue
                 if port and port.field_expression_id:
                     delete_field_expression_by_id(session, port.field_expression_id)
                 delete_input_port_instance(session, port_id)
@@ -588,7 +594,7 @@ def _ensure_canonical_expressions_for_edges(
                     incoming_fe_targets.add((inst.id, port_inst.name))
         for param in getattr(inst, "parameters", []) or []:
             kind = getattr(param, "kind", None)
-            if kind == ParameterKind.INPUT and param.value:
+            if kind in (ParameterKind.INPUT, ParameterKind.PROMPT) and param.value:
                 incoming_fe_targets.add((inst.id, param.name))
     if input_params_by_instance:
         for inst_id, params in input_params_by_instance.items():

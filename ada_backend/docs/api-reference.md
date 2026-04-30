@@ -298,6 +298,22 @@ Run input data is persisted in the `run_inputs` table (keyed by `retry_group_id`
 | GET | `/organizations/{org_id}/git-sync/{config_id}` | JWT\|ApiKey(Member) | Get a git sync config |
 | DELETE | `/organizations/{org_id}/git-sync/{config_id}` | JWT\|ApiKey(Developer) | Disconnect git sync |
 
+## Prompts (`prompt_router.py`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/orgs/{org_id}/prompts` | JWT\|ApiKey(Developer) | Create prompt with initial version |
+| GET | `/orgs/{org_id}/prompts` | JWT\|ApiKey(Member) | List all prompts in org |
+| GET | `/orgs/{org_id}/prompts/{prompt_id}` | JWT\|ApiKey(Member) | Get prompt details + versions |
+| DELETE | `/orgs/{org_id}/prompts/{prompt_id}` | JWT\|ApiKey(Developer) | Delete prompt (fails if pinned) |
+| POST | `/orgs/{org_id}/prompts/{prompt_id}/versions` | JWT\|ApiKey(Developer) | Create new version |
+| GET | `/orgs/{org_id}/prompts/{prompt_id}/versions` | JWT\|ApiKey(Member) | List versions |
+| GET | `/orgs/{org_id}/prompts/{prompt_id}/versions/{version_id}` | JWT\|ApiKey(Member) | Get version detail + sections |
+| GET | `/orgs/{org_id}/prompts/{prompt_id}/diff?from=&to=` | JWT\|ApiKey(Member) | Diff two versions |
+| GET | `/orgs/{org_id}/prompts/{prompt_id}/usages` | JWT\|ApiKey(Member) | List pinned usages |
+| PUT | `/projects/{id}/graph/{gr_id}/components/{ci_id}/ports/{port_id}/prompt-pin` | JWT(Developer) | Pin port to prompt version |
+| DELETE | `/projects/{id}/graph/{gr_id}/components/{ci_id}/ports/{port_id}/prompt-pin` | JWT(Developer) | Unpin port |
+
 ## Admin Tools (`admin_tools_router.py`, `global_secret_router.py`)
 
 | Method | Path | Auth | Description |

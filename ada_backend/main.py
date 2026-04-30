@@ -42,6 +42,7 @@ from ada_backend.routers.monitor_router import router as monitor_router
 from ada_backend.routers.oauth_router import router as oauth_router
 from ada_backend.routers.organization_router import router as org_router
 from ada_backend.routers.project_router import router as project_router
+from ada_backend.routers.prompt_router import router as prompt_router
 from ada_backend.routers.qa_evaluation_router import router as qa_evaluation_router
 from ada_backend.routers.qa_stream_router import router as qa_stream_router
 from ada_backend.routers.quality_assurance_router import router as quality_assurance_router
@@ -293,6 +294,7 @@ app.include_router(webhook_internal_router)
 app.include_router(webhook_trigger_router)
 app.include_router(scheduler_internal_router)
 app.include_router(alert_email_router)
+app.include_router(prompt_router)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)

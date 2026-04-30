@@ -105,6 +105,7 @@ class LLMCallInputs(BaseModel):
         description="Prompt template to use for the LLM call.",
         json_schema_extra={
             "is_tool_input": False,
+            "is_prompt": True,
             "ui_component": UIComponent.TEXTAREA,
         },
     )

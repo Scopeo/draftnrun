@@ -52,7 +52,7 @@ def _split_unified_parameters(
     input_port_instances: list[InputPortInstanceSchema] = []
 
     for param in parameters:
-        if param.kind == ParameterKind.INPUT:
+        if param.kind in (ParameterKind.INPUT, ParameterKind.PROMPT):
             field_expression = param.field_expression
             if field_expression is None and param.value is not None:
                 expression_json = _normalize_expression_json(param.value)
@@ -64,6 +64,7 @@ def _split_unified_parameters(
                     field_expression=field_expression,
                     description=param.description,
                     port_definition_id=param.port_definition_id,
+                    prompt_version_id=param.prompt_version_id if param.kind == ParameterKind.PROMPT else None,
                 )
             )
         else:
@@ -175,6 +176,10 @@ def _sync_input_port_field_expressions(
             else:
                 expr = create_field_expression(session, expression_json)
                 update_input_port_instance(session, existing_port.id, field_expression_id=expr.id)
+            if port_data.prompt_version_id is not None:
+                update_input_port_instance(
+                    session, existing_port.id, prompt_version_id=port_data.prompt_version_id
+                )
         else:
             expr = create_field_expression(session, expression_json)
             create_input_port_instance(
@@ -182,10 +187,11 @@ def _sync_input_port_field_expressions(
                 component_instance_id=instance_id,
                 name=port_data.name,
                 field_expression_id=expr.id,
+                prompt_version_id=port_data.prompt_version_id,
             )
 
     for port in db_ports:
-        if port.name not in incoming_names and port.field_expression_id:
+        if port.name not in incoming_names and port.field_expression_id and not port.prompt_version_id:
             delete_field_expression_by_id(session, port.field_expression_id)
             update_input_port_instance(session, port.id, field_expression_id=None)
 
