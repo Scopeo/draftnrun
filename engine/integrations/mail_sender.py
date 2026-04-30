@@ -114,9 +114,7 @@ class MailSender(Component):
         return {"input": "mail_body", "output": "status"}
 
     def is_available(self) -> bool:
-        has_gmail_connection = bool(self._gmail_access_token)
-        has_outlook_connection = bool(self._outlook_access_token)
-        return has_gmail_connection ^ has_outlook_connection
+        return bool(self._gmail_access_token) or bool(self._outlook_access_token)
 
     async def _run_without_io_trace(self, inputs: BaseModel, ctx: dict) -> MailSenderOutputs:
         gmail_inputs = GmailSenderInputs.model_validate(inputs.model_dump())
