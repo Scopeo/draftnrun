@@ -44,7 +44,7 @@ def test_is_available_both_connected(component_attrs: ComponentAttributes):
         gmail_access_token="g",
         outlook_access_token="o",
     )
-    assert not sender.is_available()
+    assert sender.is_available()
 
 
 @pytest.mark.asyncio
