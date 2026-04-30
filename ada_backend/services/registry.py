@@ -13,6 +13,7 @@ from ada_backend.services.entity_factory import (
     AgentFactory,
     EntityFactory,
     NonToolCallableBlockFactory,
+    OAuthBinding,
     OAuthComponentFactory,
     RemoteMCPToolFactory,
     build_completion_service_processor,
@@ -554,7 +555,7 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["gmail_sender_v2"],
         factory=OAuthComponentFactory(
             entity_class=GmailSenderV2,
-            oauth_bindings=[("oauth_connection_id", OAuthProvider.GMAIL, "access_token")],
+            oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.GMAIL)],
         ),
     )
 
@@ -562,7 +563,7 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["gmail_sender_v3"],
         factory=OAuthComponentFactory(
             entity_class=GmailSenderV2,
-            oauth_bindings=[("oauth_connection_id", OAuthProvider.GMAIL, "access_token")],
+            oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.GMAIL)],
         ),
     )
 
@@ -570,7 +571,7 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["outlook_sender"],
         factory=OAuthComponentFactory(
             entity_class=OutlookSender,
-            oauth_bindings=[("oauth_connection_id", OAuthProvider.OUTLOOK, "access_token")],
+            oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.OUTLOOK)],
         ),
     )
 
@@ -579,8 +580,16 @@ def create_factory_registry() -> FactoryRegistry:
         factory=OAuthComponentFactory(
             entity_class=MailSender,
             oauth_bindings=[
-                ("gmail_oauth_connection_id", OAuthProvider.GMAIL, "gmail_access_token"),
-                ("outlook_oauth_connection_id", OAuthProvider.OUTLOOK, "outlook_access_token"),
+                OAuthBinding(
+                    param_name="gmail_oauth_connection_id",
+                    provider_config_key=OAuthProvider.GMAIL,
+                    target_param_name="gmail_access_token",
+                ),
+                OAuthBinding(
+                    param_name="outlook_oauth_connection_id",
+                    provider_config_key=OAuthProvider.OUTLOOK,
+                    target_param_name="outlook_access_token",
+                ),
             ],
         ),
     )
@@ -589,7 +598,7 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["slack_sender"],
         factory=OAuthComponentFactory(
             entity_class=SlackSender,
-            oauth_bindings=[("oauth_connection_id", OAuthProvider.SLACK, "access_token")],
+            oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.SLACK)],
         ),
     )
 
@@ -597,7 +606,7 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["hubspot_mcp_tool"],
         factory=OAuthComponentFactory(
             entity_class=HubSpotMCPTool,
-            oauth_bindings=[("oauth_connection_id", OAuthProvider.HUBSPOT, "access_token")],
+            oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.HUBSPOT)],
             constructor_method="from_access_token",
             parameter_processors=[build_ignore_tool_description_processor()],
         ),
@@ -607,7 +616,7 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["hubspot_neverdrop_mcp_tool"],
         factory=OAuthComponentFactory(
             entity_class=HubSpotMCPTool,
-            oauth_bindings=[("oauth_connection_id", OAuthProvider.HUBSPOT_NEVERDROP, "access_token")],
+            oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.HUBSPOT_NEVERDROP)],
             constructor_method="from_access_token",
             parameter_processors=[build_ignore_tool_description_processor()],
         ),
@@ -617,7 +626,7 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["google_calendar_mcp_tool"],
         factory=OAuthComponentFactory(
             entity_class=GoogleCalendarMCPTool,
-            oauth_bindings=[("oauth_connection_id", OAuthProvider.GOOGLE_CALENDAR, "access_token")],
+            oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.GOOGLE_CALENDAR)],
             constructor_method="from_access_token",
             parameter_processors=[build_ignore_tool_description_processor()],
         ),

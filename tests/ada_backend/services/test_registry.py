@@ -1,7 +1,7 @@
 import pytest
 
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
-from ada_backend.services.entity_factory import OAuthComponentFactory
+from ada_backend.services.entity_factory import OAuthBinding, OAuthComponentFactory
 from ada_backend.services.registry import FACTORY_REGISTRY
 from engine.components.synthesizer import Synthesizer
 from engine.components.tools.google_calendar_mcp_tool import GoogleCalendarMCPTool
@@ -67,7 +67,11 @@ def test_google_calendar_mcp_tool_registered():
     assert isinstance(factory, OAuthComponentFactory)
     assert factory.entity_class is GoogleCalendarMCPTool
     assert factory.oauth_bindings == [
-        ("oauth_connection_id", OAuthProvider.GOOGLE_CALENDAR, "access_token"),
+        OAuthBinding(
+            param_name="oauth_connection_id",
+            provider_config_key=OAuthProvider.GOOGLE_CALENDAR,
+            target_param_name="access_token",
+        ),
     ]
     assert factory.constructor_method == "from_access_token"
 
@@ -78,8 +82,16 @@ def test_mail_sender_registered():
     assert isinstance(factory, OAuthComponentFactory)
     assert factory.entity_class is MailSender
     assert factory.oauth_bindings == [
-        ("gmail_oauth_connection_id", OAuthProvider.GMAIL, "gmail_access_token"),
-        ("outlook_oauth_connection_id", OAuthProvider.OUTLOOK, "outlook_access_token"),
+        OAuthBinding(
+            param_name="gmail_oauth_connection_id",
+            provider_config_key=OAuthProvider.GMAIL,
+            target_param_name="gmail_access_token",
+        ),
+        OAuthBinding(
+            param_name="outlook_oauth_connection_id",
+            provider_config_key=OAuthProvider.OUTLOOK,
+            target_param_name="outlook_access_token",
+        ),
     ]
 
 

@@ -35,6 +35,7 @@ from engine.components.rag.vocabulary_search import VocabularySearch
 from engine.components.synthesizer import Synthesizer
 from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import ToolDescription
+from engine.integrations.providers import OAuthProvider
 from engine.llm_services.llm_service import CompletionService, EmbeddingService, OCRService, WebSearchService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.secret_utils import unwrap_secret, unwrap_secrets
@@ -256,6 +257,14 @@ async def resolve_oauth_access_token(
         )
 
 
+class OAuthBinding(BaseModel):
+    """Maps a component OAuth parameter to a provider key and constructor kwarg."""
+
+    param_name: str = "oauth_connection_id"
+    provider_config_key: OAuthProvider
+    target_param_name: str = "access_token"
+
+
 class OAuthComponentFactory:
     """
     Generic async factory for components that require OAuth access tokens via Nango.
@@ -264,7 +273,7 @@ class OAuthComponentFactory:
     def __init__(
         self,
         entity_class: Type,
-        oauth_bindings: list[tuple[str, str, str]],
+        oauth_bindings: list[OAuthBinding],
         parameter_processors: list[ParameterProcessor] | None = None,
         constructor_method: str = "__init__",
     ):
@@ -273,7 +282,7 @@ class OAuthComponentFactory:
 
         Args:
             entity_class: The component class to instantiate
-            oauth_bindings: List of (param_name, provider_config_key, target_kwarg_name).
+            oauth_bindings: List of OAuth bindings.
                 The factory resolves one token per binding.
             parameter_processors: Additional parameter processors to apply after token resolution
             constructor_method: Method to use for instantiation (default: "__init__")
@@ -304,15 +313,15 @@ class OAuthComponentFactory:
             Instantiated component with resolved OAuth token (access_token may be None;
             component raises at run time if a connection is required but not configured).
         """
-        for param_name, provider_config_key, resolved_param_name in self.oauth_bindings:
+        for binding in self.oauth_bindings:
             # TODO: DB column is still named "oauth_connection_id" but stores OrgVariableDefinition.id
             #       after migration d4e5f6a7b8c9 — rename column to oauth_definition_id
-            definition_id = kwargs.pop(param_name, None)
+            definition_id = kwargs.pop(binding.param_name, None)
             if isinstance(definition_id, list):
                 definition_id = definition_id[0] if definition_id else None
-            access_token = await resolve_oauth_access_token(definition_id, provider_config_key)
+            access_token = await resolve_oauth_access_token(definition_id, str(binding.provider_config_key))
             # may be None; component raises at run if required
-            kwargs[resolved_param_name] = SecretStr(access_token) if access_token is not None else None
+            kwargs[binding.target_param_name] = SecretStr(access_token) if access_token is not None else None
 
         for processor in self.parameter_processors:
             kwargs = processor(kwargs, self.constructor_params)
