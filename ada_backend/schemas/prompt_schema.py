@@ -12,12 +12,9 @@ class PromptCreateSchema(BaseModel):
     sections: Optional[list["PromptSectionInputSchema"]] = None
 
 
-class PromptUpdateSchema(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-
-
 class PromptVersionCreateSchema(BaseModel):
+    name: str
+    description: Optional[str] = None
     content: str = Field(min_length=1)
     change_description: Optional[str] = None
     sections: Optional[list["PromptSectionInputSchema"]] = None
@@ -49,6 +46,8 @@ class PromptVersionResponseSchema(BaseModel):
     id: UUID
     prompt_id: UUID
     version_number: int
+    name: str
+    description: Optional[str] = None
     content: str
     change_description: Optional[str] = None
     created_by: Optional[UUID] = None
@@ -61,6 +60,8 @@ class PromptVersionSummarySchema(BaseModel):
 
     id: UUID
     version_number: int
+    name: str
+    description: Optional[str] = None
     change_description: Optional[str] = None
     created_by: Optional[UUID] = None
     created_at: datetime
@@ -71,11 +72,6 @@ class PromptResponseSchema(BaseModel):
 
     id: UUID
     organization_id: UUID
-    name: str
-    description: Optional[str] = None
-    created_by: Optional[UUID] = None
-    created_at: datetime
-    updated_at: datetime
     latest_version: Optional[PromptVersionSummarySchema] = None
 
 

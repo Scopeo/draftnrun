@@ -7,27 +7,35 @@ from sqlalchemy.orm import Session, joinedload
 from ada_backend.database import models as db
 
 
-def get_prompt_by_id(session: Session, prompt_id: UUID) -> Optional[db.Prompt]:
-    return session.query(db.Prompt).filter(db.Prompt.id == prompt_id).first()
+def get_prompt_by_id(session: Session, prompt_id: UUID) -> Optional[db.PromptDefinition]:
+    return session.query(db.PromptDefinition).filter(db.PromptDefinition.id == prompt_id).first()
 
 
-def get_prompts_by_org(session: Session, organization_id: UUID) -> list[db.Prompt]:
+def lock_prompt_for_update(session: Session, prompt_id: UUID) -> Optional[db.PromptDefinition]:
     return (
-        session.query(db.Prompt)
-        .filter(db.Prompt.organization_id == organization_id)
-        .order_by(db.Prompt.updated_at.desc())
+        session.query(db.PromptDefinition)
+        .filter(db.PromptDefinition.id == prompt_id)
+        .with_for_update()
+        .first()
+    )
+
+
+def get_prompts_by_org(session: Session, organization_id: UUID) -> list[db.PromptDefinition]:
+    return (
+        session.query(db.PromptDefinition)
+        .filter(db.PromptDefinition.organization_id == organization_id)
         .all()
     )
 
 
-def create_prompt(session: Session, prompt: db.Prompt) -> db.Prompt:
+def create_prompt(session: Session, prompt: db.PromptDefinition) -> db.PromptDefinition:
     session.add(prompt)
     session.flush()
     return prompt
 
 
 def delete_prompt(session: Session, prompt_id: UUID) -> None:
-    session.query(db.Prompt).filter(db.Prompt.id == prompt_id).delete()
+    session.query(db.PromptDefinition).filter(db.PromptDefinition.id == prompt_id).delete()
     session.flush()
 
 
@@ -79,6 +87,14 @@ def create_prompt_sections(session: Session, sections: list[db.PromptSection]) -
     return sections
 
 
+def is_prompt_referenced_in_sections(session: Session, prompt_id: UUID) -> bool:
+    return (
+        session.query(db.PromptSection.id)
+        .filter(db.PromptSection.section_prompt_id == prompt_id)
+        .first()
+    ) is not None
+
+
 def is_prompt_pinned(session: Session, prompt_id: UUID) -> bool:
     return (
         session.query(db.InputPortInstance.id)
@@ -103,16 +119,16 @@ def get_prompt_usages(
 
 def get_prompt_pins_for_project(
     session: Session, project_id: UUID
-) -> list[tuple[db.InputPortInstance, db.PortInstance, db.PromptVersion, db.Prompt]]:
+) -> list[tuple[db.InputPortInstance, db.PortInstance, db.PromptVersion, db.PromptDefinition]]:
     return (
-        session.query(db.InputPortInstance, db.PortInstance, db.PromptVersion, db.Prompt)
+        session.query(db.InputPortInstance, db.PortInstance, db.PromptVersion, db.PromptDefinition)
         .join(db.PortInstance, db.InputPortInstance.id == db.PortInstance.id)
         .join(db.ComponentInstance, db.PortInstance.component_instance_id == db.ComponentInstance.id)
         .join(db.GraphRunnerNode, db.GraphRunnerNode.node_id == db.ComponentInstance.id)
         .join(db.GraphRunner, db.GraphRunner.id == db.GraphRunnerNode.graph_runner_id)
         .join(db.ProjectEnvironmentBinding, db.ProjectEnvironmentBinding.graph_runner_id == db.GraphRunner.id)
         .join(db.PromptVersion, db.InputPortInstance.prompt_version_id == db.PromptVersion.id)
-        .join(db.Prompt, db.PromptVersion.prompt_id == db.Prompt.id)
+        .join(db.PromptDefinition, db.PromptVersion.prompt_id == db.PromptDefinition.id)
         .filter(db.ProjectEnvironmentBinding.project_id == project_id)
         .filter(db.InputPortInstance.prompt_version_id.isnot(None))
         .all()

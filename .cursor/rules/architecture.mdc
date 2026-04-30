@@ -81,7 +81,7 @@ Mixpanel Python SDK (`mixpanel_analytics.py`). `non_breaking_track` decorator wr
 
 ### Prompt Library
 
-Org-scoped, independently versioned prompts (`prompts`, `prompt_versions`, `prompt_sections` tables). Prompts are pinned to input ports via `InputPortInstance.prompt_version_id`. Pinning writes a `LiteralNode` to the field expression; runtime needs no changes. `PortDefinition.is_prompt` marks eligible ports. `ParameterKind.PROMPT` is emitted dynamically when a port is pinned. Supports `{{variable}}` runtime injection but not `@{{}}` field expressions. See `ada_backend/docs/prompts.md`.
+Org-scoped, independently versioned prompts (`prompt_definitions`, `prompt_versions`, `prompt_sections` tables). Prompts are referenced by UUID `id`, never by name. The `prompt_definitions` table is a minimal identity anchor (id, organization_id); all user-facing metadata (`name`, `description`, `created_by`) lives on `prompt_versions` and can change between versions. Prompts are pinned to input ports via `InputPortInstance.prompt_version_id`. Pinning writes a `LiteralNode` to the field expression; runtime needs no changes. `PortDefinition.is_prompt` marks eligible ports. `ParameterKind.PROMPT` is emitted dynamically when a port is pinned. Supports `{{variable}}` runtime injection but not `@{{}}` field expressions. See `ada_backend/docs/prompts.md`.
 
 ### Migration Deploy Strategy
 

@@ -5,8 +5,10 @@ import pytest
 
 from ada_backend.schemas.parameter_schema import PipelineParameterV2Schema
 from ada_backend.schemas.pipeline.graph_schema import ComponentCreateV2Schema, ComponentUpdateV2Schema
+from ada_backend.schemas.pipeline.port_instance_schema import FieldExpressionSchema, InputPortInstanceSchema
 from ada_backend.services.graph.component_instance_v2_service import (
     _split_unified_parameters,
+    _sync_input_port_field_expressions,
     create_component_in_graph,
     delete_component_from_graph,
     update_single_component,
@@ -180,6 +182,42 @@ class TestSplitUnifiedParameters:
         assert input_ports[0].name == "messages"
         assert input_ports[0].field_expression.expression_json["type"] == "literal"
 
+    def test_prompt_kind_preserves_prompt_version_id(self):
+        version_id = uuid4()
+        params = [
+            PipelineParameterV2Schema(
+                name="system_prompt",
+                kind="prompt",
+                prompt_version_id=version_id,
+                field_expression={"expression_json": {"type": "literal", "value": "Be helpful"}},
+            ),
+        ]
+        _, input_ports = _split_unified_parameters(params)
+        assert len(input_ports) == 1
+        assert input_ports[0].prompt_version_id == version_id
+
+    def test_input_kind_does_not_set_prompt_version_id(self):
+        params = [
+            PipelineParameterV2Schema(
+                name="query",
+                kind="input",
+                field_expression={"expression_json": {"type": "literal", "value": "hi"}},
+            ),
+        ]
+        _, input_ports = _split_unified_parameters(params)
+        assert input_ports[0].prompt_version_id is None
+
+    def test_prompt_kind_without_version_id_passes_none(self):
+        params = [
+            PipelineParameterV2Schema(
+                name="system_prompt",
+                kind="prompt",
+                field_expression={"expression_json": {"type": "literal", "value": "hi"}},
+            ),
+        ]
+        _, input_ports = _split_unified_parameters(params)
+        assert input_ports[0].prompt_version_id is None
+
     def test_empty_list(self):
         param_params, input_ports = _split_unified_parameters([])
         assert param_params == []
@@ -327,3 +365,88 @@ class TestUpdateComponentWithUnifiedParams:
         assert len(instance_schema.parameters) == 1
         assert len(instance_schema.input_port_instances) == 1
         mock_sync.assert_called_once()
+
+
+class TestSyncInputPortFieldExpressionsPromptPin:
+    @patch("ada_backend.services.graph.component_instance_v2_service.create_input_port_instance")
+    @patch("ada_backend.services.graph.component_instance_v2_service.create_field_expression")
+    @patch("ada_backend.services.graph.component_instance_v2_service.get_input_port_instances_for_component_instance")
+    def test_creates_new_port_with_prompt_version_id(self, mock_get_ports, mock_create_fe, mock_create_ipi, session):
+        mock_get_ports.return_value = []
+        expr_mock = MagicMock()
+        expr_mock.id = uuid4()
+        mock_create_fe.return_value = expr_mock
+
+        instance_id = uuid4()
+        version_id = uuid4()
+        incoming = [
+            InputPortInstanceSchema(
+                name="system_prompt",
+                field_expression=FieldExpressionSchema(expression_json={"type": "literal", "value": "Be helpful"}),
+                prompt_version_id=version_id,
+            ),
+        ]
+
+        _sync_input_port_field_expressions(session, instance_id, incoming)
+
+        mock_create_ipi.assert_called_once_with(
+            session=session,
+            component_instance_id=instance_id,
+            name="system_prompt",
+            field_expression_id=expr_mock.id,
+            prompt_version_id=version_id,
+        )
+
+    @patch("ada_backend.services.graph.component_instance_v2_service.update_input_port_instance")
+    @patch("ada_backend.services.graph.component_instance_v2_service.update_field_expression")
+    @patch("ada_backend.services.graph.component_instance_v2_service.get_input_port_instances_for_component_instance")
+    def test_updates_existing_port_with_prompt_version_id(self, mock_get_ports, mock_update_fe, mock_update_ipi, session):
+        version_id = uuid4()
+        existing_port = MagicMock()
+        existing_port.name = "system_prompt"
+        existing_port.field_expression_id = uuid4()
+        existing_port.prompt_version_id = None
+        mock_get_ports.return_value = [existing_port]
+
+        instance_id = uuid4()
+        incoming = [
+            InputPortInstanceSchema(
+                name="system_prompt",
+                field_expression=FieldExpressionSchema(expression_json={"type": "literal", "value": "Updated"}),
+                prompt_version_id=version_id,
+            ),
+        ]
+
+        _sync_input_port_field_expressions(session, instance_id, incoming)
+
+        mock_update_fe.assert_called_once_with(session, existing_port.field_expression_id, {"type": "literal", "value": "Updated"})
+        mock_update_ipi.assert_called_once_with(session, existing_port.id, prompt_version_id=version_id)
+
+    @patch("ada_backend.services.graph.component_instance_v2_service.create_input_port_instance")
+    @patch("ada_backend.services.graph.component_instance_v2_service.create_field_expression")
+    @patch("ada_backend.services.graph.component_instance_v2_service.get_input_port_instances_for_component_instance")
+    def test_creates_new_port_without_prompt_version_id_for_input_kind(
+        self, mock_get_ports, mock_create_fe, mock_create_ipi, session
+    ):
+        mock_get_ports.return_value = []
+        expr_mock = MagicMock()
+        expr_mock.id = uuid4()
+        mock_create_fe.return_value = expr_mock
+
+        instance_id = uuid4()
+        incoming = [
+            InputPortInstanceSchema(
+                name="query",
+                field_expression=FieldExpressionSchema(expression_json={"type": "literal", "value": "test"}),
+            ),
+        ]
+
+        _sync_input_port_field_expressions(session, instance_id, incoming)
+
+        mock_create_ipi.assert_called_once_with(
+            session=session,
+            component_instance_id=instance_id,
+            name="query",
+            field_expression_id=expr_mock.id,
+            prompt_version_id=None,
+        )

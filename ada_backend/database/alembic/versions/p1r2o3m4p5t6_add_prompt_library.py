@@ -1,8 +1,8 @@
-"""Add prompt library: prompts, prompt_versions, prompt_sections tables,
+"""Add prompt library: prompt_definitions, prompt_versions, prompt_sections tables,
 is_prompt column on port_definitions, prompt_version_id on input_port_instances.
 
 Revision ID: p1r2o3m4p5t6
-Revises: 93189a98fdf2
+Revises: l3m4n5o6p7q8
 Create Date: 2026-04-29
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "p1r2o3m4p5t6"
-down_revision: Union[str, None] = "93189a98fdf2"
+down_revision: Union[str, None] = "l3m4n5o6p7q8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -21,22 +21,24 @@ deploy_strategy = "migrate-first"
 
 def upgrade() -> None:
     op.create_table(
-        "prompts",
+        "prompt_definitions",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("organization_id", sa.UUID(), nullable=False, index=True),
-        sa.Column("name", sa.String(), nullable=False),
-        sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("created_by", sa.UUID(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_index("ix_prompts_org_name", "prompts", ["organization_id", "name"])
 
     op.create_table(
         "prompt_versions",
         sa.Column("id", sa.UUID(), primary_key=True),
-        sa.Column("prompt_id", sa.UUID(), sa.ForeignKey("prompts.id", ondelete="CASCADE"), nullable=False, index=True),
+        sa.Column(
+            "prompt_id",
+            sa.UUID(),
+            sa.ForeignKey("prompt_definitions.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
         sa.Column("version_number", sa.Integer(), nullable=False),
+        sa.Column("name", sa.String(), nullable=False),
+        sa.Column("description", sa.Text(), nullable=True),
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("change_description", sa.Text(), nullable=True),
         sa.Column("created_by", sa.UUID(), nullable=True),
@@ -55,7 +57,10 @@ def upgrade() -> None:
             index=True,
         ),
         sa.Column(
-            "section_prompt_id", sa.UUID(), sa.ForeignKey("prompts.id", ondelete="RESTRICT"), nullable=False
+            "section_prompt_id",
+            sa.UUID(),
+            sa.ForeignKey("prompt_definitions.id", ondelete="RESTRICT"),
+            nullable=False,
         ),
         sa.Column(
             "section_prompt_version_id",
@@ -89,5 +94,4 @@ def downgrade() -> None:
     op.drop_column("port_definitions", "is_prompt")
     op.drop_table("prompt_sections")
     op.drop_table("prompt_versions")
-    op.drop_index("ix_prompts_org_name", table_name="prompts")
-    op.drop_table("prompts")
+    op.drop_table("prompt_definitions")

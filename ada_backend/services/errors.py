@@ -483,6 +483,14 @@ class PromptStillPinnedError(ServiceError):
         super().__init__(f"Cannot delete prompt {prompt_id}: it is still pinned by one or more workflows")
 
 
+class PromptStillReferencedError(ServiceError):
+    status_code = 409
+
+    def __init__(self, prompt_id: UUID):
+        self.prompt_id = prompt_id
+        super().__init__(f"Cannot delete prompt {prompt_id}: it is referenced as a section by other prompts")
+
+
 class PromptNameConflictError(ServiceError):
     status_code = 409
 
@@ -490,3 +498,11 @@ class PromptNameConflictError(ServiceError):
         self.name = name
         self.organization_id = organization_id
         super().__init__(f"Prompt with name '{name}' already exists in organization {organization_id}")
+
+
+class CrossOrgSectionError(ServiceError):
+    status_code = 403
+
+    def __init__(self, section_prompt_id: UUID):
+        self.section_prompt_id = section_prompt_id
+        super().__init__(f"Section prompt {section_prompt_id} belongs to a different organization")

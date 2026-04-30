@@ -19,7 +19,6 @@ from ada_backend.schemas.prompt_schema import (
     PromptPinRequestSchema,
     PromptPinResponseSchema,
     PromptResponseSchema,
-    PromptUpdateSchema,
     PromptUsageSchema,
     PromptVersionCreateSchema,
     PromptVersionResponseSchema,
@@ -34,12 +33,11 @@ from ada_backend.services.prompt_service import (
     get_prompt_detail_service,
     get_prompt_usages_service,
     get_prompt_version_detail_service,
+    list_prompt_versions_service,
     list_prompts_service,
     pin_prompt_to_port_service,
     unpin_prompt_from_port_service,
-    update_prompt_metadata_service,
 )
-from ada_backend.repositories.prompt_repository import get_latest_prompt_version, get_prompt_versions
 
 router = APIRouter(tags=["Prompts"])
 LOGGER = logging.getLogger(__name__)
@@ -54,7 +52,7 @@ def create_prompt(
     ],
     session: Session = Depends(get_db),
 ) -> PromptResponseSchema:
-    prompt = create_prompt_service(
+    return create_prompt_service(
         session=session,
         organization_id=org_id,
         name=payload.name,
@@ -62,18 +60,6 @@ def create_prompt(
         description=payload.description,
         sections=payload.sections,
         created_by=user.id,
-    )
-    session.commit()
-    latest = get_latest_prompt_version(session, prompt.id)
-    return PromptResponseSchema(
-        id=prompt.id,
-        organization_id=prompt.organization_id,
-        name=prompt.name,
-        description=prompt.description,
-        created_by=prompt.created_by,
-        created_at=prompt.created_at,
-        updated_at=prompt.updated_at,
-        latest_version=PromptVersionSummarySchema.model_validate(latest) if latest else None,
     )
 
 
@@ -85,20 +71,7 @@ def list_prompts(
     ],
     session: Session = Depends(get_db),
 ) -> list[PromptResponseSchema]:
-    items = list_prompts_service(session, org_id)
-    return [
-        PromptResponseSchema(
-            id=item["prompt"].id,
-            organization_id=item["prompt"].organization_id,
-            name=item["prompt"].name,
-            description=item["prompt"].description,
-            created_by=item["prompt"].created_by,
-            created_at=item["prompt"].created_at,
-            updated_at=item["prompt"].updated_at,
-            latest_version=item["latest_version"],
-        )
-        for item in items
-    ]
+    return list_prompts_service(session, org_id)
 
 
 @router.get("/orgs/{org_id}/prompts/{prompt_id}", response_model=PromptDetailResponseSchema)
@@ -110,43 +83,7 @@ def get_prompt(
     ],
     session: Session = Depends(get_db),
 ) -> PromptDetailResponseSchema:
-    prompt, version_summaries = get_prompt_detail_service(session, prompt_id)
-    return PromptDetailResponseSchema(
-        id=prompt.id,
-        organization_id=prompt.organization_id,
-        name=prompt.name,
-        description=prompt.description,
-        created_by=prompt.created_by,
-        created_at=prompt.created_at,
-        updated_at=prompt.updated_at,
-        latest_version=version_summaries[0] if version_summaries else None,
-        versions=version_summaries,
-    )
-
-
-@router.patch("/orgs/{org_id}/prompts/{prompt_id}", response_model=PromptResponseSchema)
-def update_prompt(
-    org_id: UUID,
-    prompt_id: UUID,
-    payload: PromptUpdateSchema,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
-    ],
-    session: Session = Depends(get_db),
-) -> PromptResponseSchema:
-    prompt = update_prompt_metadata_service(session, prompt_id, name=payload.name, description=payload.description)
-    session.commit()
-    latest = get_latest_prompt_version(session, prompt.id)
-    return PromptResponseSchema(
-        id=prompt.id,
-        organization_id=prompt.organization_id,
-        name=prompt.name,
-        description=prompt.description,
-        created_by=prompt.created_by,
-        created_at=prompt.created_at,
-        updated_at=prompt.updated_at,
-        latest_version=PromptVersionSummarySchema.model_validate(latest) if latest else None,
-    )
+    return get_prompt_detail_service(session, prompt_id, organization_id=org_id)
 
 
 @router.delete("/orgs/{org_id}/prompts/{prompt_id}", status_code=204)
@@ -158,8 +95,7 @@ def delete_prompt_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> None:
-    delete_prompt_service(session, prompt_id)
-    session.commit()
+    delete_prompt_service(session, prompt_id, organization_id=org_id)
 
 
 @router.post(
@@ -176,16 +112,17 @@ def create_version(
     ],
     session: Session = Depends(get_db),
 ) -> PromptVersionResponseSchema:
-    version = create_prompt_version_service(
+    return create_prompt_version_service(
         session=session,
         prompt_id=prompt_id,
+        name=payload.name,
         content=payload.content,
+        description=payload.description,
         change_description=payload.change_description,
         sections=payload.sections,
         created_by=user.id,
+        organization_id=org_id,
     )
-    session.commit()
-    return get_prompt_version_detail_service(session, version.id)
 
 
 @router.get(
@@ -200,8 +137,7 @@ def list_versions(
     ],
     session: Session = Depends(get_db),
 ) -> list[PromptVersionSummarySchema]:
-    versions = get_prompt_versions(session, prompt_id)
-    return [PromptVersionSummarySchema.model_validate(v) for v in versions]
+    return list_prompt_versions_service(session, prompt_id, organization_id=org_id)
 
 
 @router.get(
@@ -217,7 +153,7 @@ def get_version(
     ],
     session: Session = Depends(get_db),
 ) -> PromptVersionResponseSchema:
-    return get_prompt_version_detail_service(session, version_id)
+    return get_prompt_version_detail_service(session, version_id, organization_id=org_id)
 
 
 @router.get(
@@ -234,7 +170,7 @@ def diff_versions(
     to_version: UUID = Query(..., alias="to"),
     session: Session = Depends(get_db),
 ) -> PromptDiffResponseSchema:
-    return diff_prompt_versions_service(session, from_version, to_version)
+    return diff_prompt_versions_service(session, from_version, to_version, organization_id=org_id)
 
 
 @router.get("/orgs/{org_id}/prompts/{prompt_id}/usages", response_model=list[PromptUsageSchema])
@@ -246,7 +182,7 @@ def get_usages(
     ],
     session: Session = Depends(get_db),
 ) -> list[PromptUsageSchema]:
-    return get_prompt_usages_service(session, prompt_id)
+    return get_prompt_usages_service(session, prompt_id, organization_id=org_id)
 
 
 @router.put(
@@ -264,8 +200,7 @@ def pin_prompt(
     ],
     session: Session = Depends(get_db),
 ) -> None:
-    pin_prompt_to_port_service(session, ci_id, port_name, payload.prompt_version_id)
-    session.commit()
+    pin_prompt_to_port_service(session, ci_id, port_name, payload.prompt_version_id, graph_runner_id)
 
 
 @router.delete(
@@ -282,8 +217,7 @@ def unpin_prompt(
     ],
     session: Session = Depends(get_db),
 ) -> None:
-    unpin_prompt_from_port_service(session, ci_id, port_name)
-    session.commit()
+    unpin_prompt_from_port_service(session, ci_id, port_name, graph_runner_id)
 
 
 @router.get("/projects/{project_id}/prompt-pins", response_model=list[PromptPinResponseSchema])

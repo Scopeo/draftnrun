@@ -2532,20 +2532,13 @@ class GitSyncConfig(Base):
     )
 
 
-class Prompt(Base):
-    __tablename__ = "prompts"
+class PromptDefinition(Base):
+    __tablename__ = "prompt_definitions"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    name = mapped_column(String, nullable=False)
-    description = mapped_column(Text, nullable=True)
-    created_by = mapped_column(UUID(as_uuid=True), nullable=True)
-    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     versions = relationship("PromptVersion", back_populates="prompt", order_by="PromptVersion.version_number")
-
-    __table_args__ = (UniqueConstraint("organization_id", "name", name="uq_prompt_org_name"),)
 
 
 class PromptVersion(Base):
@@ -2553,15 +2546,17 @@ class PromptVersion(Base):
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     prompt_id = mapped_column(
-        UUID(as_uuid=True), ForeignKey("prompts.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True), ForeignKey("prompt_definitions.id", ondelete="CASCADE"), nullable=False, index=True
     )
     version_number = mapped_column(Integer, nullable=False)
+    name = mapped_column(String, nullable=False)
+    description = mapped_column(Text, nullable=True)
     content = mapped_column(Text, nullable=False)
     change_description = mapped_column(Text, nullable=True)
     created_by = mapped_column(UUID(as_uuid=True), nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    prompt = relationship("Prompt", back_populates="versions")
+    prompt = relationship("PromptDefinition", back_populates="versions")
     sections = relationship(
         "PromptSection", back_populates="prompt_version", foreign_keys="[PromptSection.prompt_version_id]"
     )
@@ -2577,7 +2572,7 @@ class PromptSection(Base):
         UUID(as_uuid=True), ForeignKey("prompt_versions.id", ondelete="CASCADE"), nullable=False, index=True
     )
     section_prompt_id = mapped_column(
-        UUID(as_uuid=True), ForeignKey("prompts.id", ondelete="RESTRICT"), nullable=False
+        UUID(as_uuid=True), ForeignKey("prompt_definitions.id", ondelete="RESTRICT"), nullable=False
     )
     section_prompt_version_id = mapped_column(
         UUID(as_uuid=True), ForeignKey("prompt_versions.id", ondelete="RESTRICT"), nullable=False
@@ -2587,7 +2582,7 @@ class PromptSection(Base):
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     prompt_version = relationship("PromptVersion", back_populates="sections", foreign_keys=[prompt_version_id])
-    section_prompt = relationship("Prompt", foreign_keys=[section_prompt_id])
+    section_prompt = relationship("PromptDefinition", foreign_keys=[section_prompt_id])
     section_prompt_version = relationship("PromptVersion", foreign_keys=[section_prompt_version_id])
 
     __table_args__ = (
