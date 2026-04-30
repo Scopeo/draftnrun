@@ -1,7 +1,7 @@
 """add exclusive oauth connection ui component enum value
 
 Revision ID: 88538199bc7b
-Revises: 93189a98fdf2
+Revises: l3m4n5o6p7q8
 Create Date: 2026-04-29 17:00:00.000000
 
 """
@@ -11,7 +11,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "88538199bc7b"
-down_revision: Union[str, None] = "93189a98fdf2"
+down_revision: Union[str, None] = "l3m4n5o6p7q8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
