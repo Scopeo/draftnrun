@@ -113,8 +113,10 @@ const getComponentIcon = computed(() => {
 
 const color = computed(() => (isWorker.value ? 'secondary' : 'primary'))
 
+const EXCLUSIVE_OAUTH_GROUP_COMPONENTS = new Set(['EXCLUSIVE_OAUTH_CONNECTION', 'EXCLUSIVEOAUTHCONNECTION'])
+
 const isExclusiveOAuthGroup = (group: any): boolean =>
-  group.parameters.some((p: any) => normalizeUiComponent(p.ui_component) === 'EXCLUSIVEOAUTHCONNECTION')
+  group.parameters.some((p: any) => EXCLUSIVE_OAUTH_GROUP_COMPONENTS.has(normalizeUiComponent(p.ui_component)))
 </script>
 
 <template>
@@ -219,7 +221,9 @@ const isExclusiveOAuthGroup = (group: any): boolean =>
                       />
                       <template v-else>
                         <EditSidebarParameterField
-                          v-for="param in group.parameters.filter((p: any) => !p.is_advanced || form.showAdvanced.value)"
+                          v-for="param in group.parameters.filter(
+                            (p: any) => !p.is_advanced || form.showAdvanced.value
+                          )"
                           :key="param.name"
                           v-model="form.formData.value.parameters[param.name]"
                           :param="param"

@@ -14,6 +14,8 @@ const props = withDefaults(defineProps<Props>(), {
   readonly: false,
 })
 
+const optionRefs = ref<Record<string, HTMLElement | null>>({})
+
 const initialSelected = (): string | null => {
   const connected = props.parameters.find(p => props.formData[p.name])
   return connected?.name ?? props.parameters[0]?.name ?? null
@@ -22,14 +24,40 @@ const initialSelected = (): string | null => {
 const selectedParamName = ref<string | null>(initialSelected())
 
 watch(
-  () => props.parameters.map(p => props.formData[p.name]),
+  () => ({
+    parameterNames: props.parameters.map(p => p.name),
+    connectionValues: props.parameters.map(p => props.formData[p.name]),
+  }),
   () => {
     const connected = props.parameters.find(p => props.formData[p.name])
-    if (connected) selectedParamName.value = connected.name
+    if (connected) {
+      selectedParamName.value = connected.name
+      return
+    }
+
+    if (selectedParamName.value && props.parameters.some(p => p.name === selectedParamName.value)) return
+
+    selectedParamName.value = props.parameters[0]?.name ?? null
+    optionRefs.value = Object.fromEntries(
+      props.parameters.map(param => [param.name, optionRefs.value[param.name] ?? null])
+    )
   }
 )
 
 const selectedParam = computed(() => props.parameters.find(p => p.name === selectedParamName.value) ?? null)
+
+const setOptionRef = (paramName: string, element: Element | null) => {
+  optionRefs.value[paramName] = element instanceof HTMLElement ? element : null
+}
+
+const focusProvider = (paramName: string) => {
+  optionRefs.value[paramName]?.focus()
+}
+
+const getTabIndex = (paramName: string, index: number) => {
+  if (selectedParamName.value) return selectedParamName.value === paramName ? 0 : -1
+  return index === 0 ? 0 : -1
+}
 
 const selectProvider = (paramName: string) => {
   if (props.readonly) return
@@ -37,6 +65,33 @@ const selectProvider = (paramName: string) => {
     props.formData[selectedParamName.value] = null
   }
   selectedParamName.value = paramName
+}
+
+const handleArrowNavigation = (event: KeyboardEvent, currentParamName: string) => {
+  if (props.readonly) return
+
+  const directionByKey: Record<string, number> = {
+    ArrowLeft: -1,
+    ArrowUp: -1,
+    ArrowRight: 1,
+    ArrowDown: 1,
+  }
+
+  const direction = directionByKey[event.key]
+  if (!direction) return
+
+  const currentIndex = props.parameters.findIndex(param => param.name === currentParamName)
+  if (currentIndex === -1 || props.parameters.length === 0) return
+
+  event.preventDefault()
+
+  const nextIndex = (currentIndex + direction + props.parameters.length) % props.parameters.length
+  const nextParamName = props.parameters[nextIndex]?.name
+  if (!nextParamName) return
+
+  selectProvider(nextParamName)
+
+  focusProvider(nextParamName)
 }
 
 const handleConnectionUpdate = (value: string | null) => {
@@ -47,18 +102,20 @@ const handleConnectionUpdate = (value: string | null) => {
 </script>
 
 <template>
-  <div class="exclusive-oauth-group">
+  <div class="exclusive-oauth-group" role="radiogroup" aria-label="OAuth provider selection">
     <div
-      v-for="param in parameters"
+      v-for="(param, index) in parameters"
       :key="param.name"
+      :ref="el => setOptionRef(param.name, el)"
       class="provider-option rounded-lg mb-2 pa-3 d-flex align-center"
       :class="{ active: selectedParamName === param.name }"
       role="radio"
       :aria-checked="selectedParamName === param.name"
-      tabindex="0"
+      :tabindex="getTabIndex(param.name, index)"
       @click="selectProvider(param.name)"
       @keydown.enter="selectProvider(param.name)"
       @keydown.space.prevent="selectProvider(param.name)"
+      @keydown="handleArrowNavigation($event, param.name)"
     >
       <Icon
         :icon="param.ui_component_properties?.icon || 'mdi-connection'"
