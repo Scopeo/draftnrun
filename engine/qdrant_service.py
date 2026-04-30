@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import re
-import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -760,7 +759,7 @@ class QdrantService:
                     "sparse": {"text": chunk[schema.content_field], "model": BM25_MODEL},
                 }
                 point = {
-                    "id": self.get_uuid(self._build_point_id_seed(chunk, schema)),
+                    "id": chunk[schema.chunk_id_field],
                     "payload": {field: chunk[field] for field in chunk.keys()},
                     "vector": point_vector,
                 }
@@ -809,22 +808,6 @@ class QdrantService:
             collection_name=collection_name,
             point_ids=[point["id"] for point in points],
         )
-
-    @staticmethod
-    def get_uuid(string_id: str) -> str:
-        """Generate a UUID."""
-        namespace = uuid.NAMESPACE_DNS
-        return str(uuid.uuid5(namespace, string_id))
-
-    @staticmethod
-    def _build_point_id_seed(chunk: dict[str, Any], schema: QdrantCollectionSchema) -> str:
-        # TODO: Remove this workaround once chunk_id will be unique uuid
-        seed = chunk[schema.chunk_id_field]
-        if schema.source_id_field:
-            source_id = chunk.get(schema.source_id_field)
-            if source_id:
-                seed = f"{source_id}:{seed}"
-        return seed
 
     def _build_timestamp_filter(
         self,
