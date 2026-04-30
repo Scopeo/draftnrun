@@ -143,6 +143,19 @@ def upgrade() -> None:
         LOGGER.info("INGESTION_DB_URL not set. Skipping chunk_id UUID migration.")
         return
 
+    backend_conn = op.get_bind()
+    db_source_rows = backend_conn.execute(
+        text("SELECT id::text, qdrant_collection_name FROM data_sources WHERE type = 'database'")
+    ).fetchall()
+    db_source_ids = {row[0] for row in db_source_rows}
+    source_to_collection = {sid: col for sid, col in db_source_rows if col is not None}
+
+    if not db_source_ids:
+        LOGGER.info("No database-type sources found. Nothing to migrate.")
+        return
+
+    LOGGER.info(f"Found {len(db_source_ids)} database-type sources")
+
     ingestion_engine = create_engine(settings.INGESTION_DB_URL, isolation_level="AUTOCOMMIT")
     ingestion_conn = ingestion_engine.connect()
 
@@ -158,30 +171,31 @@ def upgrade() -> None:
             LOGGER.info("No org chunk tables found. Nothing to migrate.")
             return
 
+        source_ids_sql = ", ".join(f"'{sid}'" for sid in db_source_ids)
         all_mappings: dict[str, list[tuple[str, str, str]]] = {}
 
         for (table_name,) in tables:
-            has_sync_id = ingestion_conn.execute(
+            has_source_id = ingestion_conn.execute(
                 text(
                     "SELECT 1 FROM information_schema.columns "
-                    "WHERE table_schema = 'public' AND table_name = :tn AND column_name = 'sync_id'"
+                    "WHERE table_schema = 'public' AND table_name = :tn AND column_name = 'source_id'"
                 ),
                 {"tn": table_name},
             ).fetchone()
 
-            if not has_sync_id:
-                LOGGER.info(f"Table {table_name} has no sync_id column, skipping")
+            if not has_source_id:
+                LOGGER.info(f"Table {table_name} has no source_id column, skipping")
                 continue
 
             rows = ingestion_conn.execute(
                 text(
                     f'SELECT chunk_id, source_id::text FROM public."{table_name}" '
-                    f"WHERE sync_id IS NOT NULL AND chunk_id !~* '{UUID_REGEX}'"
+                    f"WHERE source_id::text IN ({source_ids_sql}) AND chunk_id !~* '{UUID_REGEX}'"
                 )
             ).fetchall()
 
             if not rows:
-                LOGGER.info(f"Table {table_name}: no non-UUID chunk_ids found")
+                LOGGER.info(f"Table {table_name}: no non-UUID chunk_ids found for database sources")
                 continue
 
             table_mapping = [(old_cid, sid, str(uuid4())) for old_cid, sid in rows]
@@ -232,23 +246,13 @@ def upgrade() -> None:
             LOGGER.info("QDRANT_CLUSTER_URL or QDRANT_API_KEY not set. Skipping Qdrant payload update.")
             return
 
-        LOGGER.info("Phase 2: Updating Qdrant payloads...")
-        qdrant_url = settings.QDRANT_CLUSTER_URL.rstrip("/")
-        headers = {"api-key": settings.QDRANT_API_KEY, "Content-Type": "application/json"}
-
-        backend_conn = op.get_bind()
-        db_sources = backend_conn.execute(
-            text(
-                "SELECT id::text, qdrant_collection_name FROM data_sources "
-                "WHERE type = 'database' AND qdrant_collection_name IS NOT NULL"
-            )
-        ).fetchall()
-
-        source_to_collection = {sid: col for sid, col in db_sources}
-
         if not source_to_collection:
             LOGGER.info("No DB sources with Qdrant collections found. Skipping Qdrant update.")
             return
+
+        LOGGER.info("Phase 2: Updating Qdrant payloads...")
+        qdrant_url = settings.QDRANT_CLUSTER_URL.rstrip("/")
+        headers = {"api-key": settings.QDRANT_API_KEY, "Content-Type": "application/json"}
 
         source_chunk_maps: dict[str, dict[str, str]] = {}
         log_rows = ingestion_conn.execute(
