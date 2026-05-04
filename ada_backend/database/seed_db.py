@@ -13,6 +13,11 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.database.seed.integrations.seed_gmail import seed_gmail_components, seed_gmail_parameter_groups
 from ada_backend.database.seed.integrations.seed_integration import seed_integrations
+from ada_backend.database.seed.integrations.seed_mail_sender import (
+    seed_mail_sender_component_parameter_groups,
+    seed_mail_sender_components,
+    seed_mail_sender_parameter_groups,
+)
 from ada_backend.database.seed.integrations.seed_mcp_google_calendar import seed_mcp_google_calendar_components
 from ada_backend.database.seed.integrations.seed_mcp_hubspot import seed_mcp_hubspot_components
 from ada_backend.database.seed.integrations.seed_mcp_hubspot_neverdrop import seed_mcp_hubspot_neverdrop_components
@@ -143,6 +148,11 @@ def seed_db(session: Session):
 
         seed_outlook_components(session)
         seed_outlook_parameter_groups(session)
+        session.commit()
+
+        seed_mail_sender_parameter_groups(session)
+        seed_mail_sender_components(session)
+        seed_mail_sender_component_parameter_groups(session)
         session.commit()
 
         seed_project_reference_components(session)
