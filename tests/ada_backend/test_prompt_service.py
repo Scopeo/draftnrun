@@ -8,6 +8,7 @@ from ada_backend.schemas.prompt_schema import PromptSectionInputSchema
 from ada_backend.services.errors import (
     CrossOrgSectionError,
     GraphNotBoundToProjectError,
+    GraphNotFound,
     NotFoundError,
     PromptStillReferencedError,
 )
@@ -274,7 +275,7 @@ def _setup_graph_with_component(session):
     session.add(project)
     session.flush()
 
-    component = db.Component(id=uuid.uuid4(), name="TestComp")
+    component = db.Component(id=uuid.uuid4(), name=f"TestComp-{uuid.uuid4().hex[:8]}")
     session.add(component)
     session.flush()
 
@@ -288,6 +289,7 @@ def _setup_graph_with_component(session):
 
     port_def = db.PortDefinition(
         id=uuid.uuid4(), component_version_id=cv.id, name="system_prompt", port_type=db.PortType.INPUT,
+        is_prompt=True,
     )
     session.add(port_def)
     session.flush()
@@ -326,7 +328,7 @@ class TestPinOwnershipValidation:
             version_id = detail.versions[0].id
 
             wrong_graph_runner_id = uuid.uuid4()
-            with pytest.raises(NotFoundError, match="not found in graph"):
+            with pytest.raises(GraphNotFound):
                 pin_prompt_to_port_service(
                     session, ci.id, "system_prompt", version_id, wrong_graph_runner_id, project.id,
                 )
@@ -336,7 +338,7 @@ class TestPinOwnershipValidation:
             ci, gr, ipi, project = _setup_graph_with_component(session)
 
             wrong_graph_runner_id = uuid.uuid4()
-            with pytest.raises(NotFoundError, match="not found in graph"):
+            with pytest.raises(GraphNotFound):
                 unpin_prompt_from_port_service(session, ci.id, "system_prompt", wrong_graph_runner_id, project.id)
 
     def test_pin_with_correct_graph_runner_succeeds(self):
