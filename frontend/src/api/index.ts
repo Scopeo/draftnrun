@@ -23,6 +23,7 @@ import { runsApi } from './runs'
 import { oauthConnectionsApi } from './oauth'
 import { gitSyncApi } from './gitSync'
 import { ingestionTaskApi, sourcesApi } from './sources'
+import { promptsApi } from './prompts'
 
 export { workflowsApi, templatesApi } from './workflows'
 export { agentsApi } from './agents'
@@ -56,6 +57,15 @@ export type { OAuthConnectionListItem } from './oauth'
 export { gitSyncApi } from './gitSync'
 export type { GitHubAppInfo, GitHubRepo, GitSyncConfig, GitSyncImportResponse } from './gitSync'
 export { sourcesApi, ingestionTaskApi } from './sources'
+export { promptsApi } from './prompts'
+export type {
+  PromptResponse,
+  PromptDetailResponse,
+  PromptVersionSummary,
+  PromptVersionDetail,
+  CreatePromptPayload,
+  CreateVersionPayload,
+} from './prompts'
 
 export const scopeoApi = {
   projects: workflowsApi,
@@ -88,4 +98,5 @@ export const scopeoApi = {
   orgVariableDefinitions: orgVariableDefinitionsApi,
   variableSets: variableSetsApi,
   settingsSecrets: settingsSecretsApi,
+  prompts: promptsApi,
 }

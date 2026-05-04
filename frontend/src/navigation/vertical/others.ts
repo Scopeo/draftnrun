@@ -146,6 +146,15 @@ export const initializeNavItems = async () => {
     })
 
     currentNavs.push({
+      title: 'Prompts',
+      icon: { icon: 'tabler-file-text' },
+      to: { name: 'org-org-id-prompts', params: { orgId: selectedOrgId.value } },
+      action: 'read',
+      subject: 'Organization',
+      group: 'configure',
+    })
+
+    currentNavs.push({
       title: 'Variables',
       icon: { icon: 'tabler-variable' },
       to: { name: 'org-org-id-variables', params: { orgId: selectedOrgId.value } },

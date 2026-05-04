@@ -43,9 +43,9 @@ router = APIRouter(tags=["Prompts"])
 LOGGER = logging.getLogger(__name__)
 
 
-@router.post("/orgs/{org_id}/prompts", response_model=PromptResponseSchema, status_code=201)
+@router.post("/orgs/{organization_id}/prompts", response_model=PromptResponseSchema, status_code=201)
 def create_prompt(
-    org_id: UUID,
+    organization_id: UUID,
     payload: PromptCreateSchema,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
@@ -54,57 +54,58 @@ def create_prompt(
 ) -> PromptResponseSchema:
     return create_prompt_service(
         session=session,
-        organization_id=org_id,
+        organization_id=organization_id,
         name=payload.name,
         content=payload.content,
         description=payload.description,
+        change_description=payload.change_description,
         sections=payload.sections,
         created_by=user.id,
     )
 
 
-@router.get("/orgs/{org_id}/prompts", response_model=list[PromptResponseSchema])
+@router.get("/orgs/{organization_id}/prompts", response_model=list[PromptResponseSchema])
 def list_prompts(
-    org_id: UUID,
+    organization_id: UUID,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     session: Session = Depends(get_db),
 ) -> list[PromptResponseSchema]:
-    return list_prompts_service(session, org_id)
+    return list_prompts_service(session, organization_id)
 
 
-@router.get("/orgs/{org_id}/prompts/{prompt_id}", response_model=PromptDetailResponseSchema)
+@router.get("/orgs/{organization_id}/prompts/{prompt_id}", response_model=PromptDetailResponseSchema)
 def get_prompt(
-    org_id: UUID,
+    organization_id: UUID,
     prompt_id: UUID,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     session: Session = Depends(get_db),
 ) -> PromptDetailResponseSchema:
-    return get_prompt_detail_service(session, prompt_id, organization_id=org_id)
+    return get_prompt_detail_service(session, prompt_id, organization_id=organization_id)
 
 
-@router.delete("/orgs/{org_id}/prompts/{prompt_id}", status_code=204)
+@router.delete("/orgs/{organization_id}/prompts/{prompt_id}", status_code=204)
 def delete_prompt_endpoint(
-    org_id: UUID,
+    organization_id: UUID,
     prompt_id: UUID,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     session: Session = Depends(get_db),
 ) -> None:
-    delete_prompt_service(session, prompt_id, organization_id=org_id)
+    delete_prompt_service(session, prompt_id, organization_id=organization_id)
 
 
 @router.post(
-    "/orgs/{org_id}/prompts/{prompt_id}/versions",
+    "/orgs/{organization_id}/prompts/{prompt_id}/versions",
     response_model=PromptVersionResponseSchema,
     status_code=201,
 )
 def create_version(
-    org_id: UUID,
+    organization_id: UUID,
     prompt_id: UUID,
     payload: PromptVersionCreateSchema,
     user: Annotated[
@@ -121,31 +122,31 @@ def create_version(
         change_description=payload.change_description,
         sections=payload.sections,
         created_by=user.id,
-        organization_id=org_id,
+        organization_id=organization_id,
     )
 
 
 @router.get(
-    "/orgs/{org_id}/prompts/{prompt_id}/versions",
+    "/orgs/{organization_id}/prompts/{prompt_id}/versions",
     response_model=list[PromptVersionSummarySchema],
 )
 def list_versions(
-    org_id: UUID,
+    organization_id: UUID,
     prompt_id: UUID,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     session: Session = Depends(get_db),
 ) -> list[PromptVersionSummarySchema]:
-    return list_prompt_versions_service(session, prompt_id, organization_id=org_id)
+    return list_prompt_versions_service(session, prompt_id, organization_id=organization_id)
 
 
 @router.get(
-    "/orgs/{org_id}/prompts/{prompt_id}/versions/{version_id}",
+    "/orgs/{organization_id}/prompts/{prompt_id}/versions/{version_id}",
     response_model=PromptVersionResponseSchema,
 )
 def get_version(
-    org_id: UUID,
+    organization_id: UUID,
     prompt_id: UUID,
     version_id: UUID,
     user: Annotated[
@@ -153,15 +154,15 @@ def get_version(
     ],
     session: Session = Depends(get_db),
 ) -> PromptVersionResponseSchema:
-    return get_prompt_version_detail_service(session, version_id, organization_id=org_id)
+    return get_prompt_version_detail_service(session, version_id, organization_id=organization_id, prompt_id=prompt_id)
 
 
 @router.get(
-    "/orgs/{org_id}/prompts/{prompt_id}/diff",
+    "/orgs/{organization_id}/prompts/{prompt_id}/diff",
     response_model=PromptDiffResponseSchema,
 )
 def diff_versions(
-    org_id: UUID,
+    organization_id: UUID,
     prompt_id: UUID,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
@@ -170,19 +171,19 @@ def diff_versions(
     to_version: UUID = Query(..., alias="to"),
     session: Session = Depends(get_db),
 ) -> PromptDiffResponseSchema:
-    return diff_prompt_versions_service(session, from_version, to_version, organization_id=org_id)
+    return diff_prompt_versions_service(session, from_version, to_version, organization_id=organization_id)
 
 
-@router.get("/orgs/{org_id}/prompts/{prompt_id}/usages", response_model=list[PromptUsageSchema])
+@router.get("/orgs/{organization_id}/prompts/{prompt_id}/usages", response_model=list[PromptUsageSchema])
 def get_usages(
-    org_id: UUID,
+    organization_id: UUID,
     prompt_id: UUID,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     session: Session = Depends(get_db),
 ) -> list[PromptUsageSchema]:
-    return get_prompt_usages_service(session, prompt_id, organization_id=org_id)
+    return get_prompt_usages_service(session, prompt_id, organization_id=organization_id)
 
 
 @router.put(

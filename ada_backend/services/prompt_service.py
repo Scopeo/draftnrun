@@ -83,6 +83,7 @@ def create_prompt_service(
     name: str,
     content: str,
     description: str | None = None,
+    change_description: str | None = None,
     sections: list[PromptSectionInputSchema] | None = None,
     created_by: UUID | None = None,
 ) -> PromptResponseSchema:
@@ -103,6 +104,7 @@ def create_prompt_service(
             name=name,
             description=description,
             content=resolved_content,
+            change_description=change_description,
             created_by=created_by,
         ),
     )
@@ -232,10 +234,15 @@ def list_prompt_versions_service(
 
 
 def get_prompt_version_detail_service(
-    session: Session, version_id: UUID, organization_id: UUID | None = None
+    session: Session,
+    version_id: UUID,
+    organization_id: UUID | None = None,
+    prompt_id: UUID | None = None,
 ) -> PromptVersionResponseSchema:
     version = get_prompt_version_by_id(session, version_id)
     if not version:
+        raise NotFoundError(f"Prompt version {version_id} not found")
+    if prompt_id and version.prompt_id != prompt_id:
         raise NotFoundError(f"Prompt version {version_id} not found")
     if organization_id:
         prompt = get_prompt_by_id(session, version.prompt_id)
@@ -391,7 +398,7 @@ def get_prompt_usages_service(
 
     usages = get_prompt_usages(session, prompt_id)
     result = []
-    for ipi, pi, ci, pv in usages:
+    for ipi, ci, pv in usages:
         project_info = _get_project_for_component_instance(session, ci.id)
         result.append(
             PromptUsageSchema(
@@ -399,7 +406,7 @@ def get_prompt_usages_service(
                 project_name=project_info[1] if project_info else "Unknown",
                 component_instance_id=ci.id,
                 component_instance_name=ci.name,
-                port_name=pi.name,
+                port_name=ipi.name,
                 pinned_version_id=pv.id,
                 pinned_version_number=pv.version_number,
             )

@@ -118,11 +118,10 @@ def is_prompt_pinned(session: Session, prompt_id: UUID) -> bool:
 
 def get_prompt_usages(
     session: Session, prompt_id: UUID
-) -> list[tuple[db.InputPortInstance, db.PortInstance, db.ComponentInstance, db.PromptVersion]]:
+) -> list[tuple[db.InputPortInstance, db.ComponentInstance, db.PromptVersion]]:
     return (
-        session.query(db.InputPortInstance, db.PortInstance, db.ComponentInstance, db.PromptVersion)
-        .join(db.PortInstance, db.InputPortInstance.id == db.PortInstance.id)
-        .join(db.ComponentInstance, db.PortInstance.component_instance_id == db.ComponentInstance.id)
+        session.query(db.InputPortInstance, db.ComponentInstance, db.PromptVersion)
+        .join(db.ComponentInstance, db.InputPortInstance.component_instance_id == db.ComponentInstance.id)
         .join(db.PromptVersion, db.InputPortInstance.prompt_version_id == db.PromptVersion.id)
         .filter(db.PromptVersion.prompt_id == prompt_id)
         .all()
