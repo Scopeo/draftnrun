@@ -223,13 +223,9 @@ def clone_graph_runner(
         )
         for source_instance_id, remapped_expressions in remapped_expressions_by_source_id.items():
             target_instance_id = ids_map[source_instance_id]
-            source_input_ports_by_name = {
-                source_input_port.name: source_input_port.id
-                for source_input_port in get_input_port_instances_for_component_instance(session, source_instance_id)
-            }
+            source_input_ports = get_input_port_instances_for_component_instance(session, source_instance_id)
+            source_input_ports_by_name = {p.name: p for p in source_input_ports}
             for remapped_expr in remapped_expressions:
-                # Use expression_json directly if available (preserves json_build structures for Router routes)
-                # Otherwise fall back to parsing expression_text (for backwards compatibility)
                 if remapped_expr.expression_json:
                     expression_json = remapped_expr.expression_json
                 else:
@@ -241,15 +237,16 @@ def clone_graph_runner(
                     expression_json=expression_json,
                 )
 
+                source_port = source_input_ports_by_name.get(remapped_expr.field_name)
                 new_input_port_instance = create_input_port_instance(
                     session=session,
                     component_instance_id=target_instance_id,
                     name=remapped_expr.field_name,
                     field_expression_id=field_expr.id,
+                    prompt_version_id=source_port.prompt_version_id if source_port else None,
                 )
-                source_input_port_id = source_input_ports_by_name.get(remapped_expr.field_name)
-                if source_input_port_id:
-                    input_port_instance_ids_map[source_input_port_id] = new_input_port_instance.id
+                if source_port:
+                    input_port_instance_ids_map[source_port.id] = new_input_port_instance.id
         total_expressions = sum(len(exprs) for exprs in remapped_expressions_by_source_id.values())
         if total_expressions > 0:
             LOGGER.info(

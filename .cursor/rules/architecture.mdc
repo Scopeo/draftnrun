@@ -79,11 +79,15 @@ Mixpanel Python SDK (`mixpanel_analytics.py`). `non_breaking_track` decorator wr
 
 `mcp_server/`: standalone pod calling the backend over HTTP + Supabase directly. See `mcp_server/README.md`.
 
+### Prompt Library
+
+Org-scoped, independently versioned prompts (`prompt_definitions`, `prompt_versions`, `prompt_sections` tables). Prompts are referenced by UUID `id`, never by name. The `prompt_definitions` table is a minimal identity anchor (id, organization_id); all user-facing metadata (`name`, `description`, `created_by`) lives on `prompt_versions` and can change between versions. Prompts are pinned to input ports via `InputPortInstance.prompt_version_id`. Pinning writes a `LiteralNode` to the field expression; runtime needs no changes. `PortDefinition.is_prompt` marks eligible ports. `ParameterKind.PROMPT` is emitted dynamically when a port is pinned. Supports `{{variable}}` runtime injection but not `@{{}}` field expressions. See `ada_backend/docs/prompts.md`.
+
 ### Migration Deploy Strategy
 
 Alembic migrations are auto-classified by `scripts/classify_migration.py` (AST-based) to determine CD deploy order: `migrate-first` (additive), `code-first` (destructive), or `breaking` (rename / mixed / scale-to-zero). Migrations using `op.execute()` or `op.get_bind()` must set `deploy_strategy` in the file. See `ada_backend/docs/migration-deploy-strategy.md`.
 
 ### Documentation
 
-- `ada_backend/docs/` for domain docs (auth, API reference, engine, webhooks, QA, credits, migration strategy).
+- `ada_backend/docs/` for domain docs (auth, API reference, engine, webhooks, QA, credits, migration strategy, prompts).
 - `README.md` files for setup and overview.

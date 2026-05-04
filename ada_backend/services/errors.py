@@ -450,3 +450,70 @@ class DuplicateAlertEmailError(ServiceError):
     def __init__(self, email: str):
         self.email = email
         super().__init__(f"Email {email} is already configured for this project")
+
+
+class NotFoundError(ServiceError):
+    status_code = 404
+
+    def __init__(self, message: str):
+        super().__init__(message)
+
+
+class PromptNotFound(ServiceError):
+    status_code = 404
+
+    def __init__(self, prompt_id: UUID):
+        self.prompt_id = prompt_id
+        super().__init__(f"Prompt not found: {prompt_id}")
+
+
+class PromptVersionNotFound(ServiceError):
+    status_code = 404
+
+    def __init__(self, version_id: UUID):
+        self.version_id = version_id
+        super().__init__(f"Prompt version not found: {version_id}")
+
+
+class PromptStillPinnedError(ServiceError):
+    status_code = 409
+
+    def __init__(self, prompt_id: UUID):
+        self.prompt_id = prompt_id
+        super().__init__(f"Cannot delete prompt {prompt_id}: it is still pinned by one or more workflows")
+
+
+class PromptStillReferencedError(ServiceError):
+    status_code = 409
+
+    def __init__(self, prompt_id: UUID):
+        self.prompt_id = prompt_id
+        super().__init__(f"Cannot delete prompt {prompt_id}: it is referenced as a section by other prompts")
+
+
+class PromptNameConflictError(ServiceError):
+    status_code = 409
+
+    def __init__(self, name: str, organization_id: UUID):
+        self.name = name
+        self.organization_id = organization_id
+        super().__init__(f"Prompt with name '{name}' already exists in organization {organization_id}")
+
+
+class PortNotPromptEligibleError(ServiceError):
+    status_code = 400
+
+    def __init__(self, port_name: str, component_instance_id: UUID):
+        self.port_name = port_name
+        self.component_instance_id = component_instance_id
+        super().__init__(
+            f"Port '{port_name}' on component instance {component_instance_id} is not eligible for prompt pinning"
+        )
+
+
+class CrossOrgSectionError(ServiceError):
+    status_code = 403
+
+    def __init__(self, section_prompt_id: UUID):
+        self.section_prompt_id = section_prompt_id
+        super().__init__(f"Section prompt {section_prompt_id} belongs to a different organization")
