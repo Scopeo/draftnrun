@@ -1,7 +1,7 @@
 """Add prompt library: prompt_definitions, prompt_versions, prompt_sections tables,
 is_prompt column on port_definitions, prompt_version_id on input_port_instances.
 
-Revision ID: p1r2o3m4p5t6
+Revision ID: 03a252d28d9f
 Revises: l3m4n5o6p7q8
 Create Date: 2026-04-29
 """
@@ -11,7 +11,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "p1r2o3m4p5t6"
+revision: str = "03a252d28d9f"
 down_revision: Union[str, None] = "l3m4n5o6p7q8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -44,6 +44,7 @@ def upgrade() -> None:
         sa.Column("created_by", sa.UUID(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.UniqueConstraint("prompt_id", "version_number", name="uq_prompt_version_number"),
+        sa.UniqueConstraint("prompt_id", "id", name="uq_prompt_version_promptid_id"),
     )
 
     op.create_table(
@@ -62,19 +63,21 @@ def upgrade() -> None:
             sa.ForeignKey("prompt_definitions.id", ondelete="RESTRICT"),
             nullable=False,
         ),
-        sa.Column(
-            "section_prompt_version_id",
-            sa.UUID(),
-            sa.ForeignKey("prompt_versions.id", ondelete="RESTRICT"),
-            nullable=False,
-        ),
+        sa.Column("section_prompt_version_id", sa.UUID(), nullable=False),
         sa.Column("placeholder", sa.String(), nullable=False),
         sa.Column("position", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.UniqueConstraint("prompt_version_id", "placeholder", name="uq_prompt_section_placeholder"),
+        sa.ForeignKeyConstraint(
+            ["section_prompt_id", "section_prompt_version_id"],
+            ["prompt_versions.prompt_id", "prompt_versions.id"],
+            name="fk_prompt_section_version_prompt",
+            ondelete="RESTRICT",
+        ),
     )
 
     op.add_column("port_definitions", sa.Column("is_prompt", sa.Boolean(), nullable=False, server_default="false"))
+    op.alter_column("port_definitions", "is_prompt", server_default=None)
 
     op.add_column(
         "input_port_instances",
