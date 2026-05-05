@@ -53,26 +53,26 @@ Diffs are computed on-the-fly using `difflib.SequenceMatcher` (character-level o
 
 ## Org-Scoping Enforcement
 
-All prompt and version service functions accept an `organization_id` parameter. When provided, lookups verify that the prompt's `organization_id` matches the URL `org_id` before returning data or mutating state. This prevents IDOR: a user authenticated in org A cannot read, modify, or delete prompts belonging to org B even if they know the prompt UUID. The router always passes `org_id` from the path.
+All prompt and version service functions accept an `organization_id` parameter. When provided, lookups verify that the prompt's `organization_id` matches the URL `organization_id` before returning data or mutating state. This prevents IDOR: a user authenticated in org A cannot read, modify, or delete prompts belonging to org B even if they know the prompt UUID. The router always passes `organization_id` from the path.
 
 ## API Endpoints
 
-### Prompt CRUD (`/orgs/{org_id}/prompts`)
+### Prompt CRUD (`/orgs/{organization_id}/prompts`)
 
-- `POST` — Create prompt with initial version (name, description, content)
+- `POST` — Create prompt with initial version (name, description, content, change_description)
 - `GET` — List all prompts in org (latest version summary included)
 - `GET /{prompt_id}` — Get prompt details + version list
 - `DELETE /{prompt_id}` — Delete (fails if still pinned or referenced as a section by other prompts)
 
-### Version Management (`/orgs/{org_id}/prompts/{prompt_id}/versions`)
+### Version Management (`/orgs/{organization_id}/prompts/{prompt_id}/versions`)
 
 - `POST` — Create new version (name, description, content, change_description)
 - `GET` — List versions
 - `GET /{version_id}` — Get version with sections
 
-### Diff (`/orgs/{org_id}/prompts/{prompt_id}/diff?from=&to=`)
+### Diff (`/orgs/{organization_id}/prompts/{prompt_id}/diff?from=&to=`)
 
-### Usages (`/orgs/{org_id}/prompts/{prompt_id}/usages`)
+### Usages (`/orgs/{organization_id}/prompts/{prompt_id}/usages`)
 
 ### Pinning
 
@@ -94,7 +94,23 @@ Prompts can be synced one-way from a GitHub repository. When a repo uses the `dr
 
 See `ada_backend/docs/git-sync.md` for full details on the folder convention and sync flow.
 
-## Files
+## Frontend
+
+The prompt library has a dedicated org-level page at `/org/{orgId}/prompts` with a "Prompts" entry in the sidebar navigation (configure group).
+
+### Pages
+
+- **List** (`/org/{orgId}/prompts`) — Card grid of all prompts with search and create.
+- **Detail** (`/org/{orgId}/prompts/{id}`) — Split layout: version sidebar (left) + version detail panel (right). Tabs: Prompt (content), Config (variables/sections), Linked Generations (usages).
+
+### Frontend Files
+
+- `frontend/src/api/prompts.ts` — API client functions
+- `frontend/src/composables/queries/usePromptsQuery.ts` — TanStack Query hooks (list, detail, version queries; create prompt, create version, delete mutations)
+- `frontend/src/components/prompts/` — UI components (PromptLibraryList, PromptDetail, PromptVersionSidebar, PromptVersionDetailPanel, CreatePromptDialog, NewVersionDialog)
+- `frontend/src/pages/org/[orgId]/prompts/` — File-based route pages (index.vue, [id].vue)
+
+## Backend Files
 
 - `ada_backend/database/models.py` — `PromptDefinition`, `PromptVersion`, `PromptSection`, `GitSyncPromptMapping` models
 - `ada_backend/schemas/prompt_schema.py` — Pydantic schemas

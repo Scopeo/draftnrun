@@ -72,5 +72,11 @@ custom_models.json
 # vite cache
 frontend/.vite/
 
+# pnpm store
+.pnpm-store/
+
+# dependencies
+node_modules/
+
 # test reports
 tests/external_api_calls/external_api_calls_matrix.md

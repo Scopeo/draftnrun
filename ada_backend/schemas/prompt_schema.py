@@ -7,14 +7,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class PromptCreateSchema(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: Optional[str] = None  # TODO: remove description field + DB column (frontend no longer sends it)
     content: str = Field(min_length=1)
+    change_description: Optional[str] = None
     sections: Optional[list["PromptSectionInputSchema"]] = None
 
 
 class PromptVersionCreateSchema(BaseModel):
-    name: str
-    description: Optional[str] = None
+    name: str  # TODO: enforce name immutability across versions (must match the first version's name)
+    description: Optional[str] = None  # TODO: remove description field + DB column (frontend no longer sends it)
     content: str = Field(min_length=1)
     change_description: Optional[str] = None
     sections: Optional[list["PromptSectionInputSchema"]] = None

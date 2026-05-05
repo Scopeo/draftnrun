@@ -215,6 +215,10 @@ export const setupGuards = (router: _RouterTyped<RouteNamedMap & { [key: string]
       'org-org-id-scheduler',
       'org-org-id-monitoring',
       'org-org-id-data-sources',
+      'org-org-id-prompts',
+      'org-org-id-prompts-id',
+      'org-org-id-prompts-new',
+      'org-org-id-prompts-id-new-version',
     ])
 
     if (to.meta.allowAllAuthenticated || (to.name && ALLOW_ALL_ROUTE_NAMES.has(to.name as string))) {

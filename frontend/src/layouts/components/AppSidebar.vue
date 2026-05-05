@@ -178,4 +178,5 @@ const isHelpDialogVisible = ref(false)
     background-color: rgba(var(--v-theme-on-surface), 0.06);
   }
 }
+
 </style>
