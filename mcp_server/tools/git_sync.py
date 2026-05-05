@@ -1,4 +1,4 @@
-"""Git sync tools — import projects from a GitHub repo for one-way graph deployment."""
+"""Git sync tools — import projects and prompts from a GitHub repo for one-way deployment."""
 
 from uuid import UUID
 
@@ -28,11 +28,11 @@ SPECS: list[ToolSpec] = [
     ToolSpec(
         name="configure_git_sync",
         description=(
-            "Scan a GitHub repository for graph.json files and create a Draft'n Run project + sync config "
-            "for each one found. On each push to the watched branch, the backend fetches graph.json "
-            "and deploys it to production (draft is never touched). "
-            "A single repo can contain multiple projects (one graph.json per subfolder). "
-            "Folders already linked to a project are skipped. "
+            "Scan a GitHub repository for the draftnrun/ folder structure and import projects + prompts. "
+            "Projects live under draftnrun/projects/<name>/ (each with graph.json + component files). "
+            "Prompts live under draftnrun/prompt_library/ as .md files (name derived from path). "
+            "On each push, changed graphs are deployed to production and changed prompts get new versions. "
+            "The repo must contain a draftnrun/ root folder (422 error if missing). "
             "Requires: the Draft'n Run GitHub App installed on the repo, and the installation ID. Developer+."
         ),
         method="post",

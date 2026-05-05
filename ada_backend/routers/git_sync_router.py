@@ -115,7 +115,7 @@ async def create_git_sync(
     ],
     session: Session = Depends(get_db),
 ) -> GitSyncImportResponse:
-    imported, skipped = await import_from_github(
+    imported, skipped, imported_prompts, skipped_prompts = await import_from_github(
         session=session,
         organization_id=organization_id,
         user_id=auth.user_id,
@@ -125,7 +125,12 @@ async def create_git_sync(
         github_installation_id=request.github_installation_id,
         project_type=request.project_type,
     )
-    return GitSyncImportResponse(imported=imported, skipped=skipped)
+    return GitSyncImportResponse(
+        imported=imported,
+        skipped=skipped,
+        imported_prompts=imported_prompts,
+        skipped_prompts=skipped_prompts,
+    )
 
 
 @org_router.get(

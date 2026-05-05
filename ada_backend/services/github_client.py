@@ -1,5 +1,6 @@
 import logging
 import time
+from dataclasses import dataclass
 
 import httpx
 import jwt
@@ -121,7 +122,7 @@ async def list_repo_contents(repo: str, path: str, ref: str, installation_id: in
 
 
 async def find_graph_json_folders(repo: str, ref: str, installation_id: int) -> list[str]:
-    """Return folder paths containing a graph.json file.
+    """Return folder paths containing a graph.json file (legacy discovery).
 
     Uses the Git Trees API with recursive mode for a single-call scan.
     Returns empty string "" for root-level graph.json, or "subfolder/path" otherwise.
@@ -145,3 +146,64 @@ async def find_graph_json_folders(repo: str, ref: str, installation_id: int) -> 
         elif path.endswith("/graph.json"):
             folders.append(path.rsplit("/graph.json", 1)[0])
     return sorted(set(folders))
+
+
+DRAFTNRUN_ROOT = "draftnrun"
+PROJECTS_DIR = f"{DRAFTNRUN_ROOT}/projects"
+PROMPT_LIBRARY_DIR = f"{DRAFTNRUN_ROOT}/prompt_library"
+
+
+@dataclass
+class DraftnrunRepoStructure:
+    project_folders: list[str]
+    prompt_files: list[str]
+
+
+async def discover_draftnrun_repo(repo: str, ref: str, installation_id: int) -> DraftnrunRepoStructure | None:
+    """Scan a repo for the ``draftnrun/`` folder structure.
+
+    Returns project folders (graph_folder paths like ``draftnrun/projects/my-agent``)
+    and prompt files (paths relative to ``draftnrun/prompt_library/``, e.g. ``folderA/prompt.md``).
+
+    Returns ``None`` if no ``draftnrun/`` root is found in the repo tree.
+    """
+    token = await get_installation_token(installation_id)
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        resp = await client.get(
+            f"{GITHUB_API_BASE}/repos/{repo}/git/trees/{ref}",
+            params={"recursive": "1"},
+            headers=_headers(token),
+        )
+        resp.raise_for_status()
+
+    tree = resp.json().get("tree", [])
+
+    has_draftnrun = any(
+        item.get("path", "").startswith(f"{DRAFTNRUN_ROOT}/") for item in tree
+    )
+    if not has_draftnrun:
+        return None
+
+    projects_prefix = f"{PROJECTS_DIR}/"
+    prompt_prefix = f"{PROMPT_LIBRARY_DIR}/"
+
+    project_folders: set[str] = set()
+    prompt_files: list[str] = []
+
+    for item in tree:
+        if item.get("type") != "blob":
+            continue
+        path = item.get("path", "")
+
+        if path.startswith(projects_prefix) and path.endswith("/graph.json"):
+            folder = path.rsplit("/graph.json", 1)[0]
+            project_folders.add(folder)
+
+        if path.startswith(prompt_prefix) and path.endswith(".md"):
+            relative = path[len(prompt_prefix) :]
+            prompt_files.append(relative)
+
+    return DraftnrunRepoStructure(
+        project_folders=sorted(project_folders),
+        prompt_files=sorted(prompt_files),
+    )

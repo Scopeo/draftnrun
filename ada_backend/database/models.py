@@ -2596,3 +2596,47 @@ class PromptSection(Base):
         ),
         UniqueConstraint("prompt_version_id", "placeholder", name="uq_prompt_section_placeholder"),
     )
+
+
+class GitSyncPromptMapping(Base):
+    __tablename__ = "git_sync_prompt_mappings"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    prompt_definition_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("prompt_definitions.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    github_owner = mapped_column(String(255), nullable=False)
+    github_repo_name = mapped_column(String(255), nullable=False)
+    branch = mapped_column(String(255), nullable=False, server_default="main")
+    prompt_file_path = mapped_column(String(500), nullable=False)
+    github_installation_id = mapped_column(Integer, nullable=False, index=True)
+    last_sync_commit_sha = mapped_column(String(40), nullable=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    prompt_definition = relationship("PromptDefinition")
+
+    @property
+    def github_repo(self) -> str:
+        return f"{self.github_owner}/{self.github_repo_name}"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "github_owner",
+            "github_repo_name",
+            "branch",
+            "prompt_file_path",
+            name="uq_git_sync_prompt_file",
+        ),
+        Index(
+            "ix_git_sync_prompt_mappings_repo_branch",
+            "github_owner",
+            "github_repo_name",
+            "branch",
+        ),
+    )

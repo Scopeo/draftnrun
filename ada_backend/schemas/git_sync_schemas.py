@@ -54,9 +54,22 @@ class GitSyncImportResult(BaseModel):
     status: str
 
 
+class GitSyncPromptImportResult(BaseModel):
+    prompt_file_path: str
+    prompt_id: UUID
+    prompt_name: str
+    status: str
+
+
 class GitSyncImportResponse(BaseModel):
     imported: list[GitSyncImportResult]
     skipped: list[str] = Field(default_factory=list, description="Folders already linked to a project")
+    imported_prompts: list[GitSyncPromptImportResult] = Field(
+        default_factory=list, description="Prompts imported from prompt_library/"
+    )
+    skipped_prompts: list[str] = Field(
+        default_factory=list, description="Prompt files already linked to a prompt definition"
+    )
 
 
 class GitHubRepoSummary(BaseModel):

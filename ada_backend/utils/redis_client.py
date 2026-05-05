@@ -341,8 +341,7 @@ def push_webhook_event(
             list(queue_payload.get("payload", {}).keys()) if isinstance(queue_payload.get("payload"), dict) else None
         )
         LOGGER.debug(
-            f"Prepared webhook payload for Redis stream: keys={list(queue_payload.keys())} "
-            f"payload_keys={payload_keys}"
+            f"Prepared webhook payload for Redis stream: keys={list(queue_payload.keys())} payload_keys={payload_keys}"
         )
 
         message_id = client.xadd(settings.REDIS_WEBHOOK_STREAM, {"data": json.dumps(queue_payload)})
@@ -467,9 +466,77 @@ def push_git_sync_task(config_id: UUID, commit_sha: str) -> bool:
     except _RECONNECT_ERRORS as e:
         LOGGER.error("Redis connection error pushing git sync task %s to queue: %s", config_id, e)
         reset_redis_client()
+        try:
+            fresh = get_redis_client()
+            if fresh:
+                fresh.delete(dedup_key)
+        except Exception as del_err:
+            LOGGER.warning("Best-effort dedup key cleanup failed for %s: %s", dedup_key, del_err)
         return False
     except Exception as e:
         LOGGER.error("Failed to push git sync task %s to Redis queue: %s", config_id, e)
+        return False
+
+
+def push_prompt_sync_task(
+    organization_id: UUID,
+    github_owner: str,
+    github_repo_name: str,
+    branch: str,
+    installation_id: int,
+    commit_sha: str,
+    prompt_paths: list[str],
+) -> bool:
+    client = get_redis_client()
+    if not client:
+        LOGGER.error(
+            "Redis client unavailable. Cannot push prompt sync task for %s/%s", github_owner, github_repo_name
+        )
+        return False
+
+    dedup_key = f"prompt_sync_dedup:{organization_id}:{github_owner}:{github_repo_name}:{branch}:{commit_sha}"
+    try:
+        was_set = client.set(dedup_key, "1", nx=True, ex=_GIT_SYNC_DEDUP_TTL_SECONDS)
+        if not was_set:
+            LOGGER.info(
+                "Prompt sync for %s/%s at %s already enqueued — skipping",
+                github_owner,
+                github_repo_name,
+                commit_sha[:8],
+            )
+            return True
+
+        payload = {
+            "type": "prompt_sync",
+            "organization_id": str(organization_id),
+            "github_owner": github_owner,
+            "github_repo_name": github_repo_name,
+            "branch": branch,
+            "installation_id": installation_id,
+            "commit_sha": commit_sha,
+            "prompt_paths": prompt_paths,
+        }
+        pushed = _push_to_redis_queue(
+            client,
+            settings.REDIS_GIT_SYNC_QUEUE_NAME,
+            payload,
+            f"prompt sync task ({github_owner}/{github_repo_name})",
+        )
+        if not pushed:
+            client.delete(dedup_key)
+        return pushed
+    except _RECONNECT_ERRORS as e:
+        LOGGER.error("Redis connection error pushing prompt sync task to queue: %s", e)
+        reset_redis_client()
+        try:
+            fresh = get_redis_client()
+            if fresh:
+                fresh.delete(dedup_key)
+        except Exception as del_err:
+            LOGGER.warning("Best-effort dedup key cleanup failed for %s: %s", dedup_key, del_err)
+        return False
+    except Exception as e:
+        LOGGER.error("Failed to push prompt sync task to Redis queue: %s", e)
         return False
 
 
@@ -506,11 +573,14 @@ def publish_graph_update_event(project_id: UUID, event: Dict[str, Any]) -> bool:
 
 
 def notify_graph_changed(project_id: UUID, graph_runner_id: UUID, action: str) -> bool:
-    return publish_graph_update_event(project_id, {
-        "type": "graph.changed",
-        "graph_runner_id": str(graph_runner_id),
-        "action": action,
-    })
+    return publish_graph_update_event(
+        project_id,
+        {
+            "type": "graph.changed",
+            "graph_runner_id": str(graph_runner_id),
+            "action": action,
+        },
+    )
 
 
 def publish_qa_event(session_id: UUID, event: Dict[str, Any]) -> bool:

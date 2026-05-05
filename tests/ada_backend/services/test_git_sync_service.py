@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from ada_backend.database.models import ProjectType
 from ada_backend.routers.git_sync_router import _verify_github_signature
 from ada_backend.services.git_sync_service import (
+    DraftnrunFolderNotFound,
     GitSyncConfigNotFound,
     GitSyncError,
     GraphJsonNotFound,
@@ -23,6 +24,7 @@ from ada_backend.services.git_sync_service import (
     register_installation_if_new,
     sync_graph_from_github,
 )
+from ada_backend.services.github_client import DraftnrunRepoStructure
 from ada_backend.utils.github_state import create_install_state, verify_install_state
 from ada_backend.utils.redis_client import push_git_sync_task
 
@@ -350,7 +352,7 @@ class TestImportFromGithub:
         config_id = uuid4()
 
         project = SimpleNamespace(id=project_id, name="my-agent", organization_id=org_id)
-        config = self._make_config(org_id, project_id, "my-agent")
+        config = self._make_config(org_id, project_id, "draftnrun/projects/my-agent")
         config.id = config_id
 
         with (
@@ -361,9 +363,12 @@ class TestImportFromGithub:
                 return_value="abc123",
             ),
             patch(
-                "ada_backend.services.git_sync_service.github_client.find_graph_json_folders",
+                "ada_backend.services.git_sync_service.github_client.discover_draftnrun_repo",
                 new_callable=AsyncMock,
-                return_value=["my-agent"],
+                return_value=DraftnrunRepoStructure(
+                    project_folders=["draftnrun/projects/my-agent"],
+                    prompt_files=[],
+                ),
             ),
             patch(
                 "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
@@ -382,7 +387,7 @@ class TestImportFromGithub:
                 return_value=True,
             ),
         ):
-            imported, skipped = await import_from_github(
+            imported, skipped, _, _ = await import_from_github(
                 session=session,
                 organization_id=org_id,
                 user_id=user_id,
@@ -393,7 +398,7 @@ class TestImportFromGithub:
             )
 
         assert len(imported) == 1
-        assert imported[0].graph_folder == "my-agent"
+        assert imported[0].graph_folder == "draftnrun/projects/my-agent"
         assert imported[0].project_name == "my-agent"
         assert imported[0].status == "created"
         assert len(skipped) == 0
@@ -409,7 +414,7 @@ class TestImportFromGithub:
         config_id = uuid4()
 
         project = SimpleNamespace(id=project_id, name="my-agent", organization_id=org_id)
-        config = self._make_config(org_id, project_id, "my-agent")
+        config = self._make_config(org_id, project_id, "draftnrun/projects/my-agent")
         config.id = config_id
 
         with (
@@ -420,9 +425,12 @@ class TestImportFromGithub:
                 return_value="abc123",
             ),
             patch(
-                "ada_backend.services.git_sync_service.github_client.find_graph_json_folders",
+                "ada_backend.services.git_sync_service.github_client.discover_draftnrun_repo",
                 new_callable=AsyncMock,
-                return_value=["my-agent"],
+                return_value=DraftnrunRepoStructure(
+                    project_folders=["draftnrun/projects/my-agent"],
+                    prompt_files=[],
+                ),
             ),
             patch(
                 "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
@@ -461,8 +469,8 @@ class TestImportFromGithub:
         org_id = uuid4()
 
         configs = {
-            "agent-a": self._make_config(org_id, uuid4(), "agent-a"),
-            "agent-b": self._make_config(org_id, uuid4(), "agent-b"),
+            "draftnrun/projects/agent-a": self._make_config(org_id, uuid4(), "draftnrun/projects/agent-a"),
+            "draftnrun/projects/agent-b": self._make_config(org_id, uuid4(), "draftnrun/projects/agent-b"),
         }
 
         def fake_create(**kwargs):
@@ -481,9 +489,12 @@ class TestImportFromGithub:
                 return_value="abc123",
             ),
             patch(
-                "ada_backend.services.git_sync_service.github_client.find_graph_json_folders",
+                "ada_backend.services.git_sync_service.github_client.discover_draftnrun_repo",
                 new_callable=AsyncMock,
-                return_value=["agent-a", "agent-b"],
+                return_value=DraftnrunRepoStructure(
+                    project_folders=["draftnrun/projects/agent-a", "draftnrun/projects/agent-b"],
+                    prompt_files=[],
+                ),
             ),
             patch(
                 "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
@@ -502,7 +513,7 @@ class TestImportFromGithub:
                 return_value=True,
             ),
         ):
-            imported, skipped = await import_from_github(
+            imported, skipped, _, _ = await import_from_github(
                 session=session,
                 organization_id=org_id,
                 user_id=uuid4(),
@@ -513,7 +524,7 @@ class TestImportFromGithub:
             )
 
         assert len(imported) == 2
-        assert {i.graph_folder for i in imported} == {"agent-a", "agent-b"}
+        assert {i.graph_folder for i in imported} == {"draftnrun/projects/agent-a", "draftnrun/projects/agent-b"}
         assert len(skipped) == 0
 
     @pytest.mark.asyncio
@@ -521,8 +532,8 @@ class TestImportFromGithub:
         session = MagicMock()
         org_id = uuid4()
 
-        existing_config = self._make_config(org_id, uuid4(), "agent-a")
-        new_config = self._make_config(org_id, uuid4(), "agent-b")
+        existing_config = self._make_config(org_id, uuid4(), "draftnrun/projects/agent-a")
+        new_config = self._make_config(org_id, uuid4(), "draftnrun/projects/agent-b")
 
         with (
             patch(PATCH_ENSURE_OWNED),
@@ -532,9 +543,12 @@ class TestImportFromGithub:
                 return_value="abc123",
             ),
             patch(
-                "ada_backend.services.git_sync_service.github_client.find_graph_json_folders",
+                "ada_backend.services.git_sync_service.github_client.discover_draftnrun_repo",
                 new_callable=AsyncMock,
-                return_value=["agent-a", "agent-b"],
+                return_value=DraftnrunRepoStructure(
+                    project_folders=["draftnrun/projects/agent-a", "draftnrun/projects/agent-b"],
+                    prompt_files=[],
+                ),
             ),
             patch(
                 "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
@@ -553,7 +567,7 @@ class TestImportFromGithub:
                 return_value=True,
             ),
         ):
-            imported, skipped = await import_from_github(
+            imported, skipped, _, _ = await import_from_github(
                 session=session,
                 organization_id=org_id,
                 user_id=uuid4(),
@@ -564,11 +578,11 @@ class TestImportFromGithub:
             )
 
         assert len(imported) == 1
-        assert imported[0].graph_folder == "agent-b"
-        assert skipped == ["agent-a"]
+        assert imported[0].graph_folder == "draftnrun/projects/agent-b"
+        assert skipped == ["draftnrun/projects/agent-a"]
 
     @pytest.mark.asyncio
-    async def test_no_graph_json_raises(self):
+    async def test_no_draftnrun_folder_raises(self):
         session = MagicMock()
 
         with (
@@ -579,9 +593,37 @@ class TestImportFromGithub:
                 return_value="abc123",
             ),
             patch(
-                "ada_backend.services.git_sync_service.github_client.find_graph_json_folders",
+                "ada_backend.services.git_sync_service.github_client.discover_draftnrun_repo",
                 new_callable=AsyncMock,
-                return_value=[],
+                return_value=None,
+            ),
+        ):
+            with pytest.raises(DraftnrunFolderNotFound):
+                await import_from_github(
+                    session=session,
+                    organization_id=uuid4(),
+                    user_id=uuid4(),
+                    github_owner="owner",
+                    github_repo_name="repo",
+                    branch="main",
+                    github_installation_id=42,
+                )
+
+    @pytest.mark.asyncio
+    async def test_empty_draftnrun_folder_raises(self):
+        session = MagicMock()
+
+        with (
+            patch(PATCH_ENSURE_OWNED),
+            patch(
+                "ada_backend.services.git_sync_service.github_client.get_branch_head_sha",
+                new_callable=AsyncMock,
+                return_value="abc123",
+            ),
+            patch(
+                "ada_backend.services.git_sync_service.github_client.discover_draftnrun_repo",
+                new_callable=AsyncMock,
+                return_value=DraftnrunRepoStructure(project_folders=[], prompt_files=[]),
             ),
         ):
             with pytest.raises(GraphJsonNotFound):
@@ -596,12 +638,12 @@ class TestImportFromGithub:
                 )
 
     @pytest.mark.asyncio
-    async def test_root_level_graph_uses_repo_name(self):
+    async def test_project_name_derived_from_folder(self):
         session = MagicMock()
         org_id = uuid4()
         pid = uuid4()
-        project = SimpleNamespace(id=pid, name="repo", organization_id=org_id)
-        config = self._make_config(org_id, pid, "")
+        project = SimpleNamespace(id=pid, name="my-project", organization_id=org_id)
+        config = self._make_config(org_id, pid, "draftnrun/projects/my-project")
 
         with (
             patch(PATCH_ENSURE_OWNED),
@@ -611,9 +653,12 @@ class TestImportFromGithub:
                 return_value="abc123",
             ),
             patch(
-                "ada_backend.services.git_sync_service.github_client.find_graph_json_folders",
+                "ada_backend.services.git_sync_service.github_client.discover_draftnrun_repo",
                 new_callable=AsyncMock,
-                return_value=[""],
+                return_value=DraftnrunRepoStructure(
+                    project_folders=["draftnrun/projects/my-project"],
+                    prompt_files=[],
+                ),
             ),
             patch(
                 "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
@@ -632,7 +677,7 @@ class TestImportFromGithub:
                 return_value=True,
             ),
         ):
-            imported, skipped = await import_from_github(
+            imported, skipped, _, _ = await import_from_github(
                 session=session,
                 organization_id=org_id,
                 user_id=uuid4(),
@@ -642,8 +687,8 @@ class TestImportFromGithub:
                 github_installation_id=42,
             )
 
-        assert imported[0].project_name == "repo"
-        assert create_mock.call_args.kwargs["project_name"] == "repo"
+        assert imported[0].project_name == "my-project"
+        assert create_mock.call_args.kwargs["project_name"] == "my-project"
 
     @pytest.mark.asyncio
     async def test_integrity_error_skips_folder(self):
@@ -659,9 +704,12 @@ class TestImportFromGithub:
                 return_value="abc123",
             ),
             patch(
-                "ada_backend.services.git_sync_service.github_client.find_graph_json_folders",
+                "ada_backend.services.git_sync_service.github_client.discover_draftnrun_repo",
                 new_callable=AsyncMock,
-                return_value=["my-agent"],
+                return_value=DraftnrunRepoStructure(
+                    project_folders=["draftnrun/projects/my-agent"],
+                    prompt_files=[],
+                ),
             ),
             patch(
                 "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
@@ -676,7 +724,7 @@ class TestImportFromGithub:
                 side_effect=IntegrityError("INSERT", {}, Exception("unique constraint")),
             ),
         ):
-            imported, skipped = await import_from_github(
+            imported, skipped, _, _ = await import_from_github(
                 session=session,
                 organization_id=org_id,
                 user_id=uuid4(),
@@ -687,14 +735,14 @@ class TestImportFromGithub:
             )
 
         assert len(imported) == 0
-        assert skipped == ["my-agent"]
+        assert skipped == ["draftnrun/projects/my-agent"]
         session.rollback.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_enqueues_initial_sync_for_each_import(self):
         session = MagicMock()
         org_id = uuid4()
-        config = self._make_config(org_id, uuid4(), "my-agent")
+        config = self._make_config(org_id, uuid4(), "draftnrun/projects/my-agent")
         project = SimpleNamespace(id=config.project_id, name="my-agent", organization_id=org_id)
 
         with (
@@ -705,9 +753,12 @@ class TestImportFromGithub:
                 return_value="abc123",
             ),
             patch(
-                "ada_backend.services.git_sync_service.github_client.find_graph_json_folders",
+                "ada_backend.services.git_sync_service.github_client.discover_draftnrun_repo",
                 new_callable=AsyncMock,
-                return_value=["my-agent"],
+                return_value=DraftnrunRepoStructure(
+                    project_folders=["draftnrun/projects/my-agent"],
+                    prompt_files=[],
+                ),
             ),
             patch(
                 "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",

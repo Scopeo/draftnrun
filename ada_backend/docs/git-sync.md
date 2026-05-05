@@ -1,6 +1,47 @@
 # Git Sync
 
-One-way sync from a GitHub repository to Draft'n Run. When a user pushes to the configured branch (default `main`), the backend receives a webhook from the GitHub App, fetches the updated graph files (`graph.json` + `<file_key>.json` per component), creates a new versioned graph runner, and deploys it through the same publish path as the frontend: promote to production, then create a fresh draft clone from that promoted graph.
+One-way sync from a GitHub repository to Draft'n Run. When a user pushes to the configured branch (default `main`), the backend receives a webhook from the GitHub App, fetches the updated graph files and prompt files, creates new versioned graph runners (and prompt versions), and deploys through the same publish path as the frontend.
+
+## Repository Folder Convention
+
+The recommended repo structure uses a `draftnrun/` root folder:
+
+```text
+repo/
+  draftnrun/
+    projects/
+      project-a/
+        graph.json
+        start.json
+        llm.json
+      project-b/
+        graph.json
+        ...
+    prompt_library/
+      system-prompt.md
+      folderA/
+        folderB/
+          specialized-prompt.md
+```
+
+- **Projects** live under `draftnrun/projects/<name>/`. Each subfolder contains `graph.json` + `<file_key>.json` per component (same payload format as before).
+- **Prompts** live under `draftnrun/prompt_library/`. Each `.md` file is a prompt. Nested folders are supported; the prompt name is derived from the relative path (e.g. `folderA/folderB/prompt.md` → name `folderA/folderB/prompt`).
+- The `draftnrun/` root is **required**. Repos without it will be rejected at setup time.
+
+### Prompt File Format
+
+Markdown files with optional YAML frontmatter:
+
+```markdown
+---
+description: Optional description of the prompt
+---
+
+The prompt content goes here.
+Supports {{variable}} placeholders.
+```
+
+The file body (after frontmatter) is the prompt `content`. The `description` field in frontmatter is optional metadata. The filename minus `.md`, combined with its directory path relative to `prompt_library/`, forms the prompt `name`.
 
 ## Architecture
 
@@ -15,23 +56,25 @@ GitHub repo (push to main)
   → GitHub App fires webhook to POST /webhooks/github
   → Backend verifies HMAC with GITHUB_APP_WEBHOOK_SECRET
   → Backend looks up matching GitSyncConfig by (owner, repo_name, branch)
-  → For each matching config where graph files changed, enqueue a Redis job
+  → For project changes (draftnrun/projects/*/...): enqueue graph sync job
+  → For prompt changes (draftnrun/prompt_library/**/*.md): enqueue prompt sync job
   → Webhook returns immediately (non-blocking)
-  → Git sync queue worker picks up the job:
-    → Generates an installation token (JWT → installation access token)
-    → Fetches graph.json + <file_key>.json per component via GitHub Contents API
-    → Creates a new graph runner, populates it with the graph JSON
-    → Calls the standard deploy service used by frontend publish
-    → Deployed runner becomes production (tagged), and a new draft clone is created from it
+  → Git sync queue worker picks up each job:
+    Graph sync:
+      → Fetches graph.json + <file_key>.json per component
+      → Creates a new graph runner, deploys to production
+    Prompt sync:
+      → Fetches changed .md files
+      → Creates new prompt versions (or new prompt definitions for new files)
 ```
 
 ## Data Model
 
-`git_sync_configs` table:
+### `git_sync_configs` table (projects)
 
 - `github_owner` — GitHub repository owner (user or organization name)
 - `github_repo_name` — GitHub repository name
-- `graph_folder` — folder path in the repo containing `graph.json` and per-component `<file_key>.json` files (auto-detected at setup time)
+- `graph_folder` — folder path in the repo containing `graph.json` and per-component `<file_key>.json` files (e.g. `draftnrun/projects/my-agent`)
 - `branch` — branch to watch (default `main`)
 - `github_installation_id` — GitHub App installation ID (integer, from the installation event)
 - `last_sync_status` — status of the last sync attempt (`success`, `fetch_failed`, `update_failed`, `deploy_failed`)
@@ -40,7 +83,18 @@ GitHub repo (push to main)
 
 Unique constraints: `(github_owner, github_repo_name, graph_folder, branch)` — one sync config per repo/folder/branch combination; `(project_id)` — one sync config per project.
 
-A single repo can host multiple projects (one graph payload per subfolder), all in the same organization.
+### `git_sync_prompt_mappings` table (prompts)
+
+Links a git-synced prompt to its source file so the backend can update the right `PromptDefinition` when a file changes.
+
+- `organization_id` — org that owns the prompt
+- `prompt_definition_id` — FK to `prompt_definitions` (UNIQUE — one mapping per prompt)
+- `github_owner`, `github_repo_name`, `branch` — repo coordinates
+- `prompt_file_path` — relative to `draftnrun/prompt_library/` (e.g. `folderA/prompt.md`)
+- `github_installation_id` — GitHub App installation ID
+- `last_sync_commit_sha` — SHA of the commit that last synced this prompt
+
+Unique constraint: `(organization_id, github_owner, github_repo_name, branch, prompt_file_path)`.
 
 ## GitHub App Setup
 
@@ -67,31 +121,42 @@ This happens automatically on each webhook — no user interaction needed.
 1. User installs the GitHub App on their repo (via GitHub UI)
 2. The installation ID is provided to Draft'n Run (from the GitHub App install page or via API)
 3. User calls `POST /organizations/{org_id}/git-sync` (or MCP tool `configure_git_sync`) with `github_owner`, `github_repo_name`, `branch`, `github_installation_id`, and optionally `project_type`
-4. Backend scans the repo tree (Git Trees API, recursive) for all `graph.json` files
-5. For each folder containing a `graph.json` that doesn't already have a sync config, the backend creates a new project (named after the folder, or the repo name for root-level) with a `"github"` tag and a `GitSyncConfig` row
-6. Backend enqueues an initial sync job for each new config — the existing `graph.json` is deployed immediately using the standard deploy flow (best-effort: if enqueue fails, subsequent pushes will trigger syncs normally)
-
-MCP tools: `configure_git_sync`, `list_git_sync_configs`, `get_git_sync_config`, `disconnect_git_sync` (see `docs://admin`).
+4. Backend scans the repo tree (Git Trees API, recursive) for the `draftnrun/` folder structure:
+   - Discovers projects under `draftnrun/projects/*/graph.json`
+   - Discovers prompts under `draftnrun/prompt_library/**/*.md`
+   - Raises `DraftnrunFolderNotFound` (422) if no `draftnrun/` root is found
+5. For each project folder: creates a new project (named after the folder) with a `"github"` tag and a `GitSyncConfig` row, enqueues an initial sync
+6. For each prompt file: creates a `PromptDefinition` + initial `PromptVersion`, creates a `GitSyncPromptMapping` row
 
 ## Service Contract
 
-- `import_from_github` returns typed `GitSyncImportResult` items plus `skipped` folder names.
-- Routers should pass those typed items through `GitSyncImportResponse` directly.
+- `import_from_github` returns `(imported_projects, skipped_projects, imported_prompts, skipped_prompts)`.
+- Routers pass those through `GitSyncImportResponse` directly.
 
 ## Sync Flow (on push)
 
 1. GitHub sends `POST /webhooks/github` with signed payload
 2. Backend verifies HMAC signature using `GITHUB_APP_WEBHOOK_SECRET` (global, one secret for all)
 3. Looks up matching `git_sync_configs` by `(github_owner, github_repo_name, branch)`
-4. For each matching config where any file in the tracked folder changed (subfolder prefix match for non-root configs, root-level files only for root configs), enqueues a job to the `ada_git_sync_queue` Redis queue and returns immediately. Enqueue is idempotent per `(config_id, commit_sha)` via a Redis `SET NX` dedup key (TTL 1 hour), so webhook retries (e.g. on partial enqueue failure returning 502) never produce duplicate queue entries
-5. The `GitSyncQueueWorker` (daemon thread in the API process) picks up each job and:
+4. For each matching config where any file in the tracked folder changed, enqueues a graph sync job. Enqueue is idempotent per `(config_id, commit_sha)` via a Redis `SET NX` dedup key (TTL 1 hour)
+5. If changed files include paths under `draftnrun/prompt_library/**/*.md`, enqueues a prompt sync job with the list of changed prompt paths
+6. The `GitSyncQueueWorker` (daemon thread in the API process) picks up each job:
 
+   **Graph sync** (existing behavior):
    - Loads the config from DB
    - Generates an installation token
    - Fetches graph.json + <file_key>.json per component via GitHub Contents API
    - Creates a new graph runner and populates it from the payload
    - Calls the canonical deploy flow (tag + production promotion + fresh draft clone)
-   - Updates `last_sync_status` and `last_sync_error` (human-readable error message on failure, cleared on success)
+   - Updates `last_sync_status` and `last_sync_error`
+
+   **Prompt sync** (new):
+   - For each changed prompt file path:
+     - Fetches the `.md` file from GitHub
+     - Parses YAML frontmatter (description) and body (content)
+     - If a `GitSyncPromptMapping` exists: creates a new `PromptVersion` if content or name changed
+     - If no mapping exists (new file): creates a `PromptDefinition` + version + mapping inside a SAVEPOINT (`session.begin_nested()`) so that an `IntegrityError` race on the mapping only rolls back that single prompt, not the entire batch
+   - File deletions do not auto-delete prompts (they may be pinned to ports)
 
 ## Graph Payload Format
 
@@ -103,7 +168,7 @@ File-based format with one file per component, all in the same folder:
 
 ## Disconnect
 
-`DELETE /organizations/{org_id}/git-sync/{config_id}` deletes the `GitSyncConfig` row. The GitHub App installation remains (managed by the user on GitHub).
+`DELETE /organizations/{org_id}/git-sync/{config_id}` deletes the `GitSyncConfig` row. The GitHub App installation remains (managed by the user on GitHub). Prompt mappings are independent from project sync configs.
 
 ## Security
 
@@ -122,7 +187,7 @@ Flow:
 2. After installation, GitHub redirects to the app's Setup URL (must be configured to `{FRONTEND_URL}/github/callback`)
 3. The callback page posts the `installation_id` back to the opener via `postMessage`
 4. A repo-picker dialog appears listing accessible repos (`GET /organizations/{org_id}/git-sync/installations/{id}/repos`)
-5. User selects a repo → `POST /organizations/{org_id}/git-sync` imports matching graph payloads
+5. User selects a repo → `POST /organizations/{org_id}/git-sync` imports matching projects and prompts
 
 API endpoints added for the frontend:
 - `GET /organizations/{org_id}/git-sync/github-app` — returns `{ configured, install_url }` (requires `GITHUB_APP_SLUG`)

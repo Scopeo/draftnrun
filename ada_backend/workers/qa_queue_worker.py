@@ -22,8 +22,7 @@ class QAQueueWorker(BaseQueueWorker):
             trace_project_name="ada-backend-qa-worker",
         )
 
-    @property
-    def required_payload_keys(self) -> tuple[str, ...]:
+    def required_payload_keys(self, payload: dict) -> tuple[str, ...]:
         return ("session_id", "project_id", "dataset_id", "run_request")
 
     def parse_item_id(self, item_payload: dict):
