@@ -116,7 +116,8 @@ def upgrade() -> None:
                 INSERT INTO port_definitions (
                     id, component_version_id, name, port_type, is_canonical,
                     description, parameter_type, ui_component, ui_component_properties,
-                    nullable, "default", is_tool_input, is_advanced, drives_output_schema
+                    nullable, "default", is_tool_input, is_advanced, drives_output_schema,
+                    is_prompt
                 )
                 SELECT
                     '{pd_id}'::uuid,
@@ -130,6 +131,7 @@ def upgrade() -> None:
                     CAST(:ui_props AS jsonb),
                     false,
                     :default_model,
+                    false,
                     false,
                     false,
                     false
