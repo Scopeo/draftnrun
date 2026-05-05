@@ -152,8 +152,6 @@ export const initializeNavItems = async () => {
       action: 'read',
       subject: 'Organization',
       group: 'configure',
-      badgeContent: 'Beta',
-      badgeClass: 'beta-badge',
     })
 
     currentNavs.push({

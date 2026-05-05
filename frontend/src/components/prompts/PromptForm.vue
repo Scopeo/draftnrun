@@ -36,7 +36,7 @@ const isValid = computed(() => name.value.trim().length > 0 && content.value.tri
     <VDivider class="my-5" />
 
     <div class="prompt-form__body">
-      <div class="prompt-form__section">
+      <div v-if="!nameReadonly" class="prompt-form__section">
         <h3 class="text-subtitle-1 font-weight-medium mb-1">Name</h3>
         <p class="text-body-2 text-medium-emphasis mb-3">A short, descriptive name for this prompt.</p>
         <VTextField
@@ -45,7 +45,6 @@ const isValid = computed(() => name.value.trim().length > 0 && content.value.tri
           density="comfortable"
           placeholder="e.g. Customer Support Agent"
           autofocus
-          :readonly="nameReadonly"
           :error-messages="formError ? [formError] : []"
         />
       </div>
@@ -67,7 +66,8 @@ const isValid = computed(() => name.value.trim().length > 0 && content.value.tri
       <div class="prompt-form__section mb-0">
         <h3 class="text-subtitle-1 font-weight-medium mb-1">Commit message</h3>
         <p class="text-body-2 text-medium-emphasis mb-3">
-          Provide information about the changes made in this version. Helps maintain a clear history of prompt iterations.
+          Provide information about the changes made in this version. Helps maintain a clear history of prompt
+          iterations.
         </p>
         <VTextarea
           v-model="commitMessage"

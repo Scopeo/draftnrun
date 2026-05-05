@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { watchOnce } from '@vueuse/core'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   usePromptDetailQuery,
@@ -60,14 +59,16 @@ const promptName = computed(() => {
   return parts[parts.length - 1]
 })
 
-watchOnce(
+const stopWatch = watch(
   () => latestVersionDetail.value,
   detail => {
     if (!detail) return
     name.value = detail.name
     content.value = detail.content
     commitMessage.value = defaultCommitMessage()
-  }
+    stopWatch()
+  },
+  { immediate: true }
 )
 
 async function submit() {
