@@ -16,7 +16,7 @@ _FRONTMATTER_DELIMITER = "---"
 def parse_prompt_markdown(raw: str, file_path: str) -> ParsedPromptFile:
     """Parse a prompt markdown file with optional YAML frontmatter.
 
-    ``file_path`` is relative to ``prompt_library/`` (e.g. ``folderA/prompt.md``).
+    ``file_path`` is relative to ``prompts/`` (e.g. ``folderA/prompt.md``).
     The prompt name is derived by stripping the ``.md`` extension.
     """
     name = file_path.removesuffix(".md")

@@ -17,7 +17,7 @@ repo/
       project-b/
         graph.json
         ...
-    prompt_library/
+    prompts/
       system-prompt.md
       folderA/
         folderB/
@@ -25,7 +25,7 @@ repo/
 ```
 
 - **Projects** live under `draftnrun/projects/<name>/`. Each subfolder contains `graph.json` + `<file_key>.json` per component (same payload format as before).
-- **Prompts** live under `draftnrun/prompt_library/`. Each `.md` file is a prompt. Nested folders are supported; the prompt name is derived from the relative path (e.g. `folderA/folderB/prompt.md` → name `folderA/folderB/prompt`).
+- **Prompts** live under `draftnrun/prompts/`. Each `.md` file is a prompt. Nested folders are supported; the prompt name is derived from the relative path (e.g. `folderA/folderB/prompt.md` → name `folderA/folderB/prompt`).
 - The `draftnrun/` root is **required**. Repos without it will be rejected at setup time.
 
 ### Prompt File Format
@@ -41,7 +41,7 @@ The prompt content goes here.
 Supports {{variable}} placeholders.
 ```
 
-The file body (after frontmatter) is the prompt `content`. The `description` field in frontmatter is optional metadata. The filename minus `.md`, combined with its directory path relative to `prompt_library/`, forms the prompt `name`.
+The file body (after frontmatter) is the prompt `content`. The `description` field in frontmatter is optional metadata. The filename minus `.md`, combined with its directory path relative to `prompts/`, forms the prompt `name`.
 
 ## Architecture
 
@@ -57,7 +57,7 @@ GitHub repo (push to main)
   → Backend verifies HMAC with GITHUB_APP_WEBHOOK_SECRET
   → Backend looks up matching GitSyncConfig by (owner, repo_name, branch)
   → For project changes (draftnrun/projects/*/...): enqueue graph sync job
-  → For prompt changes (draftnrun/prompt_library/**/*.md): enqueue prompt sync job
+  → For prompt changes (draftnrun/prompts/**/*.md): enqueue prompt sync job
   → Webhook returns immediately (non-blocking)
   → Git sync queue worker picks up each job:
     Graph sync:
@@ -90,7 +90,7 @@ Links a git-synced prompt to its source file so the backend can update the right
 - `organization_id` — org that owns the prompt
 - `prompt_definition_id` — FK to `prompt_definitions` (UNIQUE — one mapping per prompt)
 - `github_owner`, `github_repo_name`, `branch` — repo coordinates
-- `prompt_file_path` — relative to `draftnrun/prompt_library/` (e.g. `folderA/prompt.md`)
+- `prompt_file_path` — relative to `draftnrun/prompts/` (e.g. `folderA/prompt.md`)
 - `github_installation_id` — GitHub App installation ID
 - `last_sync_commit_sha` — SHA of the commit that last synced this prompt
 
@@ -123,7 +123,7 @@ This happens automatically on each webhook — no user interaction needed.
 3. User calls `POST /organizations/{org_id}/git-sync` (or MCP tool `configure_git_sync`) with `github_owner`, `github_repo_name`, `branch`, `github_installation_id`, and optionally `project_type`
 4. Backend scans the repo tree (Git Trees API, recursive) for the `draftnrun/` folder structure:
    - Discovers projects under `draftnrun/projects/*/graph.json`
-   - Discovers prompts under `draftnrun/prompt_library/**/*.md`
+   - Discovers prompts under `draftnrun/prompts/**/*.md`
    - Raises `DraftnrunFolderNotFound` (422) if no `draftnrun/` root is found
 5. For each project folder: creates a new project (named after the folder) with a `"github"` tag and a `GitSyncConfig` row, enqueues an initial sync
 6. For each prompt file: creates a `PromptDefinition` + initial `PromptVersion`, creates a `GitSyncPromptMapping` row
@@ -139,7 +139,7 @@ This happens automatically on each webhook — no user interaction needed.
 2. Backend verifies HMAC signature using `GITHUB_APP_WEBHOOK_SECRET` (global, one secret for all)
 3. Looks up matching `git_sync_configs` by `(github_owner, github_repo_name, branch)`
 4. For each matching config where any file in the tracked folder changed, enqueues a graph sync job. Enqueue is idempotent per `(config_id, commit_sha)` via a Redis `SET NX` dedup key (TTL 1 hour)
-5. If changed files include paths under `draftnrun/prompt_library/**/*.md`, enqueues a prompt sync job with the list of changed prompt paths
+5. If changed files include paths under `draftnrun/prompts/**/*.md`, enqueues a prompt sync job with the list of changed prompt paths
 6. The `GitSyncQueueWorker` (daemon thread in the API process) picks up each job:
 
    **Graph sync** (existing behavior):

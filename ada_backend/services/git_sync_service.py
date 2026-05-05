@@ -55,7 +55,7 @@ class DraftnrunFolderNotFound(ServiceError):
         self.branch = branch
         super().__init__(
             f"No draftnrun/ folder found in {repo} on branch {branch}. "
-            "The repository must contain a draftnrun/ root with projects/ and/or prompt_library/ subfolders."
+            "The repository must contain a draftnrun/ root with projects/ and/or prompts/ subfolders."
         )
 
 
@@ -151,7 +151,7 @@ async def import_from_github(
     """Scan a GitHub repo for the ``draftnrun/`` folder structure and import projects + prompts.
 
     Looks for ``draftnrun/projects/*/graph.json`` for projects and
-    ``draftnrun/prompt_library/**/*.md`` for prompts.
+    ``draftnrun/prompts/**/*.md`` for prompts.
 
     Returns ``(imported_projects, skipped_projects, imported_prompts, skipped_prompts)``.
     """
@@ -495,7 +495,7 @@ def disconnect_sync(
 
 
 def _collect_changed_prompt_paths(changed_files: set[str]) -> set[str]:
-    """Extract prompt file paths (relative to prompt_library/) from changed file set."""
+    """Extract prompt file paths (relative to prompts/) from changed file set."""
     prefix = f"{PROMPT_LIBRARY_DIR}/"
     result: set[str] = set()
     for path in changed_files:
@@ -515,7 +515,7 @@ def handle_github_push(
 ) -> tuple[int, int]:
     """Queue git sync tasks for configs whose tracked graph file changed in a push.
 
-    Also enqueues prompt sync tasks when files under ``draftnrun/prompt_library/`` changed.
+    Also enqueues prompt sync tasks when files under ``draftnrun/prompts/`` changed.
     """
     queued = 0
     failed = 0

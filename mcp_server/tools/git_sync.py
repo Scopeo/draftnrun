@@ -30,7 +30,7 @@ SPECS: list[ToolSpec] = [
         description=(
             "Scan a GitHub repository for the draftnrun/ folder structure and import projects + prompts. "
             "Projects live under draftnrun/projects/<name>/ (each with graph.json + component files). "
-            "Prompts live under draftnrun/prompt_library/ as .md files (name derived from path). "
+            "Prompts live under draftnrun/prompts/ as .md files (name derived from path). "
             "On each push, changed graphs are deployed to production and changed prompts get new versions. "
             "The repo must contain a draftnrun/ root folder (422 error if missing). "
             "Requires: the Draft'n Run GitHub App installed on the repo, and the installation ID. Developer+."

@@ -150,7 +150,7 @@ async def find_graph_json_folders(repo: str, ref: str, installation_id: int) -> 
 
 DRAFTNRUN_ROOT = "draftnrun"
 PROJECTS_DIR = f"{DRAFTNRUN_ROOT}/projects"
-PROMPT_LIBRARY_DIR = f"{DRAFTNRUN_ROOT}/prompt_library"
+PROMPT_LIBRARY_DIR = f"{DRAFTNRUN_ROOT}/prompts"
 
 
 @dataclass
@@ -163,7 +163,7 @@ async def discover_draftnrun_repo(repo: str, ref: str, installation_id: int) -> 
     """Scan a repo for the ``draftnrun/`` folder structure.
 
     Returns project folders (graph_folder paths like ``draftnrun/projects/my-agent``)
-    and prompt files (paths relative to ``draftnrun/prompt_library/``, e.g. ``folderA/prompt.md``).
+    and prompt files (paths relative to ``draftnrun/prompts/``, e.g. ``folderA/prompt.md``).
 
     Returns ``None`` if no ``draftnrun/`` root is found in the repo tree.
     """

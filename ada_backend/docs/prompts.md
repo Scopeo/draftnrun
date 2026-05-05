@@ -84,10 +84,10 @@ Pin/unpin endpoints validate that the graph runner belongs to the specified proj
 
 ## Git Sync Integration
 
-Prompts can be synced one-way from a GitHub repository. When a repo uses the `draftnrun/` folder convention, markdown files under `draftnrun/prompt_library/` are imported as prompt definitions. Each subsequent push that modifies a prompt file creates a new version automatically.
+Prompts can be synced one-way from a GitHub repository. When a repo uses the `draftnrun/` folder convention, markdown files under `draftnrun/prompts/` are imported as prompt definitions. Each subsequent push that modifies a prompt file creates a new version automatically.
 
 - The `git_sync_prompt_mappings` table links each synced `PromptDefinition` to its source file path in the repo.
-- Prompt name is derived from the file path relative to `prompt_library/` (e.g. `folderA/prompt.md` → `folderA/prompt`).
+- Prompt name is derived from the file path relative to `prompts/` (e.g. `folderA/prompt.md` → `folderA/prompt`).
 - File format: markdown with optional YAML frontmatter (`description` field). File body = prompt content.
 - Sections (`<<section:>>`) are not supported in git-synced prompts.
 - Deleted files do not auto-delete prompts (they may still be pinned to ports).

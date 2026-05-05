@@ -64,9 +64,9 @@ class TestDiscoverDraftnrunRepo:
                     {"type": "blob", "path": "draftnrun/projects/agent-a/graph.json"},
                     {"type": "blob", "path": "draftnrun/projects/agent-a/start.json"},
                     {"type": "blob", "path": "draftnrun/projects/agent-b/graph.json"},
-                    {"type": "blob", "path": "draftnrun/prompt_library/system.md"},
-                    {"type": "blob", "path": "draftnrun/prompt_library/tools/search.md"},
-                    {"type": "blob", "path": "draftnrun/prompt_library/README.txt"},
+                    {"type": "blob", "path": "draftnrun/prompts/system.md"},
+                    {"type": "blob", "path": "draftnrun/prompts/tools/search.md"},
+                    {"type": "blob", "path": "draftnrun/prompts/README.txt"},
                 ]
             }
             mock_resp.raise_for_status = MagicMock()
@@ -306,7 +306,7 @@ class TestHandleGithubPushWithPrompts:
                 "owner",
                 "repo",
                 "main",
-                changed_files={"draftnrun/prompt_library/system.md"},
+                changed_files={"draftnrun/prompts/system.md"},
                 commit_sha="abc123",
                 github_installation_id=42,
             )
@@ -317,7 +317,7 @@ class TestHandleGithubPushWithPrompts:
         call_kwargs = push_mock.call_args[1]
         assert call_kwargs["prompt_paths"] == ["system.md"]
 
-    def test_ignores_non_md_files_in_prompt_library(self):
+    def test_ignores_non_md_files_in_prompts_folder(self):
         session = MagicMock()
 
         with (
@@ -335,7 +335,7 @@ class TestHandleGithubPushWithPrompts:
                 "owner",
                 "repo",
                 "main",
-                changed_files={"draftnrun/prompt_library/README.txt"},
+                changed_files={"draftnrun/prompts/README.txt"},
                 commit_sha="abc123",
             )
 
@@ -382,7 +382,7 @@ class TestHandleGithubPushWithPrompts:
                 "main",
                 changed_files={
                     "draftnrun/projects/agent-a/graph.json",
-                    "draftnrun/prompt_library/system.md",
+                    "draftnrun/prompts/system.md",
                 },
                 commit_sha="abc123",
                 github_installation_id=42,

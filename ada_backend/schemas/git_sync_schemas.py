@@ -65,7 +65,7 @@ class GitSyncImportResponse(BaseModel):
     imported: list[GitSyncImportResult]
     skipped: list[str] = Field(default_factory=list, description="Folders already linked to a project")
     imported_prompts: list[GitSyncPromptImportResult] = Field(
-        default_factory=list, description="Prompts imported from prompt_library/"
+        default_factory=list, description="Prompts imported from prompts/"
     )
     skipped_prompts: list[str] = Field(
         default_factory=list, description="Prompt files already linked to a prompt definition"
