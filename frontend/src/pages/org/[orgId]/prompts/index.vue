@@ -19,7 +19,11 @@ definePage({
     <AppPageHeader
       title="Prompt Library"
       description="Manage and version your organization's reusable prompts."
-    />
+    >
+      <template #badge>
+        <VChip size="small" color="warning" variant="tonal">Beta</VChip>
+      </template>
+    </AppPageHeader>
     <PromptLibraryList v-if="orgId" :org-id="orgId" />
   </AppPage>
 </template>

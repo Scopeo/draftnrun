@@ -14,7 +14,7 @@ const { notify } = useNotifications()
 
 const name = ref('')
 const content = ref('')
-const commitMessage = ref('')
+const commitMessage = ref('Initial commit')
 const formError = ref<string | null>(null)
 
 const backTo = computed(() => ({ name: 'org-org-id-prompts', params: { orgId: orgId.value } }))

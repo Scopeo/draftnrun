@@ -36,8 +36,18 @@ const bootstrapComplete = computed(() => !promptPending.value && !versionPending
 
 const name = ref('')
 const content = ref('')
-const commitMessage = ref('')
 const formError = ref<string | null>(null)
+
+function defaultCommitMessage() {
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const ts = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+  const versions = promptDetail.value?.versions
+  const next = versions?.length ? Math.max(...versions.map(v => v.version_number)) + 1 : 2
+  return `${ts} — v${next}`
+}
+
+const commitMessage = ref(defaultCommitMessage())
 
 const backTo = computed(() => ({
   name: 'org-org-id-prompts-id',
@@ -56,6 +66,7 @@ watchOnce(
     if (!detail) return
     name.value = detail.name
     content.value = detail.content
+    commitMessage.value = defaultCommitMessage()
   }
 )
 

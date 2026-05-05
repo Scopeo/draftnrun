@@ -178,4 +178,10 @@ const isHelpDialogVisible = ref(false)
     background-color: rgba(var(--v-theme-on-surface), 0.06);
   }
 }
+
+:deep(.beta-badge .v-badge__badge) {
+  font-size: 0.625rem;
+  background-color: rgb(var(--v-theme-warning));
+  color: rgb(var(--v-theme-on-warning));
+}
 </style>
