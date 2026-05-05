@@ -733,3 +733,40 @@ class TestPeriodicOrphanRecovery:
         assert call_order == ["recover", "lpush"], (
             f"recover_orphaned_item must be called before lpush, got: {call_order}"
         )
+
+
+class TestNonDictPayloadHandling:
+    """Regression: json.loads can return a non-dict (list, string, etc.).
+    Calling required_payload_keys on such a value would crash (e.g. .get on a list)."""
+
+    @pytest.mark.parametrize("raw_json", ['"just a string"', "[1,2,3]", "42", "true", "null"])
+    def test_non_dict_payload_is_removed_from_processing_list(self, raw_json):
+        queue_name = "test_queue"
+
+        with patch.object(RunQueueWorker, "__init__", lambda self: None):
+            w = RunQueueWorker.__new__(RunQueueWorker)
+            w.queue_name = queue_name
+            w.worker_label = "test"
+            w._trace_manager = None
+            w._trace_project_name = "test"
+            w._drain_requested = MagicMock()
+
+        w._drain_requested.is_set = MagicMock(side_effect=[False, False, True])
+
+        client = MagicMock()
+        client.brpoplpush.return_value = raw_json.encode()
+        client.rpoplpush.return_value = None
+
+        with (
+            patch("ada_backend.workers.base_queue_worker.get_redis_client", return_value=client),
+            patch.object(BaseQueueWorker, "_recover_orphaned_processing_queues"),
+            patch("ada_backend.workers.base_queue_worker.time") as mock_time,
+            patch("ada_backend.workers.base_queue_worker.threading") as mock_threading,
+        ):
+            mock_time.monotonic = MagicMock(return_value=0)
+            mock_threading.Event.return_value = MagicMock()
+            mock_threading.Thread.return_value = MagicMock()
+
+            w._worker_loop()
+
+        client.lrem.assert_called_once()

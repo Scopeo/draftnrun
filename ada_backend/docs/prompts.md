@@ -82,10 +82,25 @@ All prompt and version service functions accept an `organization_id` parameter. 
 
 Pin/unpin endpoints validate that the graph runner belongs to the specified project via `validate_graph_runner_belongs_to_project` before mutating any port state, preventing cross-project manipulation through forged path parameters. The pin endpoint also verifies that the target port's `PortDefinition.is_prompt` flag is `True`; attempting to pin a prompt to a non-eligible port raises `PortNotPromptEligibleError` (400).
 
+## Git Sync Integration
+
+Prompts can be synced one-way from a GitHub repository. When a repo uses the `draftnrun/` folder convention, markdown files under `draftnrun/prompts/` are imported as prompt definitions. Each subsequent push that modifies a prompt file creates a new version automatically.
+
+- The `git_sync_prompt_mappings` table links each synced `PromptDefinition` to its source file path in the repo.
+- Prompt name is derived from the file path relative to `prompts/` (e.g. `folderA/prompt.md` → `folderA/prompt`).
+- File format: markdown with optional YAML frontmatter (`description` field). File body = prompt content.
+- Sections (`<<section:>>`) are not supported in git-synced prompts.
+- Deleted files do not auto-delete prompts (they may still be pinned to ports).
+
+See `ada_backend/docs/git-sync.md` for full details on the folder convention and sync flow.
+
 ## Files
 
-- `ada_backend/database/models.py` — `PromptDefinition`, `PromptVersion`, `PromptSection` models
+- `ada_backend/database/models.py` — `PromptDefinition`, `PromptVersion`, `PromptSection`, `GitSyncPromptMapping` models
 - `ada_backend/schemas/prompt_schema.py` — Pydantic schemas
 - `ada_backend/repositories/prompt_repository.py` — DB queries
+- `ada_backend/repositories/git_sync_repository.py` — Git sync prompt mapping queries
 - `ada_backend/services/prompt_service.py` — Business logic
+- `ada_backend/services/git_sync_service.py` — Git sync prompt import/sync logic
 - `ada_backend/routers/prompt_router.py` — API endpoints
+- `ada_backend/utils/prompt_markdown.py` — Markdown frontmatter parser

@@ -26,9 +26,8 @@ class BaseQueueWorker(ABC):
         self._trace_project_name = trace_project_name
         self._drain_requested = threading.Event()
 
-    @property
     @abstractmethod
-    def required_payload_keys(self) -> tuple[str, ...]:
+    def required_payload_keys(self, payload: dict) -> tuple[str, ...]:
         ...
 
     @abstractmethod
@@ -215,7 +214,21 @@ class BaseQueueWorker(ABC):
                             )
                         continue
 
-                    missing_keys = [k for k in self.required_payload_keys if k not in payload]
+                    if not isinstance(payload, dict):
+                        LOGGER.error(
+                            "[%s] Payload is %s, expected dict", self.worker_label, type(payload).__name__,
+                        )
+                        try:
+                            client.lrem(processing_queue_name, 1, data)
+                        except Exception as rm_exc:
+                            LOGGER.exception(
+                                "[%s] Failed to remove malformed item from processing list: %s",
+                                self.worker_label,
+                                rm_exc,
+                            )
+                        continue
+
+                    missing_keys = [k for k in self.required_payload_keys(payload) if k not in payload]
                     if missing_keys:
                         LOGGER.error("[%s] Payload missing keys: %s", self.worker_label, ", ".join(missing_keys))
                         try:

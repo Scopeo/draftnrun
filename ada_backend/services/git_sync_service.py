@@ -12,16 +12,25 @@ from ada_backend.repositories import git_sync_repository, github_app_installatio
 from ada_backend.repositories.graph_runner_repository import (
     insert_graph_runner_and_bind_to_project,
 )
-from ada_backend.schemas.git_sync_schemas import GitHubRepoSummary, GitSyncImportResult
+from ada_backend.repositories.prompt_repository import (
+    create_prompt,
+    create_prompt_version,
+    get_latest_prompt_version,
+    get_latest_version_number,
+    lock_prompt_for_update,
+)
+from ada_backend.schemas.git_sync_schemas import GitHubRepoSummary, GitSyncImportResult, GitSyncPromptImportResult
 from ada_backend.schemas.pipeline.graph_schema import GraphSaveV2Schema, GraphUpdateSchema
 from ada_backend.services import github_client
 from ada_backend.services.errors import ServiceError
+from ada_backend.services.github_client import PROMPT_LIBRARY_DIR
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.graph_v2_mapper_service import graph_save_v2_to_graph_update
 from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.services.project_service import create_project_with_graph_runner
 from ada_backend.utils.github_state import verify_install_state
-from ada_backend.utils.redis_client import push_git_sync_task
+from ada_backend.utils.prompt_markdown import ParsedPromptFile, parse_prompt_markdown
+from ada_backend.utils.redis_client import push_git_sync_task, push_prompt_sync_task
 
 LOGGER = logging.getLogger(__name__)
 
@@ -38,17 +47,30 @@ class GitSyncConfigNotFound(ServiceError):
         super().__init__(f"Git sync config {config_id} not found")
 
 
+class DraftnrunFolderNotFound(ServiceError):
+    status_code = 422
+
+    def __init__(self, repo: str, branch: str):
+        self.repo = repo
+        self.branch = branch
+        super().__init__(
+            f"No draftnrun/ folder found in {repo} on branch {branch}. "
+            "The repository must contain a draftnrun/ root with projects/ and/or prompts/ subfolders."
+        )
+
+
 class GraphJsonNotFound(ServiceError):
     status_code = 422
 
     def __init__(self, repo: str, branch: str):
         self.repo = repo
         self.branch = branch
-        super().__init__(f"No graph.json found in {repo} on branch {branch}")
+        super().__init__(f"No graph.json found in draftnrun/projects/ of {repo} on branch {branch}")
 
 
 class InstallationOwnershipError(ServiceError):
     """Raised when a GitHub installation belongs to a different organization."""
+
     status_code = 404
 
     def __init__(self, installation_id: int):
@@ -101,11 +123,7 @@ async def _fetch_graph_update_payload(config: db.GitSyncConfig, commit_sha: str)
         file_key = node.get("file_key")
         if not file_key:
             raise ValueError("Each node in graph.json must define file_key")
-        component_path = (
-            f"{config.graph_folder}/{file_key}.json"
-            if config.graph_folder
-            else f"{file_key}.json"
-        )
+        component_path = f"{config.graph_folder}/{file_key}.json" if config.graph_folder else f"{file_key}.json"
         component_raw = await github_client.fetch_file(
             repo=config.github_repo,
             path=component_path,
@@ -129,29 +147,80 @@ async def import_from_github(
     branch: str,
     github_installation_id: int,
     project_type: ProjectType = ProjectType.WORKFLOW,
-) -> tuple[list[GitSyncImportResult], list[str]]:
-    """Scan a GitHub repo for graph.json files, create a project + sync config for each.
+) -> tuple[list[GitSyncImportResult], list[str], list[GitSyncPromptImportResult], list[str]]:
+    """Scan a GitHub repo for the ``draftnrun/`` folder structure and import projects + prompts.
 
-    Returns (imported, skipped) where imported is a list of typed import results,
-    and skipped is a list of folder names that already had a sync config.
+    Looks for ``draftnrun/projects/*/graph.json`` for projects and
+    ``draftnrun/prompts/**/*.md`` for prompts.
 
-    Raises InstallationOwnershipError if the installation belongs to another org.
+    Returns ``(imported_projects, skipped_projects, imported_prompts, skipped_prompts)``.
     """
     ensure_installation_owned(session, github_installation_id, organization_id)
 
     github_repo = f"{github_owner}/{github_repo_name}"
     head_sha = await github_client.get_branch_head_sha(github_repo, branch, github_installation_id)
-    github_folders = await github_client.find_graph_json_folders(
+
+    structure = await github_client.discover_draftnrun_repo(
         github_repo, ref=head_sha, installation_id=github_installation_id
     )
 
-    if not github_folders:
+    if structure is None:
+        raise DraftnrunFolderNotFound(github_repo, branch)
+
+    if not structure.project_folders and not structure.prompt_files:
         raise GraphJsonNotFound(github_repo, branch)
 
+    imported_projects: list[GitSyncImportResult] = []
+    skipped_projects: list[str] = []
+    if structure.project_folders:
+        imported_projects, skipped_projects = await _import_projects(
+            session,
+            organization_id,
+            user_id,
+            github_owner,
+            github_repo_name,
+            branch,
+            github_installation_id,
+            project_type,
+            structure.project_folders,
+            github_repo,
+        )
+
+    imported_prompts: list[GitSyncPromptImportResult] = []
+    skipped_prompts: list[str] = []
+    if structure.prompt_files:
+        imported_prompts, skipped_prompts = await _import_prompts(
+            session,
+            organization_id,
+            user_id,
+            github_owner,
+            github_repo_name,
+            branch,
+            github_installation_id,
+            head_sha,
+            structure.prompt_files,
+            github_repo,
+        )
+
+    return imported_projects, skipped_projects, imported_prompts, skipped_prompts
+
+
+async def _import_projects(
+    session: Session,
+    organization_id: UUID,
+    user_id: UUID,
+    github_owner: str,
+    github_repo_name: str,
+    branch: str,
+    github_installation_id: int,
+    project_type: ProjectType,
+    github_folders: list[str],
+    github_repo: str,
+) -> tuple[list[GitSyncImportResult], list[str]]:
     existing_configs = git_sync_repository.get_configs_by_repo_and_branch(
         session, github_owner, github_repo_name, branch, github_installation_id=github_installation_id
     )
-    existing_folders = {existing_config.graph_folder for existing_config in existing_configs}
+    existing_folders = {c.graph_folder for c in existing_configs}
 
     imported: list[GitSyncImportResult] = []
     skipped: list[str] = []
@@ -161,7 +230,8 @@ async def import_from_github(
             skipped.append(github_folder)
             continue
 
-        project_name = github_folder if github_folder else github_repo_name
+        folder_basename = github_folder.rsplit("/", 1)[-1] if "/" in github_folder else github_folder
+        project_name = folder_basename if folder_basename else github_repo_name
         project_id = uuid4()
 
         project, _graph_runner_id = create_project_with_graph_runner(
@@ -169,7 +239,7 @@ async def import_from_github(
             organization_id=organization_id,
             project_id=project_id,
             project_name=project_name,
-            description=f"Imported from GitHub {github_repo} from folder {github_folder}"
+            description=f"Imported from GitHub {github_repo} ({github_folder})"
             if github_folder
             else f"Imported from GitHub {github_repo}",
             project_type=project_type,
@@ -210,13 +280,104 @@ async def import_from_github(
         )
 
     LOGGER.info(
-        "Imported %d project(s) from %s (branch %s), skipped %d already-linked folder(s)",
+        "Imported %d project(s) from %s (branch %s), skipped %d",
         len(imported),
         github_repo,
         branch,
         len(skipped),
     )
+    return imported, skipped
 
+
+async def _import_prompts(
+    session: Session,
+    organization_id: UUID,
+    user_id: UUID,
+    github_owner: str,
+    github_repo_name: str,
+    branch: str,
+    github_installation_id: int,
+    head_sha: str,
+    prompt_files: list[str],
+    github_repo: str,
+) -> tuple[list[GitSyncPromptImportResult], list[str]]:
+    existing_mappings = git_sync_repository.get_prompt_mappings_by_repo_and_branch(
+        session, organization_id, github_owner, github_repo_name, branch
+    )
+    existing_paths = {m.prompt_file_path for m in existing_mappings}
+
+    imported: list[GitSyncPromptImportResult] = []
+    skipped: list[str] = []
+
+    for file_path in prompt_files:
+        if file_path in existing_paths:
+            skipped.append(file_path)
+            continue
+
+        full_path = f"{PROMPT_LIBRARY_DIR}/{file_path}"
+        try:
+            raw = await github_client.fetch_file(
+                repo=github_repo,
+                path=full_path,
+                ref=head_sha,
+                installation_id=github_installation_id,
+            )
+        except Exception:
+            LOGGER.warning("Failed to fetch prompt file %s from %s — skipping", full_path, github_repo, exc_info=True)
+            skipped.append(file_path)
+            continue
+
+        parsed = parse_prompt_markdown(raw, file_path)
+
+        try:
+            with session.begin_nested():
+                prompt_def = create_prompt(session, db.PromptDefinition(organization_id=organization_id))
+                create_prompt_version(
+                    session,
+                    db.PromptVersion(
+                        prompt_id=prompt_def.id,
+                        version_number=1,
+                        name=parsed.name,
+                        description=parsed.description,
+                        content=parsed.content,
+                        created_by=user_id,
+                        change_description="Initial import from GitHub",
+                    ),
+                )
+                git_sync_repository.create_prompt_mapping(
+                    session=session,
+                    organization_id=organization_id,
+                    prompt_definition_id=prompt_def.id,
+                    github_owner=github_owner,
+                    github_repo_name=github_repo_name,
+                    branch=branch,
+                    prompt_file_path=file_path,
+                    github_installation_id=github_installation_id,
+                    commit_sha=head_sha,
+                )
+        except IntegrityError:
+            LOGGER.warning("Prompt mapping already exists for %r — skipping", file_path)
+            skipped.append(file_path)
+            continue
+
+        session.commit()
+
+        imported.append(
+            GitSyncPromptImportResult(
+                prompt_file_path=file_path,
+                prompt_id=prompt_def.id,
+                prompt_name=parsed.name,
+                status="created",
+            )
+        )
+
+    LOGGER.info(
+        "Imported %d prompt(s) from %s (branch %s), skipped %d",
+        len(imported),
+        github_repo,
+        branch,
+        len(skipped),
+    )
     return imported, skipped
 
 
@@ -254,7 +415,10 @@ async def sync_graph_from_github(
             e,
         )
         git_sync_repository.update_sync_status(
-            session=session, config_id=config.id, status="fetch_failed", commit_sha=commit_sha,
+            session=session,
+            config_id=config.id,
+            status="fetch_failed",
+            commit_sha=commit_sha,
             error_message=str(e),
         )
         raise GitSyncError(f"Failed to fetch graph from GitHub: {e}") from e
@@ -274,7 +438,10 @@ async def sync_graph_from_github(
     except Exception as e:
         LOGGER.error("Failed to build graph runner for project %s: %s", config.project_id, e)
         git_sync_repository.update_sync_status(
-            session=session, config_id=config.id, status="update_failed", commit_sha=commit_sha,
+            session=session,
+            config_id=config.id,
+            status="update_failed",
+            commit_sha=commit_sha,
             error_message=str(e),
         )
         raise GitSyncError(f"Graph update failed: {e}") from e
@@ -288,7 +455,10 @@ async def sync_graph_from_github(
     except Exception as e:
         LOGGER.error("Failed to deploy graph for project %s: %s", config.project_id, e)
         git_sync_repository.update_sync_status(
-            session=session, config_id=config.id, status="deploy_failed", commit_sha=commit_sha,
+            session=session,
+            config_id=config.id,
+            status="deploy_failed",
+            commit_sha=commit_sha,
             error_message=str(e),
         )
         raise GitSyncError(f"Graph deploy failed: {e}") from e
@@ -324,6 +494,16 @@ def disconnect_sync(
     LOGGER.info("Disconnected git sync config %s for project %s", config_id, config.project_id)
 
 
+def _collect_changed_prompt_paths(changed_files: set[str]) -> set[str]:
+    """Extract prompt file paths (relative to prompts/) from changed file set."""
+    prefix = f"{PROMPT_LIBRARY_DIR}/"
+    result: set[str] = set()
+    for path in changed_files:
+        if path.startswith(prefix) and path.endswith(".md"):
+            result.add(path[len(prefix) :])
+    return result
+
+
 def handle_github_push(
     session: Session,
     github_owner: str,
@@ -333,15 +513,16 @@ def handle_github_push(
     commit_sha: str,
     github_installation_id: int | None = None,
 ) -> tuple[int, int]:
-    """Queue git sync tasks for configs whose tracked graph file changed in a push."""
+    """Queue git sync tasks for configs whose tracked graph file changed in a push.
+
+    Also enqueues prompt sync tasks when files under ``draftnrun/prompts/`` changed.
+    """
+    queued = 0
+    failed = 0
+
     configs = git_sync_repository.get_configs_by_repo_and_branch(
         session, github_owner, github_repo_name, branch, github_installation_id=github_installation_id
     )
-    if not configs:
-        return 0, 0
-
-    queued = 0
-    failed = 0
     for config in configs:
         if config.graph_folder:
             folder_prefix = f"{config.graph_folder}/"
@@ -356,6 +537,50 @@ def handle_github_push(
         else:
             failed += 1
             LOGGER.error("Failed to enqueue git sync task for config %s", config.id)
+
+    changed_prompts = _collect_changed_prompt_paths(changed_files)
+    if changed_prompts:
+        org_ids = {c.organization_id for c in configs}
+        for org_id in org_ids:
+            mappings = git_sync_repository.get_prompt_mappings_by_repo_and_branch(
+                session, org_id, github_owner, github_repo_name, branch
+            )
+            mapped_paths = {m.prompt_file_path for m in mappings}
+            paths_to_sync = changed_prompts & mapped_paths
+            new_paths = changed_prompts - mapped_paths
+            if not paths_to_sync and not new_paths:
+                continue
+
+            installation_id = github_installation_id
+            if installation_id is None:
+                if mappings:
+                    installation_id = mappings[0].github_installation_id
+                else:
+                    org_configs = [c for c in configs if c.organization_id == org_id]
+                    installation_id = org_configs[0].github_installation_id if org_configs else None
+
+            if installation_id is None:
+                continue
+
+            all_paths = sorted(paths_to_sync | new_paths)
+            if push_prompt_sync_task(
+                organization_id=org_id,
+                github_owner=github_owner,
+                github_repo_name=github_repo_name,
+                branch=branch,
+                installation_id=installation_id,
+                commit_sha=commit_sha,
+                prompt_paths=all_paths,
+            ):
+                queued += 1
+            else:
+                failed += 1
+                LOGGER.error(
+                    "Failed to enqueue prompt sync task for %s/%s org=%s",
+                    github_owner,
+                    github_repo_name,
+                    org_id,
+                )
 
     return queued, failed
 
@@ -376,6 +601,144 @@ def get_config(
     if not config or config.organization_id != organization_id:
         raise GitSyncConfigNotFound(config_id)
     return config
+
+
+async def sync_prompts_from_github(
+    session: Session,
+    organization_id: UUID,
+    github_owner: str,
+    github_repo_name: str,
+    branch: str,
+    installation_id: int,
+    commit_sha: str,
+    prompt_paths: list[str],
+) -> None:
+    """Fetch changed prompt files from GitHub and create new versions (or new prompts)."""
+    github_repo = f"{github_owner}/{github_repo_name}"
+    existing_mappings = git_sync_repository.get_prompt_mappings_by_repo_and_branch(
+        session, organization_id, github_owner, github_repo_name, branch
+    )
+    path_to_mapping = {m.prompt_file_path: m for m in existing_mappings}
+
+    for file_path in prompt_paths:
+        full_path = f"{PROMPT_LIBRARY_DIR}/{file_path}"
+        try:
+            raw = await github_client.fetch_file(
+                repo=github_repo,
+                path=full_path,
+                ref=commit_sha,
+                installation_id=installation_id,
+            )
+        except Exception:
+            LOGGER.warning(
+                "Failed to fetch prompt %s from %s@%s — skipping",
+                full_path,
+                github_repo,
+                commit_sha[:8],
+                exc_info=True,
+            )
+            continue
+
+        parsed = parse_prompt_markdown(raw, file_path)
+        mapping = path_to_mapping.get(file_path)
+
+        if mapping:
+            _sync_existing_prompt(session, mapping, parsed, commit_sha)
+        else:
+            _sync_new_prompt(
+                session,
+                organization_id,
+                github_owner,
+                github_repo_name,
+                branch,
+                installation_id,
+                file_path,
+                parsed,
+                commit_sha,
+            )
+
+    session.commit()
+    LOGGER.info("Prompt sync completed for %s@%s — %d file(s)", github_repo, commit_sha[:8], len(prompt_paths))
+
+
+def _sync_existing_prompt(
+    session: Session,
+    mapping: db.GitSyncPromptMapping,
+    parsed: ParsedPromptFile,
+    commit_sha: str,
+) -> None:
+    prompt = lock_prompt_for_update(session, mapping.prompt_definition_id)
+    if not prompt:
+        LOGGER.warning("Prompt %s referenced by mapping %s no longer exists", mapping.prompt_definition_id, mapping.id)
+        return
+
+    latest = get_latest_prompt_version(session, prompt.id)
+    if (
+        latest
+        and latest.content == parsed.content
+        and latest.name == parsed.name
+        and latest.description == parsed.description
+    ):
+        git_sync_repository.update_prompt_mapping_sync(session, mapping.id, commit_sha)
+        return
+
+    next_version = get_latest_version_number(session, prompt.id) + 1
+    create_prompt_version(
+        session,
+        db.PromptVersion(
+            prompt_id=prompt.id,
+            version_number=next_version,
+            name=parsed.name,
+            description=parsed.description,
+            content=parsed.content,
+            change_description=f"Synced from GitHub ({commit_sha[:8]})",
+        ),
+    )
+    git_sync_repository.update_prompt_mapping_sync(session, mapping.id, commit_sha)
+    LOGGER.info("Created version %d for prompt %s from git sync", next_version, prompt.id)
+
+
+def _sync_new_prompt(
+    session: Session,
+    organization_id: UUID,
+    github_owner: str,
+    github_repo_name: str,
+    branch: str,
+    installation_id: int,
+    file_path: str,
+    parsed: ParsedPromptFile,
+    commit_sha: str,
+) -> None:
+    try:
+        with session.begin_nested():
+            prompt_def = create_prompt(session, db.PromptDefinition(organization_id=organization_id))
+            create_prompt_version(
+                session,
+                db.PromptVersion(
+                    prompt_id=prompt_def.id,
+                    version_number=1,
+                    name=parsed.name,
+                    description=parsed.description,
+                    content=parsed.content,
+                    change_description=f"Discovered in GitHub ({commit_sha[:8]})",
+                ),
+            )
+            git_sync_repository.create_prompt_mapping(
+                session=session,
+                organization_id=organization_id,
+                prompt_definition_id=prompt_def.id,
+                github_owner=github_owner,
+                github_repo_name=github_repo_name,
+                branch=branch,
+                prompt_file_path=file_path,
+                github_installation_id=installation_id,
+                commit_sha=commit_sha,
+            )
+    except IntegrityError:
+        LOGGER.warning("Prompt mapping race for %r — skipping", file_path)
+        return
+
+    LOGGER.info("Created new prompt %s from git file %s", prompt_def.id, file_path)
 
 
 async def list_installation_repos_summary(
