@@ -72,7 +72,7 @@ export function useCreateVersionMutation(orgId: Ref<string | undefined>, promptI
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['prompt-detail', orgId.value, promptId.value] })
-      queryClient.invalidateQueries({ queryKey: ['prompt-version'] })
+      queryClient.invalidateQueries({ queryKey: ['prompt-version', orgId.value] })
       queryClient.invalidateQueries({ queryKey: ['prompts', orgId.value] })
     },
   })

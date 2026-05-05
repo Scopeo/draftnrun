@@ -14,8 +14,9 @@ const props = defineProps<{
 
 const orgId = toRef(props, 'orgId')
 const promptId = toRef(props, 'promptId')
-const baseVersionRef = computed(() => (visible.value && props.baseVersionId) ? props.baseVersionId : undefined)
-const compareVersionRef = computed(() => (visible.value && props.compareVersionId) ? props.compareVersionId : undefined)
+const sameVersion = computed(() => !!props.baseVersionId && props.baseVersionId === props.compareVersionId)
+const baseVersionRef = computed(() => (visible.value && props.baseVersionId && !sameVersion.value) ? props.baseVersionId : undefined)
+const compareVersionRef = computed(() => (visible.value && props.compareVersionId && !sameVersion.value) ? props.compareVersionId : undefined)
 
 const baseQuery = usePromptVersionDetailQuery(orgId, promptId, baseVersionRef)
 const compareQuery = usePromptVersionDetailQuery(orgId, promptId, compareVersionRef)
@@ -75,7 +76,11 @@ const newerNumber = computed(() => {
       <VDivider />
 
       <VCardText class="diff-container pa-0">
-        <div v-if="loading" class="diff-loading d-flex justify-center align-center">
+        <div v-if="sameVersion" class="d-flex justify-center align-center pa-8">
+          <EmptyState icon="tabler-equal" title="Same version" description="Select two different versions to compare." size="sm" />
+        </div>
+
+        <div v-else-if="loading" class="diff-loading d-flex justify-center align-center">
           <VProgressCircular indeterminate color="primary" />
         </div>
 
