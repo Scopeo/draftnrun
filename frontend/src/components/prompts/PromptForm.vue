@@ -38,12 +38,15 @@ const isValid = computed(() => name.value.trim().length > 0 && content.value.tri
     <div class="prompt-form__body">
       <div v-if="!nameReadonly" class="prompt-form__section">
         <h3 class="text-subtitle-1 font-weight-medium mb-1">Name</h3>
-        <p class="text-body-2 text-medium-emphasis mb-3">A short, descriptive name for this prompt.</p>
+        <p class="text-body-2 text-medium-emphasis mb-3">
+          A short, descriptive name for this prompt. Use slashes to organize into folders (e.g.
+          <code>support/billing/refund</code> creates the prompt inside two nested folders).
+        </p>
         <VTextField
           v-model="name"
           variant="outlined"
           density="comfortable"
-          placeholder="e.g. Customer Support Agent"
+          placeholder="e.g. support/billing/refund"
           autofocus
           :error-messages="formError ? [formError] : []"
         />
