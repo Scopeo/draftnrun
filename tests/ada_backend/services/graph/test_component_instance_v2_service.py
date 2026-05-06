@@ -397,6 +397,7 @@ class TestSyncInputPortFieldExpressionsPromptPin:
             component_instance_id=instance_id,
             name="system_prompt",
             field_expression_id=expr_mock.id,
+            port_definition_id=None,
             prompt_version_id=version_id,
         )
 
@@ -455,5 +456,6 @@ class TestSyncInputPortFieldExpressionsPromptPin:
             component_instance_id=instance_id,
             name="query",
             field_expression_id=expr_mock.id,
+            port_definition_id=None,
             prompt_version_id=None,
         )
