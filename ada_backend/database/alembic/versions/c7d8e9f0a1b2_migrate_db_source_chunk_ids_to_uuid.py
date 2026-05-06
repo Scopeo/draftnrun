@@ -7,6 +7,7 @@ Create Date: 2026-04-27
 """
 
 import logging
+import uuid
 from typing import Sequence, Union
 from uuid import uuid4
 
@@ -38,6 +39,7 @@ UUID_REGEX = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 MIGRATION_LOG_TABLE = "_chunk_id_migration_log"
 DB_BATCH_SIZE = 500
 QDRANT_SCROLL_BATCH = 100
+QDRANT_UPSERT_BATCH = 50
 
 
 def _batch_update_db(ingestion_conn, table_name: str, mapping: list[tuple[str, str, str]]):
@@ -63,24 +65,52 @@ def _batch_update_db(ingestion_conn, table_name: str, mapping: list[tuple[str, s
         LOGGER.info(f"  DB batch {i // DB_BATCH_SIZE + 1}: updated {len(batch)} rows")
 
 
-def _scroll_and_update_qdrant_payload(
+def _upsert_points(client: httpx.Client, qdrant_url: str, headers: dict, collection_name: str, points: list[dict]):
+    for i in range(0, len(points), QDRANT_UPSERT_BATCH):
+        batch = points[i : i + QDRANT_UPSERT_BATCH]
+        client.put(
+            f"{qdrant_url}/collections/{collection_name}/points?wait=true",
+            headers=headers,
+            json={"points": batch},
+        ).raise_for_status()
+
+
+def _delete_points(client: httpx.Client, qdrant_url: str, headers: dict, collection_name: str, point_ids: list):
+    for i in range(0, len(point_ids), QDRANT_UPSERT_BATCH):
+        batch = point_ids[i : i + QDRANT_UPSERT_BATCH]
+        client.post(
+            f"{qdrant_url}/collections/{collection_name}/points/delete?wait=true",
+            headers=headers,
+            json={"points": batch},
+        ).raise_for_status()
+
+
+def _legacy_point_id(source_id: str, chunk_id: str) -> str:
+    return str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{source_id}:{chunk_id}"))
+
+
+def _scroll_and_replace_qdrant_points(
     client: httpx.Client,
     qdrant_url: str,
     headers: dict,
     collection_name: str,
     source_id: str,
     chunk_id_map: dict[str, str],
+    build_point_id=None,
 ):
+    if build_point_id is None:
+        def build_point_id(_src, cid):
+            return cid
+
     offset = None
-    updated = 0
-    failed = 0
+    replaced = 0
     page_num = 0
 
     while True:
         scroll_body: dict = {
             "limit": QDRANT_SCROLL_BATCH,
-            "with_payload": ["chunk_id"],
-            "with_vector": False,
+            "with_payload": True,
+            "with_vector": True,
             "filter": {"must": [{"key": "source_id", "match": {"value": source_id}}]},
         }
         if offset is not None:
@@ -110,40 +140,38 @@ def _scroll_and_update_qdrant_payload(
             f"Sample chunk_ids: {sample_cids}"
         )
 
-        page_updated = 0
+        new_points = []
+        old_ids = []
         for point in points:
             cur_cid = point.get("payload", {}).get("chunk_id")
             new_cid = chunk_id_map.get(cur_cid)
             if new_cid is None:
                 continue
-            try:
-                client.post(
-                    f"{qdrant_url}/collections/{collection_name}/points/payload",
-                    headers=headers,
-                    json={"payload": {"chunk_id": new_cid}, "points": [point["id"]]},
-                ).raise_for_status()
-                page_updated += 1
-            except httpx.HTTPStatusError as exc:
-                LOGGER.warning(
-                    f"    set_payload failed for point {point['id']}: "
-                    f"HTTP {exc.response.status_code} — {exc.response.text[:300]}"
-                )
-                failed += 1
 
-        updated += page_updated
+            payload = dict(point.get("payload", {}))
+            payload["chunk_id"] = new_cid
+            new_points.append({
+                "id": build_point_id(source_id, new_cid),
+                "payload": payload,
+                "vector": point["vector"],
+            })
+            old_ids.append(point["id"])
+
+        if new_points:
+            _upsert_points(client, qdrant_url, headers, collection_name, new_points)
+            _delete_points(client, qdrant_url, headers, collection_name, old_ids)
+
+        replaced += len(new_points)
         LOGGER.info(
             f"    Qdrant source {source_id} page {page_num}: "
-            f"{page_updated}/{len(points)} updated, {updated} total"
+            f"{len(new_points)}/{len(points)} replaced, {replaced} total"
         )
 
         offset = result.get("next_page_offset")
         if offset is None:
             break
 
-    if failed:
-        LOGGER.warning(f"    Qdrant source {source_id}: {failed} points failed")
-
-    return updated
+    return replaced
 
 
 def upgrade() -> None:
@@ -282,7 +310,7 @@ def upgrade() -> None:
             existing_collections = {c["name"] for c in resp.json().get("result", {}).get("collections", [])}
             LOGGER.info(f"Qdrant has {len(existing_collections)} collections: {existing_collections}")
 
-            total_updated = 0
+            total_replaced = 0
             total_skipped = 0
 
             for source_id, chunk_id_map in source_chunk_maps.items():
@@ -299,13 +327,13 @@ def upgrade() -> None:
                     f"  Source {source_id}: replacing points in collection '{collection_name}' "
                     f"({len(chunk_id_map)} chunks to migrate)"
                 )
-                updated = _scroll_and_update_qdrant_payload(
+                replaced = _scroll_and_replace_qdrant_points(
                     qdrant_client, qdrant_url, headers, collection_name, source_id, chunk_id_map,
                 )
-                total_updated += updated
-                LOGGER.info(f"  Source {source_id}: {updated} Qdrant points replaced")
+                total_replaced += replaced
+                LOGGER.info(f"  Source {source_id}: {replaced} Qdrant points replaced")
 
-        LOGGER.info(f"Qdrant update complete: {total_updated} replaced, {total_skipped} skipped")
+        LOGGER.info(f"Qdrant update complete: {total_replaced} replaced, {total_skipped} skipped")
 
     except Exception as e:
         LOGGER.error(f"Error during chunk_id UUID migration: {e}", exc_info=True)
@@ -381,7 +409,7 @@ def downgrade() -> None:
                 resp.raise_for_status()
                 existing_collections = {c["name"] for c in resp.json().get("result", {}).get("collections", [])}
 
-                total_updated = 0
+                total_reverted = 0
                 for source_id, chunk_id_map in source_chunk_maps.items():
                     collection_name = source_to_collection.get(source_id)
                     if not collection_name or collection_name not in existing_collections:
@@ -391,13 +419,14 @@ def downgrade() -> None:
                         f"  Source {source_id}: reverting {len(chunk_id_map)} points "
                         f"in collection '{collection_name}'"
                     )
-                    updated = _scroll_and_update_qdrant_payload(
+                    reverted = _scroll_and_replace_qdrant_points(
                         qdrant_client, qdrant_url, headers, collection_name, source_id, chunk_id_map,
+                        build_point_id=_legacy_point_id,
                     )
-                    total_updated += updated
-                    LOGGER.info(f"  Source {source_id}: {updated} Qdrant points reverted")
+                    total_reverted += reverted
+                    LOGGER.info(f"  Source {source_id}: {reverted} Qdrant points reverted")
 
-            LOGGER.info(f"Qdrant revert complete: {total_updated} points reverted")
+            LOGGER.info(f"Qdrant revert complete: {total_reverted} points reverted")
 
         ingestion_conn.execute(text(f"DROP TABLE IF EXISTS public.{MIGRATION_LOG_TABLE}"))
         LOGGER.info(f"Dropped migration log table {MIGRATION_LOG_TABLE}")
