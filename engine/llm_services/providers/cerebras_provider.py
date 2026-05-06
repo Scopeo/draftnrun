@@ -26,8 +26,7 @@ class CerebrasProvider(BaseProvider):
         """
         Convert OpenAI format messages to Cerebras-compatible format.
 
-        Cerebras's OpenAI-compatible API has issues with multi-turn tool calling
-        when using role="tool". Convert tool messages to user messages with clear formatting.
+        Strip unsupported fields (tool_calls from system/user, tool_call_id from non-tool messages).
         """
         if isinstance(messages, str):
             return messages
@@ -35,19 +34,15 @@ class CerebrasProvider(BaseProvider):
         converted_messages = []
         for msg in messages:
             role = msg.get("role")
+            cleaned = msg.copy()
 
-            if role == "tool":
-                tool_content = msg.get("content", "")
-                converted_msg = {"role": "user", "content": f"Tool result: {tool_content}"}
-                converted_messages.append(converted_msg)
-            else:
-                cleaned = msg.copy()
-                if role != "assistant" and "tool_calls" in cleaned:
-                    del cleaned["tool_calls"]
-                if role != "tool" and "tool_call_id" in cleaned:
-                    del cleaned["tool_call_id"]
-                cleaned = {k: v for k, v in cleaned.items() if v is not None}
-                converted_messages.append(cleaned)
+            if role != "assistant" and "tool_calls" in cleaned:
+                del cleaned["tool_calls"]
+            if role != "tool" and "tool_call_id" in cleaned:
+                del cleaned["tool_call_id"]
+
+            cleaned = {k: v for k, v in cleaned.items() if v is not None}
+            converted_messages.append(cleaned)
 
         return converted_messages
 
