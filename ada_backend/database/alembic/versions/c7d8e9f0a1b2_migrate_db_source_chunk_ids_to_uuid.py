@@ -6,15 +6,16 @@ Create Date: 2026-04-27
 
 """
 
+import asyncio
 import logging
 import uuid
 from typing import Sequence, Union
 from uuid import uuid4
 
-import httpx
 from alembic import op
 from sqlalchemy import create_engine, text
 
+from engine.qdrant_service import QdrantService
 from settings import settings
 
 revision: str = "c7d8e9f0a1b2"
@@ -65,34 +66,12 @@ def _batch_update_db(ingestion_conn, table_name: str, mapping: list[tuple[str, s
         LOGGER.info(f"  DB batch {i // DB_BATCH_SIZE + 1}: updated {len(batch)} rows")
 
 
-def _upsert_points(client: httpx.Client, qdrant_url: str, headers: dict, collection_name: str, points: list[dict]):
-    for i in range(0, len(points), QDRANT_UPSERT_BATCH):
-        batch = points[i : i + QDRANT_UPSERT_BATCH]
-        client.put(
-            f"{qdrant_url}/collections/{collection_name}/points?wait=true",
-            headers=headers,
-            json={"points": batch},
-        ).raise_for_status()
-
-
-def _delete_points(client: httpx.Client, qdrant_url: str, headers: dict, collection_name: str, point_ids: list):
-    for i in range(0, len(point_ids), QDRANT_UPSERT_BATCH):
-        batch = point_ids[i : i + QDRANT_UPSERT_BATCH]
-        client.post(
-            f"{qdrant_url}/collections/{collection_name}/points/delete?wait=true",
-            headers=headers,
-            json={"points": batch},
-        ).raise_for_status()
-
-
 def _legacy_point_id(source_id: str, chunk_id: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{source_id}:{chunk_id}"))
 
 
-def _scroll_and_replace_qdrant_points(
-    client: httpx.Client,
-    qdrant_url: str,
-    headers: dict,
+async def _scroll_and_replace_qdrant_points(
+    qdrant_service: QdrantService,
     collection_name: str,
     chunk_id_map: dict[str, str],
     build_point_id=None,
@@ -114,14 +93,12 @@ def _scroll_and_replace_qdrant_points(
         if offset is not None:
             scroll_body["offset"] = offset
 
-        resp = client.post(
-            f"{qdrant_url}/collections/{collection_name}/points/scroll",
-            headers=headers,
-            json=scroll_body,
+        result = await qdrant_service._send_request_async(
+            method="POST",
+            endpoint=f"collections/{collection_name}/points/scroll",
+            payload=scroll_body,
         )
-        resp.raise_for_status()
-        result = resp.json().get("result", {})
-        points = result.get("points", [])
+        points = result.get("result", {}).get("points", [])
 
         if not points:
             if page_num == 0:
@@ -153,8 +130,21 @@ def _scroll_and_replace_qdrant_points(
             old_ids.append(point["id"])
 
         if new_points:
-            _upsert_points(client, qdrant_url, headers, collection_name, new_points)
-            _delete_points(client, qdrant_url, headers, collection_name, old_ids)
+            for i in range(0, len(new_points), QDRANT_UPSERT_BATCH):
+                batch = new_points[i : i + QDRANT_UPSERT_BATCH]
+                await qdrant_service._send_request_async(
+                    method="PUT",
+                    endpoint=f"collections/{collection_name}/points?wait=true",
+                    payload={"points": batch},
+                )
+
+            for i in range(0, len(old_ids), QDRANT_UPSERT_BATCH):
+                batch = old_ids[i : i + QDRANT_UPSERT_BATCH]
+                await qdrant_service._send_request_async(
+                    method="POST",
+                    endpoint=f"collections/{collection_name}/points/delete?wait=true",
+                    payload={"points": batch},
+                )
 
         replaced += len(new_points)
         LOGGER.info(
@@ -162,11 +152,92 @@ def _scroll_and_replace_qdrant_points(
             f"{len(new_points)}/{len(points)} replaced, {replaced} total"
         )
 
-        offset = result.get("next_page_offset")
+        offset = result.get("result", {}).get("next_page_offset")
         if offset is None:
             break
 
     return replaced
+
+
+async def _run_qdrant_upgrade(source_to_collection, ingestion_conn):
+    qdrant_service = QdrantService.from_defaults()
+
+    log_rows = ingestion_conn.execute(
+        text(f"SELECT old_chunk_id, source_id, new_chunk_id FROM public.{MIGRATION_LOG_TABLE}")
+    ).fetchall()
+
+    collection_chunk_maps: dict[str, dict[str, str]] = {}
+    for old_cid, sid, new_uuid in log_rows:
+        col = source_to_collection.get(sid)
+        if col:
+            collection_chunk_maps.setdefault(col, {})[old_cid] = new_uuid
+    LOGGER.info(
+        f"Migration log: {len(log_rows)} entries, "
+        f"{len(collection_chunk_maps)} collections to update"
+    )
+    for col, cmap in collection_chunk_maps.items():
+        sample = list(cmap.items())[:3]
+        LOGGER.info(f"  collection {col}: {len(cmap)} mappings, sample: {sample}")
+
+    existing_collections = set(await qdrant_service.list_collection_names_async())
+    LOGGER.info(f"Qdrant has {len(existing_collections)} collections: {existing_collections}")
+
+    total_replaced = 0
+    for collection_name, chunk_id_map in collection_chunk_maps.items():
+        if collection_name not in existing_collections:
+            LOGGER.info(
+                f"  Collection '{collection_name}' not found in Qdrant, "
+                f"skipping {len(chunk_id_map)} chunks"
+            )
+            continue
+
+        LOGGER.info(
+            f"  Collection '{collection_name}': replacing points "
+            f"({len(chunk_id_map)} chunks to migrate)"
+        )
+        replaced = await _scroll_and_replace_qdrant_points(
+            qdrant_service, collection_name, chunk_id_map,
+        )
+        total_replaced += replaced
+        LOGGER.info(f"  Collection '{collection_name}': {replaced} Qdrant points replaced")
+
+    LOGGER.info(f"Qdrant update complete: {total_replaced} replaced")
+
+
+async def _run_qdrant_downgrade(source_to_collection, all_mappings):
+    qdrant_service = QdrantService.from_defaults()
+
+    collection_chunk_maps: dict[str, dict[str, str]] = {}
+    old_cid_to_source: dict[str, str] = {}
+    for mapping in all_mappings.values():
+        for new_uuid, sid, old_cid in mapping:
+            col = source_to_collection.get(sid)
+            if col:
+                collection_chunk_maps.setdefault(col, {})[new_uuid] = old_cid
+                old_cid_to_source[old_cid] = sid
+
+    def _legacy_build_point_id(cid):
+        sid = old_cid_to_source.get(cid)
+        if sid:
+            return _legacy_point_id(sid, cid)
+        return cid
+
+    existing_collections = set(await qdrant_service.list_collection_names_async())
+
+    total_reverted = 0
+    for collection_name, chunk_id_map in collection_chunk_maps.items():
+        if collection_name not in existing_collections:
+            continue
+
+        LOGGER.info(f"  Collection '{collection_name}': reverting {len(chunk_id_map)} points")
+        reverted = await _scroll_and_replace_qdrant_points(
+            qdrant_service, collection_name, chunk_id_map,
+            build_point_id=_legacy_build_point_id,
+        )
+        total_reverted += reverted
+        LOGGER.info(f"  Collection '{collection_name}': {reverted} Qdrant points reverted")
+
+    LOGGER.info(f"Qdrant revert complete: {total_reverted} points reverted")
 
 
 def upgrade() -> None:
@@ -276,62 +347,12 @@ def upgrade() -> None:
             _batch_update_db(ingestion_conn, table_name, mapping)
             LOGGER.info(f"Finished DB update for {table_name} ({len(mapping)} rows)")
 
-        if not settings.QDRANT_CLUSTER_URL or not settings.QDRANT_API_KEY:
-            LOGGER.info("QDRANT_CLUSTER_URL or QDRANT_API_KEY not set. Skipping Qdrant payload update.")
-            return
-
         if not source_to_collection:
             LOGGER.info("No DB sources with Qdrant collections found. Skipping Qdrant update.")
             return
 
         LOGGER.info("Phase 2: Replacing Qdrant points with new IDs...")
-        qdrant_url = settings.QDRANT_CLUSTER_URL.rstrip("/")
-        headers = {"api-key": settings.QDRANT_API_KEY, "Content-Type": "application/json"}
-
-        log_rows = ingestion_conn.execute(
-            text(f"SELECT old_chunk_id, source_id, new_chunk_id FROM public.{MIGRATION_LOG_TABLE}")
-        ).fetchall()
-
-        collection_chunk_maps: dict[str, dict[str, str]] = {}
-        for old_cid, sid, new_uuid in log_rows:
-            col = source_to_collection.get(sid)
-            if col:
-                collection_chunk_maps.setdefault(col, {})[old_cid] = new_uuid
-        LOGGER.info(
-            f"Migration log: {len(log_rows)} entries, "
-            f"{len(collection_chunk_maps)} collections to update"
-        )
-        for col, cmap in collection_chunk_maps.items():
-            sample = list(cmap.items())[:3]
-            LOGGER.info(f"  collection {col}: {len(cmap)} mappings, sample: {sample}")
-
-        with httpx.Client(timeout=60) as qdrant_client:
-            resp = qdrant_client.get(f"{qdrant_url}/collections", headers=headers)
-            resp.raise_for_status()
-            existing_collections = {c["name"] for c in resp.json().get("result", {}).get("collections", [])}
-            LOGGER.info(f"Qdrant has {len(existing_collections)} collections: {existing_collections}")
-
-            total_replaced = 0
-
-            for collection_name, chunk_id_map in collection_chunk_maps.items():
-                if collection_name not in existing_collections:
-                    LOGGER.info(
-                        f"  Collection '{collection_name}' not found in Qdrant, "
-                        f"skipping {len(chunk_id_map)} chunks"
-                    )
-                    continue
-
-                LOGGER.info(
-                    f"  Collection '{collection_name}': replacing points "
-                    f"({len(chunk_id_map)} chunks to migrate)"
-                )
-                replaced = _scroll_and_replace_qdrant_points(
-                    qdrant_client, qdrant_url, headers, collection_name, chunk_id_map,
-                )
-                total_replaced += replaced
-                LOGGER.info(f"  Collection '{collection_name}': {replaced} Qdrant points replaced")
-
-        LOGGER.info(f"Qdrant update complete: {total_replaced} replaced")
+        asyncio.run(_run_qdrant_upgrade(source_to_collection, ingestion_conn))
 
     except Exception as e:
         LOGGER.error(f"Error during chunk_id UUID migration: {e}", exc_info=True)
@@ -380,59 +401,18 @@ def downgrade() -> None:
             _batch_update_db(ingestion_conn, table_name, mapping)
             LOGGER.info(f"Finished DB revert for {table_name} ({len(mapping)} rows)")
 
-        if not settings.QDRANT_CLUSTER_URL or not settings.QDRANT_API_KEY:
-            LOGGER.info("QDRANT_CLUSTER_URL or QDRANT_API_KEY not set. Skipping Qdrant revert.")
-        else:
+        backend_conn = op.get_bind()
+        db_sources = backend_conn.execute(
+            text(
+                "SELECT id::text, qdrant_collection_name FROM data_sources "
+                "WHERE type = 'database' AND qdrant_collection_name IS NOT NULL"
+            )
+        ).fetchall()
+        source_to_collection = {sid: col for sid, col in db_sources}
+
+        if source_to_collection:
             LOGGER.info("Phase 2: Reverting Qdrant points to legacy IDs...")
-            qdrant_url = settings.QDRANT_CLUSTER_URL.rstrip("/")
-            headers = {"api-key": settings.QDRANT_API_KEY, "Content-Type": "application/json"}
-
-            backend_conn = op.get_bind()
-            db_sources = backend_conn.execute(
-                text(
-                    "SELECT id::text, qdrant_collection_name FROM data_sources "
-                    "WHERE type = 'database' AND qdrant_collection_name IS NOT NULL"
-                )
-            ).fetchall()
-
-            source_to_collection = {sid: col for sid, col in db_sources}
-
-            collection_chunk_maps: dict[str, dict[str, str]] = {}
-            old_cid_to_source: dict[str, str] = {}
-            for mapping in all_mappings.values():
-                for new_uuid, sid, old_cid in mapping:
-                    col = source_to_collection.get(sid)
-                    if col:
-                        collection_chunk_maps.setdefault(col, {})[new_uuid] = old_cid
-                        old_cid_to_source[old_cid] = sid
-
-            def _legacy_build_point_id(cid):
-                sid = old_cid_to_source.get(cid)
-                if sid:
-                    return _legacy_point_id(sid, cid)
-                return cid
-
-            with httpx.Client(timeout=60) as qdrant_client:
-                resp = qdrant_client.get(f"{qdrant_url}/collections", headers=headers)
-                resp.raise_for_status()
-                existing_collections = {c["name"] for c in resp.json().get("result", {}).get("collections", [])}
-
-                total_reverted = 0
-                for collection_name, chunk_id_map in collection_chunk_maps.items():
-                    if collection_name not in existing_collections:
-                        continue
-
-                    LOGGER.info(
-                        f"  Collection '{collection_name}': reverting {len(chunk_id_map)} points"
-                    )
-                    reverted = _scroll_and_replace_qdrant_points(
-                        qdrant_client, qdrant_url, headers, collection_name, chunk_id_map,
-                        build_point_id=_legacy_build_point_id,
-                    )
-                    total_reverted += reverted
-                    LOGGER.info(f"  Collection '{collection_name}': {reverted} Qdrant points reverted")
-
-            LOGGER.info(f"Qdrant revert complete: {total_reverted} points reverted")
+            asyncio.run(_run_qdrant_downgrade(source_to_collection, all_mappings))
 
         ingestion_conn.execute(text(f"DROP TABLE IF EXISTS public.{MIGRATION_LOG_TABLE}"))
         LOGGER.info(f"Dropped migration log table {MIGRATION_LOG_TABLE}")
