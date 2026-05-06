@@ -7,8 +7,8 @@ Create Date: 2026-04-27
 """
 
 import logging
-from typing import Sequence, Union
-from uuid import uuid4
+from typing import Callable, Sequence, Union
+from uuid import NAMESPACE_DNS, uuid4, uuid5
 
 import httpx
 from alembic import op
@@ -37,7 +37,7 @@ if not LOGGER.handlers:
 UUID_REGEX = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 MIGRATION_LOG_TABLE = "_chunk_id_migration_log"
 DB_BATCH_SIZE = 500
-QDRANT_SCROLL_BATCH = 256
+QDRANT_SCROLL_BATCH = 100
 
 
 def _batch_update_db(ingestion_conn, table_name: str, mapping: list[tuple[str, str, str]]):
@@ -63,13 +63,18 @@ def _batch_update_db(ingestion_conn, table_name: str, mapping: list[tuple[str, s
         LOGGER.info(f"  DB batch {i // DB_BATCH_SIZE + 1}: updated {len(batch)} rows")
 
 
-def _scroll_and_update_qdrant(
+def _legacy_point_id(source_id: str, chunk_id: str) -> str:
+    return str(uuid5(NAMESPACE_DNS, f"{source_id}:{chunk_id}"))
+
+
+def _scroll_and_replace_qdrant(
     client: httpx.Client,
     qdrant_url: str,
     headers: dict,
     collection_name: str,
     source_id: str,
     chunk_id_map: dict[str, str],
+    build_new_point_id: Callable[[str], str],
 ):
     offset = None
     updated = 0
@@ -79,8 +84,8 @@ def _scroll_and_update_qdrant(
     while True:
         scroll_body: dict = {
             "limit": QDRANT_SCROLL_BATCH,
-            "with_payload": ["chunk_id", "source_id"],
-            "with_vector": False,
+            "with_payload": True,
+            "with_vector": True,
             "filter": {"must": [{"key": "source_id", "match": {"value": source_id}}]},
         }
         if offset is not None:
@@ -99,33 +104,47 @@ def _scroll_and_update_qdrant(
             break
 
         page_num += 1
-        page_updated = 0
-        page_failed = 0
+        new_points = []
+        old_point_ids = []
 
         for point in points:
-            old_cid = point.get("payload", {}).get("chunk_id")
-            new_cid = chunk_id_map.get(old_cid)
+            cur_cid = point.get("payload", {}).get("chunk_id")
+            new_cid = chunk_id_map.get(cur_cid)
             if new_cid is None:
                 continue
+            new_payload = {**point.get("payload", {}), "chunk_id": new_cid}
+            new_points.append({
+                "id": build_new_point_id(new_cid),
+                "payload": new_payload,
+                "vector": point["vector"],
+            })
+            old_point_ids.append(point["id"])
+
+        page_replaced = 0
+        if new_points:
             try:
-                client.post(
-                    f"{qdrant_url}/collections/{collection_name}/points/payload",
+                client.put(
+                    f"{qdrant_url}/collections/{collection_name}/points",
                     headers=headers,
-                    json={"payload": {"chunk_id": new_cid}, "points": [point["id"]]},
+                    json={"points": new_points},
                 ).raise_for_status()
-                page_updated += 1
+                client.post(
+                    f"{qdrant_url}/collections/{collection_name}/points/delete",
+                    headers=headers,
+                    json={"points": old_point_ids},
+                ).raise_for_status()
+                page_replaced = len(new_points)
             except httpx.HTTPStatusError as exc:
                 LOGGER.warning(
-                    f"    Qdrant set_payload failed for point {point['id']} "
-                    f"(source {source_id}): {exc.response.status_code}"
+                    f"    Qdrant batch failed for source {source_id} page {page_num}: "
+                    f"{exc.response.status_code}"
                 )
-                failed_ids.append(str(point["id"]))
-                page_failed += 1
+                failed_ids.extend(str(pid) for pid in old_point_ids)
 
-        updated += page_updated
+        updated += page_replaced
         LOGGER.info(
             f"    Qdrant source {source_id} page {page_num}: "
-            f"{page_updated} updated, {page_failed} failed, {updated} total"
+            f"{page_replaced} replaced, {updated} total"
         )
 
         offset = result.get("next_page_offset")
@@ -250,7 +269,7 @@ def upgrade() -> None:
             LOGGER.info("No DB sources with Qdrant collections found. Skipping Qdrant update.")
             return
 
-        LOGGER.info("Phase 2: Updating Qdrant payloads...")
+        LOGGER.info("Phase 2: Replacing Qdrant points with new IDs...")
         qdrant_url = settings.QDRANT_CLUSTER_URL.rstrip("/")
         headers = {"api-key": settings.QDRANT_API_KEY, "Content-Type": "application/json"}
 
@@ -280,16 +299,17 @@ def upgrade() -> None:
                     continue
 
                 LOGGER.info(
-                    f"  Source {source_id}: scrolling collection '{collection_name}' "
-                    f"({len(chunk_id_map)} chunks to update)"
+                    f"  Source {source_id}: replacing points in collection '{collection_name}' "
+                    f"({len(chunk_id_map)} chunks to migrate)"
                 )
-                updated = _scroll_and_update_qdrant(
-                    qdrant_client, qdrant_url, headers, collection_name, source_id, chunk_id_map
+                updated = _scroll_and_replace_qdrant(
+                    qdrant_client, qdrant_url, headers, collection_name, source_id, chunk_id_map,
+                    build_new_point_id=lambda cid: cid,
                 )
                 total_updated += updated
-                LOGGER.info(f"  Source {source_id}: {updated} Qdrant points updated")
+                LOGGER.info(f"  Source {source_id}: {updated} Qdrant points replaced")
 
-        LOGGER.info(f"Qdrant update complete: {total_updated} updated, {total_skipped} skipped")
+        LOGGER.info(f"Qdrant update complete: {total_updated} replaced, {total_skipped} skipped")
 
     except Exception as e:
         LOGGER.error(f"Error during chunk_id UUID migration: {e}", exc_info=True)
@@ -341,7 +361,7 @@ def downgrade() -> None:
         if not settings.QDRANT_CLUSTER_URL or not settings.QDRANT_API_KEY:
             LOGGER.info("QDRANT_CLUSTER_URL or QDRANT_API_KEY not set. Skipping Qdrant revert.")
         else:
-            LOGGER.info("Phase 2: Reverting Qdrant payloads...")
+            LOGGER.info("Phase 2: Reverting Qdrant points to legacy IDs...")
             qdrant_url = settings.QDRANT_CLUSTER_URL.rstrip("/")
             headers = {"api-key": settings.QDRANT_API_KEY, "Content-Type": "application/json"}
 
@@ -372,10 +392,12 @@ def downgrade() -> None:
                         continue
 
                     LOGGER.info(
-                        f"  Source {source_id}: reverting {len(chunk_id_map)} chunks in collection '{collection_name}'"
+                        f"  Source {source_id}: reverting {len(chunk_id_map)} points "
+                        f"in collection '{collection_name}'"
                     )
-                    updated = _scroll_and_update_qdrant(
-                        qdrant_client, qdrant_url, headers, collection_name, source_id, chunk_id_map
+                    updated = _scroll_and_replace_qdrant(
+                        qdrant_client, qdrant_url, headers, collection_name, source_id, chunk_id_map,
+                        build_new_point_id=lambda cid, _sid=source_id: _legacy_point_id(_sid, cid),
                     )
                     total_updated += updated
                     LOGGER.info(f"  Source {source_id}: {updated} Qdrant points reverted")
