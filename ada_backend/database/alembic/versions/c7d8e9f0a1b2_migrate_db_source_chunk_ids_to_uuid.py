@@ -94,12 +94,11 @@ def _scroll_and_replace_qdrant_points(
     qdrant_url: str,
     headers: dict,
     collection_name: str,
-    source_id: str,
     chunk_id_map: dict[str, str],
     build_point_id=None,
 ):
     if build_point_id is None:
-        def build_point_id(_src, cid):
+        def build_point_id(cid):
             return cid
 
     offset = None
@@ -111,7 +110,6 @@ def _scroll_and_replace_qdrant_points(
             "limit": QDRANT_SCROLL_BATCH,
             "with_payload": True,
             "with_vector": True,
-            "filter": {"must": [{"key": "source_id", "match": {"value": source_id}}]},
         }
         if offset is not None:
             scroll_body["offset"] = offset
@@ -127,10 +125,7 @@ def _scroll_and_replace_qdrant_points(
 
         if not points:
             if page_num == 0:
-                LOGGER.warning(
-                    f"    Qdrant scroll returned 0 points for source_id={source_id} "
-                    f"in collection={collection_name}"
-                )
+                LOGGER.warning(f"    Qdrant scroll returned 0 points in collection={collection_name}")
             break
 
         page_num += 1
@@ -151,7 +146,7 @@ def _scroll_and_replace_qdrant_points(
             payload = dict(point.get("payload", {}))
             payload["chunk_id"] = new_cid
             new_points.append({
-                "id": build_point_id(source_id, new_cid),
+                "id": build_point_id(new_cid),
                 "payload": payload,
                 "vector": point["vector"],
             })
@@ -163,7 +158,7 @@ def _scroll_and_replace_qdrant_points(
 
         replaced += len(new_points)
         LOGGER.info(
-            f"    Qdrant source {source_id} page {page_num}: "
+            f"    Qdrant collection {collection_name} page {page_num}: "
             f"{len(new_points)}/{len(points)} replaced, {replaced} total"
         )
 
@@ -293,16 +288,22 @@ def upgrade() -> None:
         qdrant_url = settings.QDRANT_CLUSTER_URL.rstrip("/")
         headers = {"api-key": settings.QDRANT_API_KEY, "Content-Type": "application/json"}
 
-        source_chunk_maps: dict[str, dict[str, str]] = {}
         log_rows = ingestion_conn.execute(
             text(f"SELECT old_chunk_id, source_id, new_chunk_id FROM public.{MIGRATION_LOG_TABLE}")
         ).fetchall()
+
+        collection_chunk_maps: dict[str, dict[str, str]] = {}
         for old_cid, sid, new_uuid in log_rows:
-            source_chunk_maps.setdefault(sid, {})[old_cid] = new_uuid
-        LOGGER.info(f"Migration log: {len(log_rows)} entries across {len(source_chunk_maps)} sources")
-        for sid, cmap in source_chunk_maps.items():
+            col = source_to_collection.get(sid)
+            if col:
+                collection_chunk_maps.setdefault(col, {})[old_cid] = new_uuid
+        LOGGER.info(
+            f"Migration log: {len(log_rows)} entries, "
+            f"{len(collection_chunk_maps)} collections to update"
+        )
+        for col, cmap in collection_chunk_maps.items():
             sample = list(cmap.items())[:3]
-            LOGGER.info(f"  source {sid}: {len(cmap)} mappings, sample: {sample}")
+            LOGGER.info(f"  collection {col}: {len(cmap)} mappings, sample: {sample}")
 
         with httpx.Client(timeout=60) as qdrant_client:
             resp = qdrant_client.get(f"{qdrant_url}/collections", headers=headers)
@@ -311,29 +312,26 @@ def upgrade() -> None:
             LOGGER.info(f"Qdrant has {len(existing_collections)} collections: {existing_collections}")
 
             total_replaced = 0
-            total_skipped = 0
 
-            for source_id, chunk_id_map in source_chunk_maps.items():
-                collection_name = source_to_collection.get(source_id)
-                if not collection_name or collection_name not in existing_collections:
-                    total_skipped += len(chunk_id_map)
+            for collection_name, chunk_id_map in collection_chunk_maps.items():
+                if collection_name not in existing_collections:
                     LOGGER.info(
-                        f"  Source {source_id}: collection '{collection_name}' not found, "
+                        f"  Collection '{collection_name}' not found in Qdrant, "
                         f"skipping {len(chunk_id_map)} chunks"
                     )
                     continue
 
                 LOGGER.info(
-                    f"  Source {source_id}: replacing points in collection '{collection_name}' "
+                    f"  Collection '{collection_name}': replacing points "
                     f"({len(chunk_id_map)} chunks to migrate)"
                 )
                 replaced = _scroll_and_replace_qdrant_points(
-                    qdrant_client, qdrant_url, headers, collection_name, source_id, chunk_id_map,
+                    qdrant_client, qdrant_url, headers, collection_name, chunk_id_map,
                 )
                 total_replaced += replaced
-                LOGGER.info(f"  Source {source_id}: {replaced} Qdrant points replaced")
+                LOGGER.info(f"  Collection '{collection_name}': {replaced} Qdrant points replaced")
 
-        LOGGER.info(f"Qdrant update complete: {total_replaced} replaced, {total_skipped} skipped")
+        LOGGER.info(f"Qdrant update complete: {total_replaced} replaced")
 
     except Exception as e:
         LOGGER.error(f"Error during chunk_id UUID migration: {e}", exc_info=True)
@@ -399,10 +397,20 @@ def downgrade() -> None:
 
             source_to_collection = {sid: col for sid, col in db_sources}
 
-            source_chunk_maps: dict[str, dict[str, str]] = {}
+            collection_chunk_maps: dict[str, dict[str, str]] = {}
+            old_cid_to_source: dict[str, str] = {}
             for mapping in all_mappings.values():
                 for new_uuid, sid, old_cid in mapping:
-                    source_chunk_maps.setdefault(sid, {})[new_uuid] = old_cid
+                    col = source_to_collection.get(sid)
+                    if col:
+                        collection_chunk_maps.setdefault(col, {})[new_uuid] = old_cid
+                        old_cid_to_source[old_cid] = sid
+
+            def _legacy_build_point_id(cid):
+                sid = old_cid_to_source.get(cid)
+                if sid:
+                    return _legacy_point_id(sid, cid)
+                return cid
 
             with httpx.Client(timeout=60) as qdrant_client:
                 resp = qdrant_client.get(f"{qdrant_url}/collections", headers=headers)
@@ -410,21 +418,19 @@ def downgrade() -> None:
                 existing_collections = {c["name"] for c in resp.json().get("result", {}).get("collections", [])}
 
                 total_reverted = 0
-                for source_id, chunk_id_map in source_chunk_maps.items():
-                    collection_name = source_to_collection.get(source_id)
-                    if not collection_name or collection_name not in existing_collections:
+                for collection_name, chunk_id_map in collection_chunk_maps.items():
+                    if collection_name not in existing_collections:
                         continue
 
                     LOGGER.info(
-                        f"  Source {source_id}: reverting {len(chunk_id_map)} points "
-                        f"in collection '{collection_name}'"
+                        f"  Collection '{collection_name}': reverting {len(chunk_id_map)} points"
                     )
                     reverted = _scroll_and_replace_qdrant_points(
-                        qdrant_client, qdrant_url, headers, collection_name, source_id, chunk_id_map,
-                        build_point_id=_legacy_point_id,
+                        qdrant_client, qdrant_url, headers, collection_name, chunk_id_map,
+                        build_point_id=_legacy_build_point_id,
                     )
                     total_reverted += reverted
-                    LOGGER.info(f"  Source {source_id}: {reverted} Qdrant points reverted")
+                    LOGGER.info(f"  Collection '{collection_name}': {reverted} Qdrant points reverted")
 
             LOGGER.info(f"Qdrant revert complete: {total_reverted} points reverted")
 
