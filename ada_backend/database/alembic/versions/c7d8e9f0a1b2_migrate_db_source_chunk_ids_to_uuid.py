@@ -77,6 +77,7 @@ async def _scroll_and_replace_qdrant_points(
     build_point_id=None,
 ):
     if build_point_id is None:
+
         def build_point_id(cid):
             return cid
 
@@ -107,10 +108,7 @@ async def _scroll_and_replace_qdrant_points(
 
         page_num += 1
         sample_cids = [p.get("payload", {}).get("chunk_id") for p in points[:5]]
-        LOGGER.info(
-            f"    Qdrant scroll page {page_num}: {len(points)} points. "
-            f"Sample chunk_ids: {sample_cids}"
-        )
+        LOGGER.info(f"    Qdrant scroll page {page_num}: {len(points)} points. Sample chunk_ids: {sample_cids}")
 
         new_points = []
         old_ids = []
@@ -171,35 +169,39 @@ async def _run_qdrant_upgrade(source_to_collection, ingestion_conn):
         col = source_to_collection.get(sid)
         if col:
             collection_chunk_maps.setdefault(col, {})[old_cid] = new_uuid
-    LOGGER.info(
-        f"Migration log: {len(log_rows)} entries, "
-        f"{len(collection_chunk_maps)} collections to update"
-    )
+    LOGGER.info(f"Migration log: {len(log_rows)} entries, {len(collection_chunk_maps)} collections to update")
     for col, cmap in collection_chunk_maps.items():
         sample = list(cmap.items())[:3]
         LOGGER.info(f"  collection {col}: {len(cmap)} mappings, sample: {sample}")
+
+    if log_rows and not collection_chunk_maps:
+        raise RuntimeError("Qdrant update cannot run: migration log has entries but none map to Qdrant collections")
 
     existing_collections = set(await qdrant_service.list_collection_names_async())
     LOGGER.info(f"Qdrant has {len(existing_collections)} collections: {existing_collections}")
 
     total_replaced = 0
+    expected_replacements = 0
     for collection_name, chunk_id_map in collection_chunk_maps.items():
         if collection_name not in existing_collections:
-            LOGGER.info(
-                f"  Collection '{collection_name}' not found in Qdrant, "
-                f"skipping {len(chunk_id_map)} chunks"
+            raise RuntimeError(
+                f"Qdrant collection '{collection_name}' not found; cannot migrate {len(chunk_id_map)} chunks"
             )
-            continue
 
-        LOGGER.info(
-            f"  Collection '{collection_name}': replacing points "
-            f"({len(chunk_id_map)} chunks to migrate)"
-        )
+        expected_replacements += len(chunk_id_map)
+        LOGGER.info(f"  Collection '{collection_name}': replacing points ({len(chunk_id_map)} chunks to migrate)")
         replaced = await _scroll_and_replace_qdrant_points(
-            qdrant_service, collection_name, chunk_id_map,
+            qdrant_service,
+            collection_name,
+            chunk_id_map,
         )
         total_replaced += replaced
         LOGGER.info(f"  Collection '{collection_name}': {replaced} Qdrant points replaced")
+
+    if expected_replacements and total_replaced == 0:
+        raise RuntimeError(
+            f"Qdrant update replaced 0 points, but DB migration has {expected_replacements} mapped chunk IDs"
+        )
 
     LOGGER.info(f"Qdrant update complete: {total_replaced} replaced")
 
@@ -231,7 +233,9 @@ async def _run_qdrant_downgrade(source_to_collection, all_mappings):
 
         LOGGER.info(f"  Collection '{collection_name}': reverting {len(chunk_id_map)} points")
         reverted = await _scroll_and_replace_qdrant_points(
-            qdrant_service, collection_name, chunk_id_map,
+            qdrant_service,
+            collection_name,
+            chunk_id_map,
             build_point_id=_legacy_build_point_id,
         )
         total_reverted += reverted
@@ -308,6 +312,24 @@ def upgrade() -> None:
             LOGGER.info(f"Table {table_name}: {len(table_mapping)} chunk_ids to migrate")
 
         if not all_mappings:
+            log_exists = ingestion_conn.execute(
+                text(
+                    "SELECT 1 FROM information_schema.tables "
+                    f"WHERE table_schema = 'public' AND table_name = '{MIGRATION_LOG_TABLE}'"
+                )
+            ).fetchone()
+            if log_exists and source_to_collection:
+                log_count = ingestion_conn.execute(
+                    text(f"SELECT COUNT(*) FROM public.{MIGRATION_LOG_TABLE}")
+                ).scalar_one()
+                if log_count:
+                    LOGGER.info(
+                        "No non-UUID chunk_ids found in DB, but migration log has "
+                        f"{log_count} entries. Running Qdrant update from saved DB mapping."
+                    )
+                    asyncio.run(_run_qdrant_upgrade(source_to_collection, ingestion_conn))
+                    return
+
             LOGGER.info("No non-UUID chunk_ids found across any table. Migration complete.")
             return
 
