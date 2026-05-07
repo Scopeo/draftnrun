@@ -19,6 +19,7 @@ globs:
 - Legacy system: some components still use `AgentPayload` pattern (`migrated = False`). New components MUST use the multi-port `NodeData` system (`migrated = True`).
 - `SQLLocalService` engine pools are cached per `engine_url` (process-level). Avoid patterns that instantiate many services for the same URL expecting independent pools.
 - In ingestion code paths, reuse one `SQLLocalService` per job when possible, and ensure `await close()` is called in a `finally` block.
+- Internal source metadata keys must be underscore-prefixed (`_source_url`, `_supabase_url`, `_reranked_score`, retrieval/reranker ranks) and excluded from LLM context. Keep public source display on top-level chunk `url` / `SourceChunk.url`.
 - `IS_CLOUD_S3` controls folder-source ingestion URL strategy: keep it `False` in local/dev and custom `S3_ENDPOINT_URL` setups (direct file reads; presigned URL getter returns `None`), set it `True` in cloud AWS S3 prod to require presigned URL generation and fail fast on missing URLs.
 - For DB-source ingestion worker flow (`ingestion_script/ingest_db_source.py`), keep a single source `SQLLocalService` per run and share it across validation and fetch helpers.
 - Adding a new component: create class in `engine/components/`, register in `ada_backend/services/registry.py`, add DB seed data (Component, ComponentVersion, PortDefinition, ComponentParameterDefinition rows). Always set `migrated = True`, define Pydantic I/O schemas, define canonical ports.

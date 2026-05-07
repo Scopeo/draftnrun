@@ -46,10 +46,10 @@ def sync_files_to_supabase(
     supabase_client = create_client(settings.SUPABASE_PROJECT_URL, settings.SUPABASE_SERVICE_ROLE_SECRET_KEY)
 
     for doc in list_of_documents:
-        doc.metadata["supabase_url"] = get_supabase_url_for_file(
+        doc.metadata["_supabase_url"] = get_supabase_url_for_file(
             f"{doc.folder_name}/{doc.file_name}",
             organization_id=organization_id,
             source_name=source_name,
         )
-        upload_file_to_supabase(get_file_content_func(doc.id), supabase_client, doc.metadata["supabase_url"])
+        upload_file_to_supabase(get_file_content_func(doc.id), supabase_client, doc.metadata["_supabase_url"])
     return list_of_documents
