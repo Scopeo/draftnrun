@@ -50,6 +50,7 @@ _EXACT_KEYWORD_FIELD_NAMES = {
 
 _UNINDEXED_PAYLOAD_FIELD_NAMES = {
     "content",
+    "chunk",  # for tests
 }
 
 
