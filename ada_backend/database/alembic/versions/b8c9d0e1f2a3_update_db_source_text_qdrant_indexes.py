@@ -51,25 +51,39 @@ def _metadata_fields_for_text_indexes(qdrant_schema: dict) -> list[str]:
     return fields_to_update
 
 
+def _hybrid_collection_name(collection_name: str) -> str:
+    return f"{collection_name}_hybrid"
+
+
+async def _resolve_collection_name(qdrant_service: QdrantService, collection_name: str) -> str | None:
+    hybrid_collection_name = _hybrid_collection_name(collection_name)
+    if await qdrant_service.collection_exists_async(hybrid_collection_name):
+        return hybrid_collection_name
+    if await qdrant_service.collection_exists_async(collection_name):
+        return collection_name
+    return None
+
+
 async def _update_collection_indexes(
     qdrant_service: QdrantService,
     collection_name: str,
     field_names: list[str],
     target_schema: FieldSchema,
 ) -> None:
-    if not await qdrant_service.collection_exists_async(collection_name):
+    target_collection_name = await _resolve_collection_name(qdrant_service, collection_name)
+    if not target_collection_name:
         LOGGER.info("Qdrant collection %s does not exist. Skipping.", collection_name)
         return
 
     for field_name in field_names:
         LOGGER.info(
             "Ensuring Qdrant index for database source collection=%s field=%s target=%s",
-            collection_name,
+            target_collection_name,
             field_name,
             target_schema.value,
         )
         await qdrant_service.create_index_if_needed_async(
-            collection_name=collection_name,
+            collection_name=target_collection_name,
             field_name=field_name,
             field_schema_type=target_schema,
         )
