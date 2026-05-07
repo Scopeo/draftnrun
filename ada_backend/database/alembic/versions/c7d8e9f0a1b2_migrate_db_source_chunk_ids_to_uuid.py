@@ -70,6 +70,19 @@ def _legacy_point_id(source_id: str, chunk_id: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{source_id}:{chunk_id}"))
 
 
+def _resolve_qdrant_collection_name(collection_name: str, existing_collections: set[str]) -> str | None:
+    candidates = [collection_name]
+    if not collection_name.endswith("_hybrid"):
+        candidates.append(f"{collection_name}_hybrid")
+
+    for candidate in candidates:
+        if candidate in existing_collections:
+            if candidate != collection_name:
+                LOGGER.info(f"  Collection '{collection_name}' not found; using existing '{candidate}'")
+            return candidate
+    return None
+
+
 async def _scroll_and_replace_qdrant_points(
     qdrant_service: QdrantService,
     collection_name: str,
@@ -183,20 +196,23 @@ async def _run_qdrant_upgrade(source_to_collection, ingestion_conn):
     total_replaced = 0
     expected_replacements = 0
     for collection_name, chunk_id_map in collection_chunk_maps.items():
-        if collection_name not in existing_collections:
+        qdrant_collection_name = _resolve_qdrant_collection_name(collection_name, existing_collections)
+        if not qdrant_collection_name:
             raise RuntimeError(
                 f"Qdrant collection '{collection_name}' not found; cannot migrate {len(chunk_id_map)} chunks"
             )
 
         expected_replacements += len(chunk_id_map)
-        LOGGER.info(f"  Collection '{collection_name}': replacing points ({len(chunk_id_map)} chunks to migrate)")
+        LOGGER.info(
+            f"  Collection '{qdrant_collection_name}': replacing points ({len(chunk_id_map)} chunks to migrate)"
+        )
         replaced = await _scroll_and_replace_qdrant_points(
             qdrant_service,
-            collection_name,
+            qdrant_collection_name,
             chunk_id_map,
         )
         total_replaced += replaced
-        LOGGER.info(f"  Collection '{collection_name}': {replaced} Qdrant points replaced")
+        LOGGER.info(f"  Collection '{qdrant_collection_name}': {replaced} Qdrant points replaced")
 
     if expected_replacements and total_replaced == 0:
         raise RuntimeError(
@@ -228,18 +244,19 @@ async def _run_qdrant_downgrade(source_to_collection, all_mappings):
 
     total_reverted = 0
     for collection_name, chunk_id_map in collection_chunk_maps.items():
-        if collection_name not in existing_collections:
+        qdrant_collection_name = _resolve_qdrant_collection_name(collection_name, existing_collections)
+        if not qdrant_collection_name:
             continue
 
-        LOGGER.info(f"  Collection '{collection_name}': reverting {len(chunk_id_map)} points")
+        LOGGER.info(f"  Collection '{qdrant_collection_name}': reverting {len(chunk_id_map)} points")
         reverted = await _scroll_and_replace_qdrant_points(
             qdrant_service,
-            collection_name,
+            qdrant_collection_name,
             chunk_id_map,
             build_point_id=_legacy_build_point_id,
         )
         total_reverted += reverted
-        LOGGER.info(f"  Collection '{collection_name}': {reverted} Qdrant points reverted")
+        LOGGER.info(f"  Collection '{qdrant_collection_name}': {reverted} Qdrant points reverted")
 
     LOGGER.info(f"Qdrant revert complete: {total_reverted} points reverted")
 
