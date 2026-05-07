@@ -225,3 +225,22 @@ Each upserted point carries both a dense embedding and a BM25 document inference
     }
 }
 ```
+
+### Payload Filters
+
+Qdrant metadata indexes distinguish exact keyword filters from full-text filters:
+
+- Technical identifiers (`chunk_id`, `source_id`, `file_id`, `url`, `sync_id`, `*_id`, `*_uuid`, `*_url`) stay as
+  `keyword` indexes and should be queried with `match.value`.
+- Chunk body fields (`content`, `chunk`) are not payload-indexed; retrieval already uses dense/sparse vectors for the
+  body text.
+- Human text metadata from database or folder ingestion (`VARCHAR`/`TEXT` fields such as names, authors, titles, and
+  descriptions) is indexed as Qdrant `text` with `word` tokenization, lowercasing, ASCII folding, and phrase matching
+  enabled.
+- Date, numeric, and boolean metadata keeps its typed Qdrant index (`datetime`, `integer`, `float`, `bool`) and should
+  use the corresponding range or value filter.
+
+Use `match.text` for text-indexed metadata. For example, a stored value `Jean-Baptiste` and a filter value
+`Jean Baptiste` tokenize to the same words and match through Qdrant full-text filtering. Existing database-ingested
+sources are migrated by Alembic revision `b8c9d0e1f2a3`; non-database sources use the runtime index creation path on
+future syncs.
