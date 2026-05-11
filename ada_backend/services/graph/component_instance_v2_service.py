@@ -187,6 +187,7 @@ def _sync_input_port_field_expressions(
                 component_instance_id=instance_id,
                 name=port_data.name,
                 field_expression_id=expr.id,
+                port_definition_id=port_data.port_definition_id,
                 prompt_version_id=port_data.prompt_version_id,
             )
 

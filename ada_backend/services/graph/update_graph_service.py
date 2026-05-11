@@ -345,6 +345,11 @@ async def update_graph_service(
         session, graph_runner_id, graph_project, input_params_by_instance
     )
 
+    instance_to_cv: dict[UUID, UUID] = {}
+    for inst in graph_project.component_instances:
+        if inst.id and inst.component_version_id:
+            instance_to_cv[inst.id] = inst.component_version_id
+
     db_port_instances_by_instance: dict[UUID, dict[str, UUID]] = defaultdict(dict)
     db_field_expr_port_names: dict[UUID, set[str]] = defaultdict(set)
     for instance_id in instance_ids:
@@ -353,6 +358,10 @@ async def update_graph_service(
             db_port_instances_by_instance[instance_id][port.name] = port.id
             if port.field_expression_id:
                 db_field_expr_port_names[instance_id].add(port.name)
+            if not port.port_definition_id and instance_id in instance_to_cv:
+                port_def_id = get_input_port_definition_id(session, instance_to_cv[instance_id], port.name)
+                if port_def_id:
+                    update_input_port_instance(session, port.id, port_definition_id=port_def_id)
 
     # Create/update auto-generated canonical field expressions so the user can
     # see canonical wiring in the UI.  Must run before field-expression processing
@@ -371,12 +380,16 @@ async def update_graph_service(
                 expr = create_field_expression(session, expression_json)
                 update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
         else:
+            port_def_id = get_input_port_definition_id(
+                session, instance_to_cv[target_id], field_name
+            ) if target_id in instance_to_cv else None
             expr = create_field_expression(session, expression_json)
             input_port_instance = create_input_port_instance(
                 session=session,
                 component_instance_id=target_id,
                 name=field_name,
                 field_expression_id=expr.id,
+                port_definition_id=port_def_id,
             )
             db_port_instances_by_instance[target_id][field_name] = input_port_instance.id
 
@@ -406,12 +419,16 @@ async def update_graph_service(
                             expr = create_field_expression(session, port_instance.field_expression.expression_json)
                             update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
                     else:
+                        port_def_id = get_input_port_definition_id(
+                            session, instance.component_version_id, field_name
+                        ) if instance.component_version_id else None
                         expr = create_field_expression(session, port_instance.field_expression.expression_json)
                         create_input_port_instance(
                             session=session,
                             component_instance_id=instance.id,
                             name=field_name,
                             field_expression_id=expr.id,
+                            port_definition_id=port_def_id,
                         )
 
         # Convert Inputs from parameters[kind="input"] to field expressions.
@@ -472,6 +489,9 @@ async def update_graph_service(
                 if prompt_version_id is not None:
                     update_input_port_instance(session, existing_port_id, prompt_version_id=prompt_version_id)
             else:
+                port_def_id = get_input_port_definition_id(
+                    session, instance.component_version_id, field_name
+                ) if instance.component_version_id else None
                 expr = create_field_expression(session, expression_json)
                 create_input_port_instance(
                     session=session,
@@ -479,6 +499,7 @@ async def update_graph_service(
                     name=field_name,
                     field_expression_id=expr.id,
                     prompt_version_id=prompt_version_id,
+                    port_definition_id=port_def_id,
                 )
             sync_output_port_instances_from_schema(
                 session=session,

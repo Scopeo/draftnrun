@@ -10,6 +10,7 @@ from ada_backend.services.errors import (
     GraphNotBoundToProjectError,
     GraphNotFound,
     NotFoundError,
+    PortNotPromptEligibleError,
     PromptStillReferencedError,
 )
 from ada_backend.services.prompt_service import (
@@ -371,3 +372,17 @@ class TestPinOwnershipValidation:
 
             with pytest.raises(GraphNotBoundToProjectError):
                 unpin_prompt_from_port_service(session, ci.id, "system_prompt", gr.id, uuid.uuid4())
+
+    def test_pin_fails_when_port_definition_id_is_null(self):
+        """port_definition_id must be set for prompt eligibility check to pass."""
+        with get_db_session() as session:
+            ci, gr, ipi, project = _setup_graph_with_component(session)
+            ipi.port_definition_id = None
+            session.flush()
+
+            prompt = _create_prompt(session, name=f"Pin-{uuid.uuid4().hex[:8]}")
+            detail = get_prompt_detail_service(session, prompt.id, organization_id=ORG_ID)
+            version_id = detail.versions[0].id
+
+            with pytest.raises(PortNotPromptEligibleError):
+                pin_prompt_to_port_service(session, ci.id, "system_prompt", version_id, gr.id, project.id)

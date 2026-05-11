@@ -243,6 +243,7 @@ def clone_graph_runner(
                     component_instance_id=target_instance_id,
                     name=remapped_expr.field_name,
                     field_expression_id=field_expr.id,
+                    port_definition_id=source_port.port_definition_id if source_port else None,
                     prompt_version_id=source_port.prompt_version_id if source_port else None,
                 )
                 if source_port:
