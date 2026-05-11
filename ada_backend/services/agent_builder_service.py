@@ -201,6 +201,7 @@ async def instantiate_component(
     """
     # --- Session 1: read component metadata, params, integration, sub-component identities ---
     with get_db_session() as session:
+        # Fetch the component instance
         component_instance = get_component_instance_by_id(session, component_instance_id)
         component_name = get_component_name_from_instance(session, component_instance_id)
         if not component_instance:
@@ -210,6 +211,7 @@ async def instantiate_component(
         component_ref = component_instance.ref
         LOGGER.debug(f"Init instantiation for component {component_name} version: {component_version_id}\n")
 
+        # Fetch basic parameters
         input_params: dict[str, Any] = get_component_params(
             session,
             component_instance_id,
@@ -221,6 +223,8 @@ async def instantiate_component(
         component_integration = get_integration_from_component(session, component_version_id)
 
         if component_integration:
+            # If the component has an integration, we need to fetch the secret integration ID
+            # from the component instance's integration relationship
             LOGGER.debug(f"Component {component_name} has an integration. Fetching integration relationship.\n")
             integration_relationship = get_component_instance_integration_relationship(
                 session=session, component_instance_id=component_instance_id
@@ -234,6 +238,9 @@ async def instantiate_component(
                     component_instance_name=component_instance_name,
                 )
 
+        # Resolve sub-components: collect identities and pre-configured field expressions
+        # before closing the session, so recursive instantiation happens without holding
+        # the parent DB connection.
         sub_components = get_component_sub_components(session, component_instance_id)
         sub_component_specs: list[tuple[UUID, str, str, int | None, dict[str, Any]]] = []
         for sub_component in sub_components:
@@ -241,11 +248,16 @@ async def instantiate_component(
             param_name = sub_component.parameter_definition.name
             child_ref = sub_component.child_component_instance.ref
             order = sub_component.order
+            # Collect pre-configured field expression values for this tool and map them to their
+            # tool description names so AIAgent can inject them at _run_tool_call time.
+            # Variables are passed to also evaluate VarNode/JsonBuildNode expressions (e.g. secrets).
             pre_configured = _resolve_literal_field_expressions(session, child_id, variables=variables)
             sub_component_specs.append((child_id, param_name, child_ref, order, pre_configured))
 
     # --- Outside session: recursive sub-component instantiation (no parent connection held) ---
-    grouped_sub_components: dict[str, list[tuple[int, Any]]] = {}
+    grouped_sub_components: dict[str, list[tuple[int, Any]]] = {}  # name -> [(order, instance), ...]
+    # Maps tool description names to their pre-configured literal run inputs.
+    # Passed to AIAgent so _run_tool_call can merge them with LLM-provided arguments.
     tool_pre_configured_inputs: dict[str, dict[str, Any]] = {}
 
     for child_id, param_name, child_ref, order, pre_configured in sub_component_specs:
@@ -264,6 +276,7 @@ async def instantiate_component(
                     for tool_description in get_descriptions():
                         tool_pre_configured_inputs[tool_description.name] = pre_configured
 
+            # Group sub-components by parameter name
             if param_name not in grouped_sub_components:
                 grouped_sub_components[param_name] = []
             grouped_sub_components[param_name].append((order, instantiated_sub_component))
@@ -285,14 +298,17 @@ async def instantiate_component(
             )
             raise ValueError(error_msg) from e
     LOGGER.debug(f"Resolved sub-component parameter names: {list(grouped_sub_components.keys())}")
+    # Merge grouped sub-components into input parameters
     for parameter_name, sub_component_list in grouped_sub_components.items():
         LOGGER.debug(f"Merging {len(sub_component_list)} sub-component(s) for parameter '{parameter_name}'")
         if not any(order is not None for order, _ in sub_component_list):
+            # All sub-components have order=None, treat as singleton if only one
             if len(sub_component_list) == 1:
-                input_params[parameter_name] = sub_component_list[0][1]
+                input_params[parameter_name] = sub_component_list[0][1]  # Extract just the instance
             else:
                 input_params[parameter_name] = [instance for _, instance in sub_component_list]
         else:
+            # Some sub-components have order, sort by order
             input_params[parameter_name] = [
                 instance for _, instance in sorted(sub_component_list, key=lambda x: x[0] or 0)
             ]
@@ -300,6 +316,7 @@ async def instantiate_component(
 
     # --- Session 2: globals, secrets, tool description, base component ---
     with get_db_session() as session:
+        # Apply global component parameters (non-overridable, invisible to UI)
         try:
             globals_ = get_global_parameters_by_component_version_id(session, component_version_id)
             grouped_globals: dict[str, list[tuple[int, Any]]] = {}
@@ -310,6 +327,7 @@ async def instantiate_component(
                         grouped_globals[pname] = []
                     grouped_globals[pname].append((gparam.order, gparam.get_value()))
                 else:
+                    # Scalar: enforce globally
                     input_params[pname] = gparam.get_value()
             for pname, values in grouped_globals.items():
                 input_params[pname] = [v for _, v in sorted(values, key=lambda x: x[0])]
@@ -321,6 +339,7 @@ async def instantiate_component(
                 f"Failed to apply global component parameters for instance {component_ref}: {e}"
             ) from e
 
+        # Resolve secret placeholders for any parameter in input_params.
         key_to_secret: dict[str, SecretStr] | None = None
         if project_id:
             secrets = get_organization_secrets_from_project_id(session, project_id)
@@ -347,7 +366,7 @@ async def instantiate_component(
         if base_component and base_component == "API Call":
             component_version_id = COMPONENT_VERSION_UUIDS["api_call_tool"]
 
-    # Session closed — DB connection returned to pool before factory creation.
+    # Instantiate the component using its factory
     LOGGER.debug(
         f"Trying to create component: {component_name} "
         f"(version ID: {component_version_id}) "
