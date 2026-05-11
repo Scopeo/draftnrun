@@ -159,11 +159,11 @@ async def test_instantiate_component_error_logs_only_param_names_after_secret_re
         lambda session, pid: [SimpleNamespace(key="API_KEY", secret=SecretStr(LEAK_MARKER))],
     )
     monkeypatch.setattr(agent_builder_service, "FACTORY_REGISTRY", FakeRegistry())
+    monkeypatch.setattr(agent_builder_service, "get_db_session", lambda: nullcontext(object()))
 
     with caplog.at_level(logging.DEBUG):
         with pytest.raises(ValueError, match="Failed to instantiate component 'Test Component'"):
             await agent_builder_service.instantiate_component(
-                session=object(),
                 component_instance_id=component_instance_id,
                 project_id=project_id,
                 variables=None,
