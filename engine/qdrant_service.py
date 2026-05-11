@@ -50,7 +50,6 @@ _EXACT_KEYWORD_FIELD_NAMES = {
 
 _UNINDEXED_PAYLOAD_FIELD_NAMES = {
     "content",
-    "chunk",  # for tests
 }
 
 
@@ -60,14 +59,7 @@ def should_create_payload_index(field_name: str) -> bool:
 
 def is_exact_keyword_field(field_name: str) -> bool:
     normalized_name = field_name.lower()
-    return (
-        normalized_name in _EXACT_KEYWORD_FIELD_NAMES
-        or normalized_name.endswith("_id")
-        or normalized_name.endswith("_uuid")
-        or normalized_name.endswith("_url")
-        or normalized_name == "id"
-        or normalized_name == "uuid"
-    )
+    return normalized_name in _EXACT_KEYWORD_FIELD_NAMES
 
 
 def get_qdrant_field_schema_payload(field_schema_type: FieldSchema) -> str | dict[str, Any]:

@@ -346,7 +346,7 @@ def test_metadata_field_schema_mapping_uses_text_only_for_non_identifier_strings
 def test_payload_index_creation_skips_content_fields():
     assert should_create_payload_index("author") is True
     assert should_create_payload_index("content") is False
-    assert should_create_payload_index("chunk") is False
+    assert should_create_payload_index("chunk") is True
 
 
 def test_text_index_payload_uses_full_text_configuration():
