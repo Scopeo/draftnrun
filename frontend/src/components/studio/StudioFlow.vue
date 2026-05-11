@@ -362,9 +362,16 @@ const { breadcrumbs, handleBreadcrumbClick, goToOverviewAndClearHistory, resetVi
       :projects="projects"
       :agents="agents"
       :is-draft-mode="isDraftMode"
+      :prompt-context="currentGraphRunner && selectedOrgId && projectId ? {
+        orgId: selectedOrgId,
+        projectId: projectId,
+        graphRunnerId: currentGraphRunner.graph_runner_id,
+        projectName: currentProject?.project_name || '',
+      } : null"
       @save="handleComponentSave"
       @add-tools="handleAddTools"
       @remove-tool="handleRemoveTool"
+      @prompt-migrated="graph.loadGraphData(projectId)"
     />
 
     <ComponentSelectionCarousel

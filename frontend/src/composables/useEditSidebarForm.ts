@@ -91,7 +91,10 @@ export function useEditSidebarForm(
     if (isToolDescriptionEditable.value) {
       filtered = filtered.filter(
         (p: SidebarParameter) =>
-          p.kind === 'parameter' || p.kind === undefined || (p.kind === 'input' && p.is_tool_input === false)
+          p.kind === 'parameter' ||
+          p.kind === 'prompt' ||
+          p.kind === undefined ||
+          (p.kind === 'input' && p.is_tool_input === false)
       )
     }
     return filtered

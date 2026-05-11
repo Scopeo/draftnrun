@@ -90,3 +90,25 @@ export function useDeletePromptMutation(orgId: Ref<string | undefined>) {
     },
   })
 }
+
+export interface PinPromptParams {
+  projectId: string
+  graphRunnerId: string
+  componentInstanceId: string
+  portName: string
+  promptVersionId: string
+}
+
+export function usePinPromptMutation() {
+  return useMutation({
+    mutationFn: async (params: PinPromptParams) => {
+      return await promptsApi.pinPrompt(
+        params.projectId,
+        params.graphRunnerId,
+        params.componentInstanceId,
+        params.portName,
+        params.promptVersionId,
+      )
+    },
+  })
+}

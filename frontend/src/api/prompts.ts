@@ -80,4 +80,27 @@ export const promptsApi = {
 
   createVersion: (orgId: string, promptId: string, payload: CreateVersionPayload): Promise<PromptVersionDetail> =>
     $api(`/orgs/${orgId}/prompts/${promptId}/versions`, { method: 'POST', body: payload }),
+
+  pinPrompt: (
+    projectId: string,
+    graphRunnerId: string,
+    componentInstanceId: string,
+    portName: string,
+    promptVersionId: string,
+  ): Promise<void> =>
+    $api(
+      `/projects/${projectId}/graph/${graphRunnerId}/components/${componentInstanceId}/ports/${encodeURIComponent(portName)}/prompt-pin`,
+      { method: 'PUT', body: { prompt_version_id: promptVersionId } },
+    ),
+
+  unpinPrompt: (
+    projectId: string,
+    graphRunnerId: string,
+    componentInstanceId: string,
+    portName: string,
+  ): Promise<void> =>
+    $api(
+      `/projects/${projectId}/graph/${graphRunnerId}/components/${componentInstanceId}/ports/${encodeURIComponent(portName)}/prompt-pin`,
+      { method: 'DELETE' },
+    ),
 }

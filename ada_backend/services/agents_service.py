@@ -72,15 +72,6 @@ def get_all_agents_service(session: Session, organization_id: UUID) -> list[Agen
 def _extract_system_prompt_and_model_params(
     component_instance: ComponentInstanceSchema,
 ) -> tuple[str, list[PipelineParameterSchema]]:
-    """
-    Extract system prompt and model parameters from an AI agent component instance.
-
-    Args:
-        component_instance: The AI agent component instance
-
-    Returns:
-        Tuple of (system_prompt, model_parameters)
-    """
     system_prompt = ""
     model_parameters = []
 

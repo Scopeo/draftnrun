@@ -1,5 +1,14 @@
 import type { Integration } from '../data/component-definitions'
 
+export interface PromptPinInfo {
+  prompt_id: string
+  prompt_name: string
+  pinned_version_id: string
+  pinned_version_number: number
+  latest_version_number: number
+  is_latest: boolean
+}
+
 export interface ToolDescription {
   name: string
   description: string
@@ -20,8 +29,10 @@ export interface Parameter {
   parameter_group_id: string | null
   parameter_order_within_group: number | null
   parameter_group_name: string | null
-  kind?: 'parameter' | 'input'
+  kind?: 'parameter' | 'input' | 'prompt'
   is_tool_input?: boolean
+  is_prompt_eligible?: boolean
+  prompt_pin?: PromptPinInfo | null
 }
 
 export interface NodeData {
