@@ -199,12 +199,15 @@ async def instantiate_component(
     Returns:
         Any: Instantiated component object.
     """
+    # --- Session 1: read component metadata, params, integration, sub-component identities ---
     with get_db_session() as session:
         component_instance = get_component_instance_by_id(session, component_instance_id)
         component_name = get_component_name_from_instance(session, component_instance_id)
         if not component_instance:
             raise ValueError(f"Component instance {component_instance_id} not found.")
         component_version_id = component_instance.component_version_id
+        component_instance_name = component_instance.name
+        component_ref = component_instance.ref
         LOGGER.debug(f"Init instantiation for component {component_name} version: {component_version_id}\n")
 
         input_params: dict[str, Any] = get_component_params(
@@ -215,7 +218,7 @@ async def instantiate_component(
 
         LOGGER.debug(f"Loaded component input param names: {list(input_params.keys())}")
 
-        component_integration = get_integration_from_component(session, component_instance.component_version_id)
+        component_integration = get_integration_from_component(session, component_version_id)
 
         if component_integration:
             LOGGER.debug(f"Component {component_name} has an integration. Fetching integration relationship.\n")
@@ -228,73 +231,77 @@ async def instantiate_component(
                 raise MissingIntegrationError(
                     integration_name=component_integration.name,
                     integration_service=component_integration.service,
-                    component_instance_name=component_instance.name,
+                    component_instance_name=component_instance_name,
                 )
 
         sub_components = get_component_sub_components(session, component_instance_id)
-
-        grouped_sub_components: dict[str, list[tuple[int, Any]]] = {}
-        tool_pre_configured_inputs: dict[str, dict[str, Any]] = {}
-
+        sub_component_specs: list[tuple[UUID, str, str, int | None, dict[str, Any]]] = []
         for sub_component in sub_components:
+            child_id = sub_component.child_component_instance.id
             param_name = sub_component.parameter_definition.name
-            LOGGER.debug(f"Found sub-component: {param_name=}, {sub_component.child_component_instance.ref=}\n")
-            try:
-                instantiated_sub_component = await instantiate_component(
-                    sub_component.child_component_instance.id,
-                    project_id=project_id,
-                    variables=variables,
-                )
-                LOGGER.debug(f"Instantiated sub-component: {instantiated_sub_component}\n")
+            child_ref = sub_component.child_component_instance.ref
+            order = sub_component.order
+            pre_configured = _resolve_literal_field_expressions(session, child_id, variables=variables)
+            sub_component_specs.append((child_id, param_name, child_ref, order, pre_configured))
 
-                pre_configured = _resolve_literal_field_expressions(
-                    session, sub_component.child_component_instance.id, variables=variables
-                )
-                if pre_configured:
-                    get_descriptions = getattr(instantiated_sub_component, "get_tool_descriptions", None)
-                    if get_descriptions:
-                        for tool_description in get_descriptions():
-                            tool_pre_configured_inputs[tool_description.name] = pre_configured
+    # --- Outside session: recursive sub-component instantiation (no parent connection held) ---
+    grouped_sub_components: dict[str, list[tuple[int, Any]]] = {}
+    tool_pre_configured_inputs: dict[str, dict[str, Any]] = {}
 
-                if param_name not in grouped_sub_components:
-                    grouped_sub_components[param_name] = []
-                grouped_sub_components[param_name].append((sub_component.order, instantiated_sub_component))
-            except (MissingDataSourceError, MissingIntegrationError, EngineError):
-                raise
-            except Exception as e:
-                error_msg = (
-                    f"Failed to instantiate sub-component '{param_name}' "
-                    f"for component instance {component_instance.name} "
-                    f"({component_instance.id}): {e}\n"
-                )
-                LOGGER.error(
-                    error_msg,
-                    exc_info=True,
-                    extra={
-                        "input_param_names": list(input_params.keys()),
-                        "grouped_sub_component_names": list(grouped_sub_components.keys()),
-                    },
-                )
-                raise ValueError(error_msg) from e
-        LOGGER.debug(f"Resolved sub-component parameter names: {list(grouped_sub_components.keys())}")
-        for parameter_name, sub_component_list in grouped_sub_components.items():
-            LOGGER.debug(f"Merging {len(sub_component_list)} sub-component(s) for parameter '{parameter_name}'")
-            if not any(order is not None for order, _ in sub_component_list):
-                if len(sub_component_list) == 1:
-                    input_params[parameter_name] = sub_component_list[0][1]
-                else:
-                    input_params[parameter_name] = [instance for _, instance in sub_component_list]
-            else:
-                input_params[parameter_name] = [
-                    instance for _, instance in sorted(sub_component_list, key=lambda x: x[0] or 0)
-                ]
-        LOGGER.debug(f"Merged input parameter names: {list(input_params.keys())}")
-
+    for child_id, param_name, child_ref, order, pre_configured in sub_component_specs:
+        LOGGER.debug(f"Found sub-component: {param_name=}, {child_ref=}\n")
         try:
-            globals_ = get_global_parameters_by_component_version_id(
-                session,
-                component_instance.component_version_id,
+            instantiated_sub_component = await instantiate_component(
+                child_id,
+                project_id=project_id,
+                variables=variables,
             )
+            LOGGER.debug(f"Instantiated sub-component: {instantiated_sub_component}\n")
+
+            if pre_configured:
+                get_descriptions = getattr(instantiated_sub_component, "get_tool_descriptions", None)
+                if get_descriptions:
+                    for tool_description in get_descriptions():
+                        tool_pre_configured_inputs[tool_description.name] = pre_configured
+
+            if param_name not in grouped_sub_components:
+                grouped_sub_components[param_name] = []
+            grouped_sub_components[param_name].append((order, instantiated_sub_component))
+        except (MissingDataSourceError, MissingIntegrationError, EngineError):
+            raise
+        except Exception as e:
+            error_msg = (
+                f"Failed to instantiate sub-component '{param_name}' "
+                f"for component instance {component_instance_name} "
+                f"({component_instance_id}): {e}\n"
+            )
+            LOGGER.error(
+                error_msg,
+                exc_info=True,
+                extra={
+                    "input_param_names": list(input_params.keys()),
+                    "grouped_sub_component_names": list(grouped_sub_components.keys()),
+                },
+            )
+            raise ValueError(error_msg) from e
+    LOGGER.debug(f"Resolved sub-component parameter names: {list(grouped_sub_components.keys())}")
+    for parameter_name, sub_component_list in grouped_sub_components.items():
+        LOGGER.debug(f"Merging {len(sub_component_list)} sub-component(s) for parameter '{parameter_name}'")
+        if not any(order is not None for order, _ in sub_component_list):
+            if len(sub_component_list) == 1:
+                input_params[parameter_name] = sub_component_list[0][1]
+            else:
+                input_params[parameter_name] = [instance for _, instance in sub_component_list]
+        else:
+            input_params[parameter_name] = [
+                instance for _, instance in sorted(sub_component_list, key=lambda x: x[0] or 0)
+            ]
+    LOGGER.debug(f"Merged input parameter names: {list(input_params.keys())}")
+
+    # --- Session 2: globals, secrets, tool description, base component ---
+    with get_db_session() as session:
+        try:
+            globals_ = get_global_parameters_by_component_version_id(session, component_version_id)
             grouped_globals: dict[str, list[tuple[int, Any]]] = {}
             for gparam in globals_:
                 pname = gparam.parameter_definition.name
@@ -311,7 +318,7 @@ async def instantiate_component(
             )
         except Exception as e:
             raise ValueError(
-                f"Failed to apply global component parameters for instance {component_instance.ref}: {e}"
+                f"Failed to apply global component parameters for instance {component_ref}: {e}"
             ) from e
 
         key_to_secret: dict[str, SecretStr] | None = None
@@ -321,21 +328,21 @@ async def instantiate_component(
 
         input_params = replace_secret_placeholders(input_params, key_to_secret)
 
-        factory = FACTORY_REGISTRY.get(component_instance.component_version_id)
+        factory = FACTORY_REGISTRY.get(component_version_id)
         entity_class = getattr(factory, "entity_class", None)
         if entity_class and issubclass(entity_class, EngineComponent):
-            tool_description = generate_tool_description(session, component_instance)
+            ci = get_component_instance_by_id(session, component_instance_id)
+            tool_description = generate_tool_description(session, ci) if ci else None
             if tool_description:
                 input_params["tool_description"] = tool_description
             LOGGER.debug(f"Tool description: {tool_description}\n")
         input_params["component_attributes"] = ComponentAttributes(
-            component_instance_name=component_instance.name,
-            component_instance_id=component_instance.id,
+            component_instance_name=component_instance_name,
+            component_instance_id=component_instance_id,
         )
         if tool_pre_configured_inputs:
             input_params["tool_pre_configured_inputs"] = tool_pre_configured_inputs
 
-        component_version_id = component_instance.component_version_id
         base_component = get_base_component_from_version(session, component_version_id)
         if base_component and base_component == "API Call":
             component_version_id = COMPONENT_VERSION_UUIDS["api_call_tool"]
