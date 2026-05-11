@@ -100,6 +100,7 @@ export interface PinPromptParams {
 }
 
 export function usePinPromptMutation() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (params: PinPromptParams) => {
       return await promptsApi.pinPrompt(
@@ -109,6 +110,9 @@ export function usePinPromptMutation() {
         params.portName,
         params.promptVersionId,
       )
+    },
+    onSuccess: (_data, params) => {
+      queryClient.invalidateQueries({ queryKey: ['graph', params.projectId, params.graphRunnerId] })
     },
   })
 }

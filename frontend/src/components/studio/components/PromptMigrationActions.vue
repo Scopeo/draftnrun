@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { PromptPinInfo } from '../types/node.types'
 import { useCreatePromptMutation, useDeletePromptMutation, usePinPromptMutation } from '@/composables/queries/usePromptsQuery'
 import { useNotifications } from '@/composables/useNotifications'
 import { logger } from '@/utils/logger'
+import type { PromptPinInfo } from '../types/node.types'
 
 interface Props {
   isPromptEligible: boolean
