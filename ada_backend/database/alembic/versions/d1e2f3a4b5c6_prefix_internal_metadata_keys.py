@@ -159,12 +159,15 @@ async def _rename_qdrant_payload_keys_for_collection(
         return 0
 
     updated_points = 0
+    old_keys = list(key_renames.keys())
     offset = None
     while True:
         points, offset = await _scroll_qdrant_batch(qdrant_service, collection_name, offset)
         if not points:
             break
 
+        # Collect all points in this page that need key renames.
+        updates: list[tuple[Any, dict]] = []
         for point in points:
             point_payload = point.get("payload") or {}
             renamed_payload = {
@@ -172,21 +175,27 @@ async def _rename_qdrant_payload_keys_for_collection(
                 for old_key, new_key in key_renames.items()
                 if old_key in point_payload
             }
-            if not renamed_payload:
-                continue
+            if renamed_payload:
+                updates.append((point["id"], renamed_payload))
 
-            point_id = point["id"]
-            await qdrant_service._send_request_async(
-                method="POST",
-                endpoint=f"collections/{collection_name}/points/payload?wait=true",
-                payload={"points": [point_id], "payload": renamed_payload},
-            )
+        if updates:
+            # Set new keys concurrently (each point may have different values).
+            await asyncio.gather(*[
+                qdrant_service._send_request_async(
+                    method="POST",
+                    endpoint=f"collections/{collection_name}/points/payload?wait=true",
+                    payload={"points": [point_id], "payload": renamed_payload},
+                )
+                for point_id, renamed_payload in updates
+            ])
+            # Delete old keys in a single batch request for all affected points.
+            affected_ids = [point_id for point_id, _ in updates]
             await qdrant_service._send_request_async(
                 method="POST",
                 endpoint=f"collections/{collection_name}/points/payload/delete?wait=true",
-                payload={"points": [point_id], "keys": list(key_renames.keys())},
+                payload={"points": affected_ids, "keys": old_keys},
             )
-            updated_points += 1
+            updated_points += len(updates)
 
         if offset is None:
             break
