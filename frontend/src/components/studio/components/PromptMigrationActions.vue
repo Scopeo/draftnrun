@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useCreatePromptMutation, useDeletePromptMutation, usePinPromptMutation } from '@/composables/queries/usePromptsQuery'
+import { format } from 'date-fns'
+import {
+  useCreatePromptMutation,
+  useDeletePromptMutation,
+  usePinPromptMutation,
+  usePromptDetailQuery,
+} from '@/composables/queries/usePromptsQuery'
 import { useNotifications } from '@/composables/useNotifications'
 import { logger } from '@/utils/logger'
 import type { PromptPinInfo } from '../types/node.types'
@@ -41,6 +47,47 @@ const pinMutation = usePinPromptMutation()
 
 const isMigrating = computed(() => createMutation.isPending.value || pinMutation.isPending.value)
 const pendingPrompt = ref<{ id: string; versionId: string } | null>(null)
+
+const upgradeMenuOpened = ref(false)
+const promptIdForVersions = computed(() => (upgradeMenuOpened.value ? props.promptPin?.prompt_id : undefined))
+const { data: promptDetail } = usePromptDetailQuery(orgIdRef, promptIdForVersions)
+
+const newerVersions = computed(() => {
+  if (!promptDetail.value?.versions || !props.promptPin) return []
+  return promptDetail.value.versions
+    .filter((v) => v.version_number > props.promptPin!.pinned_version_number)
+    .sort((a, b) => b.version_number - a.version_number)
+})
+
+const latestVersionNumber = computed(() => {
+  if (!promptDetail.value?.versions?.length) return props.promptPin?.latest_version_number ?? 0
+  return Math.max(...promptDetail.value.versions.map((v) => v.version_number))
+})
+
+function onUpgradeMenuUpdate(open: boolean) {
+  if (open) upgradeMenuOpened.value = true
+}
+
+async function pinToVersion(versionId: string) {
+  try {
+    await pinMutation.mutateAsync({
+      projectId: props.projectId,
+      graphRunnerId: props.graphRunnerId,
+      componentInstanceId: props.componentInstanceId,
+      portName: props.portName,
+      promptVersionId: versionId,
+    })
+    notify.success('Prompt version updated')
+    emit('migrated')
+  } catch (error) {
+    logger.error('Failed to update prompt version', { error })
+    notify.error('Failed to update prompt version')
+  }
+}
+
+function formatVersionDate(dateStr: string): string {
+  return format(new Date(dateStr), 'dd/MM/yyyy')
+}
 
 function openMigrateDialog() {
   migrateName.value = `${props.projectName}/${props.componentName}`
@@ -113,15 +160,74 @@ function navigateToPrompt() {
 
 <template>
   <div v-if="isPromptEligible" class="prompt-migration-actions d-inline-flex align-center">
-    <!-- Pinned state: show library link -->
+    <!-- Pinned state: show library link + version chip + upgrade -->
     <template v-if="promptPin">
       <VChip size="small" color="primary" variant="tonal" class="me-1" @click="navigateToPrompt">
         <VIcon icon="tabler-library" size="14" class="me-1" />
         {{ promptPin.prompt_name }}
-        <template v-if="!promptPin.is_latest">
-          <VIcon icon="tabler-alert-circle" size="14" class="ms-1 text-warning" />
-        </template>
       </VChip>
+      <VChip size="small" variant="outlined" class="me-1">
+        #{{ promptPin.pinned_version_number }}
+      </VChip>
+
+      <!-- Upgrade menu: visible only when pinned version is not the latest -->
+      <VMenu
+        v-if="!promptPin.is_latest && !readonly"
+        location="bottom end"
+        @update:model-value="onUpgradeMenuUpdate"
+      >
+        <template #activator="{ props: menuProps }">
+          <VTooltip location="top">
+            <template #activator="{ props: tooltipProps }">
+              <VBtn
+                v-bind="{ ...menuProps, ...tooltipProps }"
+                icon
+                variant="text"
+                size="x-small"
+                color="warning"
+              >
+                <VIcon icon="tabler-arrow-up-circle" size="18" />
+              </VBtn>
+            </template>
+            <span>Newer versions available</span>
+          </VTooltip>
+        </template>
+        <VCard min-width="280" max-width="360">
+          <VCardTitle class="text-subtitle-2 pa-3 pb-1">Update to newer version</VCardTitle>
+          <VList v-if="newerVersions.length" density="compact" class="pa-1">
+            <VListItem
+              v-for="version in newerVersions"
+              :key="version.id"
+              :disabled="pinMutation.isPending.value"
+              class="rounded"
+              @click="pinToVersion(version.id)"
+            >
+              <template #prepend>
+                <span class="text-subtitle-2 font-weight-bold me-2">#{{ version.version_number }}</span>
+              </template>
+              <VListItemTitle class="text-body-2">
+                {{ version.change_description || version.name }}
+              </VListItemTitle>
+              <VListItemSubtitle class="text-caption">
+                {{ formatVersionDate(version.created_at) }}
+              </VListItemSubtitle>
+              <template #append>
+                <VChip
+                  v-if="version.version_number === latestVersionNumber"
+                  size="x-small"
+                  variant="flat"
+                  color="default"
+                  label
+                >
+                  Latest
+                </VChip>
+              </template>
+            </VListItem>
+          </VList>
+          <VCardText v-else class="text-body-2 text-medium-emphasis pa-3">Loading versions...</VCardText>
+        </VCard>
+      </VMenu>
+
       <VTooltip location="top">
         <template #activator="{ props: tooltipProps }">
           <VBtn

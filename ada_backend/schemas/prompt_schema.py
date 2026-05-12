@@ -56,6 +56,11 @@ class PromptVersionResponseSchema(BaseModel):
     sections: list[PromptSectionResponseSchema] = []
 
 
+class PromptVersionProductionUsageSchema(BaseModel):
+    project_id: UUID
+    project_name: str
+
+
 class PromptVersionSummarySchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -66,6 +71,7 @@ class PromptVersionSummarySchema(BaseModel):
     change_description: Optional[str] = None
     created_by: Optional[UUID] = None
     created_at: datetime
+    production_usages: list[PromptVersionProductionUsageSchema] = []
 
 
 class PromptResponseSchema(BaseModel):

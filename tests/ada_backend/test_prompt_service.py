@@ -386,3 +386,111 @@ class TestPinOwnershipValidation:
 
             with pytest.raises(PortNotPromptEligibleError):
                 pin_prompt_to_port_service(session, ci.id, "system_prompt", version_id, gr.id, project.id)
+
+
+def _setup_graph_with_component_for_env(session, env: db.EnvType, project_name="TestProject"):
+    project = db.WorkflowProject(id=uuid.uuid4(), name=project_name, organization_id=ORG_ID)
+    session.add(project)
+    session.flush()
+
+    component = db.Component(id=uuid.uuid4(), name=f"Comp-{uuid.uuid4().hex[:8]}")
+    session.add(component)
+    session.flush()
+
+    cv = db.ComponentVersion(id=uuid.uuid4(), component_id=component.id, version_tag="1.0.0")
+    session.add(cv)
+    session.flush()
+
+    ci = db.ComponentInstance(id=uuid.uuid4(), component_version_id=cv.id, name="CI")
+    session.add(ci)
+    session.flush()
+
+    port_def = db.PortDefinition(
+        id=uuid.uuid4(), component_version_id=cv.id, name="system_prompt",
+        port_type=db.PortType.INPUT, is_prompt=True,
+    )
+    session.add(port_def)
+    session.flush()
+
+    ipi = db.InputPortInstance(
+        id=uuid.uuid4(), component_instance_id=ci.id, name="system_prompt", port_definition_id=port_def.id,
+    )
+    session.add(ipi)
+    session.flush()
+
+    gr = db.GraphRunner(id=uuid.uuid4())
+    session.add(gr)
+    session.flush()
+
+    binding = db.ProjectEnvironmentBinding(
+        id=uuid.uuid4(), project_id=project.id, graph_runner_id=gr.id, environment=env,
+    )
+    session.add(binding)
+    session.flush()
+
+    node = db.GraphRunnerNode(
+        node_id=ci.id, graph_runner_id=gr.id, node_type=db.NodeType.COMPONENT, is_start_node=True,
+    )
+    session.add(node)
+    session.flush()
+
+    return ci, gr, ipi, project
+
+
+class TestProductionUsages:
+    def test_production_usages_included_in_detail(self):
+        with get_db_session() as session:
+            ci, gr, ipi, project = _setup_graph_with_component_for_env(
+                session, db.EnvType.PRODUCTION, project_name="ProdProject",
+            )
+            prompt = _create_prompt(session, name=f"ProdUsage-{uuid.uuid4().hex[:8]}")
+            detail = get_prompt_detail_service(session, prompt.id, organization_id=ORG_ID)
+            version_id = detail.versions[0].id
+
+            pin_prompt_to_port_service(session, ci.id, "system_prompt", version_id, gr.id, project.id)
+
+            detail = get_prompt_detail_service(session, prompt.id, organization_id=ORG_ID)
+            v = next(v for v in detail.versions if v.id == version_id)
+            assert len(v.production_usages) == 1
+            assert v.production_usages[0].project_name == "ProdProject"
+            assert v.production_usages[0].project_id == project.id
+
+    def test_draft_usages_excluded_from_production_usages(self):
+        with get_db_session() as session:
+            ci, gr, ipi, project = _setup_graph_with_component_for_env(
+                session, db.EnvType.DRAFT, project_name="DraftProject",
+            )
+            prompt = _create_prompt(session, name=f"DraftUsage-{uuid.uuid4().hex[:8]}")
+            detail = get_prompt_detail_service(session, prompt.id, organization_id=ORG_ID)
+            version_id = detail.versions[0].id
+
+            pin_prompt_to_port_service(session, ci.id, "system_prompt", version_id, gr.id, project.id)
+
+            detail = get_prompt_detail_service(session, prompt.id, organization_id=ORG_ID)
+            v = next(v for v in detail.versions if v.id == version_id)
+            assert len(v.production_usages) == 0
+
+    def test_production_usages_empty_when_not_pinned(self):
+        with get_db_session() as session:
+            prompt = _create_prompt(session, name=f"NoPins-{uuid.uuid4().hex[:8]}")
+            detail = get_prompt_detail_service(session, prompt.id, organization_id=ORG_ID)
+            for v in detail.versions:
+                assert v.production_usages == []
+
+    def test_multiple_projects_in_production_usages(self):
+        with get_db_session() as session:
+            prompt = _create_prompt(session, name=f"MultiProd-{uuid.uuid4().hex[:8]}")
+            detail = get_prompt_detail_service(session, prompt.id, organization_id=ORG_ID)
+            version_id = detail.versions[0].id
+
+            for i in range(2):
+                ci, gr, ipi, project = _setup_graph_with_component_for_env(
+                    session, db.EnvType.PRODUCTION, project_name=f"ProdProject-{i}",
+                )
+                pin_prompt_to_port_service(session, ci.id, "system_prompt", version_id, gr.id, project.id)
+
+            detail = get_prompt_detail_service(session, prompt.id, organization_id=ORG_ID)
+            v = next(v for v in detail.versions if v.id == version_id)
+            assert len(v.production_usages) == 2
+            names = {u.project_name for u in v.production_usages}
+            assert names == {"ProdProject-0", "ProdProject-1"}

@@ -72,6 +72,10 @@ All prompt and version service functions accept an `organization_id` parameter. 
 
 ### Diff (`/orgs/{organization_id}/prompts/{prompt_id}/diff?from=&to=`)
 
+### Production Usages in Version Summaries
+
+The `GET /{prompt_id}` detail endpoint enriches each `PromptVersionSummary` with a `production_usages` list — one entry per project that has this version pinned in a **production** environment binding. Each entry contains `project_id` and `project_name`. Draft-only pins are excluded. The frontend displays this as a green "Prod" chip (with project count) in the version sidebar, with a tooltip listing project names on hover.
+
 ### Usages (`/orgs/{organization_id}/prompts/{prompt_id}/usages`)
 
 ### Pinning
@@ -119,11 +123,12 @@ Users can migrate inline prompts to the org's prompt library directly from the w
 1. A "Migrate to Prompt Library" icon appears next to any prompt-eligible parameter in the component EditSidebar when the parameter is not yet pinned to a library prompt.
 2. Clicking the icon opens a dialog with a default name of `project_name/component_name`.
 3. On confirm, the frontend creates a new prompt in the org library (`POST /orgs/{org_id}/prompts`) then pins it to the component port (`PUT /projects/{project_id}/graph/{graph_runner_id}/components/{ci_id}/ports/{port_name}/prompt-pin`).
-4. Once pinned, the prompt textarea becomes read-only and displays a chip linking to the prompt's library page at `/org/{orgId}/prompts/{promptId}`.
+4. Once pinned, the prompt textarea becomes read-only and displays a chip linking to the prompt's library page at `/org/{orgId}/prompts/{promptId}`, plus a version chip showing the pinned version number (e.g., `#3`).
+5. When newer versions exist (`pinned_version < latest`), a warning-colored upgrade button appears. Clicking it opens a dropdown listing all newer versions (newest-first) with version number, change description, date, and a "Latest" badge. Selecting a version re-pins the port to that version. The version list is lazy-fetched only when the upgrade menu is first opened.
 
 ### Frontend Components
 
-- `PromptMigrationActions.vue` — Shared component handling both the migrate button (unpinned) and the pinned-state display (chip + external link).
+- `PromptMigrationActions.vue` — Shared component handling the migrate button (unpinned), pinned-state display (name chip + version chip + external link), and the inline version upgrade picker.
 - `EditSidebarParameterField.vue` — Workflow studio integration via `promptContext` and `componentInstanceId` props threaded from `StudioFlow.vue` → `EditSidebar.vue`.
 
 ## Backend Files
