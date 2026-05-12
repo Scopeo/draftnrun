@@ -187,8 +187,10 @@ export const graphTransformer: GraphTransformerType = {
           parameter_group_id: groupId,
           parameter_order_within_group: groupOrder,
           parameter_group_name: groupName,
-          kind: (param.kind ?? 'parameter') as 'parameter' | 'input',
+          kind: (param.kind ?? 'parameter') as 'parameter' | 'input' | 'prompt',
           is_tool_input: param.is_tool_input ?? true,
+          is_prompt_eligible: param.is_prompt_eligible ?? false,
+          prompt_pin: param.prompt_pin ?? null,
         }
       })
 

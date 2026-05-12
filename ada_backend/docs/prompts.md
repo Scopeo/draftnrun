@@ -110,6 +110,22 @@ The prompt library has a dedicated org-level page at `/org/{orgId}/prompts` with
 - `frontend/src/components/prompts/` — UI components (PromptLibraryList, PromptDetail, PromptVersionSidebar, PromptVersionDetailPanel, CreatePromptDialog, NewVersionDialog)
 - `frontend/src/pages/org/[orgId]/prompts/` — File-based route pages (index.vue, [id].vue)
 
+## Studio Migration Flow
+
+Users can migrate inline prompts to the org's prompt library directly from the workflow studio UI. This works for any component with a prompt-eligible parameter (`is_prompt=True` on the port definition), such as the AI Agent's `initial_prompt` or LLM Call's `prompt_template`.
+
+### How It Works
+
+1. A "Migrate to Prompt Library" icon appears next to any prompt-eligible parameter in the component EditSidebar when the parameter is not yet pinned to a library prompt.
+2. Clicking the icon opens a dialog with a default name of `project_name/component_name`.
+3. On confirm, the frontend creates a new prompt in the org library (`POST /orgs/{org_id}/prompts`) then pins it to the component port (`PUT /projects/{project_id}/graph/{graph_runner_id}/components/{ci_id}/ports/{port_name}/prompt-pin`).
+4. Once pinned, the prompt textarea becomes read-only and displays a chip linking to the prompt's library page at `/org/{orgId}/prompts/{promptId}`.
+
+### Frontend Components
+
+- `PromptMigrationActions.vue` — Shared component handling both the migrate button (unpinned) and the pinned-state display (chip + external link).
+- `EditSidebarParameterField.vue` — Workflow studio integration via `promptContext` and `componentInstanceId` props threaded from `StudioFlow.vue` → `EditSidebar.vue`.
+
 ## Backend Files
 
 - `ada_backend/database/models.py` — `PromptDefinition`, `PromptVersion`, `PromptSection`, `GitSyncPromptMapping` models

@@ -1,4 +1,5 @@
 import type { ComponentParameter } from '../../data/component-definitions'
+import type { PromptPinInfo } from '../../types/node.types'
 
 export interface Source {
   id: string
@@ -14,8 +15,10 @@ export interface SidebarParameter {
   ui_component?: string | null
   ui_component_properties?: Record<string, any> | null
   is_advanced?: boolean
-  kind?: 'parameter' | 'input'
+  kind?: 'parameter' | 'input' | 'prompt'
   is_tool_input?: boolean
+  is_prompt_eligible?: boolean
+  prompt_pin?: PromptPinInfo | null
   parameter_group_id?: string | null
   parameter_group_name?: string | null
   parameter_order_within_group?: number | null

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { VSelect } from 'vuetify/components/VSelect'
 import type { ComponentConfig, SidebarParameter } from './edit-sidebar/types'
 import { isInlineLabelComponent, normalizeUiComponent } from './edit-sidebar/types'
+import PromptMigrationActions from './PromptMigrationActions.vue'
 import ParameterLabel from '@/components/shared/ParameterLabel.vue'
 
 interface Props {
@@ -10,13 +11,28 @@ interface Props {
   componentConfig: ComponentConfig
   color: string
   jsonValidationState?: 'valid' | 'invalid' | null
+  promptContext?: {
+    orgId: string
+    projectId: string
+    graphRunnerId: string
+    projectName: string
+  } | null
+  componentInstanceId?: string | null
+  componentInstanceName?: string | null
+  isReadOnlyMode?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  promptContext: null,
+  componentInstanceId: null,
+  componentInstanceName: null,
+  isReadOnlyMode: false,
+})
 
 const emit = defineEmits<{
   'file-update': [value: unknown]
   'json-blur': []
+  'prompt-migrated': []
 }>()
 
 const model = defineModel<any>()
@@ -32,21 +48,42 @@ const isFileUploadWithBase64 = computed(
 const isLlmModel = computed(() => props.param.type === 'llm_model')
 const isOutputFormat = computed(() => props.param.name === 'output_format')
 const isSlider = computed(() => normalizedUi.value === 'SLIDER')
+const isPromptPinned = computed(() => !!props.param.prompt_pin)
+const showPromptActions = computed(
+  () => props.param.is_prompt_eligible && props.promptContext && props.componentInstanceId,
+)
 
 const bindProps = computed(() => ({
   ...props.componentConfig.props,
   ...(isInlineLabel.value ? {} : { label: undefined }),
+  ...(isPromptPinned.value ? { readonly: true } : {}),
 }))
 </script>
 
 <template>
   <div class="parameter-item mb-4">
-    <ParameterLabel
-      v-if="!isInlineLabel"
-      :label="componentConfig.props?.label || param.name"
-      :description="param.ui_component_properties?.description || param.ui_component_properties?.placeholder"
-      :required="param.nullable === false"
-    />
+    <div v-if="!isInlineLabel" class="d-flex align-center justify-space-between">
+      <ParameterLabel
+        :label="componentConfig.props?.label || param.name"
+        :description="param.ui_component_properties?.description || param.ui_component_properties?.placeholder"
+        :required="param.nullable === false"
+      />
+      <PromptMigrationActions
+        v-if="showPromptActions"
+        :is-prompt-eligible="true"
+        :prompt-pin="param.prompt_pin || null"
+        :prompt-content="String(model ?? '')"
+        :project-name="promptContext!.projectName"
+        :component-name="componentInstanceName || param.name"
+        :org-id="promptContext!.orgId"
+        :project-id="promptContext!.projectId"
+        :graph-runner-id="promptContext!.graphRunnerId"
+        :component-instance-id="componentInstanceId!"
+        :port-name="param.name"
+        :readonly="isReadOnlyMode"
+        @migrated="emit('prompt-migrated')"
+      />
+    </div>
     <div class="d-flex align-center">
       <!-- FileUpload with saved base64 string -->
       <template v-if="isFileUploadWithBase64">

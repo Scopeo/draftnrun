@@ -25,7 +25,16 @@ export interface BackendAgentParameter {
   ui_component: string | null
   ui_component_properties: Record<string, any> | null
   is_advanced: boolean
-  kind?: 'parameter' | 'input'
+  kind?: 'parameter' | 'input' | 'prompt'
+  is_prompt_eligible?: boolean
+  prompt_pin?: {
+    prompt_id: string
+    prompt_name: string
+    pinned_version_id: string
+    pinned_version_number: number
+    latest_version_number: number
+    is_latest: boolean
+  } | null
 }
 
 export interface BackendAgentTool {

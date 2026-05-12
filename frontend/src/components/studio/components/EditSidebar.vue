@@ -25,11 +25,17 @@ interface Props {
   projects?: any[] | null
   agents?: any[] | null
   isDraftMode?: boolean
+  promptContext?: {
+    orgId: string
+    projectId: string
+    graphRunnerId: string
+    projectName: string
+  } | null
 }
 
 const props = defineProps<Props>()
 
-const emit = defineEmits(['update:modelValue', 'save', 'add-tools', 'remove-tool'])
+const emit = defineEmits(['update:modelValue', 'save', 'add-tools', 'remove-tool', 'prompt-migrated'])
 
 const drawer = computed({
   get: () => props.modelValue,
@@ -185,8 +191,13 @@ const isExclusiveOAuthGroup = (group: any): boolean =>
                   :component-config="componentConfig.getComponentConfig(param)"
                   :color="color"
                   :json-validation-state="form.jsonValidationState.value[param.name]"
+                  :prompt-context="promptContext"
+                  :component-instance-id="componentData?.id || null"
+                  :component-instance-name="componentData?.name || null"
+                  :is-read-only-mode="isReadOnlyMode"
                   @file-update="form.onFileModelUpdate(param.name, $event)"
                   @json-blur="form.handleJsonFieldBlur(param.name)"
+                  @prompt-migrated="emit('prompt-migrated')"
                 />
 
                 <!-- Non-Advanced Parameter Groups -->
@@ -230,7 +241,12 @@ const isExclusiveOAuthGroup = (group: any): boolean =>
                           :component-config="componentConfig.getComponentConfig(param)"
                           :color="color"
                           :json-validation-state="form.jsonValidationState.value[param.name]"
+                          :prompt-context="promptContext"
+                          :component-instance-id="componentData?.id || null"
+                          :component-instance-name="componentData?.name || null"
+                          :is-read-only-mode="isReadOnlyMode"
                           @file-update="form.onFileModelUpdate(param.name, $event)"
+                          @prompt-migrated="emit('prompt-migrated')"
                           @json-blur="form.handleJsonFieldBlur(param.name)"
                         />
                       </template>
@@ -267,8 +283,13 @@ const isExclusiveOAuthGroup = (group: any): boolean =>
                         :component-config="componentConfig.getComponentConfig(param)"
                         :color="color"
                         :json-validation-state="form.jsonValidationState.value[param.name]"
+                        :prompt-context="promptContext"
+                        :component-instance-id="componentData?.id || null"
+                        :component-instance-name="componentData?.name || null"
+                        :is-read-only-mode="isReadOnlyMode"
                         @file-update="form.onFileModelUpdate(param.name, $event)"
                         @json-blur="form.handleJsonFieldBlur(param.name)"
+                        @prompt-migrated="emit('prompt-migrated')"
                       />
 
                       <!-- Advanced-Only Parameter Groups -->
@@ -309,8 +330,13 @@ const isExclusiveOAuthGroup = (group: any): boolean =>
                               :component-config="componentConfig.getComponentConfig(param)"
                               :color="color"
                               :json-validation-state="form.jsonValidationState.value[param.name]"
+                              :prompt-context="promptContext"
+                              :component-instance-id="componentData?.id || null"
+                              :component-instance-name="componentData?.name || null"
+                              :is-read-only-mode="isReadOnlyMode"
                               @file-update="form.onFileModelUpdate(param.name, $event)"
                               @json-blur="form.handleJsonFieldBlur(param.name)"
+                              @prompt-migrated="emit('prompt-migrated')"
                             />
                           </div>
                         </VExpandTransition>
