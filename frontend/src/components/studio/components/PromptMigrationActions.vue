@@ -50,7 +50,11 @@ const pendingPrompt = ref<{ id: string; versionId: string } | null>(null)
 
 const upgradeMenuOpened = ref(false)
 const promptIdForVersions = computed(() => (upgradeMenuOpened.value ? props.promptPin?.prompt_id : undefined))
-const { data: promptDetail } = usePromptDetailQuery(orgIdRef, promptIdForVersions)
+const {
+  data: promptDetail,
+  isLoading: versionsLoading,
+  isError: versionsError,
+} = usePromptDetailQuery(orgIdRef, promptIdForVersions)
 
 const newerVersions = computed(() => {
   if (!promptDetail.value?.versions || !props.promptPin) return []
@@ -194,7 +198,13 @@ function navigateToPrompt() {
         </template>
         <VCard min-width="280" max-width="360">
           <VCardTitle class="text-subtitle-2 pa-3 pb-1">Update to newer version</VCardTitle>
-          <VList v-if="newerVersions.length" density="compact" class="pa-1">
+          <VCardText v-if="versionsLoading" class="text-body-2 text-medium-emphasis pa-3">
+            Loading versions...
+          </VCardText>
+          <VCardText v-else-if="versionsError" class="text-body-2 text-error pa-3">
+            Failed to load versions
+          </VCardText>
+          <VList v-else-if="newerVersions.length" density="compact" class="pa-1">
             <VListItem
               v-for="version in newerVersions"
               :key="version.id"
@@ -224,7 +234,9 @@ function navigateToPrompt() {
               </template>
             </VListItem>
           </VList>
-          <VCardText v-else class="text-body-2 text-medium-emphasis pa-3">Loading versions...</VCardText>
+          <VCardText v-else class="text-body-2 text-medium-emphasis pa-3">
+            No newer versions
+          </VCardText>
         </VCard>
       </VMenu>
 

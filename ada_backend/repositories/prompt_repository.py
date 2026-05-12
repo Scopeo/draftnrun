@@ -161,7 +161,7 @@ def get_input_port_instance(
 
 
 def get_production_usages_by_prompt(
-    session: Session, prompt_id: UUID
+    session: Session, prompt_id: UUID, organization_id: UUID
 ) -> list[tuple[UUID, UUID, str]]:
     return (
         session.query(db.PromptVersion.id, db.Project.id, db.Project.name)
@@ -174,6 +174,7 @@ def get_production_usages_by_prompt(
         .filter(
             db.PromptVersion.prompt_id == prompt_id,
             db.ProjectEnvironmentBinding.environment == db.EnvType.PRODUCTION,
+            db.Project.organization_id == organization_id,
         )
         .distinct()
         .all()

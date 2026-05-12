@@ -217,7 +217,7 @@ def get_prompt_detail_service(
     versions = get_prompt_versions(session, prompt_id)
     version_summaries = [PromptVersionSummarySchema.model_validate(v) for v in versions]
 
-    prod_rows = get_production_usages_by_prompt(session, prompt_id)
+    prod_rows = get_production_usages_by_prompt(session, prompt_id, prompt.organization_id)
     prod_map: dict[UUID, list[PromptVersionProductionUsageSchema]] = {}
     for version_id, project_id, project_name in prod_rows:
         prod_map.setdefault(version_id, []).append(
