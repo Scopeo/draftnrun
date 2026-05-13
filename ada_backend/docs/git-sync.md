@@ -56,16 +56,18 @@ GitHub repo (push to main)
   → GitHub App fires webhook to POST /webhooks/github
   → Backend verifies HMAC with GITHUB_APP_WEBHOOK_SECRET
   → Backend looks up matching GitSyncConfig by (owner, repo_name, branch)
-  → For project changes (draftnrun/projects/*/...): enqueue graph sync job
-  → For prompt changes (draftnrun/prompts/**/*.md): enqueue prompt sync job
+  → For prompt changes (draftnrun/prompts/**/*.md): enqueue prompt sync job (first)
+  → For project changes (draftnrun/projects/*/...): enqueue graph sync job (second)
   → Webhook returns immediately (non-blocking)
-  → Git sync queue worker picks up each job:
-    Graph sync:
-      → Fetches graph.json + <file_key>.json per component
-      → Creates a new graph runner, deploys to production
-    Prompt sync:
+  → Git sync queue worker picks up each job (FIFO):
+    Prompt sync (runs first):
       → Fetches changed .md files
       → Creates new prompt versions (or new prompt definitions for new files)
+      → Cascade: re-syncs affected projects via sync_graph_from_github
+    Graph sync (runs second):
+      → Dedup: skips if config was already synced at this commit (by cascade)
+      → Fetches graph.json + <file_key>.json per component
+      → Creates a new graph runner, deploys to production
 ```
 
 ## Data Model
@@ -165,6 +167,42 @@ File-based format with one file per component, all in the same folder:
 - `<file_key>.json` contains per-component payload (`component_id`, `component_version_id`, `parameters`, `input_port_instances`, etc.)
 - Edges and field expression refs use `file_key` (e.g. `{"type": "ref", "file_key": "start", "port": "output"}`); the mapper resolves them to server-generated UUIDs at sync time
 - No hardcoded instance IDs needed — all IDs are generated fresh on each sync
+
+### Linking to Prompt Library (`prompt_path`)
+
+Input parameters with `kind="prompt"` (or `kind="input"`) can reference a prompt file from the same repo using the `prompt_path` field. The path is relative to `draftnrun/prompts/` (e.g. `"system-prompt.md"`) and **must** end with `.md`. Paths are normalized at sync time: the `draftnrun/prompts/` prefix is stripped if present, and absolute paths, `..` traversals, or non-`.md` extensions are rejected.
+
+Example in a component JSON file:
+
+```json
+{
+  "parameters": [
+    {
+      "name": "prompt_template",
+      "kind": "prompt",
+      "prompt_path": "system-prompt.md"
+    }
+  ]
+}
+```
+
+At graph sync time the backend:
+1. Looks up the `GitSyncPromptMapping` for that path in the same repo/branch
+2. Fetches the latest `PromptVersion` for the linked `PromptDefinition`
+3. Pins the port to that version (sets `prompt_version_id` + `LiteralNode` field expression)
+4. If no mapping exists yet (new file), the prompt is imported inline
+
+## Prompt Change Cascade Deploy
+
+When a git-synced prompt file changes (new `PromptVersion` created by `sync_prompts_from_github`), the backend automatically redeploys every **git-synced project** whose production graph has a port pinned to that prompt by calling `sync_graph_from_github` — the same code path used for graph file changes:
+
+1. Find affected projects via `get_git_synced_projects_pinned_to_prompt`
+2. For each project, look up its `GitSyncConfig` and resolve the correct commit SHA: if the project's config tracks the same repo+branch as the changed prompt, the prompt push's `commit_sha` is reused; otherwise the HEAD SHA of the project's own branch is fetched via `get_branch_head_sha`
+3. `sync_graph_from_github` fetches the latest graph JSON from GitHub at that SHA, resolves all `prompt_path` references to the latest prompt versions (including the just-created one), builds a new runner, and deploys
+
+**Dedup**: prompt sync jobs are enqueued before graph sync jobs. If the same push changes both a prompt file and a graph file for the same project, the prompt cascade deploys the project first (with both the new graph structure and the new prompt version). When the graph sync job runs next, `sync_graph_from_github` detects that the config was already successfully synced at the same `commit_sha` and skips the redundant deploy.
+
+The old production `GraphRunner` retains its link to the old `PromptVersion` as an immutable historical snapshot. Only git-synced projects (those with a `GitSyncConfig`) are affected; manually-created projects that happen to pin the same org-level prompt are not touched.
 
 ## Disconnect
 
