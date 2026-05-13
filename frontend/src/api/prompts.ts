@@ -1,5 +1,10 @@
 import { $api } from '@/utils/api'
 
+export interface PromptVersionProductionUsage {
+  project_id: string
+  project_name: string
+}
+
 export interface PromptVersionSummary {
   id: string
   version_number: number
@@ -7,6 +12,7 @@ export interface PromptVersionSummary {
   change_description: string | null
   created_by: string | null
   created_at: string
+  production_usages: PromptVersionProductionUsage[]
 }
 
 export interface PromptResponse {

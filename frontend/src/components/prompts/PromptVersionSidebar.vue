@@ -43,6 +43,15 @@ function formatVersionDate(dateStr: string): string {
 function isLatest(v: PromptVersionSummary): boolean {
   return v.version_number === latestVersionNumber.value
 }
+
+function prodChipLabel(v: PromptVersionSummary): string {
+  const count = v.production_usages?.length ?? 0
+  return count > 1 ? `Prod (${count})` : 'Prod'
+}
+
+function prodTooltipText(v: PromptVersionSummary): string {
+  return (v.production_usages ?? []).map((u) => u.project_name).join(', ')
+}
 </script>
 
 <template>
@@ -74,6 +83,16 @@ function isLatest(v: PromptVersionSummary): boolean {
         <div class="d-flex align-center gap-2 mb-1">
           <span class="text-subtitle-2 font-weight-bold"># {{ version.version_number }}</span>
           <VChip v-if="isLatest(version)" size="x-small" variant="flat" color="default" label> Latest </VChip>
+          <VChip
+            v-if="version.production_usages?.length"
+            size="x-small"
+            variant="flat"
+            color="success"
+            label
+          >
+            {{ prodChipLabel(version) }}
+            <VTooltip activator="parent" location="top">{{ prodTooltipText(version) }}</VTooltip>
+          </VChip>
           <VSpacer />
           <VBtn
             v-if="version.id !== selectedVersionId"

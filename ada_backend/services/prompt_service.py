@@ -14,6 +14,7 @@ from ada_backend.repositories.prompt_repository import (
     get_input_port_instance,
     get_latest_prompt_version,
     get_latest_version_number,
+    get_production_usages_by_prompt,
     get_prompt_by_id,
     get_prompt_pins_for_project,
     get_prompt_usages,
@@ -33,6 +34,7 @@ from ada_backend.schemas.prompt_schema import (
     PromptSectionInputSchema,
     PromptSectionResponseSchema,
     PromptUsageSchema,
+    PromptVersionProductionUsageSchema,
     PromptVersionResponseSchema,
     PromptVersionSummarySchema,
 )
@@ -214,6 +216,16 @@ def get_prompt_detail_service(
 
     versions = get_prompt_versions(session, prompt_id)
     version_summaries = [PromptVersionSummarySchema.model_validate(v) for v in versions]
+
+    prod_rows = get_production_usages_by_prompt(session, prompt_id, prompt.organization_id)
+    prod_map: dict[UUID, list[PromptVersionProductionUsageSchema]] = {}
+    for version_id, project_id, project_name in prod_rows:
+        prod_map.setdefault(version_id, []).append(
+            PromptVersionProductionUsageSchema(project_id=project_id, project_name=project_name)
+        )
+    for summary in version_summaries:
+        summary.production_usages = prod_map.get(summary.id, [])
+
     return PromptDetailResponseSchema(
         id=prompt.id,
         organization_id=prompt.organization_id,

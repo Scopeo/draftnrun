@@ -160,6 +160,27 @@ def get_input_port_instance(
     )
 
 
+def get_production_usages_by_prompt(
+    session: Session, prompt_id: UUID, organization_id: UUID
+) -> list[tuple[UUID, UUID, str]]:
+    return (
+        session.query(db.PromptVersion.id, db.Project.id, db.Project.name)
+        .join(db.InputPortInstance, db.InputPortInstance.prompt_version_id == db.PromptVersion.id)
+        .join(db.ComponentInstance, db.InputPortInstance.component_instance_id == db.ComponentInstance.id)
+        .join(db.GraphRunnerNode, db.GraphRunnerNode.node_id == db.ComponentInstance.id)
+        .join(db.GraphRunner, db.GraphRunner.id == db.GraphRunnerNode.graph_runner_id)
+        .join(db.ProjectEnvironmentBinding, db.ProjectEnvironmentBinding.graph_runner_id == db.GraphRunner.id)
+        .join(db.Project, db.Project.id == db.ProjectEnvironmentBinding.project_id)
+        .filter(
+            db.PromptVersion.prompt_id == prompt_id,
+            db.ProjectEnvironmentBinding.environment == db.EnvType.PRODUCTION,
+            db.Project.organization_id == organization_id,
+        )
+        .distinct()
+        .all()
+    )
+
+
 def get_input_port_instances_with_prompt_pins(
     session: Session, component_instance_ids: list[UUID]
 ) -> list[db.InputPortInstance]:
