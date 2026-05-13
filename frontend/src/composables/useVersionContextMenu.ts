@@ -22,18 +22,11 @@ export function useContextMenu() {
     menuTargetId.value = null
   }
 
-  const handleItemRef = (el: HTMLElement | null, targetId: string) => {
-    if (el && menuTargetId.value === targetId) {
-      menuActivatorElement.value = el
-    }
-  }
-
   return {
     menuVisible,
     menuTargetId,
     menuActivatorElement,
     openMenu,
     closeMenu,
-    handleItemRef,
   }
 }
