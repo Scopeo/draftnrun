@@ -14,8 +14,10 @@ Datasets belong to an organization and contain input/groundtruth entries. Each d
 
 - **`DatasetProject`** (`quality_assurance.dataset_project`): `organization_id`, `name`
 - **`DatasetProjectAssociation`** (`quality_assurance.dataset_project_associations`): `dataset_id`, `project_id` (many-to-many)
-- **`InputGroundtruth`** (`quality_assurance.input_groundtruth`): `dataset_id`, `input_data`, `groundtruth`, `position`, custom column values
-- **`QADatasetMetadata`** (`quality_assurance.qa_dataset_metadata`): custom column definitions per dataset
+- **`AssociationColumnMapping`** (`quality_assurance.association_column_mappings`): `association_id` FK → `dataset_project_associations.id`, `column_id` FK → `qa_dataset_metadata.column_id`, `role` (`ColumnRole` enum: `input` | `expected_output`). Unique on `(association_id, column_id)`. Tracks which dataset columns serve as inputs vs. expected outputs for each project association. Auto-populated from system columns when an association is created.
+- **`QADatasetMetadata`** (`quality_assurance.qa_dataset_metadata`): column definitions per dataset. `dataset_id` FK → `dataset_project.id`, `column_id` (UUID, unique), `column_name`, `column_display_position`, `default_role` (`ColumnRole` enum, nullable — `input` | `expected_output` for system columns, `NULL` for user-created columns).
+- **`InputGroundtruth`** (`quality_assurance.input_groundtruth`): dataset rows. `dataset_id` FK → `dataset_project.id`, `input` (JSONB), `groundtruth` (String, nullable), `position`. Also carries a legacy `custom_columns` (JSONB, nullable) field, but the canonical per-cell store is `DatasetCellValue`.
+- **`DatasetCellValue`** (`quality_assurance.dataset_cell_values`): normalized per-cell storage — one row per (dataset-row, column) intersection. `row_id` FK → `input_groundtruth.id`, `column_id` FK → `qa_dataset_metadata.column_id`, `value` (Text, nullable). Unique on `(row_id, column_id)`.
 
 ### CRUD Endpoints (Organization-scoped)
 
@@ -112,10 +114,11 @@ Evaluates a judge against version outputs, storing results as `JudgeEvaluation` 
 
 ## Key Files
 
-- `routers/quality_assurance_router.py` — dataset + entry CRUD, run (sync + async), import/export
+- `routers/quality_assurance_router.py` — dataset + entry CRUD, run (sync + async), import/export. Thin transport layer: delegates all business logic and DB writes to the QA service.
 - `routers/qa_stream_router.py` — WebSocket endpoint for async QA session streaming (auth only; delegates to service)
 - `routers/llm_judges_router.py` — judge CRUD, defaults
 - `routers/qa_evaluation_router.py` — evaluation run, results
+- `services/qa/quality_assurance_service.py` — dataset CRUD, project association with column mappings, QA session lifecycle, dataset validation, run orchestration
 - `services/qa/qa_stream_service.py` — session replay, Redis subscription, and event streaming logic for the QA WebSocket
 - `services/qa/qa_evaluation_service.py` — LLM evaluation logic
 - `workers/qa_queue_worker.py` — `QAQueueWorker` subclass of `BaseQueueWorker` for async QA jobs

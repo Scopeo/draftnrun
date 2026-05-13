@@ -17,10 +17,11 @@ class Pagination(BaseModel):
 class InputGroundtruthCreate(BaseModel):
     """Schema for creating a new input-groundtruth entry."""
 
-    input: dict
+    input: Optional[dict] = None
     groundtruth: Optional[str] = None
     position: Optional[int] = None
     custom_columns: Optional[Dict[str, Optional[str]]] = None
+    cell_values: Optional[Dict[str, Optional[str]]] = None
 
     @field_validator("position")
     @classmethod
@@ -29,6 +30,12 @@ class InputGroundtruthCreate(BaseModel):
         if v is not None and v < 1:
             raise ValueError("position for a QA example must be a positive integer greater or equal to 1 if provided")
         return v
+
+    @model_validator(mode="after")
+    def validate_input_or_cell_values(self):
+        if not self.input and not self.cell_values:
+            raise ValueError("Either 'input' or 'cell_values' must be provided.")
+        return self
 
 
 class InputGroundtruthWithVersionResponse(BaseModel):
@@ -116,6 +123,7 @@ class InputGroundtruthUpdateWithId(BaseModel):
     input: Optional[dict] = None
     groundtruth: Optional[str] = None
     custom_columns: Optional[Dict[str, Optional[str]]] = None
+    cell_values: Optional[Dict[str, Optional[str]]] = None
 
 
 class InputGroundtruthUpdateList(BaseModel):
@@ -136,9 +144,10 @@ class InputGroundtruthResponse(BaseModel):
     id: UUID
     dataset_id: UUID
     position: int
-    input: dict
+    input: Optional[dict] = None
     groundtruth: Optional[str] = None
     custom_columns: Optional[Dict[str, Optional[str]]] = None
+    cell_values: Optional[Dict[str, Optional[str]]] = None
     created_at: datetime
     updated_at: datetime
 
