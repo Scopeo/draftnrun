@@ -28,8 +28,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 def generate_upload_key(organization_id: UUID, filename: str) -> str:
-    s3_filename = f"{organization_id}/{uuid4()}_{filename}"
-    return sanitize_filename(s3_filename, remove_extension_dot=False)
+    sanitized_filename = sanitize_filename(f"{uuid4()}_{filename}", remove_extension_dot=False)
+    return f"{organization_id}/{sanitized_filename}"
 
 
 @lru_cache()
@@ -52,14 +52,11 @@ def upload_file_to_s3(
     bucket_name: str = settings.S3_BUCKET_NAME,
 ) -> S3UploadedInformation:
     """Upload a file to an S3 bucket."""
-    sanitized_key = sanitize_filename(file_name, remove_extension_dot=False)
     try:
         s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
-        upload_file_to_bucket(
-            s3_client=s3_client, bucket_name=bucket_name, key=sanitized_key, byte_content=byte_content
-        )
-        LOGGER.info(f"Successfully uploaded file to S3 with {sanitized_key} key.")
-        return S3UploadedInformation(s3_path_file=sanitized_key)
+        upload_file_to_bucket(s3_client=s3_client, bucket_name=bucket_name, key=file_name, byte_content=byte_content)
+        LOGGER.info(f"Successfully uploaded file to S3 with {file_name} key.")
+        return S3UploadedInformation(s3_path_file=file_name)
     except Exception as e:
         LOGGER.error(f"Error uploading file to S3: {str(e)}")
         raise ValueError(f"Failed to upload file to S3: {str(e)}")

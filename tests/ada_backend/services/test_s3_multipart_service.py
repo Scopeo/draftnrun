@@ -8,6 +8,7 @@ from ada_backend.services.s3_files_service import (
     abort_multipart_upload,
     complete_multipart_upload,
     generate_presigned_part_urls,
+    generate_upload_key,
     init_multipart_upload,
 )
 
@@ -22,6 +23,15 @@ def mock_s3_client():
 
 
 class TestInitMultipartUpload:
+    def test_generate_upload_key_preserves_org_prefix(self):
+        org_id = uuid4()
+
+        key = generate_upload_key(org_id, "test file.pdf")
+
+        assert key.startswith(f"{org_id}/")
+        assert "/" in key
+        assert key.endswith("test_file.pdf")
+
     def test_creates_multipart_upload(self, mock_s3_client):
         mock_s3_client.create_multipart_upload.return_value = {"UploadId": "test-upload-id-123"}
         org_id = uuid4()
@@ -35,7 +45,7 @@ class TestInitMultipartUpload:
 
         assert result.upload_id == "test-upload-id-123"
         assert "test.pdf" in result.key
-        assert str(org_id).replace("-", "_") in result.key
+        assert result.key.startswith(f"{org_id}/")
         mock_s3_client.create_multipart_upload.assert_called_once()
         call_kwargs = mock_s3_client.create_multipart_upload.call_args.kwargs
         assert call_kwargs["Bucket"] == "test-bucket"
