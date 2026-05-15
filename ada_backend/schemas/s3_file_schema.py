@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field, conint, conlist, constr
+from typing import Annotated
+
+from pydantic import BaseModel, Field
 
 
 class UploadFileRequest(BaseModel):
@@ -35,14 +37,14 @@ class PresignedPartURL(BaseModel):
 
 
 class CompletedPart(BaseModel):
-    part_number: conint(gt=0)
-    etag: constr(min_length=1)
+    part_number: Annotated[int, Field(gt=0)]
+    etag: Annotated[str, Field(min_length=1)]
 
 
 class CompleteMultipartRequest(BaseModel):
     key: str
     upload_id: str
-    parts: conlist(CompletedPart, min_length=1)
+    parts: Annotated[list[CompletedPart], Field(min_length=1)]
 
 
 class AbortMultipartRequest(BaseModel):
