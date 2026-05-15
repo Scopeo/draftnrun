@@ -4,6 +4,8 @@ import pytest
 
 import engine.components.tools.hubspot_mcp.server as hubspot_server
 from engine.components.tools.hubspot_mcp.client import HubSpotClient
+from engine.components.tools.hubspot_mcp_tool import HUBSPOT_DEFAULT_TOOL_NAMES
+from engine.components.tools.mcp.shared import MCPToolInputs
 
 
 @pytest.fixture
@@ -88,3 +90,43 @@ async def test_auth_get_current_user_tool():
 
     assert result == expected
     mock_client.get_token_hubspot_metadata.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_notes_update_tool():
+    expected = {"id": "note-123", "properties": {"hs_note_body": "Updated body"}}
+    mock_client = AsyncMock()
+    mock_client.request.return_value = expected
+
+    with patch("engine.components.tools.hubspot_mcp.server._client", mock_client, create=True):
+        result = await hubspot_server.notes_update(
+            objectId="note-123",
+            properties=hubspot_server.NoteProperties(
+                hs_note_body="Updated body",
+                hs_timestamp="2026-02-27T10:00:00Z",
+            ),
+        )
+
+    assert result == expected
+    mock_client.request.assert_called_once_with(
+        "patch",
+        "/crm/v3/objects/notes/note-123",
+        json={
+            "properties": {
+                "hs_note_body": "Updated body",
+                "hs_timestamp": "2026-02-27T10:00:00Z",
+            }
+        },
+    )
+
+
+def test_notes_update_in_default_tools():
+    assert "notes_update" in HUBSPOT_DEFAULT_TOOL_NAMES
+
+
+def test_mcp_tool_inputs_ports_are_exposed():
+    tool_name_extra = MCPToolInputs.model_fields["tool_name"].json_schema_extra
+    tool_arguments_extra = MCPToolInputs.model_fields["tool_arguments"].json_schema_extra
+
+    assert tool_name_extra == {"is_tool_input": False}
+    assert tool_arguments_extra == {"is_tool_input": False}

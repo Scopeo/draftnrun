@@ -179,6 +179,19 @@ async def notes_create(
 
 
 @mcp.tool(
+    name="notes_update",
+    description="Update an existing HubSpot note by ID.",
+    tags={Tag.engagements},
+)
+async def notes_update(
+    objectId: str,
+    properties: NoteProperties,
+) -> dict[str, Any]:
+    body = {"properties": properties.model_dump(exclude_none=True)}
+    return await _client.request("patch", f"/crm/v3/objects/notes/{objectId}", json=body)
+
+
+@mcp.tool(
     name="emails_create",
     description=(
         "Log an email engagement in HubSpot's timeline (does NOT send a real email). "

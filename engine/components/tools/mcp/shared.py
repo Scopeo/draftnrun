@@ -24,12 +24,12 @@ class MCPToolInputs(BaseModel):
 
     tool_name: str = Field(
         description="Name of the MCP tool to call.",
-        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
+        json_schema_extra={"is_tool_input": False},
     )
     tool_arguments: dict[str, Any] = Field(
         default_factory=dict,
         description="Arguments to pass to the MCP tool.",
-        json_schema_extra={"disabled_as_input": True, "is_tool_input": False},
+        json_schema_extra={"is_tool_input": False},
     )
     # TODO: Remove this after function-calling refactor
     model_config = {"extra": "allow"}
