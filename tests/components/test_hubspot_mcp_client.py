@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import engine.components.tools.hubspot_mcp.server as hubspot_server
+from ada_backend.database.models import UIComponent
 from engine.components.tools.hubspot_mcp.client import HubSpotClient
 from engine.components.tools.hubspot_mcp_tool import HUBSPOT_DEFAULT_TOOL_NAMES
 from engine.components.tools.mcp.shared import MCPToolInputs
@@ -129,4 +130,6 @@ def test_mcp_tool_inputs_ports_are_exposed():
     tool_arguments_extra = MCPToolInputs.model_fields["tool_arguments"].json_schema_extra
 
     assert tool_name_extra == {"is_tool_input": False}
-    assert tool_arguments_extra == {"is_tool_input": False}
+    assert tool_arguments_extra is not None
+    assert tool_arguments_extra["is_tool_input"] is False
+    assert tool_arguments_extra["ui_component"] == UIComponent.JSON_TEXTAREA

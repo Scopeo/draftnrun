@@ -3,6 +3,7 @@
 import json
 from typing import Any, Callable
 
+from ada_backend.database.models import UIComponent
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
@@ -29,7 +30,14 @@ class MCPToolInputs(BaseModel):
     tool_arguments: dict[str, Any] = Field(
         default_factory=dict,
         description="Arguments to pass to the MCP tool.",
-        json_schema_extra={"is_tool_input": False},
+        json_schema_extra={
+            "is_tool_input": False,
+            "ui_component": UIComponent.JSON_TEXTAREA,
+            "ui_component_properties": {
+                "label": "Tool Arguments",
+                "description": "Arguments to pass to the MCP tool.",
+            },
+        },
     )
     # TODO: Remove this after function-calling refactor
     model_config = {"extra": "allow"}
