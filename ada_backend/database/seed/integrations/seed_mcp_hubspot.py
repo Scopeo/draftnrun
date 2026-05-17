@@ -29,7 +29,7 @@ def seed_mcp_hubspot_components(session: Session):
     hubspot_mcp_tool_component = Component(
         id=COMPONENT_UUIDS["hubspot_mcp_tool"],
         name="HubSpot MCP Tool",
-        is_agent=False,
+        is_agent=True,
         function_callable=True,
         can_use_function_calling=False,
         icon="logos:hubspot",
