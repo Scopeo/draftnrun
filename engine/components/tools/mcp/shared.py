@@ -3,11 +3,11 @@
 import json
 from typing import Any, Callable
 
-from ada_backend.database.models import UIComponent
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 
+from ada_backend.database.models import UIComponent
 from engine.components.types import ToolDescription
 from engine.trace.serializer import serialize_to_json
 from shared.log_redaction import redact_sensitive
