@@ -188,6 +188,7 @@ async def test_run_without_io_trace_success(
     assert isinstance(result, PythonCodeRunnerToolOutputs)
     assert "execution_result" in result.artifacts
     execution_data = json.loads(result.output)
+    assert result.data == execution_data
     assert execution_data["error"] is None
     assert execution_data["stdout"] == ["Hello, World!"]
     mock_sandbox.kill.assert_called_once()

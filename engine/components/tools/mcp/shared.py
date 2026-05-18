@@ -5,9 +5,9 @@ from typing import Any, Callable
 
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-from ada_backend.database.models import UIComponent
+from ada_backend.database.models import ParameterType, UIComponent
 from engine.components.types import ToolDescription
 from engine.trace.serializer import serialize_to_json
 from shared.log_redaction import redact_sensitive
@@ -47,8 +47,23 @@ class MCPToolOutputs(BaseModel):
     """Shared output schema for both Local and Remote MCP tools."""
 
     output: str
+    data: Any | None = Field(
+        default=None,
+        description="Parsed JSON payload when the MCP tool output is valid JSON.",
+        json_schema_extra={"parameter_type": ParameterType.JSON},
+    )
     content: list[Any] = Field(default_factory=list, description="Raw MCP content items.")
     is_error: bool = Field(default=False, description="Whether the MCP server marked the call as an error.")
+
+    @model_validator(mode="after")
+    def populate_data(self):
+        if self.data is not None:
+            return self
+        try:
+            self.data = json.loads(self.output)
+        except json.JSONDecodeError:
+            self.data = None
+        return self
 
 
 def process_mcp_result(result) -> tuple[str, list[Any], bool]:

@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import json
 import logging
 from dataclasses import dataclass
 from io import BytesIO
@@ -12,9 +13,9 @@ from e2b_code_interpreter import AsyncSandbox
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 from PIL import Image
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ada_backend.database.models import UIComponent
+from ada_backend.database.models import ParameterType, UIComponent
 from engine.components.component import Component
 from engine.components.tools.sandbox_utils import get_or_create_sandbox
 from engine.components.types import ComponentAttributes, ToolDescription
@@ -113,9 +114,24 @@ class PythonCodeRunnerToolInputs(BaseModel):
 
 class PythonCodeRunnerToolOutputs(BaseModel):
     output: str = Field(description="The result of the executed python code.")
+    data: Any | None = Field(
+        default=None,
+        description="Structured execution result from the Python code runner.",
+        json_schema_extra={"parameter_type": ParameterType.JSON},
+    )
     artifacts: dict[str, Any] = Field(
         default_factory=dict, description="Artifacts produced by the python code runner."
     )
+
+    @model_validator(mode="after")
+    def populate_data(self):
+        if self.data is not None:
+            return self
+        try:
+            self.data = json.loads(self.output)
+        except json.JSONDecodeError:
+            self.data = None
+        return self
 
 
 class PythonCodeRunner(Component):
@@ -390,5 +406,6 @@ class PythonCodeRunner(Component):
 
         return PythonCodeRunnerToolOutputs(
             output=content,
+            data=execution_result_dict,
             artifacts=artifacts,
         )
