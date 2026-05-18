@@ -48,6 +48,17 @@ def _serialize_result(result) -> dict:
 
 
 def _extract_structured_data_from_execution_result(execution_result: dict[str, Any]) -> Any | None:
+    def _parse_json_string(raw_value: Any) -> Any | None:
+        if not isinstance(raw_value, str):
+            return None
+        stripped = raw_value.strip()
+        if not stripped:
+            return None
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            return None
+
     for result in execution_result.get("results") or []:
         if not isinstance(result, dict):
             continue
@@ -55,16 +66,13 @@ def _extract_structured_data_from_execution_result(execution_result: dict[str, A
             return result["json"]
         if result.get("data") is not None:
             return result["data"]
+        parsed_text = _parse_json_string(result.get("text"))
+        if parsed_text is not None:
+            return parsed_text
 
     stdout_lines = execution_result.get("stdout") or []
     last_non_empty_stdout = next((str(line).strip() for line in reversed(stdout_lines) if str(line).strip()), None)
-    if not last_non_empty_stdout:
-        return None
-
-    try:
-        return json.loads(last_non_empty_stdout)
-    except json.JSONDecodeError:
-        return None
+    return _parse_json_string(last_non_empty_stdout)
 
 
 PYTHON_CODE_RUNNER_TOOL_DESCRIPTION = ToolDescription(

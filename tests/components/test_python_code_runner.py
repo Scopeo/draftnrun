@@ -232,6 +232,15 @@ def test_extract_structured_data_falls_back_to_native_data_result():
     assert _extract_structured_data_from_execution_result(execution_result) == {"id": "native-data"}
 
 
+def test_extract_structured_data_falls_back_to_result_text_json():
+    execution_result = {
+        "results": [{"json": None, "data": None, "text": '  {"id": "from-text"}  '}],
+        "stdout": ['{"id": "stdout"}'],
+    }
+
+    assert _extract_structured_data_from_execution_result(execution_result) == {"id": "from-text"}
+
+
 def test_extract_structured_data_falls_back_to_last_json_stdout_line():
     execution_result = {
         "results": [],
