@@ -8,7 +8,6 @@ from engine.components.tools.python_code_runner import (
     PythonCodeRunner,
     PythonCodeRunnerToolInputs,
     PythonCodeRunnerToolOutputs,
-    _extract_structured_data_from_execution_result,
 )
 from engine.components.types import ComponentAttributes
 from tests.mocks.trace_manager import MockTraceManager
@@ -189,7 +188,6 @@ async def test_run_without_io_trace_success(
     assert isinstance(result, PythonCodeRunnerToolOutputs)
     assert "execution_result" in result.artifacts
     execution_data = json.loads(result.output)
-    assert result.data is None
     assert execution_data["error"] is None
     assert execution_data["stdout"] == ["Hello, World!"]
     mock_sandbox.kill.assert_called_once()
@@ -212,61 +210,3 @@ async def test_run_without_io_trace_no_images_in_artifacts(
     assert isinstance(result, PythonCodeRunnerToolOutputs)
     assert "images" not in result.artifacts
     assert "image(s) generated" not in result.output
-
-
-def test_extract_structured_data_prefers_native_json_result():
-    execution_result = {
-        "results": [{"json": {"id": "abc", "nested": {"x": 7}}, "data": {"fallback": True}}],
-        "stdout": ['{"id": "stdout"}'],
-    }
-
-    assert _extract_structured_data_from_execution_result(execution_result) == {"id": "abc", "nested": {"x": 7}}
-
-
-def test_extract_structured_data_falls_back_to_native_data_result():
-    execution_result = {
-        "results": [{"json": None, "data": {"id": "native-data"}}],
-        "stdout": ['{"id": "stdout"}'],
-    }
-
-    assert _extract_structured_data_from_execution_result(execution_result) == {"id": "native-data"}
-
-
-def test_extract_structured_data_falls_back_to_result_text_json():
-    execution_result = {
-        "results": [{"json": None, "data": None, "text": '  {"id": "from-text"}  '}],
-        "stdout": ['{"id": "stdout"}'],
-    }
-
-    assert _extract_structured_data_from_execution_result(execution_result) == {"id": "from-text"}
-
-
-def test_extract_structured_data_falls_back_to_last_json_stdout_line():
-    execution_result = {
-        "results": [],
-        "stdout": ["debug line", '  {"contact_tool_arguments": {"properties": {"email": "a@b.com"}}}  ', ""],
-    }
-
-    data = _extract_structured_data_from_execution_result(execution_result)
-
-    assert data["contact_tool_arguments"]["properties"]["email"] == "a@b.com"
-
-
-def test_extract_structured_data_returns_none_for_non_json_stdout():
-    execution_result = {"results": [], "stdout": ["hello"]}
-
-    assert _extract_structured_data_from_execution_result(execution_result) is None
-
-
-def test_python_code_runner_output_validator_extracts_payload_from_execution_envelope():
-    output = json.dumps({
-        "results": [],
-        "stdout": ['{"id": "stdout-json"}'],
-        "stderr": [],
-        "error": None,
-        "execution_count": 1,
-    })
-
-    result = PythonCodeRunnerToolOutputs(output=output)
-
-    assert result.data == {"id": "stdout-json"}

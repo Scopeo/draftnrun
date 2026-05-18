@@ -179,16 +179,86 @@ async def notes_create(
 
 
 @mcp.tool(
-    name="notes_update",
-    description="Update an existing HubSpot note by ID.",
+    name="crm_upsert_contact_by_email",
+    description=(
+        "Create or update a HubSpot contact by email. If objectId is provided, update that "
+        "contact directly; otherwise use HubSpot's native create-or-update-by-email endpoint."
+    ),
+    tags={Tag.contacts},
+)
+async def crm_upsert_contact_by_email(
+    properties: ContactProperties,
+    objectId: Optional[str] = None,
+) -> dict[str, Any]:
+    payload = properties.model_dump(exclude_none=True)
+
+    if objectId:
+        result = await _client.request("patch", f"/crm/v3/objects/contacts/{objectId}", json={"properties": payload})
+        return {"id": result.get("id", objectId), "operation": "updated"}
+
+    email = payload.get("email")
+    if not email:
+        raise ValueError("crm_upsert_contact_by_email requires properties.email when objectId is not provided")
+
+    legacy_payload = [
+        {"property": key, "value": value}
+        for key, value in payload.items()
+    ]
+    result = await _client.request("post", f"/contacts/v1/contact/createOrUpdate/email/{email}", json={"properties": legacy_payload})
+
+    vid = result.get("vid")
+    if vid is None and isinstance(result.get("canonical-vid"), int):
+        vid = result["canonical-vid"]
+    if vid is None and isinstance(result.get("canonical-vid"), str):
+        vid = result["canonical-vid"]
+
+    is_new = bool(result.get("isNew"))
+    operation = "created" if is_new else "updated"
+    return {"id": str(vid) if vid is not None else "", "operation": operation}
+
+
+@mcp.tool(
+    name="notes_upsert_for_contact",
+    description=(
+        "Create or update a HubSpot note for a contact. If objectId is provided, update that note; "
+        "otherwise create a new note associated to the contact. Can skip the call when the body is empty."
+    ),
     tags={Tag.engagements},
 )
-async def notes_update(
-    objectId: str,
+async def notes_upsert_for_contact(
+    contactId: str,
     properties: NoteProperties,
+    objectId: Optional[str] = None,
+    associationTypeId: int = 202,
+    skipIfBodyEmpty: bool = False,
 ) -> dict[str, Any]:
-    body = {"properties": properties.model_dump(exclude_none=True)}
-    return await _client.request("patch", f"/crm/v3/objects/notes/{objectId}", json=body)
+    payload = properties.model_dump(exclude_none=True)
+    note_body = payload.get("hs_note_body", "")
+
+    if skipIfBodyEmpty and not str(note_body).strip():
+        return {"id": "", "operation": "skipped", "contactId": contactId}
+
+    if objectId:
+        result = await _client.request("patch", f"/crm/v3/objects/notes/{objectId}", json={"properties": payload})
+        return {"id": result.get("id", objectId), "operation": "updated", "contactId": contactId}
+
+    associations = [
+        {
+            "to": {"id": contactId},
+            "types": [
+                {
+                    "associationCategory": "HUBSPOT_DEFINED",
+                    "associationTypeId": associationTypeId,
+                }
+            ],
+        }
+    ]
+    result = await _client.request(
+        "post",
+        "/crm/v3/objects/notes",
+        json={"properties": payload, "associations": associations},
+    )
+    return {"id": result.get("id", ""), "operation": "created", "contactId": contactId}
 
 
 @mcp.tool(

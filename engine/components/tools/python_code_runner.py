@@ -1,6 +1,5 @@
 import base64
 import hashlib
-import json
 import logging
 from dataclasses import dataclass
 from io import BytesIO
@@ -13,9 +12,9 @@ from e2b_code_interpreter import AsyncSandbox
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 from PIL import Image
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
-from ada_backend.database.models import ParameterType, UIComponent
+from ada_backend.database.models import UIComponent
 from engine.components.component import Component
 from engine.components.tools.sandbox_utils import get_or_create_sandbox
 from engine.components.types import ComponentAttributes, ToolDescription
@@ -45,34 +44,6 @@ def _serialize_result(result) -> dict:
         "is_main_result": result.is_main_result,
         "extra": result.extra,
     }
-
-
-def _extract_structured_data_from_execution_result(execution_result: dict[str, Any]) -> Any | None:
-    def _parse_json_string(raw_value: Any) -> Any | None:
-        if not isinstance(raw_value, str):
-            return None
-        stripped = raw_value.strip()
-        if not stripped:
-            return None
-        try:
-            return json.loads(stripped)
-        except json.JSONDecodeError:
-            return None
-
-    for result in execution_result.get("results") or []:
-        if not isinstance(result, dict):
-            continue
-        if result.get("json") is not None:
-            return result["json"]
-        if result.get("data") is not None:
-            return result["data"]
-        parsed_text = _parse_json_string(result.get("text"))
-        if parsed_text is not None:
-            return parsed_text
-
-    stdout_lines = execution_result.get("stdout") or []
-    last_non_empty_stdout = next((str(line).strip() for line in reversed(stdout_lines) if str(line).strip()), None)
-    return _parse_json_string(last_non_empty_stdout)
 
 
 PYTHON_CODE_RUNNER_TOOL_DESCRIPTION = ToolDescription(
@@ -142,29 +113,9 @@ class PythonCodeRunnerToolInputs(BaseModel):
 
 class PythonCodeRunnerToolOutputs(BaseModel):
     output: str = Field(description="The result of the executed python code.")
-    data: Any | None = Field(
-        default=None,
-        description="Structured payload produced by the Python code, when available.",
-        json_schema_extra={"parameter_type": ParameterType.JSON},
-    )
     artifacts: dict[str, Any] = Field(
         default_factory=dict, description="Artifacts produced by the python code runner."
     )
-
-    @model_validator(mode="after")
-    def populate_data(self):
-        if self.data is not None:
-            return self
-        try:
-            parsed_output = json.loads(self.output)
-        except json.JSONDecodeError:
-            self.data = None
-            return self
-        if isinstance(parsed_output, dict) and "results" in parsed_output and "stdout" in parsed_output:
-            self.data = _extract_structured_data_from_execution_result(parsed_output)
-        else:
-            self.data = parsed_output
-        return self
 
 
 class PythonCodeRunner(Component):
@@ -439,6 +390,5 @@ class PythonCodeRunner(Component):
 
         return PythonCodeRunnerToolOutputs(
             output=content,
-            data=_extract_structured_data_from_execution_result(execution_result_dict),
             artifacts=artifacts,
         )
