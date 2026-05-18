@@ -47,6 +47,26 @@ def _serialize_result(result) -> dict:
     }
 
 
+def _extract_structured_data_from_execution_result(execution_result: dict[str, Any]) -> Any | None:
+    for result in execution_result.get("results") or []:
+        if not isinstance(result, dict):
+            continue
+        if result.get("json") is not None:
+            return result["json"]
+        if result.get("data") is not None:
+            return result["data"]
+
+    stdout_lines = execution_result.get("stdout") or []
+    last_non_empty_stdout = next((str(line).strip() for line in reversed(stdout_lines) if str(line).strip()), None)
+    if not last_non_empty_stdout:
+        return None
+
+    try:
+        return json.loads(last_non_empty_stdout)
+    except json.JSONDecodeError:
+        return None
+
+
 PYTHON_CODE_RUNNER_TOOL_DESCRIPTION = ToolDescription(
     name="python_code_runner",
     description=(
@@ -116,7 +136,7 @@ class PythonCodeRunnerToolOutputs(BaseModel):
     output: str = Field(description="The result of the executed python code.")
     data: Any | None = Field(
         default=None,
-        description="Structured execution result from the Python code runner.",
+        description="Structured payload produced by the Python code, when available.",
         json_schema_extra={"parameter_type": ParameterType.JSON},
     )
     artifacts: dict[str, Any] = Field(
@@ -128,9 +148,14 @@ class PythonCodeRunnerToolOutputs(BaseModel):
         if self.data is not None:
             return self
         try:
-            self.data = json.loads(self.output)
+            parsed_output = json.loads(self.output)
         except json.JSONDecodeError:
             self.data = None
+            return self
+        if isinstance(parsed_output, dict) and "results" in parsed_output and "stdout" in parsed_output:
+            self.data = _extract_structured_data_from_execution_result(parsed_output)
+        else:
+            self.data = parsed_output
         return self
 
 
@@ -406,6 +431,6 @@ class PythonCodeRunner(Component):
 
         return PythonCodeRunnerToolOutputs(
             output=content,
-            data=execution_result_dict,
+            data=_extract_structured_data_from_execution_result(execution_result_dict),
             artifacts=artifacts,
         )
