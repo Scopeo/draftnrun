@@ -13,7 +13,7 @@ from engine.components.tools.python_code_runner import (
     PythonCodeRunnerToolOutputs,
 )
 from engine.components.types import ComponentAttributes
-from engine.trace.span_context import TracingSpanParams, set_tracing_span
+from engine.trace.span_context import TracingSpanParams, reset_tracing_span, set_tracing_span
 from engine.trace.trace_manager import TraceManager
 
 
@@ -39,13 +39,17 @@ async def e2b_tool(mock_trace_manager):
 @pytest.fixture(autouse=True)
 def setup_tracing_context():
     """Setup a unique tracing context for each test."""
+    reset_tracing_span()
     unique_uuid = f"/tmp/{uuid.uuid4()}"
     set_tracing_span(
         project_id="test_project",
         organization_id="test_org",
         organization_llm_providers=["test_provider"],
         uuid_for_temp_folder=unique_uuid,
+        shared_sandbox=None,
     )
+    yield
+    reset_tracing_span()
 
 
 def test_execute_simple_python_code(e2b_tool):
