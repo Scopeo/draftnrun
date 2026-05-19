@@ -96,6 +96,14 @@ Prompts can be synced one-way from a GitHub repository. When a repo uses the `dr
 - Sections (`<<section:>>`) are not supported in git-synced prompts.
 - Deleted files do not auto-delete prompts (they may still be pinned to ports).
 
+### prompt_path — Linking Graph Ports to Repo Prompts
+
+Per-component JSON files in `draftnrun/projects/` can reference a prompt by its relative path in `draftnrun/prompts/` using the `prompt_path` field on a parameter. At graph sync time the backend resolves the path to the latest `PromptVersion` and pins the port. See `ada_backend/docs/git-sync.md` for the JSON format.
+
+### Cascade Deploy on Prompt Change
+
+When a git-synced prompt file changes and a new `PromptVersion` is created, the backend automatically redeploys every **git-synced project** (projects with a `GitSyncConfig`) whose production graph has a port pinned to that prompt. The cascade reuses `sync_graph_from_github` — the same code path as graph file changes — so there is a single unified deploy mechanism. Each project's deploy uses the correct commit SHA for its own repo+branch (not the prompt push's SHA, which may belong to a different repo). The old production `GraphRunner` is never mutated — it keeps its link to the old version as a historical snapshot. If a push changes both a prompt file and a graph file for the same project, only one deploy occurs (prompt sync runs first and the subsequent graph sync is deduplicated). This is git-sync-only; manual pin/unpin from the UI continues to mutate in place without creating a new graph version.
+
 See `ada_backend/docs/git-sync.md` for full details on the folder convention and sync flow.
 
 ## Frontend

@@ -185,3 +185,23 @@ def update_prompt_mapping_sync(
     mapping.last_sync_commit_sha = commit_sha
     session.flush()
     return True
+
+
+def get_git_synced_projects_pinned_to_prompt(
+    session: Session,
+    prompt_definition_id: UUID,
+) -> list[UUID]:
+    rows = (
+        session.query(db.ProjectEnvironmentBinding.project_id)
+        .join(db.GraphRunnerNode, db.GraphRunnerNode.graph_runner_id == db.ProjectEnvironmentBinding.graph_runner_id)
+        .join(db.InputPortInstance, db.InputPortInstance.component_instance_id == db.GraphRunnerNode.node_id)
+        .join(db.PromptVersion, db.PromptVersion.id == db.InputPortInstance.prompt_version_id)
+        .join(db.GitSyncConfig, db.GitSyncConfig.project_id == db.ProjectEnvironmentBinding.project_id)
+        .filter(
+            db.PromptVersion.prompt_id == prompt_definition_id,
+            db.ProjectEnvironmentBinding.environment == db.EnvType.PRODUCTION,
+        )
+        .distinct()
+        .all()
+    )
+    return [r[0] for r in rows]

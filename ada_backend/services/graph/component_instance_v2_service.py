@@ -65,6 +65,7 @@ def _split_unified_parameters(
                     description=param.description,
                     port_definition_id=param.port_definition_id,
                     prompt_version_id=param.prompt_version_id if param.kind == ParameterKind.PROMPT else None,
+                    prompt_path=param.prompt_path,
                 )
             )
         else:

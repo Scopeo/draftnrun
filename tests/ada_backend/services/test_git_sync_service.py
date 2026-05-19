@@ -65,6 +65,9 @@ class TestSyncGraphFromGithub:
             graph_folder="my-project",
             github_installation_id=12345,
             created_by_user_id=uuid4(),
+            last_sync_commit_sha=None,
+            last_sync_status=None,
+            branch="main",
         )
 
     @pytest.mark.asyncio

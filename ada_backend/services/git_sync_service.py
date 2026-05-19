@@ -1,5 +1,6 @@
 import json
 import logging
+from pathlib import PurePosixPath
 from uuid import UUID, uuid4
 
 from sqlalchemy.exc import IntegrityError
@@ -21,6 +22,7 @@ from ada_backend.repositories.prompt_repository import (
 )
 from ada_backend.schemas.git_sync_schemas import GitHubRepoSummary, GitSyncImportResult, GitSyncPromptImportResult
 from ada_backend.schemas.pipeline.graph_schema import GraphSaveV2Schema, GraphUpdateSchema
+from ada_backend.schemas.pipeline.port_instance_schema import FieldExpressionSchema
 from ada_backend.services import github_client
 from ada_backend.services.errors import ServiceError
 from ada_backend.services.github_client import PROMPT_LIBRARY_DIR
@@ -400,11 +402,121 @@ async def _enqueue_initial_sync(config: db.GitSyncConfig) -> None:
         LOGGER.warning("Failed to enqueue initial sync task for config %s", config.id)
 
 
+def _normalize_prompt_path(prompt_path: str) -> str:
+    """Strip the ``draftnrun/prompts/`` prefix (if present) and validate the path.
+
+    Returns a relative POSIX path suitable for lookup in ``git_sync_prompt_mappings``.
+    Raises ``GitSyncError`` for absolute, traversal, or non-``.md`` paths.
+    """
+    path = PurePosixPath(prompt_path)
+    prefix = PurePosixPath(PROMPT_LIBRARY_DIR)
+
+    if path.is_absolute() or ".." in path.parts:
+        raise GitSyncError(f"Invalid prompt_path {prompt_path!r}")
+
+    if path.parts[: len(prefix.parts)] == prefix.parts:
+        path = PurePosixPath(*path.parts[len(prefix.parts) :])
+
+    normalized = path.as_posix()
+    if not normalized or normalized.startswith("../"):
+        raise GitSyncError(f"Invalid prompt_path {prompt_path!r}")
+    if not normalized.endswith(".md"):
+        raise GitSyncError(f"prompt_path must reference a .md file, got {prompt_path!r}")
+    return normalized
+
+
+async def _resolve_prompt_paths(
+    session: Session,
+    graph_data: GraphUpdateSchema,
+    config: db.GitSyncConfig,
+    commit_sha: str,
+) -> None:
+    """Resolve ``prompt_path`` references in input port instances to prompt library pins.
+
+    Walks all component instances in the graph payload and, for any input port
+    that carries a ``prompt_path``, looks up the corresponding
+    ``GitSyncPromptMapping`` to pin it to the latest ``PromptVersion``.
+    If no mapping exists yet the prompt file is fetched and imported inline.
+    """
+    for component_instance in graph_data.component_instances:
+        for port in component_instance.input_port_instances:
+            if not port.prompt_path:
+                continue
+
+            normalized = _normalize_prompt_path(port.prompt_path)
+
+            mapping = git_sync_repository.get_prompt_mapping_by_file_path(
+                session,
+                organization_id=config.organization_id,
+                github_owner=config.github_owner,
+                github_repo_name=config.github_repo_name,
+                branch=config.branch,
+                prompt_file_path=normalized,
+            )
+
+            if not mapping:
+                full_path = f"{PROMPT_LIBRARY_DIR}/{normalized}"
+                try:
+                    raw = await github_client.fetch_file(
+                        repo=config.github_repo,
+                        path=full_path,
+                        ref=commit_sha,
+                        installation_id=config.github_installation_id,
+                    )
+                except Exception as exc:
+                    raise GitSyncError(
+                        f"Failed to fetch prompt file {full_path} for port {port.name}: {exc}"
+                    ) from exc
+
+                parsed = parse_prompt_markdown(raw, normalized)
+                _sync_new_prompt(
+                    session,
+                    config.organization_id,
+                    config.github_owner,
+                    config.github_repo_name,
+                    config.branch,
+                    config.github_installation_id,
+                    normalized,
+                    parsed,
+                    commit_sha,
+                )
+                mapping = git_sync_repository.get_prompt_mapping_by_file_path(
+                    session,
+                    organization_id=config.organization_id,
+                    github_owner=config.github_owner,
+                    github_repo_name=config.github_repo_name,
+                    branch=config.branch,
+                    prompt_file_path=normalized,
+                )
+                if not mapping:
+                    raise GitSyncError(
+                        f"Could not create prompt mapping for {normalized} on port {port.name}"
+                    )
+
+            latest = get_latest_prompt_version(session, mapping.prompt_definition_id)
+            if not latest:
+                raise GitSyncError(
+                    f"No versions found for prompt {mapping.prompt_definition_id} "
+                    f"referenced by port {port.name}"
+                )
+
+            port.prompt_version_id = latest.id
+            port.field_expression = FieldExpressionSchema(expression_json={"type": "literal", "value": latest.content})
+
+
 async def sync_graph_from_github(
     session: Session,
     config: db.GitSyncConfig,
     commit_sha: str,
 ) -> None:
+    if config.last_sync_commit_sha == commit_sha and config.last_sync_status == "success":
+        LOGGER.info(
+            "Config %s already synced at %s — skipping duplicate sync",
+            config.id,
+            commit_sha[:8],
+        )
+        return
+
     try:
         graph_data = await _fetch_graph_update_payload(config, commit_sha)
     except Exception as e:
@@ -422,6 +534,19 @@ async def sync_graph_from_github(
             error_message=str(e),
         )
         raise GitSyncError(f"Failed to fetch graph from GitHub: {e}") from e
+
+    try:
+        await _resolve_prompt_paths(session, graph_data, config, commit_sha)
+    except GitSyncError as e:
+        LOGGER.error("Prompt resolution failed for project %s: %s", config.project_id, e)
+        git_sync_repository.update_sync_status(
+            session=session,
+            config_id=config.id,
+            status="prompt_resolution_failed",
+            commit_sha=commit_sha,
+            error_message=str(e),
+        )
+        raise
 
     new_runner_id = uuid4()
     try:
@@ -523,20 +648,6 @@ def handle_github_push(
     configs = git_sync_repository.get_configs_by_repo_and_branch(
         session, github_owner, github_repo_name, branch, github_installation_id=github_installation_id
     )
-    for config in configs:
-        if config.graph_folder:
-            folder_prefix = f"{config.graph_folder}/"
-            if not any(path.startswith(folder_prefix) for path in changed_files):
-                continue
-        else:
-            if not any("/" not in path for path in changed_files):
-                continue
-
-        if push_git_sync_task(config.id, commit_sha):
-            queued += 1
-        else:
-            failed += 1
-            LOGGER.error("Failed to enqueue git sync task for config %s", config.id)
 
     changed_prompts = _collect_changed_prompt_paths(changed_files)
     if changed_prompts:
@@ -581,6 +692,21 @@ def handle_github_push(
                     github_repo_name,
                     org_id,
                 )
+
+    for config in configs:
+        if config.graph_folder:
+            folder_prefix = f"{config.graph_folder}/"
+            if not any(path.startswith(folder_prefix) for path in changed_files):
+                continue
+        else:
+            if not any("/" not in path for path in changed_files):
+                continue
+
+        if push_git_sync_task(config.id, commit_sha):
+            queued += 1
+        else:
+            failed += 1
+            LOGGER.error("Failed to enqueue git sync task for config %s", config.id)
 
     return queued, failed
 
@@ -643,7 +769,7 @@ async def sync_prompts_from_github(
         mapping = path_to_mapping.get(file_path)
 
         if mapping:
-            _sync_existing_prompt(session, mapping, parsed, commit_sha)
+            await _sync_existing_prompt(session, mapping, parsed, commit_sha)
         else:
             _sync_new_prompt(
                 session,
@@ -661,7 +787,7 @@ async def sync_prompts_from_github(
     LOGGER.info("Prompt sync completed for %s@%s — %d file(s)", github_repo, commit_sha[:8], len(prompt_paths))
 
 
-def _sync_existing_prompt(
+async def _sync_existing_prompt(
     session: Session,
     mapping: db.GitSyncPromptMapping,
     parsed: ParsedPromptFile,
@@ -683,7 +809,7 @@ def _sync_existing_prompt(
         return
 
     next_version = get_latest_version_number(session, prompt.id) + 1
-    create_prompt_version(
+    new_version = create_prompt_version(
         session,
         db.PromptVersion(
             prompt_id=prompt.id,
@@ -696,6 +822,10 @@ def _sync_existing_prompt(
     )
     git_sync_repository.update_prompt_mapping_sync(session, mapping.id, commit_sha)
     LOGGER.info("Created version %d for prompt %s from git sync", next_version, prompt.id)
+
+    await _redeploy_projects_for_prompt_change(
+        session, prompt.id, new_version, commit_sha, mapping.github_owner, mapping.github_repo_name, mapping.branch
+    )
 
 
 def _sync_new_prompt(
@@ -739,6 +869,48 @@ def _sync_new_prompt(
         return
 
     LOGGER.info("Created new prompt %s from git file %s", prompt_def.id, file_path)
+
+
+async def _redeploy_projects_for_prompt_change(
+    session: Session,
+    prompt_definition_id: UUID,
+    new_version: db.PromptVersion,
+    commit_sha: str,
+    source_owner: str,
+    source_repo_name: str,
+    source_branch: str,
+) -> None:
+    affected_project_ids = git_sync_repository.get_git_synced_projects_pinned_to_prompt(
+        session, prompt_definition_id
+    )
+    if not affected_project_ids:
+        return
+
+    for project_id in affected_project_ids:
+        try:
+            config = git_sync_repository.get_git_sync_config_by_project(session, project_id)
+            if not config:
+                LOGGER.warning("No git sync config for project %s — skipping prompt cascade", project_id)
+                continue
+
+            same_source = (
+                config.github_owner == source_owner
+                and config.github_repo_name == source_repo_name
+                and config.branch == source_branch
+            )
+            target_sha = commit_sha if same_source else await github_client.get_branch_head_sha(
+                config.github_repo, config.branch, config.github_installation_id
+            )
+
+            await sync_graph_from_github(session, config, target_sha)
+            LOGGER.info(
+                "Cascade-deployed project %s with new prompt version %s (v%d)",
+                project_id,
+                new_version.id,
+                new_version.version_number,
+            )
+        except Exception:
+            LOGGER.exception("Failed to cascade-deploy project %s for prompt %s", project_id, prompt_definition_id)
 
 
 async def list_installation_repos_summary(

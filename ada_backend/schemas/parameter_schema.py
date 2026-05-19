@@ -68,6 +68,7 @@ class PipelineParameterV2Schema(ParameterBase, WithValue):
     description: Optional[str] = None
     port_definition_id: Optional[UUID] = None
     prompt_version_id: Optional[UUID] = None
+    prompt_path: Optional[str] = None
 
 
 class ParameterGroupSchema(BaseModel):
