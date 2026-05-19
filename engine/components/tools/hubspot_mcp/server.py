@@ -204,7 +204,11 @@ async def crm_upsert_contact_by_email(
         {"property": key, "value": value}
         for key, value in payload.items()
     ]
-    result = await _client.request("post", f"/contacts/v1/contact/createOrUpdate/email/{email}", json={"properties": legacy_payload})
+    result = await _client.request(
+        "post",
+        f"/contacts/v1/contact/createOrUpdate/email/{email}",
+        json={"properties": legacy_payload},
+    )
 
     vid = result.get("vid")
     if vid is None and isinstance(result.get("canonical-vid"), int):
