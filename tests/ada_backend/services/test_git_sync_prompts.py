@@ -1005,6 +1005,160 @@ class TestNormalizePromptPath:
             _normalize_prompt_path("README")
 
 
+UPDATE_GRAPH_PREFIX = "ada_backend.services.graph.update_graph_service"
+
+
+class TestUpdateGraphServicePersistsPromptVersionId:
+    """Regression: update_graph_service must persist prompt_version_id from input_port_instances."""
+
+    @pytest.mark.asyncio
+    async def test_creates_port_with_prompt_version_id(self):
+        from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
+        from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
+        from ada_backend.schemas.pipeline.port_instance_schema import (
+            FieldExpressionSchema,
+            InputPortInstanceSchema,
+        )
+        from ada_backend.services.graph.update_graph_service import update_graph_service
+
+        session = MagicMock()
+        graph_runner_id = uuid4()
+        project_id = uuid4()
+        instance_id = uuid4()
+        component_version_id = uuid4()
+        prompt_version_id = uuid4()
+        fe_id = uuid4()
+
+        port = InputPortInstanceSchema(
+            name="prompt_template",
+            field_expression=FieldExpressionSchema(
+                expression_json={"type": "literal", "value": "You are helpful."}
+            ),
+            prompt_version_id=prompt_version_id,
+        )
+        ci = ComponentInstanceSchema(
+            id=instance_id,
+            component_id=uuid4(),
+            component_version_id=component_version_id,
+            parameters=[],
+            input_port_instances=[port],
+            is_start_node=True,
+        )
+        graph_data = GraphUpdateSchema(component_instances=[ci], relationships=[], edges=[])
+
+        fe_mock = MagicMock()
+        fe_mock.id = fe_id
+        ipi_mock = MagicMock()
+        ipi_mock.id = uuid4()
+
+        agent_mock = AsyncMock()
+
+        with (
+            patch(f"{UPDATE_GRAPH_PREFIX}.graph_runner_exists", return_value=True),
+            patch(f"{UPDATE_GRAPH_PREFIX}.get_component_nodes", return_value=[]),
+            patch(f"{UPDATE_GRAPH_PREFIX}.get_edges", return_value=[]),
+            patch(f"{UPDATE_GRAPH_PREFIX}.create_or_update_component_instance", return_value=instance_id),
+            patch(f"{UPDATE_GRAPH_PREFIX}.upsert_component_node"),
+            patch(f"{UPDATE_GRAPH_PREFIX}.get_input_port_instances_for_component_instance", return_value=[]),
+            patch(f"{UPDATE_GRAPH_PREFIX}.get_input_port_definition_id", return_value=None),
+            patch(f"{UPDATE_GRAPH_PREFIX}.create_field_expression", return_value=fe_mock),
+            patch(f"{UPDATE_GRAPH_PREFIX}.create_input_port_instance", return_value=ipi_mock) as mock_create_ipi,
+            patch(f"{UPDATE_GRAPH_PREFIX}.get_agent_for_project", new_callable=AsyncMock, return_value=agent_mock),
+            patch(f"{UPDATE_GRAPH_PREFIX}.extract_playground_configuration", return_value=({}, {})),
+            patch(f"{UPDATE_GRAPH_PREFIX}.track_project_saved"),
+        ):
+            await update_graph_service(
+                session=session,
+                graph_runner_id=graph_runner_id,
+                project_id=project_id,
+                graph_project=graph_data,
+                bypass_validation=True,
+                skip_validation=True,
+            )
+
+        mock_create_ipi.assert_called_once()
+        call_kwargs = mock_create_ipi.call_args[1]
+        assert call_kwargs["prompt_version_id"] == prompt_version_id
+
+    @pytest.mark.asyncio
+    async def test_updates_existing_port_with_prompt_version_id(self):
+        from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
+        from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
+        from ada_backend.schemas.pipeline.port_instance_schema import (
+            FieldExpressionSchema,
+            InputPortInstanceSchema,
+        )
+        from ada_backend.services.graph.update_graph_service import update_graph_service
+
+        session = MagicMock()
+        graph_runner_id = uuid4()
+        project_id = uuid4()
+        instance_id = uuid4()
+        component_version_id = uuid4()
+        prompt_version_id = uuid4()
+        existing_port_id = uuid4()
+        existing_fe_id = uuid4()
+
+        port = InputPortInstanceSchema(
+            name="prompt_template",
+            field_expression=FieldExpressionSchema(
+                expression_json={"type": "literal", "value": "Updated prompt."}
+            ),
+            prompt_version_id=prompt_version_id,
+        )
+        ci = ComponentInstanceSchema(
+            id=instance_id,
+            component_id=uuid4(),
+            component_version_id=component_version_id,
+            parameters=[],
+            input_port_instances=[port],
+            is_start_node=True,
+        )
+        graph_data = GraphUpdateSchema(component_instances=[ci], relationships=[], edges=[])
+
+        existing_db_port = MagicMock()
+        existing_db_port.id = existing_port_id
+        existing_db_port.name = "prompt_template"
+        existing_db_port.field_expression_id = existing_fe_id
+        existing_db_port.port_definition_id = None
+        existing_db_port.prompt_version_id = None
+
+        agent_mock = AsyncMock()
+
+        with (
+            patch(f"{UPDATE_GRAPH_PREFIX}.graph_runner_exists", return_value=True),
+            patch(f"{UPDATE_GRAPH_PREFIX}.get_component_nodes", return_value=[]),
+            patch(f"{UPDATE_GRAPH_PREFIX}.get_edges", return_value=[]),
+            patch(f"{UPDATE_GRAPH_PREFIX}.create_or_update_component_instance", return_value=instance_id),
+            patch(f"{UPDATE_GRAPH_PREFIX}.upsert_component_node"),
+            patch(
+                f"{UPDATE_GRAPH_PREFIX}.get_input_port_instances_for_component_instance",
+                return_value=[existing_db_port],
+            ),
+            patch(f"{UPDATE_GRAPH_PREFIX}.get_input_port_instance", return_value=existing_db_port),
+            patch(f"{UPDATE_GRAPH_PREFIX}.update_field_expression"),
+            patch(f"{UPDATE_GRAPH_PREFIX}.update_input_port_instance") as mock_update_ipi,
+            patch(f"{UPDATE_GRAPH_PREFIX}.get_agent_for_project", new_callable=AsyncMock, return_value=agent_mock),
+            patch(f"{UPDATE_GRAPH_PREFIX}.extract_playground_configuration", return_value=({}, {})),
+            patch(f"{UPDATE_GRAPH_PREFIX}.track_project_saved"),
+        ):
+            await update_graph_service(
+                session=session,
+                graph_runner_id=graph_runner_id,
+                project_id=project_id,
+                graph_project=graph_data,
+                bypass_validation=True,
+                skip_validation=True,
+            )
+
+        prompt_update_calls = [
+            c for c in mock_update_ipi.call_args_list
+            if "prompt_version_id" in (c.kwargs or {})
+        ]
+        assert len(prompt_update_calls) == 1
+        assert prompt_update_calls[0].kwargs["prompt_version_id"] == prompt_version_id
+
+
 class TestResolvePromptPathsNormalization:
     @pytest.mark.asyncio
     async def test_prefixed_prompt_path_is_normalized_before_lookup(self):

@@ -418,6 +418,10 @@ async def update_graph_service(
                         else:
                             expr = create_field_expression(session, port_instance.field_expression.expression_json)
                             update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
+                        if port_instance.prompt_version_id is not None:
+                            update_input_port_instance(
+                                session, existing_port_id, prompt_version_id=port_instance.prompt_version_id
+                            )
                     else:
                         port_def_id = get_input_port_definition_id(
                             session, instance.component_version_id, field_name
@@ -429,6 +433,7 @@ async def update_graph_service(
                             name=field_name,
                             field_expression_id=expr.id,
                             port_definition_id=port_def_id,
+                            prompt_version_id=port_instance.prompt_version_id,
                         )
 
         # Convert Inputs from parameters[kind="input"] to field expressions.
