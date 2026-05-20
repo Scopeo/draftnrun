@@ -67,6 +67,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "outlook_sender": UUID("62979492-b4ef-4cfe-96f1-67a960a1e8d4"),
     "mail_sender": UUID("83c061db-1506-4636-95d1-9254ee23283e"),
     "scorer": UUID("f1a2b3c4-d5e6-7890-abcd-ef1234567891"),
+    "outlook_calendar_mcp_tool": UUID("b36d6f8f-f5f1-4533-b353-fda582add009"),
 }
 COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "synthesizer": UUID("6f790dd1-06f6-4489-a655-1a618763a114"),
@@ -123,6 +124,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "outlook_sender": UUID("6e3b9e9b-ab98-4189-88b7-41b8bf2aa07c"),
     "mail_sender": UUID("ced15521-e358-4b57-a9ac-47672dd1657b"),
     "scorer": UUID("f1a2b3c4-d5e6-7890-abcd-ef1234567892"),
+    "outlook_calendar_mcp_tool": UUID("3585dacd-2088-4069-99c8-40049026d4ac"),
 }
 
 DEFAULT_MODEL_WEB_SEARCH = "openai:gpt-5-mini"
