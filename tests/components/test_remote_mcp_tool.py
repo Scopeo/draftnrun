@@ -46,7 +46,7 @@ def create_mock_list_result(tools: list):
     return mock_result
 
 
-def create_mock_call_result(text_content: str = None, is_error: bool = False):
+def create_mock_call_result(text_content: str | None = None, is_error: bool = False):
     """Helper to create a mock call_tool result."""
     mock_result = MagicMock()
     if text_content:
@@ -225,6 +225,7 @@ def test_run_executes_tool_successfully(mock_trace_manager, component_attributes
             # Verify result
             assert isinstance(result, MCPToolOutputs)
             assert json.loads(result.output) == [{"id": "1", "title": "Issue 1"}]
+            assert result.data == [{"id": "1", "title": "Issue 1"}]
             assert result.is_error is False
             assert len(result.content) == 1
 
@@ -271,6 +272,7 @@ def test_run_handles_multiple_content_items(mock_trace_manager, component_attrib
 
             # Verify content is concatenated
             assert result.output == "First part\nSecond part"
+            assert result.data is None
             assert len(result.content) == 2
 
     asyncio.run(run_test())
@@ -305,6 +307,7 @@ def test_run_handles_empty_content(mock_trace_manager, component_attributes):
 
             # Should return default success message
             assert result.output == json.dumps({"result": "success"})
+            assert result.data == {"result": "success"}
 
     asyncio.run(run_test())
 

@@ -18,6 +18,7 @@ HUBSPOT_DEFAULT_TOOL_NAMES: tuple[str, ...] = (
     "crm_update_contact",
     "crm_search_contacts",
     "crm_get_contact",
+    "crm_upsert_contact_by_email",
     "crm_create_company",
     "crm_update_company",
     "crm_search_companies",
@@ -25,6 +26,7 @@ HUBSPOT_DEFAULT_TOOL_NAMES: tuple[str, ...] = (
     "crm_create_association",
     "crm_list_association_types",
     "notes_create",
+    "notes_upsert_for_contact",
     "emails_create",
     "tasks_create",
 )

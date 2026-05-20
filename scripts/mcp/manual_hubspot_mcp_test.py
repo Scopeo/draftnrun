@@ -9,6 +9,9 @@ What it does:
 
 Usage:
     uv run python scripts/mcp/manual_hubspot_mcp_test.py --connection-id <uuid>
+    uv run python scripts/mcp/manual_hubspot_mcp_test.py \
+        --provider-config-key hubspot-neverdrop \
+        --connection-id <uuid>
 
 Optional: call a specific tool
     uv run python scripts/mcp/manual_hubspot_mcp_test.py \
@@ -45,6 +48,11 @@ async def main():
         help="UUID of the HubSpot OAuth connection in the database",
     )
     parser.add_argument(
+        "--provider-config-key",
+        default="hubspot",
+        help="OAuth provider config key to use when fetching the token (default: hubspot)",
+    )
+    parser.add_argument(
         "--call-tool",
         help="Optional: tool name to invoke once (e.g., crm_get_contact)",
     )
@@ -59,14 +67,14 @@ async def main():
         access_token = await get_oauth_access_token(
             session=session,
             oauth_connection_id=UUID(args.connection_id),
-            provider_config_key="hubspot",
+            provider_config_key=args.provider_config_key,
         )
     print("Token retrieved.")
 
     trace_manager = TraceManager(project_name="manual-hubspot-mcp-test")
     component_attributes = ComponentAttributes(component_instance_name="manual-hubspot-mcp-tool")
 
-    tool = HubSpotMCPTool.from_access_token(
+    tool = await HubSpotMCPTool.from_access_token(
         trace_manager=trace_manager,
         component_attributes=component_attributes,
         access_token=access_token,

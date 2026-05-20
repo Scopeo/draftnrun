@@ -174,6 +174,10 @@ class RemoteMCPTool(Component):
     def get_outputs_schema(cls):
         return MCPToolOutputs
 
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "tool_arguments", "output": "output"}
+
     async def _run_without_io_trace(
         self,
         inputs: MCPToolInputs,

@@ -127,11 +127,23 @@ class LocalMCPTool(Component):
                 error_label = f"stdio://{self.command} {' '.join(self.args)}"
                 raise MCPConnectionError(error_label, str(exc)) from exc
 
+    _CLOSE_TIMEOUT_SECONDS = 5
+
     async def close(self):
-        """Close the persistent MCP session and cleanup subprocess."""
+        """Close the persistent MCP session and cleanup subprocess.
+
+        Uses a timeout to prevent hanging when the stdio subprocess does not
+        exit promptly (e.g. anyio cancel-scope mismatch inside the worker
+        thread's event loop).
+        """
         if self._session is not None:
             try:
-                await self._session.__aexit__(None, None, None)
+                async with asyncio.timeout(self._CLOSE_TIMEOUT_SECONDS):
+                    await self._session.__aexit__(None, None, None)
+            except asyncio.TimeoutError:
+                LOGGER.warning(f"Timed out closing MCP session for {self.command}, forcing cleanup")
+            except asyncio.CancelledError:
+                LOGGER.warning(f"Cancelled while closing MCP session for {self.command}, forcing cleanup")
             except Exception as e:
                 LOGGER.warning(f"Error closing MCP session: {e}")
             finally:
@@ -139,7 +151,12 @@ class LocalMCPTool(Component):
 
         if self._stdio_context is not None:
             try:
-                await self._stdio_context.__aexit__(None, None, None)
+                async with asyncio.timeout(self._CLOSE_TIMEOUT_SECONDS):
+                    await self._stdio_context.__aexit__(None, None, None)
+            except asyncio.TimeoutError:
+                LOGGER.warning(f"Timed out closing stdio context for {self.command}, forcing cleanup")
+            except asyncio.CancelledError:
+                LOGGER.warning(f"Cancelled while closing stdio context for {self.command}, forcing cleanup")
             except Exception as e:
                 LOGGER.warning(f"Error closing stdio context: {e}")
             finally:
@@ -206,6 +223,8 @@ class LocalMCPTool(Component):
             await instance.close()
             error_label = f"stdio://{command} {' '.join(instance.args)}"
             raise MCPConnectionError(error_label, str(exc)) from exc
+        finally:
+            await instance.close()
 
         tools = list(getattr(tools_result, "tools", []) or [])
 
@@ -235,6 +254,10 @@ class LocalMCPTool(Component):
     def get_outputs_schema(cls):
         return MCPToolOutputs
 
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "tool_arguments", "output": "output"}
+
     async def _run_without_io_trace(
         self,
         inputs: MCPToolInputs,
@@ -253,6 +276,7 @@ class LocalMCPTool(Component):
         await self._ensure_session()
 
         try:
+            assert self._session is not None
             return await asyncio.wait_for(
                 self._session.call_tool(tool_name, arguments=arguments),
                 timeout=self.timeout,
@@ -263,3 +287,5 @@ class LocalMCPTool(Component):
         except Exception as exc:
             error_label = f"stdio://{self.command} {' '.join(self.args)}"
             raise MCPConnectionError(error_label, str(exc)) from exc
+        finally:
+            await self.close()
