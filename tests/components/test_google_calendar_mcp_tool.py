@@ -11,6 +11,7 @@ import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import SecretStr
 
 from engine.components.tools.google_calendar_mcp import server as gcal_server
 from engine.components.tools.google_calendar_mcp.client import GoogleCalendarClient
@@ -23,7 +24,7 @@ from engine.components.types import ComponentAttributes
 from tests.mocks.trace_manager import MockTraceManager
 
 
-async def _make_tool(access_token: str | None = "fake-token") -> GoogleCalendarMCPTool:
+async def _make_tool(access_token: SecretStr | None = SecretStr("fake-token")) -> GoogleCalendarMCPTool:
     return await GoogleCalendarMCPTool.from_access_token(
         trace_manager=MockTraceManager(project_name="test"),
         component_attributes=ComponentAttributes(component_instance_name="test-gcal"),
@@ -34,7 +35,7 @@ async def _make_tool(access_token: str | None = "fake-token") -> GoogleCalendarM
 class TestGoogleCalendarMCPToolConstruction:
     @pytest.mark.asyncio
     async def test_from_access_token_sets_env(self):
-        tool = await _make_tool("my-token")
+        tool = await _make_tool(SecretStr("my-token"))
         assert tool.env == {"GOOGLE_CALENDAR_ACCESS_TOKEN": "my-token"}
 
     @pytest.mark.asyncio
@@ -90,7 +91,7 @@ class TestGoogleCalendarMCPToolRunGuard:
 
     @pytest.mark.asyncio
     async def test_raises_when_empty_token(self):
-        tool = await _make_tool("")
+        tool = await _make_tool(SecretStr(""))
         inputs = MCPToolInputs(tool_name="calendar_list_calendars", tool_arguments={})
         with pytest.raises(ValueError, match="OAuth connection"):
             await tool._run_without_io_trace(inputs, ctx={})

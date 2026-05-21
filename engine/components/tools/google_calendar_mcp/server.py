@@ -8,7 +8,9 @@ Expects GOOGLE_CALENDAR_ACCESS_TOKEN in the environment.
 """
 
 import warnings
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
+
+from pydantic import Field
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -42,7 +44,7 @@ async def calendar_list_events(
     calendar_id: str = "primary",
     time_min: Optional[str] = None,
     time_max: Optional[str] = None,
-    max_results: int = 50,
+    max_results: Annotated[int, Field(ge=1, le=1000)] = 50,
     query: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     return await _client.list_events(

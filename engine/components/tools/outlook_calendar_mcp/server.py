@@ -7,9 +7,10 @@ Run:
 Expects OUTLOOK_CALENDAR_ACCESS_TOKEN in the environment.
 """
 
-import logging
 import warnings
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
+
+from pydantic import Field
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -20,9 +21,6 @@ from engine.components.tools.outlook_calendar_mcp.schema import EventBody
 from engine.components.types import ToolDescription
 from engine.llm_services.utils import resolve_schema_refs
 
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-LOGGER = logging.getLogger(__name__)
-
 mcp = FastMCP("outlook-calendar")
 _client: OutlookCalendarClient
 
@@ -32,10 +30,7 @@ _client: OutlookCalendarClient
     description="List all calendars accessible to the authenticated user.",
 )
 async def outlook_calendar_list_calendars() -> list[dict[str, Any]]:
-    LOGGER.info("outlook_calendar_list_calendars called")
-    result = await _client.list_calendars()
-    LOGGER.info("outlook_calendar_list_calendars returned %d calendars", len(result))
-    return result
+    return await _client.list_calendars()
 
 
 @mcp.tool(
@@ -50,22 +45,16 @@ async def outlook_calendar_list_events(
     calendar_id: str = "primary",
     time_min: Optional[str] = None,
     time_max: Optional[str] = None,
-    max_results: int = 50,
+    max_results: Annotated[int, Field(ge=1, le=1000)] = 50,
     query: Optional[str] = None,
 ) -> list[dict[str, Any]]:
-    LOGGER.info(
-        "outlook_calendar_list_events called: calendar_id=%s, time_min=%s, time_max=%s, max_results=%d, query=%s",
-        calendar_id, time_min, time_max, max_results, query,
-    )
-    result = await _client.list_events(
+    return await _client.list_events(
         calendar_id=calendar_id,
         time_min=time_min,
         time_max=time_max,
         max_results=max_results,
         query=query,
     )
-    LOGGER.info("outlook_calendar_list_events returned %d events", len(result))
-    return result
 
 
 @mcp.tool(
@@ -73,7 +62,6 @@ async def outlook_calendar_list_events(
     description="Get a single event by its ID.",
 )
 async def outlook_calendar_get_event(event_id: str) -> dict[str, Any]:
-    LOGGER.info("outlook_calendar_get_event called: event_id=%s", event_id)
     return await _client.get_event(event_id=event_id)
 
 
@@ -82,9 +70,7 @@ async def outlook_calendar_get_event(event_id: str) -> dict[str, Any]:
     description="Return the email address of the authenticated calendar owner.",
 )
 async def outlook_calendar_get_my_email() -> dict[str, str]:
-    LOGGER.info("outlook_calendar_get_my_email called")
     email = await _client.get_user_email()
-    LOGGER.info("outlook_calendar_get_my_email returned: %s", email)
     return {"email": email}
 
 
@@ -103,7 +89,6 @@ async def outlook_calendar_create_event(
     event: EventBody,
     calendar_id: str = "primary",
 ) -> dict[str, Any]:
-    LOGGER.info("outlook_calendar_create_event called: calendar_id=%s, event=%s", calendar_id, event)
     body = event.model_dump(exclude_none=True)
     return await _client.create_event(event_body=body, calendar_id=calendar_id)
 
@@ -119,7 +104,6 @@ async def outlook_calendar_update_event(
     event_id: str,
     event: EventBody,
 ) -> dict[str, Any]:
-    LOGGER.info("outlook_calendar_update_event called: event_id=%s, event=%s", event_id, event)
     body = event.model_dump(exclude_none=True)
     return await _client.update_event(event_id=event_id, event_body=body)
 
@@ -129,7 +113,6 @@ async def outlook_calendar_update_event(
     description="Delete an event by its ID. This action is irreversible.",
 )
 async def outlook_calendar_delete_event(event_id: str) -> dict[str, Any]:
-    LOGGER.info("outlook_calendar_delete_event called: event_id=%s", event_id)
     return await _client.delete_event(event_id=event_id)
 
 

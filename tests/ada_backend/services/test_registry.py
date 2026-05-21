@@ -126,5 +126,5 @@ async def test_mail_sender_factory_resolves_oauth_bindings(monkeypatch):
         ("gmail-definition-id", OAuthProvider.GMAIL),
         ("outlook-definition-id", OAuthProvider.OUTLOOK),
     ]
-    assert component._gmail_access_token == "gmail-access-token"
-    assert component._outlook_access_token == "outlook-access-token"
+    assert component._gmail_access_token.get_secret_value() == "gmail-access-token"
+    assert component._outlook_access_token.get_secret_value() == "outlook-access-token"

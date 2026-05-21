@@ -10,6 +10,7 @@ environment and ada_backend.database.models would crash on missing FERNET_KEY.
 
 import logging
 from typing import Any, Optional
+from urllib.parse import quote
 
 import httpx
 
@@ -89,7 +90,8 @@ class OutlookCalendarClient:
     ) -> list[dict[str, Any]]:
         resolved_id = await self._resolve_calendar_id(calendar_id)
         LOGGER.info("list_events: resolved calendar_id=%s -> %s", calendar_id, resolved_id)
-        prefix = f"/me/calendars/{resolved_id}"
+        safe_cal_id = quote(resolved_id, safe="")
+        prefix = f"/me/calendars/{safe_cal_id}"
         if time_min and time_max:
             path = f"{prefix}/calendarView"
             params: dict[str, Any] = {
@@ -119,7 +121,7 @@ class OutlookCalendarClient:
         return resp.json().get("value", [])
 
     async def get_event(self, event_id: str) -> dict[str, Any]:
-        resp = await self._request("GET", f"/me/events/{event_id}")
+        resp = await self._request("GET", f"/me/events/{quote(event_id, safe='')}")
         return resp.json()
 
     async def create_event(
@@ -127,13 +129,14 @@ class OutlookCalendarClient:
     ) -> dict[str, Any]:
         resolved_id = await self._resolve_calendar_id(calendar_id)
         LOGGER.info("create_event: resolved calendar_id=%s -> %s", calendar_id, resolved_id)
-        resp = await self._request("POST", f"/me/calendars/{resolved_id}/events", json_body=event_body)
+        safe_cal_id = quote(resolved_id, safe="")
+        resp = await self._request("POST", f"/me/calendars/{safe_cal_id}/events", json_body=event_body)
         return resp.json()
 
     async def update_event(self, event_id: str, event_body: dict[str, Any]) -> dict[str, Any]:
-        resp = await self._request("PATCH", f"/me/events/{event_id}", json_body=event_body)
+        resp = await self._request("PATCH", f"/me/events/{quote(event_id, safe='')}", json_body=event_body)
         return resp.json()
 
     async def delete_event(self, event_id: str) -> dict[str, Any]:
-        await self._request("DELETE", f"/me/events/{event_id}")
+        await self._request("DELETE", f"/me/events/{quote(event_id, safe='')}")
         return {"status": "deleted", "eventId": event_id}

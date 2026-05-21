@@ -6,7 +6,7 @@ from uuid import UUID
 import httpx
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator
 
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
@@ -181,7 +181,7 @@ class OutlookSender(Component):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        access_token: Optional[str] = None,
+        access_token: Optional[SecretStr] = None,
         save_as_draft: bool = True,
         tool_description: ToolDescription = OUTLOOK_SENDER_TOOL_DESCRIPTION,
     ):
@@ -190,16 +190,18 @@ class OutlookSender(Component):
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
-        self.access_token = access_token
+        self._access_token = access_token
         self._email_address: Optional[str] = None
         self.save_as_draft = save_as_draft
 
     def is_available(self) -> bool:
-        return bool(self.access_token)
+        return self._access_token is not None
 
     def _auth_headers(self) -> dict[str, str]:
+        if self._access_token is None:
+            raise ValueError("Outlook Sender requires a configured OAuth connection.")
         return {
-            "Authorization": f"Bearer {self.access_token}",
+            "Authorization": f"Bearer {self._access_token.get_secret_value()}",
             "Content-Type": "application/json",
         }
 
@@ -267,7 +269,7 @@ class OutlookSender(Component):
             raise OutlookAPIError("send Outlook email", response.status_code)
 
     async def _run_without_io_trace(self, inputs: OutlookSenderInputs, ctx: dict) -> OutlookSenderOutputs:
-        if not self.access_token:
+        if self._access_token is None:
             raise ValueError(
                 "Outlook Sender requires a configured OAuth connection. "
                 "Please select an Outlook connection in the component settings."

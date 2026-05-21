@@ -3,7 +3,7 @@ from typing import Optional, Type
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 from slack_sdk import WebClient
 
 from engine.components.component import Component
@@ -82,27 +82,19 @@ class SlackSender(Component):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        access_token: Optional[str] = None,
+        access_token: Optional[SecretStr] = None,
         tool_description: ToolDescription = SLACK_SENDER_TOOL_DESCRIPTION,
     ):
-        """Initialize SlackSender with a provided Slack OAuth access token.
-
-        Args:
-            trace_manager: Trace manager for observability
-            component_attributes: Component configuration attributes
-            access_token: Slack OAuth access token (injected by OAuth processor); may be None until run.
-            tool_description: Tool description for the component
-        """
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
         self._access_token = access_token
-        self.client = WebClient(token=access_token) if access_token else None
+        self.client = WebClient(token=access_token.get_secret_value()) if access_token is not None else None
 
     def is_available(self) -> bool:
-        return bool(self._access_token)
+        return self._access_token is not None
 
     async def _run_without_io_trace(
         self,

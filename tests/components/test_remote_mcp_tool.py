@@ -56,6 +56,7 @@ def create_mock_call_result(text_content: str | None = None, is_error: bool = Fa
     else:
         mock_result.content = []
     mock_result.isError = is_error
+    mock_result.structuredContent = None
     return mock_result
 
 
