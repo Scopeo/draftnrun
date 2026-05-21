@@ -1,7 +1,7 @@
 from typing import Optional, Type
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
@@ -87,8 +87,8 @@ class MailSender(Component):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        gmail_access_token: Optional[str] = None,
-        outlook_access_token: Optional[str] = None,
+        gmail_access_token: Optional[SecretStr] = None,
+        outlook_access_token: Optional[SecretStr] = None,
         save_as_draft: bool = True,
         tool_description: ToolDescription = MAIL_SENDER_TOOL_DESCRIPTION,
     ):

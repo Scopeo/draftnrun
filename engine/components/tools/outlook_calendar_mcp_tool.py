@@ -1,5 +1,5 @@
 """
-Google Calendar MCP Tool — wraps the internal FastMCP server via stdio.
+Outlook Calendar MCP Tool — wraps the internal FastMCP server via stdio.
 """
 
 import sys
@@ -7,25 +7,25 @@ from typing import Optional, Self
 
 from pydantic import SecretStr
 
-from engine.components.tools.google_calendar_mcp.server import get_tool_descriptions
 from engine.components.tools.mcp.local_mcp_tool import LocalMCPTool
 from engine.components.tools.mcp.shared import MCPToolInputs, MCPToolOutputs
+from engine.components.tools.outlook_calendar_mcp.server import get_tool_descriptions
 from engine.components.types import ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 
 _DEFAULT_TOOLS = {
-    "calendar_list_calendars",
-    "calendar_list_events",
-    "calendar_get_event",
-    "calendar_get_my_email",
-    "calendar_create_event",
-    "calendar_update_event",
-    "calendar_delete_event",
+    "outlook_calendar_list_calendars",
+    "outlook_calendar_list_events",
+    "outlook_calendar_get_event",
+    "outlook_calendar_get_my_email",
+    "outlook_calendar_create_event",
+    "outlook_calendar_update_event",
+    "outlook_calendar_delete_event",
 }
 
 
-class GoogleCalendarMCPTool(LocalMCPTool):
-    """Expose tools from the internal Google Calendar FastMCP server via stdio subprocess."""
+class OutlookCalendarMCPTool(LocalMCPTool):
+    """Expose tools from the internal Outlook Calendar FastMCP server via stdio subprocess."""
 
     @classmethod
     async def from_access_token(
@@ -43,10 +43,12 @@ class GoogleCalendarMCPTool(LocalMCPTool):
             trace_manager=trace_manager,
             component_attributes=component_attributes,
             command=sys.executable,
-            args=["-m", "engine.components.tools.google_calendar_mcp.server"],
-            env={"GOOGLE_CALENDAR_ACCESS_TOKEN": access_token.get_secret_value()}
-            if access_token is not None
-            else None,
+            args=["-m", "engine.components.tools.outlook_calendar_mcp.server"],
+            env=(
+                {"OUTLOOK_CALENDAR_ACCESS_TOKEN": access_token.get_secret_value()}
+                if access_token is not None
+                else None
+            ),
             timeout=timeout,
             tool_descriptions=tool_descriptions,
         )
@@ -56,9 +58,9 @@ class GoogleCalendarMCPTool(LocalMCPTool):
         inputs: MCPToolInputs,
         ctx: Optional[dict],
     ) -> MCPToolOutputs:
-        if not self.env or not self.env.get("GOOGLE_CALENDAR_ACCESS_TOKEN"):
+        if not self.env or not self.env.get("OUTLOOK_CALENDAR_ACCESS_TOKEN"):
             raise ValueError(
-                "Google Calendar MCP requires a configured OAuth connection. "
-                "Please select a Google Calendar connection in the component settings."
+                "Outlook Calendar MCP requires a configured OAuth connection. "
+                "Please select an Outlook Calendar connection in the component settings."
             )
         return await super()._run_without_io_trace(inputs, ctx)

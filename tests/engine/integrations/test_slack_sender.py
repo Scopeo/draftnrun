@@ -2,6 +2,7 @@ import uuid
 from unittest.mock import patch
 
 import pytest
+from pydantic import SecretStr
 
 from engine.components.types import ComponentAttributes
 from engine.integrations.slack.slack_sender import SlackSender, SlackSenderInputs
@@ -25,7 +26,7 @@ async def test_slack_sender_success():
                 component_instance_name="test_slack_sender",
                 component_instance_id=uuid.uuid4(),
             ),
-            access_token="xoxb-test-token",
+            access_token=SecretStr("xoxb-test-token"),
         )
 
         inputs = SlackSenderInputs(
@@ -58,7 +59,7 @@ async def test_slack_sender_with_thread():
                 component_instance_name="test_slack_sender",
                 component_instance_id=uuid.uuid4(),
             ),
-            access_token="xoxb-test-token",
+            access_token=SecretStr("xoxb-test-token"),
         )
 
         inputs = SlackSenderInputs(
@@ -92,7 +93,7 @@ async def test_slack_sender_api_error():
                 component_instance_name="test_slack_sender",
                 component_instance_id=uuid.uuid4(),
             ),
-            access_token="xoxb-test-token",
+            access_token=SecretStr("xoxb-test-token"),
         )
 
         inputs = SlackSenderInputs(
@@ -121,7 +122,7 @@ async def test_slack_sender_calls_api_with_correct_params():
                 component_instance_name="test_slack_sender",
                 component_instance_id=uuid.uuid4(),
             ),
-            access_token="xoxb-test-token",
+            access_token=SecretStr("xoxb-test-token"),
         )
 
         inputs = SlackSenderInputs(

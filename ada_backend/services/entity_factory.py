@@ -313,6 +313,7 @@ class OAuthComponentFactory:
             Instantiated component with resolved OAuth token (access_token may be None;
             component raises at run time if a connection is required but not configured).
         """
+        resolved_tokens: dict[str, SecretStr | None] = {}
         for binding in self.oauth_bindings:
             # TODO: DB column is still named "oauth_connection_id" but stores OrgVariableDefinition.id
             #       after migration d4e5f6a7b8c9 — rename column to oauth_definition_id
@@ -320,12 +321,14 @@ class OAuthComponentFactory:
             if isinstance(definition_id, list):
                 definition_id = definition_id[0] if definition_id else None
             access_token = await resolve_oauth_access_token(definition_id, str(binding.provider_config_key))
-            # may be None; component raises at run if required
-            kwargs[binding.target_param_name] = SecretStr(access_token) if access_token is not None else None
+            resolved_tokens[binding.target_param_name] = SecretStr(access_token) if access_token is not None else None
 
         for processor in self.parameter_processors:
             kwargs = processor(kwargs, self.constructor_params)
         kwargs = unwrap_secrets(kwargs)
+
+        for key, secret in resolved_tokens.items():
+            kwargs[key] = secret
 
         if self.constructor_method == "__init__":
             return self.entity_class(**kwargs)

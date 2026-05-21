@@ -29,6 +29,7 @@ import json
 from uuid import UUID
 
 from dotenv import load_dotenv
+from pydantic import SecretStr
 
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.services.integration_service import get_oauth_access_token
@@ -77,7 +78,7 @@ async def main():
     tool = await HubSpotMCPTool.from_access_token(
         trace_manager=trace_manager,
         component_attributes=component_attributes,
-        access_token=access_token,
+        access_token=SecretStr(access_token),
     )
 
     descriptions = tool.get_tool_descriptions()

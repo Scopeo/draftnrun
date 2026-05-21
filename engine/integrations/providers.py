@@ -8,3 +8,4 @@ class OAuthProvider(StrEnum):
     GMAIL = "google-mail"
     GOOGLE_CALENDAR = "google-calendar"
     OUTLOOK = "outlook"
+    OUTLOOK_CALENDAR = "outlook-calendar"

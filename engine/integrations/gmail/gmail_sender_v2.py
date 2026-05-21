@@ -5,7 +5,7 @@ from typing import Iterable, Optional, Type
 from googleapiclient.errors import HttpError
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
@@ -44,7 +44,7 @@ class GmailSenderV2(Component):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        access_token: Optional[str] = None,
+        access_token: Optional[SecretStr] = None,
         save_as_draft: bool = True,
         tool_description: ToolDescription = GMAIL_SENDER_TOOL_DESCRIPTION,
     ):
@@ -62,14 +62,15 @@ class GmailSenderV2(Component):
         return bool(self._access_token)
 
     def _ensure_client(self) -> None:
-        if not self._access_token:
+        if self._access_token is None:
             raise ValueError(
                 "Gmail Sender requires a configured OAuth connection. "
                 "Please select a Gmail connection in the component settings."
             )
         if self._service is None:
-            self._service = get_gmail_sender_service(self._access_token)
-            self._email_address = get_google_user_email(self._access_token)
+            token = self._access_token.get_secret_value()
+            self._service = get_gmail_sender_service(token)
+            self._email_address = get_google_user_email(token)
 
     @property
     def service(self):

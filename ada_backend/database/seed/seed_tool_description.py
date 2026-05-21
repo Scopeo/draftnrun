@@ -61,6 +61,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "mail_sender_tool_description": UUID("7fe2178e-36c6-4195-aa5b-9a9178be70e8"),
     "default_sql_tool_description": UUID("7a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d"),
     "scorer_tool_description": UUID("8f9d4c3e-7a2b-4e1d-9c8f-5b6a3d2e1f0b"),
+    "outlook_calendar_mcp_tool_description": UUID("3b1d4b54-10ad-45d0-8051-7ad389b36378"),
 }
 
 
@@ -175,6 +176,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["scorer_tool_description"],
         **DEFAULT_SCORER_TOOL_DESCRIPTION.model_dump(),
     )
+    outlook_calendar_mcp_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["outlook_calendar_mcp_tool_description"],
+        **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -207,5 +212,6 @@ def seed_tool_description(session: Session):
             mail_sender_tool_description,
             default_sql_tool_description,
             scorer_tool_description,
+            outlook_calendar_mcp_tool_description,
         ],
     )
