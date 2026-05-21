@@ -8,11 +8,13 @@ import anything from ada_backend/ — the subprocess runs with a minimal
 environment and ada_backend.database.models would crash on missing FERNET_KEY.
 """
 
+import logging
 from typing import Any, Optional
 
 import httpx
 
 GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
+LOGGER = logging.getLogger(__name__)
 
 
 class OutlookCalendarClient:
@@ -21,6 +23,7 @@ class OutlookCalendarClient:
             raise ValueError("access_token is required")
         self._access_token = access_token
         self._user_email: str | None = None
+        self._default_calendar_id: str | None = None
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -37,15 +40,18 @@ class OutlookCalendarClient:
         json_body: dict[str, Any] | None = None,
         timeout: float = 30.0,
     ) -> httpx.Response:
+        url = f"{GRAPH_API_BASE}{path}"
+        LOGGER.info("HTTP %s %s params=%s", method, url, params)
         async with httpx.AsyncClient() as client:
             response = await client.request(
                 method,
-                f"{GRAPH_API_BASE}{path}",
+                url,
                 headers=self._headers(),
                 params=params,
                 json=json_body,
                 timeout=timeout,
             )
+        LOGGER.info("HTTP %s %s -> %d (%d bytes)", method, url, response.status_code, len(response.content))
         response.raise_for_status()
         return response
 
@@ -62,10 +68,16 @@ class OutlookCalendarClient:
         resp = await self._request("GET", "/me/calendars", params={"$top": "100"})
         return resp.json().get("value", [])
 
-    def _calendar_prefix(self, calendar_id: str) -> str:
-        if calendar_id == "primary":
-            return "/me"
-        return f"/me/calendars/{calendar_id}"
+    async def _resolve_calendar_id(self, calendar_id: str) -> str:
+        if calendar_id != "primary":
+            return calendar_id
+        if self._default_calendar_id is None:
+            LOGGER.info("Resolving default calendar ID via /me/calendar")
+            resp = await self._request("GET", "/me/calendar", params={"$select": "id,name"})
+            data = resp.json()
+            self._default_calendar_id = data["id"]
+            LOGGER.info("Default calendar: id=%s name=%s", data["id"], data.get("name"))
+        return self._default_calendar_id
 
     async def list_events(
         self,
@@ -75,7 +87,9 @@ class OutlookCalendarClient:
         max_results: int = 50,
         query: Optional[str] = None,
     ) -> list[dict[str, Any]]:
-        prefix = self._calendar_prefix(calendar_id)
+        resolved_id = await self._resolve_calendar_id(calendar_id)
+        LOGGER.info("list_events: resolved calendar_id=%s -> %s", calendar_id, resolved_id)
+        prefix = f"/me/calendars/{resolved_id}"
         if time_min and time_max:
             path = f"{prefix}/calendarView"
             params: dict[str, Any] = {
@@ -111,8 +125,9 @@ class OutlookCalendarClient:
     async def create_event(
         self, event_body: dict[str, Any], calendar_id: str = "primary"
     ) -> dict[str, Any]:
-        prefix = self._calendar_prefix(calendar_id)
-        resp = await self._request("POST", f"{prefix}/events", json_body=event_body)
+        resolved_id = await self._resolve_calendar_id(calendar_id)
+        LOGGER.info("create_event: resolved calendar_id=%s -> %s", calendar_id, resolved_id)
+        resp = await self._request("POST", f"/me/calendars/{resolved_id}/events", json_body=event_body)
         return resp.json()
 
     async def update_event(self, event_id: str, event_body: dict[str, Any]) -> dict[str, Any]:
