@@ -1,6 +1,7 @@
 """Shared utilities for MCP tools (Local and Remote)."""
 
 import json
+import logging
 from typing import Any, Callable
 
 from openinference.semconv.trace import SpanAttributes
@@ -11,6 +12,8 @@ from ada_backend.database.models import ParameterType, UIComponent
 from engine.components.types import ToolDescription
 from engine.trace.serializer import serialize_to_json
 from shared.log_redaction import redact_sensitive
+
+LOGGER = logging.getLogger(__name__)
 
 DEFAULT_MCP_TOOL_DESCRIPTION = ToolDescription(
     name="mcp_tool",
@@ -76,7 +79,17 @@ def process_mcp_result(result) -> tuple[str, list[Any], bool]:
     Returns:
         tuple: (output_string, content_items, is_error)
     """
-    content_items = list(getattr(result, "content", []) or [])
+    LOGGER.info("process_mcp_result: result type=%s", type(result).__name__)
+    raw_content = getattr(result, "content", [])
+    LOGGER.info("process_mcp_result: raw content=%s (type=%s)", raw_content, type(raw_content).__name__)
+    content_items = list(raw_content or [])
+    LOGGER.info("process_mcp_result: %d content items", len(content_items))
+    for i, item in enumerate(content_items):
+        LOGGER.info(
+            "process_mcp_result: item[%d] type=%s has_text=%s text_preview=%s",
+            i, type(item).__name__, hasattr(item, "text"),
+            repr(getattr(item, "text", None)[:200]) if getattr(item, "text", None) else None,
+        )
     content_parts = [item.text for item in content_items if getattr(item, "text", None) is not None]
     is_error = bool(getattr(result, "isError", False))
 
@@ -85,6 +98,10 @@ def process_mcp_result(result) -> tuple[str, list[Any], bool]:
     elif is_error:
         output = json.dumps({"result": "error", "message": "MCP tool call failed with no output."})
     else:
+        LOGGER.warning(
+            "process_mcp_result: no content parts found, returning generic success. "
+            "result attrs=%s", [a for a in dir(result) if not a.startswith("_")],
+        )
         output = json.dumps({"result": "success"})
 
     return output, content_items, is_error
@@ -153,6 +170,8 @@ async def execute_mcp_tool_call(
     if inputs.model_extra:
         arguments.update(inputs.model_extra)
 
+    LOGGER.info("execute_mcp_tool_call: tool=%s arguments=%s", tool_name, arguments)
+
     span = get_current_span()
     # TODO(security): redact_sensitive is a best-effort heuristic (match by key-name substring)
     # used here because MCP tool arguments are user/LLM-supplied and cannot be typed as SecretStr.
@@ -163,6 +182,7 @@ async def execute_mcp_tool_call(
         SpanAttributes.TOOL_PARAMETERS: serialize_to_json(redacted_arguments),
     })
     result = await call_tool_fn(tool_name, arguments)
+    LOGGER.info("execute_mcp_tool_call: raw result type=%s", type(result).__name__)
 
     output, content_items, is_error = process_mcp_result(result)
 
