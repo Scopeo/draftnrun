@@ -62,6 +62,11 @@ class OutlookCalendarClient:
         resp = await self._request("GET", "/me/calendars", params={"$top": "100"})
         return resp.json().get("value", [])
 
+    def _calendar_prefix(self, calendar_id: str) -> str:
+        if calendar_id == "primary":
+            return "/me"
+        return f"/me/calendars/{calendar_id}"
+
     async def list_events(
         self,
         calendar_id: str = "primary",
@@ -70,8 +75,9 @@ class OutlookCalendarClient:
         max_results: int = 50,
         query: Optional[str] = None,
     ) -> list[dict[str, Any]]:
+        prefix = self._calendar_prefix(calendar_id)
         if time_min and time_max:
-            path = f"/me/calendars/{calendar_id}/calendarView"
+            path = f"{prefix}/calendarView"
             params: dict[str, Any] = {
                 "startDateTime": time_min,
                 "endDateTime": time_max,
@@ -79,7 +85,7 @@ class OutlookCalendarClient:
                 "$orderby": "start/dateTime",
             }
         else:
-            path = f"/me/calendars/{calendar_id}/events"
+            path = f"{prefix}/events"
             params = {
                 "$top": str(max_results),
                 "$orderby": "start/dateTime",
@@ -105,7 +111,8 @@ class OutlookCalendarClient:
     async def create_event(
         self, event_body: dict[str, Any], calendar_id: str = "primary"
     ) -> dict[str, Any]:
-        resp = await self._request("POST", f"/me/calendars/{calendar_id}/events", json_body=event_body)
+        prefix = self._calendar_prefix(calendar_id)
+        resp = await self._request("POST", f"{prefix}/events", json_body=event_body)
         return resp.json()
 
     async def update_event(self, event_id: str, event_body: dict[str, Any]) -> dict[str, Any]:
