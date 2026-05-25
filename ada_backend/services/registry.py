@@ -67,6 +67,7 @@ from engine.components.tools.docx_template import DocxTemplateAgent
 from engine.components.tools.google_calendar_mcp_tool import GoogleCalendarMCPTool
 from engine.components.tools.hubspot_mcp_tool import HubSpotMCPTool
 from engine.components.tools.linkup_tool import LinkupSearchTool
+from engine.components.tools.notion_mcp_tool import NotionMCPTool
 from engine.components.tools.outlook_calendar_mcp_tool import OutlookCalendarMCPTool
 from engine.components.tools.python_code_runner import PythonCodeRunner
 from engine.components.tools.terminal_command_runner import TerminalCommandRunner
@@ -638,6 +639,16 @@ def create_factory_registry() -> FactoryRegistry:
         factory=OAuthComponentFactory(
             entity_class=OutlookCalendarMCPTool,
             oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.OUTLOOK_CALENDAR)],
+            constructor_method="from_access_token",
+            parameter_processors=[build_ignore_tool_description_processor()],
+        ),
+    )
+
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["notion_neverdrop_mcp_tool"],
+        factory=OAuthComponentFactory(
+            entity_class=NotionMCPTool,
+            oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.NOTION_NEVERDROP)],
             constructor_method="from_access_token",
             parameter_processors=[build_ignore_tool_description_processor()],
         ),
