@@ -3,7 +3,7 @@ import httpx
 from engine.components.tools.notion_mcp.errors import NotionAccessTokenRequiredError
 
 _BASE_URL = "https://api.notion.com"
-_NOTION_VERSION = "2022-06-28"
+_NOTION_VERSION = "2026-03-11"
 
 
 class NotionClient:

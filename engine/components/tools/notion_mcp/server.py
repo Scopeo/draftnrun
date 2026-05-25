@@ -218,6 +218,72 @@ async def delete_block(block_id: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Tier 1b — Presentation & Views
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool(
+    name="set_icon",
+    description=(
+        "Set an emoji icon on a page or database. "
+        'target_type must be "page" or "database". '
+        'emoji is a single Unicode emoji character (e.g. "\U0001f4c7", "\U0001f3e2").'
+    ),
+)
+async def set_icon(
+    target_id: str,
+    emoji: str,
+    target_type: str = "page",
+) -> dict[str, Any]:
+    icon_payload: dict[str, Any] = {"icon": {"type": "emoji", "emoji": emoji}}
+    if target_type == "database":
+        return await _client.request("patch", f"/v1/databases/{target_id}", json=icon_payload)
+    return await _client.request("patch", f"/v1/pages/{target_id}", json=icon_payload)
+
+
+@mcp.tool(
+    name="list_views",
+    description="List all views in a database. Returns view IDs and types.",
+)
+async def list_views(database_id: str) -> dict[str, Any]:
+    db = await _client.request("get", f"/v1/databases/{database_id}")
+    data_sources = db.get("data_sources", [])
+    if not data_sources:
+        raise RuntimeError(f"Database {database_id} has no data_sources — cannot list views")
+    ds_id = data_sources[0]["id"]
+    return await _client.request("get", "/v1/views", params={"data_source_id": ds_id})
+
+
+@mcp.tool(
+    name="create_view",
+    description=(
+        "Create a new view on a database. "
+        'type can be "table", "board", "gallery", "list", "calendar", or "timeline". '
+        "Optionally specify a filter and a name for the view. "
+        "The data_source_id is auto-discovered from the database."
+    ),
+)
+async def create_view(
+    database_id: str,
+    type: str = "table",
+    name: Optional[str] = None,
+    filter: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    db = await _client.request("get", f"/v1/databases/{database_id}")
+    data_sources = db.get("data_sources", [])
+    if not data_sources:
+        raise RuntimeError(f"Database {database_id} has no data_sources — cannot create view")
+    ds_id = data_sources[0]["id"]
+
+    body: dict[str, Any] = {"database_id": database_id, "data_source_id": ds_id, "type": type}
+    if name:
+        body["name"] = name
+    if filter:
+        body["filter"] = filter
+    return await _client.request("post", "/v1/views", json=body)
+
+
+# ---------------------------------------------------------------------------
 # Tier 2 — Smart Upserts
 # ---------------------------------------------------------------------------
 

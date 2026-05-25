@@ -25,6 +25,9 @@ NOTION_DEFAULT_TOOL_NAMES: tuple[str, ...] = (
     "append_blocks",
     "get_block_children",
     "delete_block",
+    "set_icon",
+    "list_views",
+    "create_view",
     "upsert_page_by_property",
     "replace_page_blocks",
 )
