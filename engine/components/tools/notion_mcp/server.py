@@ -116,7 +116,8 @@ async def get_database(database_id: str) -> dict[str, Any]:
         "initial_data_source_properties define the first data source schema (columns). "
         "Each property key is the column name, value is the type config "
         '(e.g. {"Email": {"email": {}}, "Name": {"title": {}}}). '
-        "Every initial data source must have exactly one title property."
+        "Every initial data source must have exactly one title property. "
+        "Optionally set an emoji icon at creation time."
     ),
 )
 async def create_database(
@@ -124,6 +125,7 @@ async def create_database(
     title: str,
     initial_data_source_properties: dict[str, Any],
     is_inline: bool = False,
+    icon: Optional[str] = None,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {
         "parent": {"type": "page_id", "page_id": parent_page_id},
@@ -131,6 +133,8 @@ async def create_database(
         "initial_data_source": {"properties": initial_data_source_properties},
         "is_inline": is_inline,
     }
+    if icon:
+        body["icon"] = {"type": "emoji", "emoji": icon}
     return await _client.request("post", "/v1/databases", json=body)
 
 
@@ -214,17 +218,20 @@ async def query_data_source(
         "For data source rows, parent is {type: 'data_source_id', data_source_id: ...} "
         "and properties are column values. "
         "For sub-pages, parent is {page_id: ...} and properties must include a title. "
-        "Optionally include children blocks for the page body."
+        "Optionally include children blocks for the page body and an emoji icon."
     ),
 )
 async def create_page(
     parent: dict[str, Any],
     properties: dict[str, Any],
     children: Optional[list[dict[str, Any]]] = None,
+    icon: Optional[str] = None,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {"parent": parent, "properties": properties}
     if children:
         body["children"] = children
+    if icon:
+        body["icon"] = {"type": "emoji", "emoji": icon}
     return await _client.request("post", "/v1/pages", json=body)
 
 
@@ -318,14 +325,15 @@ async def list_views(data_source_id: str) -> dict[str, Any]:
 
 
 @mcp.tool(
-    name="create_view",
+    name="create_raw_view",
     description=(
-        "Create a new view on a database/data source pair. "
+        "Create a view on a database/data source pair using raw Notion API payloads. "
         'type can be "table", "board", "gallery", "list", "calendar", or "timeline". '
-        "Optionally specify a filter, sorts, quick_filters, configuration, and a name for the view."
+        "Prefer create_table_view for table views with column visibility, grouping, and sorts. "
+        "Use this tool for non-table view types or when you need full control over the configuration payload."
     ),
 )
-async def create_view(
+async def create_raw_view(
     database_id: str,
     data_source_id: str,
     type: str = "table",
@@ -412,62 +420,7 @@ async def create_table_view(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(
-    name="upsert_page_by_property",
-    description=(
-        "Query a data source for a page matching a unique property value, "
-        "then create or update accordingly. Returns {page_id, operation} "
-        'where operation is "created", "updated", or "noop". '
-        "For updates, only the provided properties are changed. "
-        "Use this for deterministic contact/interaction sync."
-    ),
-)
-async def upsert_page_by_property(
-    data_source_id: str,
-    match_property: str,
-    match_property_type: str,
-    match_value: str,
-    properties: dict[str, Any],
-) -> dict[str, Any]:
-    filter_condition = {match_property_type: {"equals": match_value}}
-    query_filter = {"property": match_property, **filter_condition}
-
-    result = await _client.request(
-        "post",
-        f"/v1/data_sources/{data_source_id}/query",
-        json={"filter": query_filter, "page_size": 1},
-    )
-
-    existing_pages = result.get("results", [])
-
-    if existing_pages:
-        page = existing_pages[0]
-        page_id = page["id"]
-        updated = await _client.request(
-            "patch",
-            f"/v1/pages/{page_id}",
-            json={"properties": properties},
-        )
-        return {"page_id": page_id, "operation": "updated", "page": updated}
-
-    create_body: dict[str, Any] = {
-        "parent": {"type": "data_source_id", "data_source_id": data_source_id},
-        "properties": properties,
-    }
-    created = await _client.request("post", "/v1/pages", json=create_body)
-    return {"page_id": created["id"], "operation": "created", "page": created}
-
-
-@mcp.tool(
-    name="replace_page_blocks",
-    description=(
-        "Replace all blocks in a page body with new content. "
-        "Deletes existing child blocks, then appends the new blocks. "
-        "Preserves child_database and child_page blocks by default so dashboard databases are not trashed. "
-        "Useful for syncing notes/transcription without appending duplicates."
-    ),
-)
-async def replace_page_blocks(
+async def _replace_blocks(
     page_id: str,
     new_blocks: list[dict[str, Any]],
     preserve_block_types: Optional[list[str]] = None,
@@ -507,6 +460,78 @@ async def replace_page_blocks(
         "appended_block_count": len(new_blocks),
         "appended": appended,
     }
+
+
+@mcp.tool(
+    name="upsert_page_by_property",
+    description=(
+        "Query a data source for a page matching a unique property value, "
+        "then create or update accordingly. Returns {page_id, operation} "
+        'where operation is "created", "updated", or "noop". '
+        "For updates, only the provided properties are changed. "
+        "When children blocks are provided: on create they are set as the page body; "
+        "on update existing blocks are replaced (preserving child_database/child_page by default). "
+        "Use this for deterministic contact/interaction sync."
+    ),
+)
+async def upsert_page_by_property(
+    data_source_id: str,
+    match_property: str,
+    match_property_type: str,
+    match_value: str,
+    properties: dict[str, Any],
+    children: Optional[list[dict[str, Any]]] = None,
+    preserve_block_types: Optional[list[str]] = None,
+) -> dict[str, Any]:
+    filter_condition = {match_property_type: {"equals": match_value}}
+    query_filter = {"property": match_property, **filter_condition}
+
+    result = await _client.request(
+        "post",
+        f"/v1/data_sources/{data_source_id}/query",
+        json={"filter": query_filter, "page_size": 1},
+    )
+
+    existing_pages = result.get("results", [])
+
+    if existing_pages:
+        page = existing_pages[0]
+        page_id = page["id"]
+        updated = await _client.request(
+            "patch",
+            f"/v1/pages/{page_id}",
+            json={"properties": properties},
+        )
+        response: dict[str, Any] = {"page_id": page_id, "operation": "updated", "page": updated}
+        if children is not None:
+            response["blocks"] = await _replace_blocks(page_id, children, preserve_block_types)
+        return response
+
+    create_body: dict[str, Any] = {
+        "parent": {"type": "data_source_id", "data_source_id": data_source_id},
+        "properties": properties,
+    }
+    if children:
+        create_body["children"] = children
+    created = await _client.request("post", "/v1/pages", json=create_body)
+    return {"page_id": created["id"], "operation": "created", "page": created}
+
+
+@mcp.tool(
+    name="replace_page_blocks",
+    description=(
+        "Replace all blocks in a page body with new content. "
+        "Deletes existing child blocks, then appends the new blocks. "
+        "Preserves child_database and child_page blocks by default so dashboard databases are not trashed. "
+        "Useful for syncing notes/transcription without appending duplicates."
+    ),
+)
+async def replace_page_blocks(
+    page_id: str,
+    new_blocks: list[dict[str, Any]],
+    preserve_block_types: Optional[list[str]] = None,
+) -> dict[str, Any]:
+    return await _replace_blocks(page_id, new_blocks, preserve_block_types)
 
 
 # ---------------------------------------------------------------------------

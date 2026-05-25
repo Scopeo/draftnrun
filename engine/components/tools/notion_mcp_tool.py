@@ -29,7 +29,7 @@ NOTION_DEFAULT_TOOL_NAMES: tuple[str, ...] = (
     "delete_block",
     "set_icon",
     "list_views",
-    "create_view",
+    "create_raw_view",
     "create_table_view",
     "upsert_page_by_property",
     "replace_page_blocks",
