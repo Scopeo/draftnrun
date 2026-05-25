@@ -22,6 +22,44 @@ mcp = FastMCP("notion")
 _client: NotionClient
 
 
+def _property_by_name(properties: dict[str, Any], property_name: str) -> dict[str, Any]:
+    property_config = properties.get(property_name)
+    if not property_config:
+        raise RuntimeError(f"Data source does not have property {property_name!r}")
+    return property_config
+
+
+def _table_property_config(property_config: dict[str, Any], visible: bool = True, width: int = 180) -> dict[str, Any]:
+    return {"property_id": property_config["id"], "visible": visible, "width": width}
+
+
+def _group_by_type(property_type: str) -> str:
+    if property_type == "rich_text":
+        return "text"
+    if property_type == "people":
+        return "person"
+    return property_type
+
+
+def _group_by_config(property_config: dict[str, Any], group_by: Optional[str]) -> dict[str, Any]:
+    property_type = _group_by_type(property_config["type"])
+    config: dict[str, Any] = {
+        "type": property_type,
+        "property_id": property_config["id"],
+        "sort": {"type": "ascending"},
+        "hide_empty_groups": True,
+    }
+    if group_by:
+        config["group_by"] = group_by
+    elif property_type in {"title", "rich_text", "url", "email", "phone_number"}:
+        config["group_by"] = "exact"
+    elif property_type == "status":
+        config["group_by"] = "option"
+    elif property_type == "date":
+        config["group_by"] = "month"
+    return config
+
+
 # ---------------------------------------------------------------------------
 # Tier 1 — CRUD Primitives
 # ---------------------------------------------------------------------------
@@ -308,6 +346,64 @@ async def create_view(
         body["quick_filters"] = quick_filters
     if configuration:
         body["configuration"] = configuration
+    return await _client.request("post", "/v1/views", json=body)
+
+
+@mcp.tool(
+    name="create_table_view",
+    description=(
+        "Create a table view with high-level layout options. Resolves property names to Notion property IDs, "
+        "sets visible columns, optional grouping, filters, and sorts."
+    ),
+)
+async def create_table_view(
+    database_id: str,
+    data_source_id: str,
+    name: str,
+    visible_properties: list[str],
+    filter: Optional[dict[str, Any]] = None,
+    sorts: Optional[list[dict[str, Any]]] = None,
+    group_by_property: Optional[str] = None,
+    group_by: Optional[str] = None,
+    wrap_cells: bool = False,
+    frozen_column_index: int = 1,
+    show_vertical_lines: bool = True,
+) -> dict[str, Any]:
+    data_source = await _client.request("get", f"/v1/data_sources/{data_source_id}")
+    properties = data_source.get("properties", {})
+    visible_property_names = set(visible_properties)
+
+    configuration: dict[str, Any] = {
+        "type": "table",
+        "properties": [
+            _table_property_config(_property_by_name(properties, property_name))
+            for property_name in visible_properties
+        ]
+        + [
+            _table_property_config(property_config, visible=False)
+            for property_name, property_config in properties.items()
+            if property_name not in visible_property_names
+        ],
+        "wrap_cells": wrap_cells,
+        "frozen_column_index": frozen_column_index,
+        "show_vertical_lines": show_vertical_lines,
+    }
+
+    if group_by_property:
+        property_config = _property_by_name(properties, group_by_property)
+        configuration["group_by"] = _group_by_config(property_config, group_by)
+
+    body: dict[str, Any] = {
+        "database_id": database_id,
+        "data_source_id": data_source_id,
+        "type": "table",
+        "name": name,
+        "configuration": configuration,
+    }
+    if filter:
+        body["filter"] = filter
+    if sorts:
+        body["sorts"] = sorts
     return await _client.request("post", "/v1/views", json=body)
 
 
