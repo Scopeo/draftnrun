@@ -63,7 +63,7 @@ async def main():
     load_dotenv("credentials.env")
 
     parser = argparse.ArgumentParser(description="Test Notion MCP Tool connection")
-    token_group = parser.add_mutually_exclusive_group(required=True)
+    token_group = parser.add_mutually_exclusive_group(required=False)
     token_group.add_argument("--connection-id", help="UUID of the Notion OAuth connection in the database")
     token_group.add_argument("--token", help="Direct Notion access token (bypasses DB)")
     parser.add_argument("--call-tool", help="Optional: tool name to invoke once (e.g., get_self)")
