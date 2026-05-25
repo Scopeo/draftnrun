@@ -62,7 +62,10 @@ async def get_self() -> dict[str, Any]:
 
 @mcp.tool(
     name="get_database",
-    description="Retrieve a database schema by ID. Returns the database properties (columns) and metadata.",
+    description=(
+        "Retrieve a database container by ID. In Notion API 2026-03-11, schemas and rows live on data "
+        "sources; use get_data_source to retrieve properties."
+    ),
 )
 async def get_database(database_id: str) -> dict[str, Any]:
     return await _client.request("get", f"/v1/databases/{database_id}")
@@ -72,22 +75,22 @@ async def get_database(database_id: str) -> dict[str, Any]:
     name="create_database",
     description=(
         "Create a new database as a child of a parent page. "
-        "Properties define the database schema (columns). "
+        "initial_data_source_properties define the first data source schema (columns). "
         "Each property key is the column name, value is the type config "
         '(e.g. {"Email": {"email": {}}, "Name": {"title": {}}}). '
-        "Every database must have exactly one title property."
+        "Every initial data source must have exactly one title property."
     ),
 )
 async def create_database(
     parent_page_id: str,
     title: str,
-    properties: dict[str, Any],
+    initial_data_source_properties: dict[str, Any],
     is_inline: bool = False,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {
         "parent": {"type": "page_id", "page_id": parent_page_id},
         "title": [{"type": "text", "text": {"content": title}}],
-        "properties": properties,
+        "initial_data_source": {"properties": initial_data_source_properties},
         "is_inline": is_inline,
     }
     return await _client.request("post", "/v1/databases", json=body)
@@ -96,13 +99,39 @@ async def create_database(
 @mcp.tool(
     name="update_database",
     description=(
-        "Update a database's title or properties (add/rename/remove columns). "
-        "To add a new property, include it in properties with its type config. "
-        "To remove a property, set its value to null."
+        "Update database container metadata. In Notion API 2026-03-11, schemas live on data sources; "
+        "use update_data_source to add, rename, or remove columns."
     ),
 )
 async def update_database(
     database_id: str,
+    title: str,
+) -> dict[str, Any]:
+    return await _client.request(
+        "patch",
+        f"/v1/databases/{database_id}",
+        json={"title": [{"type": "text", "text": {"content": title}}]},
+    )
+
+
+@mcp.tool(
+    name="get_data_source",
+    description="Retrieve a data source by ID, including its properties (columns).",
+)
+async def get_data_source(data_source_id: str) -> dict[str, Any]:
+    return await _client.request("get", f"/v1/data_sources/{data_source_id}")
+
+
+@mcp.tool(
+    name="update_data_source",
+    description=(
+        "Update a data source's title or properties (add/rename/remove columns). "
+        "To add a new property, include it in properties with its type config. "
+        "To remove a property, set its value to null."
+    ),
+)
+async def update_data_source(
+    data_source_id: str,
     title: Optional[str] = None,
     properties: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
@@ -111,20 +140,20 @@ async def update_database(
         body["title"] = [{"type": "text", "text": {"content": title}}]
     if properties is not None:
         body["properties"] = properties
-    return await _client.request("patch", f"/v1/databases/{database_id}", json=body)
+    return await _client.request("patch", f"/v1/data_sources/{data_source_id}", json=body)
 
 
 @mcp.tool(
-    name="query_database",
+    name="query_data_source",
     description=(
-        "Query a Notion database with optional filter and sorts. "
+        "Query a Notion data source with optional filter and sorts. "
         "Filter uses Notion's compound filter syntax: "
         '{"and": [{"property": "Email", "email": {"equals": "foo@bar.com"}}]}. '
         "Returns matching pages (rows)."
     ),
 )
-async def query_database(
-    database_id: str,
+async def query_data_source(
+    data_source_id: str,
     filter: Optional[dict[str, Any]] = None,
     sorts: Optional[list[dict[str, Any]]] = None,
     page_size: int = 100,
@@ -137,14 +166,15 @@ async def query_database(
         body["sorts"] = sorts
     if start_cursor:
         body["start_cursor"] = start_cursor
-    return await _client.request("post", f"/v1/databases/{database_id}/query", json=body)
+    return await _client.request("post", f"/v1/data_sources/{data_source_id}/query", json=body)
 
 
 @mcp.tool(
     name="create_page",
     description=(
         "Create a page in a database or as a child of another page. "
-        "For database rows, parent is {database_id: ...} and properties are column values. "
+        "For data source rows, parent is {type: 'data_source_id', data_source_id: ...} "
+        "and properties are column values. "
         "For sub-pages, parent is {page_id: ...} and properties must include a title. "
         "Optionally include children blocks for the page body."
     ),
@@ -243,43 +273,41 @@ async def set_icon(
 
 @mcp.tool(
     name="list_views",
-    description="List all views in a database. Returns view IDs and types.",
+    description="List all views for a data source. Returns view IDs and types.",
 )
-async def list_views(database_id: str) -> dict[str, Any]:
-    db = await _client.request("get", f"/v1/databases/{database_id}")
-    data_sources = db.get("data_sources", [])
-    if not data_sources:
-        raise RuntimeError(f"Database {database_id} has no data_sources — cannot list views")
-    ds_id = data_sources[0]["id"]
-    return await _client.request("get", "/v1/views", params={"data_source_id": ds_id})
+async def list_views(data_source_id: str) -> dict[str, Any]:
+    return await _client.request("get", "/v1/views", params={"data_source_id": data_source_id})
 
 
 @mcp.tool(
     name="create_view",
     description=(
-        "Create a new view on a database. "
+        "Create a new view on a database/data source pair. "
         'type can be "table", "board", "gallery", "list", "calendar", or "timeline". '
-        "Optionally specify a filter and a name for the view. "
-        "The data_source_id is auto-discovered from the database."
+        "Optionally specify a filter, sorts, quick_filters, configuration, and a name for the view."
     ),
 )
 async def create_view(
     database_id: str,
+    data_source_id: str,
     type: str = "table",
     name: Optional[str] = None,
     filter: Optional[dict[str, Any]] = None,
+    sorts: Optional[list[dict[str, Any]]] = None,
+    quick_filters: Optional[list[dict[str, Any]]] = None,
+    configuration: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    db = await _client.request("get", f"/v1/databases/{database_id}")
-    data_sources = db.get("data_sources", [])
-    if not data_sources:
-        raise RuntimeError(f"Database {database_id} has no data_sources — cannot create view")
-    ds_id = data_sources[0]["id"]
-
-    body: dict[str, Any] = {"database_id": database_id, "data_source_id": ds_id, "type": type}
+    body: dict[str, Any] = {"database_id": database_id, "data_source_id": data_source_id, "type": type}
     if name:
         body["name"] = name
     if filter:
         body["filter"] = filter
+    if sorts:
+        body["sorts"] = sorts
+    if quick_filters:
+        body["quick_filters"] = quick_filters
+    if configuration:
+        body["configuration"] = configuration
     return await _client.request("post", "/v1/views", json=body)
 
 
@@ -291,7 +319,7 @@ async def create_view(
 @mcp.tool(
     name="upsert_page_by_property",
     description=(
-        "Query a database for a page matching a unique property value, "
+        "Query a data source for a page matching a unique property value, "
         "then create or update accordingly. Returns {page_id, operation} "
         'where operation is "created", "updated", or "noop". '
         "For updates, only the provided properties are changed. "
@@ -299,7 +327,7 @@ async def create_view(
     ),
 )
 async def upsert_page_by_property(
-    database_id: str,
+    data_source_id: str,
     match_property: str,
     match_property_type: str,
     match_value: str,
@@ -310,7 +338,7 @@ async def upsert_page_by_property(
 
     result = await _client.request(
         "post",
-        f"/v1/databases/{database_id}/query",
+        f"/v1/data_sources/{data_source_id}/query",
         json={"filter": query_filter, "page_size": 1},
     )
 
@@ -327,7 +355,7 @@ async def upsert_page_by_property(
         return {"page_id": page_id, "operation": "updated", "page": updated}
 
     create_body: dict[str, Any] = {
-        "parent": {"database_id": database_id},
+        "parent": {"type": "data_source_id", "data_source_id": data_source_id},
         "properties": properties,
     }
     created = await _client.request("post", "/v1/pages", json=create_body)
@@ -339,14 +367,18 @@ async def upsert_page_by_property(
     description=(
         "Replace all blocks in a page body with new content. "
         "Deletes existing child blocks, then appends the new blocks. "
+        "Preserves child_database and child_page blocks by default so dashboard databases are not trashed. "
         "Useful for syncing notes/transcription without appending duplicates."
     ),
 )
 async def replace_page_blocks(
     page_id: str,
     new_blocks: list[dict[str, Any]],
+    preserve_block_types: Optional[list[str]] = None,
 ) -> dict[str, Any]:
+    preserved_types = set(["child_database", "child_page"] if preserve_block_types is None else preserve_block_types)
     deleted_ids: list[str] = []
+    preserved_ids: list[str] = []
     start_cursor: str | None = None
     while True:
         params: dict[str, Any] = {"page_size": 100}
@@ -355,6 +387,9 @@ async def replace_page_blocks(
         children_resp = await _client.request("get", f"/v1/blocks/{page_id}/children", params=params)
         for block in children_resp.get("results", []):
             block_id = block["id"]
+            if block.get("type") in preserved_types:
+                preserved_ids.append(block_id)
+                continue
             await _client.request("delete", f"/v1/blocks/{block_id}")
             deleted_ids.append(block_id)
         if not children_resp.get("has_more"):
@@ -372,6 +407,7 @@ async def replace_page_blocks(
     return {
         "page_id": page_id,
         "deleted_block_count": len(deleted_ids),
+        "preserved_block_count": len(preserved_ids),
         "appended_block_count": len(new_blocks),
         "appended": appended,
     }
