@@ -132,6 +132,37 @@ async def test_gmail_token(access_token: str) -> bool:
         return False
 
 
+async def test_notion_token(access_token: str) -> bool:
+    """Test Notion token with users/me API."""
+    print_header("Testing Notion API Connectivity")
+    print_info("Calling Notion users/me endpoint...")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                "https://api.notion.com/v1/users/me",
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Notion-Version": "2026-03-11",
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            print_success("Notion authentication successful!")
+            print_info(f"  User ID: {data.get('id')}")
+            print_info(f"  Name: {data.get('name')}")
+            print_info(f"  Type: {data.get('type')}")
+            return True
+
+    except httpx.HTTPError as e:
+        print_error(f"HTTP error: {e}")
+        return False
+    except Exception as e:
+        print_error(f"Unexpected error: {e}")
+        return False
+
+
 async def test_token_usage(oauth_connection_id: str, provider: str):
     """Test OAuth token retrieval and usage."""
 
@@ -163,6 +194,8 @@ async def test_token_usage(oauth_connection_id: str, provider: str):
         success = await test_hubspot_token(access_token)
     elif provider == "google-mail":
         success = await test_gmail_token(access_token)
+    elif provider in {"notion", "notion-neverdrop"}:
+        success = await test_notion_token(access_token)
     else:
         print_error(f"Provider '{provider}' not supported for testing yet")
         print_info("Token was retrieved successfully, but cannot validate against API")
@@ -194,7 +227,7 @@ def main():
     parser.add_argument(
         "--provider",
         required=True,
-        choices=["slack", "hubspot", "google-mail"],
+        choices=["slack", "hubspot", "google-mail", "notion", "notion-neverdrop"],
         help="Provider key",
     )
 
