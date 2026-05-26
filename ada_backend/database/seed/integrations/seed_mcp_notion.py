@@ -29,7 +29,7 @@ def seed_mcp_notion_neverdrop_components(session: Session):
     component = Component(
         id=COMPONENT_UUIDS["notion_neverdrop_mcp_tool"],
         name="Notion NeverDrop MCP Tool",
-        is_agent=False,
+        is_agent=True,
         function_callable=True,
         can_use_function_calling=False,
         icon="simple-icons:notion",
