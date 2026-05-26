@@ -324,17 +324,25 @@ class Worker(BaseWorker):
                     message=message,
                     type=ResultType.ERROR,
                 )
-                self._update_task_status_to_failed(
+
+                if error_type in self._FATAL_ERROR_TYPES:
+                    self._update_task_status_to_failed(
+                        organization_id=organization_id,
+                        task_id=task_id,
+                        source_name=source_name,
+                        source_type=source_type,
+                        ingestion_id=ingestion_id,
+                        result_metadata=result_metadata,
+                    )
+                    return ProcessTaskOutcome.FAIL_FATAL_ACK
+
+                self._reset_task_status_to_pending(
                     organization_id=organization_id,
                     task_id=task_id,
                     source_name=source_name,
                     source_type=source_type,
                     ingestion_id=ingestion_id,
-                    result_metadata=result_metadata,
                 )
-
-                if error_type in self._FATAL_ERROR_TYPES:
-                    return ProcessTaskOutcome.FAIL_FATAL_ACK
                 return ProcessTaskOutcome.FAIL_RETRY
             else:
                 logger.info("task_completed ingestion_id=%s", ingestion_id)
@@ -343,17 +351,12 @@ class Worker(BaseWorker):
         except Exception as e:
             logger.error("task_error error=%s", str(e), exc_info=True)
             try:
-                result_metadata = TaskResultMetadata(
-                    message=str(e),
-                    type=ResultType.ERROR,
-                )
-                self._update_task_status_to_failed(
+                self._reset_task_status_to_pending(
                     organization_id=organization_id,
                     task_id=task_id,
                     source_name=source_name,
                     source_type=source_type,
                     ingestion_id=ingestion_id,
-                    result_metadata=result_metadata,
                 )
             except Exception as update_error:
                 logger.error("failed_to_update_task_status error=%s", str(update_error))
@@ -479,6 +482,58 @@ class Worker(BaseWorker):
         except Exception as e:
             logger.error(
                 "failed_to_update_task_status_to_failed ingestion_id=%s task_id=%s organization_id=%s error=%s",
+                ingestion_id,
+                task_id,
+                organization_id,
+                str(e),
+            )
+
+    def _reset_task_status_to_pending(
+        self,
+        organization_id: str,
+        task_id: str,
+        source_name: str,
+        source_type: str,
+        ingestion_id: str,
+    ) -> None:
+        """Reset the task status to PENDING so it stays pending during retries.
+
+        The ingestion subprocess marks the task FAILED on error before exiting,
+        but the worker may schedule a retry.  Overriding back to PENDING keeps
+        the user-visible status consistent with what is actually happening.
+        """
+        try:
+            pending_task = IngestionTaskUpdate(
+                id=task_id,
+                source_name=source_name,
+                source_type=source_type,
+                status=db.TaskStatus.PENDING,
+            )
+
+            api_base_url = os.getenv("API_BASE_URL", DEFAULT_API_BASE_URL)
+            ingestion_api_key = os.getenv("INGESTION_API_KEY", "default-key")
+
+            response = requests.patch(
+                f"{api_base_url}/ingestion_task/{organization_id}",
+                json=pending_task.model_dump(mode="json"),
+                headers={
+                    "x-ingestion-api-key": ingestion_api_key,
+                    "Content-Type": "application/json",
+                },
+                timeout=10,
+            )
+            response.raise_for_status()
+
+            logger.info(
+                "task_status_reset_to_pending ingestion_id=%s task_id=%s organization_id=%s",
+                ingestion_id,
+                task_id,
+                organization_id,
+            )
+
+        except Exception as e:
+            logger.error(
+                "failed_to_reset_task_status_to_pending ingestion_id=%s task_id=%s organization_id=%s error=%s",
                 ingestion_id,
                 task_id,
                 organization_id,
