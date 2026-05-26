@@ -25,7 +25,7 @@ from ada_backend.schemas.pipeline.graph_schema import GraphSaveV2Schema, GraphUp
 from ada_backend.schemas.pipeline.port_instance_schema import FieldExpressionSchema
 from ada_backend.services import github_client
 from ada_backend.services.errors import ServiceError
-from ada_backend.services.github_client import PROMPT_LIBRARY_DIR
+from ada_backend.services.github_client import PROJECTS_DIR, PROMPT_LIBRARY_DIR
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.graph_v2_mapper_service import graph_save_v2_to_graph_update
 from ada_backend.services.graph.update_graph_service import update_graph_service
@@ -207,6 +207,62 @@ async def import_from_github(
     return imported_projects, skipped_projects, imported_prompts, skipped_prompts
 
 
+def _create_synced_project(
+    session: Session,
+    organization_id: UUID,
+    github_owner: str,
+    github_repo_name: str,
+    branch: str,
+    github_installation_id: int,
+    github_folder: str,
+    project_type: ProjectType,
+    created_by_user_id: UUID | None,
+    description: str,
+) -> tuple[db.Project, str, db.GitSyncConfig] | None:
+    """Create a project + GitSyncConfig for a single repo folder.
+
+    Returns ``(project, project_name, config)`` on success, or ``None``
+    if a config already exists (``IntegrityError``).
+    """
+    folder_basename = github_folder.rsplit("/", 1)[-1] if "/" in github_folder else github_folder
+    project_name = folder_basename if folder_basename else github_repo_name
+
+    project, _graph_runner_id = create_project_with_graph_runner(
+        session=session,
+        organization_id=organization_id,
+        project_id=uuid4(),
+        project_name=project_name,
+        description=description,
+        project_type=project_type,
+        template=None,
+        graph_id=uuid4(),
+        add_input=True,
+        tags=["github"],
+    )
+
+    try:
+        config = git_sync_repository.create_git_sync_config(
+            session=session,
+            organization_id=organization_id,
+            project_id=project.id,
+            github_owner=github_owner,
+            github_repo_name=github_repo_name,
+            graph_folder=github_folder,
+            branch=branch,
+            github_installation_id=github_installation_id,
+            created_by_user_id=created_by_user_id,
+        )
+    except IntegrityError:
+        session.rollback()
+        LOGGER.warning(
+            "Sync config already exists for folder %r in %s/%s — skipping",
+            github_folder, github_owner, github_repo_name,
+        )
+        return None
+
+    return project, project_name, config
+
+
 async def _import_projects(
     session: Session,
     organization_id: UUID,
@@ -232,43 +288,25 @@ async def _import_projects(
             skipped.append(github_folder)
             continue
 
-        folder_basename = github_folder.rsplit("/", 1)[-1] if "/" in github_folder else github_folder
-        project_name = folder_basename if folder_basename else github_repo_name
-        project_id = uuid4()
-
-        project, _graph_runner_id = create_project_with_graph_runner(
+        result = _create_synced_project(
             session=session,
             organization_id=organization_id,
-            project_id=project_id,
-            project_name=project_name,
+            github_owner=github_owner,
+            github_repo_name=github_repo_name,
+            branch=branch,
+            github_installation_id=github_installation_id,
+            github_folder=github_folder,
+            project_type=project_type,
+            created_by_user_id=user_id,
             description=f"Imported from GitHub {github_repo} ({github_folder})"
             if github_folder
             else f"Imported from GitHub {github_repo}",
-            project_type=project_type,
-            template=None,
-            graph_id=uuid4(),
-            add_input=True,
-            tags=["github"],
         )
-
-        try:
-            config = git_sync_repository.create_git_sync_config(
-                session=session,
-                organization_id=organization_id,
-                project_id=project.id,
-                github_owner=github_owner,
-                github_repo_name=github_repo_name,
-                graph_folder=github_folder,
-                branch=branch,
-                github_installation_id=github_installation_id,
-                created_by_user_id=user_id,
-            )
-        except IntegrityError:
-            session.rollback()
-            LOGGER.warning("Sync config already exists for folder %r in %s — skipping", github_folder, github_repo)
+        if result is None:
             skipped.append(github_folder)
             continue
 
+        project, project_name, config = result
         await _enqueue_initial_sync(config)
 
         imported.append(
@@ -629,6 +667,81 @@ def _collect_changed_prompt_paths(changed_files: set[str]) -> set[str]:
     return result
 
 
+def _detect_new_project_folders(changed_files: set[str], existing_folders: set[str]) -> set[str]:
+    """Return project folder paths from *changed_files* that are not yet tracked.
+
+    Only folders where ``graph.json`` itself was added/modified are returned —
+    changes to other files under a new folder are not enough.
+    """
+    prefix = f"{PROJECTS_DIR}/"
+    new_folders: set[str] = set()
+    for path in changed_files:
+        if not path.startswith(prefix):
+            continue
+        rest = path[len(prefix):]
+        parts = rest.split("/", 1)
+        if len(parts) < 2:
+            continue
+        folder = f"{PROJECTS_DIR}/{parts[0]}"
+        if parts[1] == "graph.json" and folder not in existing_folders:
+            new_folders.add(folder)
+    return new_folders
+
+
+def _auto_import_new_projects(
+    session: Session,
+    github_owner: str,
+    github_repo_name: str,
+    branch: str,
+    github_installation_id: int,
+    organization_id: UUID,
+    created_by_user_id: UUID | None,
+    new_folders: set[str],
+    commit_sha: str,
+) -> tuple[int, int]:
+    """Create projects + sync configs for newly discovered folders and enqueue initial sync.
+
+    Returns ``(queued, failed)`` counts.
+    """
+    github_repo = f"{github_owner}/{github_repo_name}"
+    queued = 0
+    failed = 0
+
+    for folder in sorted(new_folders):
+        result = _create_synced_project(
+            session=session,
+            organization_id=organization_id,
+            github_owner=github_owner,
+            github_repo_name=github_repo_name,
+            branch=branch,
+            github_installation_id=github_installation_id,
+            github_folder=folder,
+            project_type=ProjectType.WORKFLOW,
+            created_by_user_id=created_by_user_id,
+            description=f"Auto-discovered from GitHub {github_repo} ({folder})",
+        )
+        if result is None:
+            continue
+
+        _project, _project_name, config = result
+        if push_git_sync_task(config.id, commit_sha):
+            queued += 1
+        else:
+            failed += 1
+            LOGGER.error("Failed to enqueue initial sync for auto-discovered config %s", config.id)
+
+    if queued or failed:
+        LOGGER.info(
+            "Auto-discovered %d new project folder(s) from push to %s (branch %s): %d queued, %d failed",
+            len(new_folders),
+            github_repo,
+            branch,
+            queued,
+            failed,
+        )
+    return queued, failed
+
+
 def handle_github_push(
     session: Session,
     github_owner: str,
@@ -640,7 +753,8 @@ def handle_github_push(
 ) -> tuple[int, int]:
     """Queue git sync tasks for configs whose tracked graph file changed in a push.
 
-    Also enqueues prompt sync tasks when files under ``draftnrun/prompts/`` changed.
+    Also enqueues prompt sync tasks when files under ``draftnrun/prompts/`` changed,
+    and auto-discovers new project folders that don't have a ``GitSyncConfig`` yet.
     """
     queued = 0
     failed = 0
@@ -707,6 +821,26 @@ def handle_github_push(
         else:
             failed += 1
             LOGGER.error("Failed to enqueue git sync task for config %s", config.id)
+
+    existing_folders = {c.graph_folder for c in configs}
+    new_folders = _detect_new_project_folders(changed_files, existing_folders)
+    if new_folders and github_installation_id is not None:
+        install_row = github_app_installation_repository.get_by_installation_id(session, github_installation_id)
+        if install_row:
+            created_by = next((c.created_by_user_id for c in configs if c.created_by_user_id), None)
+            disc_queued, disc_failed = _auto_import_new_projects(
+                session=session,
+                github_owner=github_owner,
+                github_repo_name=github_repo_name,
+                branch=branch,
+                github_installation_id=github_installation_id,
+                organization_id=install_row.organization_id,
+                created_by_user_id=created_by,
+                new_folders=new_folders,
+                commit_sha=commit_sha,
+            )
+            queued += disc_queued
+            failed += disc_failed
 
     return queued, failed
 
