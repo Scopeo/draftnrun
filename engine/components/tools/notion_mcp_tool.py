@@ -6,6 +6,8 @@ import sys
 from collections.abc import Collection
 from typing import Optional, Self
 
+from pydantic import SecretStr
+
 from engine.components.tools.mcp.local_mcp_tool import LocalMCPTool
 from engine.components.tools.mcp.shared import MCPToolInputs, MCPToolOutputs
 from engine.components.tools.notion_mcp.server import get_tool_descriptions
@@ -55,7 +57,7 @@ class NotionMCPTool(LocalMCPTool):
         cls,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        access_token: str,
+        access_token: SecretStr | None = None,
         allowed_tools: Collection[str] | None = None,
         timeout: int = 30,
     ) -> Self:
@@ -67,7 +69,7 @@ class NotionMCPTool(LocalMCPTool):
             component_attributes=component_attributes,
             command=sys.executable,
             args=["-m", "engine.components.tools.notion_mcp.server"],
-            env={"NOTION_ACCESS_TOKEN": access_token} if access_token else None,
+            env={"NOTION_ACCESS_TOKEN": access_token.get_secret_value()} if access_token is not None else None,
             timeout=timeout,
             tool_descriptions=tool_descriptions,
         )
