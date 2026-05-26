@@ -1,8 +1,5 @@
-from unittest.mock import MagicMock, patch
-
 import pytest
 
-from workers.worker.base_worker import ProcessTaskOutcome
 from workers.worker import main as worker_main
 
 
