@@ -313,7 +313,9 @@ async def set_icon(
     icon_payload: dict[str, Any] = {"icon": {"type": "emoji", "emoji": emoji}}
     if target_type == "database":
         return await _client.request("patch", f"/v1/databases/{target_id}", json=icon_payload)
-    return await _client.request("patch", f"/v1/pages/{target_id}", json=icon_payload)
+    if target_type == "page":
+        return await _client.request("patch", f"/v1/pages/{target_id}", json=icon_payload)
+    raise ValueError('target_type must be "page" or "database"')
 
 
 @mcp.tool(
@@ -467,7 +469,7 @@ async def _replace_blocks(
     description=(
         "Query a data source for a page matching a unique property value, "
         "then create or update accordingly. Returns {page_id, operation} "
-        'where operation is "created", "updated", or "noop". '
+        'where operation is "created" or "updated". '
         "For updates, only the provided properties are changed. "
         "When children blocks are provided: on create they are set as the page body; "
         "on update existing blocks are replaced (preserving child_database/child_page by default). "
