@@ -135,7 +135,11 @@ async def create_database(
     }
     if icon:
         body["icon"] = {"type": "emoji", "emoji": icon}
-    return await _client.request("post", "/v1/databases", json=body)
+    created = await _client.request("post", "/v1/databases", json=body)
+    data_sources = created.get("data_sources", [])
+    if data_sources:
+        created["data_source_id"] = data_sources[0].get("id")
+    return created
 
 
 @mcp.tool(
@@ -484,7 +488,15 @@ async def upsert_page_by_property(
     properties: dict[str, Any],
     children: Optional[list[dict[str, Any]]] = None,
     preserve_block_types: Optional[list[str]] = None,
+    merge_relations: Optional[dict[str, list[str]]] = None,
 ) -> dict[str, Any]:
+    merged_properties = dict(properties)
+    merged_relation_ids: dict[str, list[str]] = {}
+    if merge_relations:
+        for property_name, page_ids in merge_relations.items():
+            merged_relation_ids[property_name] = page_ids
+            merged_properties[property_name] = {"relation": [{"id": page_id} for page_id in page_ids]}
+
     filter_condition = {match_property_type: {"equals": match_value}}
     query_filter = {"property": match_property, **filter_condition}
 
@@ -502,21 +514,31 @@ async def upsert_page_by_property(
         updated = await _client.request(
             "patch",
             f"/v1/pages/{page_id}",
-            json={"properties": properties},
+            json={"properties": merged_properties},
         )
-        response: dict[str, Any] = {"page_id": page_id, "operation": "updated", "page": updated}
+        response: dict[str, Any] = {
+            "page_id": page_id,
+            "operation": "updated",
+            "merged_relation_ids": merged_relation_ids,
+            "page": updated,
+        }
         if children is not None:
             response["blocks"] = await _replace_blocks(page_id, children, preserve_block_types)
         return response
 
     create_body: dict[str, Any] = {
         "parent": {"type": "data_source_id", "data_source_id": data_source_id},
-        "properties": properties,
+        "properties": merged_properties,
     }
     if children:
         create_body["children"] = children
     created = await _client.request("post", "/v1/pages", json=create_body)
-    return {"page_id": created["id"], "operation": "created", "page": created}
+    return {
+        "page_id": created["id"],
+        "operation": "created",
+        "merged_relation_ids": merged_relation_ids,
+        "page": created,
+    }
 
 
 @mcp.tool(
