@@ -27,7 +27,7 @@ def seed_mcp_hubspot_neverdrop_components(session: Session):
     hubspot_neverdrop_mcp_tool_component = Component(
         id=COMPONENT_UUIDS["hubspot_neverdrop_mcp_tool"],
         name="HubSpot Neverdrop MCP Tool",
-        is_agent=False,
+        is_agent=True,
         function_callable=True,
         can_use_function_calling=False,
         icon="logos:hubspot",
@@ -40,8 +40,7 @@ def seed_mcp_hubspot_neverdrop_components(session: Session):
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.INTERNAL,
         description=(
-            "Connect to HubSpot Neverdrop via MCP to access CRM tools"
-            " (contacts, deals, companies, tickets, etc.)."
+            "Connect to HubSpot Neverdrop via MCP to access CRM tools" " (contacts, deals, companies, tickets, etc.)."
         ),
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["hubspot_neverdrop_mcp_tool_description"],
     )
