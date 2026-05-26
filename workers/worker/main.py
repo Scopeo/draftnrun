@@ -4,6 +4,7 @@ import os
 import re
 import resource
 import subprocess
+import time
 from pathlib import Path
 from typing import Any, Dict
 
@@ -33,6 +34,7 @@ def _parse_log_level(line: str, default: int = logging.ERROR) -> int:
 STREAM_NAME = os.getenv("REDIS_INGESTION_STREAM", "ada_ingestion_stream")
 MAX_CONCURRENT_INGESTIONS = int(os.getenv("MAX_CONCURRENT_INGESTIONS", 2))
 SUBPROCESS_MEMORY_LIMIT_MB = int(os.getenv("SUBPROCESS_MEMORY_LIMIT_MB", "4096"))
+SUBPROCESS_TIMEOUT_S = int(os.getenv("SUBPROCESS_TIMEOUT_S", "1800"))
 INGESTION_BATCH_SIZE = int(os.getenv("INGESTION_BATCH_SIZE", "50"))
 
 
@@ -207,9 +209,22 @@ class Worker(BaseWorker):
             stdout_buffer = ""
             stderr_buffer = ""
             raw_stderr_lines: list[str] = []
+            timed_out = False
+            start_monotonic = time.monotonic()
 
-            # Stream output in real-time until process completes
             while process.poll() is None:
+                if SUBPROCESS_TIMEOUT_S > 0 and time.monotonic() - start_monotonic > SUBPROCESS_TIMEOUT_S:
+                    logger.error(
+                        "subprocess_timeout ingestion_id=%s elapsed=%ds limit=%ds",
+                        ingestion_id,
+                        int(time.monotonic() - start_monotonic),
+                        SUBPROCESS_TIMEOUT_S,
+                    )
+                    process.kill()
+                    process.wait(timeout=10)
+                    timed_out = True
+                    break
+
                 ready, _, _ = select.select([process.stdout, process.stderr], [], [], 0.1)
 
                 for stream in ready:
@@ -218,7 +233,6 @@ class Worker(BaseWorker):
                             chunk = stream.read(1024).decode("utf-8", errors="replace")
                             if chunk:
                                 stdout_buffer += chunk
-                                # Log complete lines immediately
                                 while "\n" in stdout_buffer:
                                     line, stdout_buffer = stdout_buffer.split("\n", 1)
                                     if line.strip():
@@ -231,7 +245,6 @@ class Worker(BaseWorker):
                             chunk = stream.read(1024).decode("utf-8", errors="replace")
                             if chunk:
                                 stderr_buffer += chunk
-                                # Log complete lines immediately
                                 while "\n" in stderr_buffer:
                                     line, stderr_buffer = stderr_buffer.split("\n", 1)
                                     if line.strip():
@@ -262,6 +275,22 @@ class Worker(BaseWorker):
                     if line.strip():
                         raw_stderr_lines.append(line.strip())
                         logger.log(_parse_log_level(line), "script_final_error output=%s", line.strip())
+
+            if timed_out:
+                message = (
+                    f"Ingestion subprocess timed out after {SUBPROCESS_TIMEOUT_S}s. "
+                    f"Possible solution: increase SUBPROCESS_TIMEOUT_S or reduce source size"
+                )
+                result_metadata = TaskResultMetadata(message=message, type=ResultType.ERROR)
+                self._update_task_status_to_failed(
+                    organization_id=organization_id,
+                    task_id=task_id,
+                    source_name=source_name,
+                    source_type=source_type,
+                    ingestion_id=ingestion_id,
+                    result_metadata=result_metadata,
+                )
+                return ProcessTaskOutcome.FAIL_FATAL_ACK
 
             if process.returncode != 0:
                 logger.error("script_failed return_code=%s", process.returncode)
@@ -303,6 +332,9 @@ class Worker(BaseWorker):
                     ingestion_id=ingestion_id,
                     result_metadata=result_metadata,
                 )
+
+                if error_type in self._FATAL_ERROR_TYPES:
+                    return ProcessTaskOutcome.FAIL_FATAL_ACK
                 return ProcessTaskOutcome.FAIL_RETRY
             else:
                 logger.info("task_completed ingestion_id=%s", ingestion_id)
@@ -333,6 +365,13 @@ class Worker(BaseWorker):
     _WARNING_LINE_RE = re.compile(
         r"^(?:\S+\.)*(\w*Warning)\s*:\s*(.+)",
     )
+    _FATAL_ERROR_TYPES = frozenset({
+        "Out of Memory",
+        "Environment Error",
+        "Module Not Found Error",
+        "Google AI API Error",
+        "pyarrow_incompatible",
+    })
 
     def _parse_error_message(self, stderr_text: str) -> dict:
         """Parse error messages to provide a cleaner summary."""

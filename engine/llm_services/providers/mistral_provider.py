@@ -19,6 +19,9 @@ from engine.llm_services.utils import validate_and_extract_json_response, wrap_s
 LOGGER = logging.getLogger(__name__)
 
 
+_MISTRAL_TIMEOUT_MS = 600_000
+
+
 class MistralProvider(BaseProvider):
     _sdk_exceptions = (openai.APIError, mistralai.SDKError)
 
@@ -145,7 +148,7 @@ class MistralProvider(BaseProvider):
         stream: bool,
         **kwargs,
     ) -> tuple[BaseModel, int, int, int]:
-        client = mistralai.Mistral(api_key=self._api_key)
+        client = mistralai.Mistral(api_key=self._api_key, timeout_ms=_MISTRAL_TIMEOUT_MS)
 
         # Convert messages format if needed
         if isinstance(messages, str):
@@ -311,8 +314,7 @@ class MistralProvider(BaseProvider):
         if response_format is not None:
             text_prompt = format_prompt_with_pydantic_output(text_prompt, response_format)
 
-        # Use Mistral native client for vision
-        mclient = mistralai.Mistral(api_key=self._api_key)
+        mclient = mistralai.Mistral(api_key=self._api_key, timeout_ms=_MISTRAL_TIMEOUT_MS)
         content: list[dict] = [{"type": "text", "text": text_prompt}]
         for img in image_content_list:
             b64 = base64.b64encode(img).decode("utf-8")
@@ -344,7 +346,7 @@ class MistralProvider(BaseProvider):
             raise
 
     async def ocr(self, messages: list[dict], **kwargs) -> tuple[str, int, int, int]:
-        client = mistralai.Mistral(api_key=self._api_key)
+        client = mistralai.Mistral(api_key=self._api_key, timeout_ms=_MISTRAL_TIMEOUT_MS)
 
         # Handle case where messages is a dict with "messages" key (from test)
         if isinstance(messages, dict) and "messages" in messages:

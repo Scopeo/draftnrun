@@ -7,7 +7,13 @@ import boto3
 from ada_backend.schemas.ingestion_task_schema import (
     S3UploadedInformation,
 )
-from ada_backend.schemas.s3_file_schema import S3UploadURL, UploadFileRequest
+from ada_backend.schemas.s3_file_schema import (
+    CompletedPart,
+    MultipartInitResponse,
+    PresignedPartURL,
+    S3UploadURL,
+    UploadFileRequest,
+)
 from data_ingestion.boto3_client import (
     create_bucket,
     delete_file_from_bucket,
@@ -19,6 +25,11 @@ from data_ingestion.utils import sanitize_filename
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
+
+
+def generate_upload_key(organization_id: UUID, filename: str) -> str:
+    sanitized_filename = sanitize_filename(f"{uuid4()}_{filename}", remove_extension_dot=False)
+    return f"{organization_id}/{sanitized_filename}"
 
 
 @lru_cache()
@@ -41,17 +52,24 @@ def upload_file_to_s3(
     bucket_name: str = settings.S3_BUCKET_NAME,
 ) -> S3UploadedInformation:
     """Upload a file to an S3 bucket."""
-    sanitized_key = sanitize_filename(file_name, remove_extension_dot=False)
     try:
         s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
-        upload_file_to_bucket(
-            s3_client=s3_client, bucket_name=bucket_name, key=sanitized_key, byte_content=byte_content
-        )
-        LOGGER.info(f"Successfully uploaded file to S3 with {sanitized_key} key.")
-        return S3UploadedInformation(s3_path_file=sanitized_key)
+        upload_file_to_bucket(s3_client=s3_client, bucket_name=bucket_name, key=file_name, byte_content=byte_content)
+        LOGGER.info(f"Successfully uploaded file to S3 with {file_name} key.")
+        return S3UploadedInformation(s3_path_file=file_name)
     except Exception as e:
         LOGGER.error(f"Error uploading file to S3: {str(e)}")
         raise ValueError(f"Failed to upload file to S3: {str(e)}")
+
+
+def upload_organization_file_to_s3(
+    organization_id: UUID,
+    filename: str,
+    byte_content: bytes,
+    bucket_name: str = settings.S3_BUCKET_NAME,
+) -> S3UploadedInformation:
+    key = generate_upload_key(organization_id, filename)
+    return upload_file_to_s3(file_name=key, byte_content=byte_content, bucket_name=bucket_name)
 
 
 def delete_file_from_s3(
@@ -128,8 +146,7 @@ def generate_s3_upload_presigned_urls_service(
     s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
     upload_urls = []
     for upload_file_request in upload_file_requests:
-        s3_filename = f"{organization_id}/{uuid4()}_{upload_file_request.filename}"
-        key = sanitize_filename(s3_filename, remove_extension_dot=False)
+        key = generate_upload_key(organization_id, upload_file_request.filename)
         presigned_url = generate_presigned_upload_url(
             s3_client=s3_client,
             key=key,
@@ -145,3 +162,86 @@ def generate_s3_upload_presigned_urls_service(
             )
         )
     return upload_urls
+
+
+def init_multipart_upload(
+    organization_id: UUID,
+    filename: str,
+    content_type: str,
+    bucket_name: str = settings.S3_BUCKET_NAME,
+) -> MultipartInitResponse:
+    s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
+    key = generate_upload_key(organization_id, filename)
+    try:
+        response = s3_client.create_multipart_upload(Bucket=bucket_name, Key=key, ContentType=content_type)
+        upload_id = response["UploadId"]
+        LOGGER.info(f"Initiated multipart upload for {key}, upload_id={upload_id}")
+        return MultipartInitResponse(upload_id=upload_id, key=key)
+    except Exception as e:
+        LOGGER.error(f"Failed to initiate multipart upload for {key}: {e}")
+        raise ValueError(f"Failed to initiate multipart upload: {e}") from e
+
+
+def generate_presigned_part_urls(
+    key: str,
+    upload_id: str,
+    part_count: int,
+    bucket_name: str = settings.S3_BUCKET_NAME,
+    expiration: int = 3600,
+) -> list[PresignedPartURL]:
+    s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
+    urls: list[PresignedPartURL] = []
+    try:
+        for part_number in range(1, part_count + 1):
+            url = s3_client.generate_presigned_url(
+                ClientMethod="upload_part",
+                Params={
+                    "Bucket": bucket_name,
+                    "Key": key,
+                    "UploadId": upload_id,
+                    "PartNumber": part_number,
+                },
+                ExpiresIn=expiration,
+            )
+            urls.append(PresignedPartURL(part_number=part_number, presigned_url=url))
+        LOGGER.info(f"Generated {part_count} presigned part URLs for {key}")
+        return urls
+    except Exception as e:
+        LOGGER.error(f"Failed to generate presigned part URLs for {key}: {e}")
+        raise ValueError(f"Failed to generate presigned part URLs: {e}") from e
+
+
+def complete_multipart_upload(
+    key: str,
+    upload_id: str,
+    parts: list[CompletedPart],
+    bucket_name: str = settings.S3_BUCKET_NAME,
+) -> None:
+    s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
+    try:
+        s3_client.complete_multipart_upload(
+            Bucket=bucket_name,
+            Key=key,
+            UploadId=upload_id,
+            MultipartUpload={
+                "Parts": [{"PartNumber": p.part_number, "ETag": p.etag} for p in parts],
+            },
+        )
+        LOGGER.info(f"Completed multipart upload for {key}")
+    except Exception as e:
+        LOGGER.error(f"Failed to complete multipart upload for {key}: {e}")
+        raise ValueError(f"Failed to complete multipart upload: {e}") from e
+
+
+def abort_multipart_upload(
+    key: str,
+    upload_id: str,
+    bucket_name: str = settings.S3_BUCKET_NAME,
+) -> None:
+    s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
+    try:
+        s3_client.abort_multipart_upload(Bucket=bucket_name, Key=key, UploadId=upload_id)
+        LOGGER.info(f"Aborted multipart upload for {key}")
+    except Exception as e:
+        LOGGER.error(f"Failed to abort multipart upload for {key}: {e}")
+        raise ValueError(f"Failed to abort multipart upload: {e}") from e

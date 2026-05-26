@@ -250,6 +250,22 @@ Run input data is persisted in the `run_inputs` table (keyed by `retry_group_id`
 |---|---|---|---|
 | POST | `/organizations/{org_id}/files/upload-urls` | JWT\|ApiKey(Developer) | Get presigned URLs |
 | POST | `/files/{organization_id}/upload` | JWT(Developer) | Upload files |
+| POST | `/organizations/{org_id}/files/multipart/init` | JWT\|ApiKey(Developer) | Initiate multipart upload |
+| POST | `/organizations/{org_id}/files/multipart/presign-parts` | JWT\|ApiKey(Developer) | Get presigned URLs for parts |
+| POST | `/organizations/{org_id}/files/multipart/complete` | JWT\|ApiKey(Developer) | Complete multipart upload |
+| POST | `/organizations/{org_id}/files/multipart/abort` | JWT\|ApiKey(Developer) | Abort multipart upload |
+
+### Multipart Upload Flow
+
+Use multipart upload instead of single-shot presigned PUT when the file size meets or exceeds the configured multipart upload threshold (`MULTIPART_THRESHOLD`; see `frontend/src/components/knowledge/DataSourceDialogUpload.vue` for browser uploads and `data_ingestion/boto3_client.py` for backend direct uploads):
+
+1. **Init** — `POST .../multipart/init` with `{ filename, content_type }`. Returns `{ upload_id, key }`, where `key` is namespaced under the organization prefix (`{organization_id}/...`).
+2. **Presign parts** — `POST .../multipart/presign-parts` with `{ key, upload_id, part_count }`. Returns presigned URLs for each part. Send the `key` back exactly as returned by init; do not sanitize or rewrite it client-side.
+3. **Upload parts** — `PUT` each file chunk to its presigned URL. Collect `ETag` from each response header.
+4. **Complete** — `POST .../multipart/complete` with `{ key, upload_id, parts: [{ part_number: 1, etag: "\"etag-from-s3-part-1\"" }, { part_number: 2, etag: "\"etag-from-s3-part-2\"" }] }`. The `parts` array must be sorted by ascending `part_number`, and each `etag` must be the exact string returned by S3 for that part; do not trim, modify, or change quotes. Otherwise S3 returns `InvalidPartOrder` or `InvalidPart`.
+5. **Abort** (on failure) — `POST .../multipart/abort` with `{ key, upload_id }` to clean up incomplete uploads.
+
+S3 bucket CORS must allow browser multipart uploads: include the app origin in `AllowedOrigins`, include `PUT` in `AllowedMethods`, and expose the `ETag` response header (for example, `ExposeHeaders: ["ETag"]`) so the frontend can complete the upload.
 
 ## Credits (`credits_router.py`)
 
