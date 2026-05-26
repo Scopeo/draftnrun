@@ -1,6 +1,9 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from workers.worker import main as worker_main
+from workers.worker.base_worker import ProcessTaskOutcome
 
 
 @pytest.fixture
@@ -11,6 +14,19 @@ def worker():
     w.current_threads = 0
     w.worker_type = "redis_ingestion"
     return w
+
+
+def _make_payload(**overrides):
+    base = {
+        "ingestion_id": "ing-test",
+        "organization_id": "org-test",
+        "task_id": "task-test",
+        "source_type": "local",
+        "source_name": "test-source",
+        "source_attributes": {"list_of_files_from_local_folder": []},
+    }
+    base.update(overrides)
+    return base
 
 
 class TestSubprocessTimeout:
@@ -111,3 +127,44 @@ class TestFatalVsRetryOutcome:
     def test_transient_errors_produce_retry_outcome(self, worker, stderr_text):
         error_summary = worker._parse_error_message(stderr_text)
         assert error_summary["error_type"] not in worker._FATAL_ERROR_TYPES
+
+
+class TestTaskStatusOnRetry:
+    """Regression: retryable errors must reset the task to PENDING, not leave it FAILED."""
+
+    def _run_process_task(self, worker, stderr_text: str, returncode: int = 1):
+        mock_process = MagicMock()
+        mock_process.returncode = returncode
+        mock_process.stdout = MagicMock()
+        mock_process.stderr = MagicMock()
+        mock_process.poll = MagicMock(side_effect=[None, 0])
+        mock_process.stdout.fileno.return_value = 10
+        mock_process.stderr.fileno.return_value = 11
+        mock_process.stdout.read.return_value = b""
+        mock_process.stderr.read.return_value = stderr_text.encode()
+
+        with (
+            patch("subprocess.Popen", return_value=mock_process),
+            patch("select.select", return_value=([], [], [])),
+            patch("fcntl.fcntl"),
+            patch.object(worker, "_update_task_status_to_failed") as mock_failed,
+            patch.object(worker, "_reset_task_status_to_pending") as mock_pending,
+        ):
+            outcome = worker.process_task(_make_payload())
+        return outcome, mock_failed, mock_pending
+
+    def test_retryable_error_resets_to_pending(self, worker):
+        outcome, mock_failed, mock_pending = self._run_process_task(
+            worker, "httpx.HTTPStatusError: Client error '404 Not Found'"
+        )
+        assert outcome == ProcessTaskOutcome.FAIL_RETRY
+        mock_pending.assert_called_once()
+        mock_failed.assert_not_called()
+
+    def test_fatal_error_marks_failed(self, worker):
+        outcome, mock_failed, mock_pending = self._run_process_task(
+            worker, "MemoryError: cannot allocate"
+        )
+        assert outcome == ProcessTaskOutcome.FAIL_FATAL_ACK
+        mock_failed.assert_called_once()
+        mock_pending.assert_not_called()
