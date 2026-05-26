@@ -57,6 +57,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "hubspot_mcp_tool_description": UUID("1d6ce8b3-44ae-4c3d-a14b-2837a3a5717e"),
     "hubspot_neverdrop_mcp_tool_description": UUID("a1e7f624-6c98-4546-b769-3607819ebad2"),
     "google_calendar_mcp_tool_description": UUID("d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"),
+    "notion_neverdrop_mcp_tool_description": UUID("deb1f596-64d1-494d-a09c-dfb5c1211c30"),
     "outlook_sender_tool_description": UUID("31344b0e-4949-42b6-98a8-6b1dcec98f3c"),
     "mail_sender_tool_description": UUID("7fe2178e-36c6-4195-aa5b-9a9178be70e8"),
     "default_sql_tool_description": UUID("7a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d"),
@@ -160,6 +161,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["google_calendar_mcp_tool_description"],
         **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
     )
+    notion_neverdrop_mcp_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["notion_neverdrop_mcp_tool_description"],
+        **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
+    )
     outlook_sender_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["outlook_sender_tool_description"],
         **OUTLOOK_SENDER_TOOL_DESCRIPTION.model_dump(),
@@ -208,6 +213,7 @@ def seed_tool_description(session: Session):
             hubspot_mcp_tool_description,
             hubspot_neverdrop_mcp_tool_description,
             google_calendar_mcp_tool_description,
+            notion_neverdrop_mcp_tool_description,
             outlook_sender_tool_description,
             mail_sender_tool_description,
             default_sql_tool_description,
