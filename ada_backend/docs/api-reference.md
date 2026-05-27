@@ -244,6 +244,15 @@ Run input data is persisted in the `run_inputs` table (keyed by `retry_group_id`
 | POST | `/ingestion_task/{organization_id}` | JWT\|ApiKey(Developer) | Create task |
 | DELETE | `/ingestion_task/{organization_id}/{source_id}` | JWT(Developer) | Delete task |
 
+### Source ID assignment
+
+`source_id` is assigned server-side at task creation by `create_ingestion_task_by_organization` (`ada_backend/services/ingestion_task_service.py`):
+
+- If the request omits `source_id` (new source flow), the service generates one with `uuid4()`, persists it on the `IngestionTask` row, and forwards it in the Redis payload.
+- If the request includes `source_id` (add-files-to-existing-source flow), the provided value is preserved end to end.
+
+This guarantee is important because the ingestion subprocess may run more than once for the same task — `FAIL_RETRY` re-dispatches the Redis message, and worker reclaims can re-deliver after a crash. With a single, stable `source_id` carried on the payload, every attempt writes chunks under the same UUID, so they consolidate into one source. The historical fallbacks in the subprocess (`ingestion_script/ingest_folder_source.py`, `ingestion_script/utils.py`) and the source repository (`ada_backend/repositories/source_repository.py`) remain only as defense-in-depth and should not trigger in the normal API-driven path.
+
 ## S3 Files (`s3_files_router.py`)
 
 | Method | Path | Auth | Description |
