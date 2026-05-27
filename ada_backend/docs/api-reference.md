@@ -244,12 +244,37 @@ Run input data is persisted in the `run_inputs` table (keyed by `retry_group_id`
 | POST | `/ingestion_task/{organization_id}` | JWT\|ApiKey(Developer) | Create task |
 | DELETE | `/ingestion_task/{organization_id}/{source_id}` | JWT(Developer) | Delete task |
 
+### Source ID assignment
+
+`source_id` is generated server-side at task creation by `create_ingestion_task_by_organization` (`ada_backend/services/ingestion_task_service.py`) and forwarded on the Redis payload:
+
+- If the request omits `source_id` (new source flow), the service generates one with `uuid4()` and forwards it in the Redis payload. The `IngestionTask` DB row keeps `source_id = NULL` because the `data_sources` row doesn't exist yet (FK constraint `ingestion_tasks_source_id_fkey`). The subprocess creates the `data_sources` row using the payload's `source_id` and updates `IngestionTask.source_id` on completion.
+- If the request includes `source_id` (add-files-to-existing-source flow), the provided value is preserved end to end — both in the DB row and the Redis payload.
+
+This guarantee is important because the ingestion subprocess may run more than once for the same task — `FAIL_RETRY` re-dispatches the Redis message, and worker reclaims can re-deliver after a crash. With a single, stable `source_id` carried on the payload, every attempt writes chunks under the same UUID, so they consolidate into one source. The historical fallbacks in the subprocess (`ingestion_script/ingest_folder_source.py`, `ingestion_script/utils.py`) and the source repository (`ada_backend/repositories/source_repository.py`) remain only as defense-in-depth and should not trigger in the normal API-driven path.
+
 ## S3 Files (`s3_files_router.py`)
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | POST | `/organizations/{org_id}/files/upload-urls` | JWT\|ApiKey(Developer) | Get presigned URLs |
 | POST | `/files/{organization_id}/upload` | JWT(Developer) | Upload files |
+| POST | `/organizations/{org_id}/files/multipart/init` | JWT\|ApiKey(Developer) | Initiate multipart upload |
+| POST | `/organizations/{org_id}/files/multipart/presign-parts` | JWT\|ApiKey(Developer) | Get presigned URLs for parts |
+| POST | `/organizations/{org_id}/files/multipart/complete` | JWT\|ApiKey(Developer) | Complete multipart upload |
+| POST | `/organizations/{org_id}/files/multipart/abort` | JWT\|ApiKey(Developer) | Abort multipart upload |
+
+### Multipart Upload Flow
+
+Use multipart upload instead of single-shot presigned PUT when the file size meets or exceeds the configured multipart upload threshold (`MULTIPART_THRESHOLD`; see `frontend/src/components/knowledge/DataSourceDialogUpload.vue` for browser uploads and `data_ingestion/boto3_client.py` for backend direct uploads):
+
+1. **Init** — `POST .../multipart/init` with `{ filename, content_type }`. Returns `{ upload_id, key }`, where `key` is namespaced under the organization prefix (`{organization_id}/...`).
+2. **Presign parts** — `POST .../multipart/presign-parts` with `{ key, upload_id, part_count }`. Returns presigned URLs for each part. Send the `key` back exactly as returned by init; do not sanitize or rewrite it client-side.
+3. **Upload parts** — `PUT` each file chunk to its presigned URL. Collect `ETag` from each response header.
+4. **Complete** — `POST .../multipart/complete` with `{ key, upload_id, parts: [{ part_number: 1, etag: "\"etag-from-s3-part-1\"" }, { part_number: 2, etag: "\"etag-from-s3-part-2\"" }] }`. The `parts` array must be sorted by ascending `part_number`, and each `etag` must be the exact string returned by S3 for that part; do not trim, modify, or change quotes. Otherwise S3 returns `InvalidPartOrder` or `InvalidPart`.
+5. **Abort** (on failure) — `POST .../multipart/abort` with `{ key, upload_id }` to clean up incomplete uploads.
+
+S3 bucket CORS must allow browser multipart uploads: include the app origin in `AllowedOrigins`, include `PUT` in `AllowedMethods`, and expose the `ETag` response header (for example, `ExposeHeaders: ["ETag"]`) so the frontend can complete the upload.
 
 ## Credits (`credits_router.py`)
 

@@ -3,15 +3,19 @@ import logging
 import os
 import re
 import resource
+import signal
 import subprocess
+import threading
+import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
+import redis
 import requests
 
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, ResultType, TaskResultMetadata
-from workers.worker.base_worker import BaseWorker, ProcessTaskOutcome, logger, redis_client
+from workers.worker.base_worker import CONSUMER_GROUP, BaseWorker, ProcessTaskOutcome, logger, redis_client
 
 _LEVEL_RE = re.compile(r"\b(DEBUG|INFO|WARNING|ERROR|CRITICAL)\b")
 _LEVEL_MAP = {
@@ -33,7 +37,10 @@ def _parse_log_level(line: str, default: int = logging.ERROR) -> int:
 STREAM_NAME = os.getenv("REDIS_INGESTION_STREAM", "ada_ingestion_stream")
 MAX_CONCURRENT_INGESTIONS = int(os.getenv("MAX_CONCURRENT_INGESTIONS", 2))
 SUBPROCESS_MEMORY_LIMIT_MB = int(os.getenv("SUBPROCESS_MEMORY_LIMIT_MB", "4096"))
+SUBPROCESS_TIMEOUT_S = int(os.getenv("SUBPROCESS_TIMEOUT_S", "1800"))
 INGESTION_BATCH_SIZE = int(os.getenv("INGESTION_BATCH_SIZE", "50"))
+INGESTION_PEL_HEARTBEAT_INTERVAL_S = int(os.getenv("INGESTION_PEL_HEARTBEAT_INTERVAL_S", "20"))
+_KILL_GRACE_PERIOD_S = 5
 
 
 def _set_memory_limit() -> None:
@@ -43,7 +50,45 @@ def _set_memory_limit() -> None:
         resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
 
 
-# Default API base URL - use HTTP for localhost
+def _kill_process_group(process: subprocess.Popen, grace_period_s: float = _KILL_GRACE_PERIOD_S) -> None:
+    """SIGTERM the subprocess's process group, escalate to SIGKILL after a grace period.
+
+    Requires the subprocess to have been spawned with `start_new_session=True` so it is
+    the leader of its own process group; otherwise we'd nuke the worker itself.
+    """
+    if process.poll() is not None:
+        return
+    try:
+        pgid = os.getpgid(process.pid)
+    except ProcessLookupError:
+        return
+
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    except OSError as e:
+        logger.warning("killpg_sigterm_failed pid=%s pgid=%s error=%s", process.pid, pgid, str(e))
+
+    try:
+        process.wait(timeout=grace_period_s)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    except OSError as e:
+        logger.warning("killpg_sigkill_failed pid=%s pgid=%s error=%s", process.pid, pgid, str(e))
+
+    try:
+        process.wait(timeout=grace_period_s)
+    except subprocess.TimeoutExpired:
+        logger.error("subprocess_did_not_exit_after_sigkill pid=%s pgid=%s", process.pid, pgid)
+
+
 DEFAULT_API_BASE_URL = "http://localhost:8000"
 
 
@@ -58,6 +103,77 @@ class Worker(BaseWorker):
     def get_required_fields(self) -> list[str]:
         """Get required fields for ingestion task payload."""
         return ["ingestion_id"]
+
+    def _pel_heartbeat_loop(
+        self,
+        message_id: str,
+        stop_event: threading.Event,
+        interval_s: float,
+        max_duration_s: float,
+    ) -> None:
+        """Refresh the PEL idle timer for `message_id` without bumping delivery count.
+
+        Uses `XCLAIM ... JUSTID` so `times_delivered` is NOT incremented while
+        long-running ingestion subprocesses execute. Stops when `stop_event` is
+        set or when `max_duration_s` has elapsed (defense-in-depth so a genuinely
+        hung handler can still be reclaimed by the BaseWorker idle threshold).
+        """
+        consumer_name = self._consumer_name()
+        deadline = time.monotonic() + max_duration_s if max_duration_s > 0 else None
+        while not stop_event.wait(timeout=interval_s):
+            if deadline is not None and time.monotonic() > deadline:
+                logger.warning(
+                    "pel_heartbeat_max_duration_reached message_id=%s max_duration_s=%s",
+                    message_id,
+                    max_duration_s,
+                )
+                return
+            try:
+                redis_client.xclaim(
+                    self.stream_name,
+                    CONSUMER_GROUP,
+                    consumer_name,
+                    min_idle_time=0,
+                    message_ids=[message_id],
+                    justid=True,
+                )
+            except redis.ConnectionError as e:
+                logger.warning(
+                    "pel_heartbeat_redis_connection_error message_id=%s error=%s",
+                    message_id,
+                    str(e),
+                )
+            except redis.ResponseError as e:
+                logger.warning(
+                    "pel_heartbeat_redis_response_error message_id=%s error=%s",
+                    message_id,
+                    str(e),
+                )
+            except Exception as e:
+                logger.warning(
+                    "pel_heartbeat_unexpected_error message_id=%s error=%s",
+                    message_id,
+                    str(e),
+                )
+
+    def _process_and_ack(self, payload: Dict[str, Any], message_id: str, fields: Dict[str, str]) -> None:
+        stop_event = threading.Event()
+        heartbeat_thread: Optional[threading.Thread] = None
+        if INGESTION_PEL_HEARTBEAT_INTERVAL_S > 0:
+            max_duration_s = float(SUBPROCESS_TIMEOUT_S) + _KILL_GRACE_PERIOD_S * 2 if SUBPROCESS_TIMEOUT_S > 0 else 0
+            heartbeat_thread = threading.Thread(
+                target=self._pel_heartbeat_loop,
+                args=(message_id, stop_event, float(INGESTION_PEL_HEARTBEAT_INTERVAL_S), max_duration_s),
+                daemon=True,
+                name=f"ingestion-pel-heartbeat-{message_id}",
+            )
+            heartbeat_thread.start()
+        try:
+            super()._process_and_ack(payload, message_id, fields)
+        finally:
+            stop_event.set()
+            if heartbeat_thread is not None:
+                heartbeat_thread.join(timeout=float(INGESTION_PEL_HEARTBEAT_INTERVAL_S) + 1.0)
 
     def process_task(self, payload: Dict[str, Any]) -> ProcessTaskOutcome:
         """Process a single ingestion task."""
@@ -187,6 +303,7 @@ class Worker(BaseWorker):
                 env=env,
                 cwd=str(Path(__file__).parents[2]),
                 preexec_fn=_set_memory_limit,
+                start_new_session=True,
             )
 
             # Real-time logging - stream output as it happens
@@ -207,9 +324,21 @@ class Worker(BaseWorker):
             stdout_buffer = ""
             stderr_buffer = ""
             raw_stderr_lines: list[str] = []
+            timed_out = False
+            start_monotonic = time.monotonic()
 
-            # Stream output in real-time until process completes
             while process.poll() is None:
+                if SUBPROCESS_TIMEOUT_S > 0 and time.monotonic() - start_monotonic > SUBPROCESS_TIMEOUT_S:
+                    logger.error(
+                        "subprocess_timeout ingestion_id=%s elapsed=%ds limit=%ds",
+                        ingestion_id,
+                        int(time.monotonic() - start_monotonic),
+                        SUBPROCESS_TIMEOUT_S,
+                    )
+                    _kill_process_group(process)
+                    timed_out = True
+                    break
+
                 ready, _, _ = select.select([process.stdout, process.stderr], [], [], 0.1)
 
                 for stream in ready:
@@ -218,7 +347,6 @@ class Worker(BaseWorker):
                             chunk = stream.read(1024).decode("utf-8", errors="replace")
                             if chunk:
                                 stdout_buffer += chunk
-                                # Log complete lines immediately
                                 while "\n" in stdout_buffer:
                                     line, stdout_buffer = stdout_buffer.split("\n", 1)
                                     if line.strip():
@@ -231,7 +359,6 @@ class Worker(BaseWorker):
                             chunk = stream.read(1024).decode("utf-8", errors="replace")
                             if chunk:
                                 stderr_buffer += chunk
-                                # Log complete lines immediately
                                 while "\n" in stderr_buffer:
                                     line, stderr_buffer = stderr_buffer.split("\n", 1)
                                     if line.strip():
@@ -262,6 +389,22 @@ class Worker(BaseWorker):
                     if line.strip():
                         raw_stderr_lines.append(line.strip())
                         logger.log(_parse_log_level(line), "script_final_error output=%s", line.strip())
+
+            if timed_out:
+                message = (
+                    f"Ingestion subprocess timed out after {SUBPROCESS_TIMEOUT_S}s. "
+                    f"Possible solution: increase SUBPROCESS_TIMEOUT_S or reduce source size"
+                )
+                result_metadata = TaskResultMetadata(message=message, type=ResultType.ERROR)
+                self._update_task_status_to_failed(
+                    organization_id=organization_id,
+                    task_id=task_id,
+                    source_name=source_name,
+                    source_type=source_type,
+                    ingestion_id=ingestion_id,
+                    result_metadata=result_metadata,
+                )
+                return ProcessTaskOutcome.FAIL_FATAL_ACK
 
             if process.returncode != 0:
                 logger.error("script_failed return_code=%s", process.returncode)
@@ -295,13 +438,24 @@ class Worker(BaseWorker):
                     message=message,
                     type=ResultType.ERROR,
                 )
-                self._update_task_status_to_failed(
+
+                if error_type in self._FATAL_ERROR_TYPES:
+                    self._update_task_status_to_failed(
+                        organization_id=organization_id,
+                        task_id=task_id,
+                        source_name=source_name,
+                        source_type=source_type,
+                        ingestion_id=ingestion_id,
+                        result_metadata=result_metadata,
+                    )
+                    return ProcessTaskOutcome.FAIL_FATAL_ACK
+
+                self._reset_task_status_to_pending(
                     organization_id=organization_id,
                     task_id=task_id,
                     source_name=source_name,
                     source_type=source_type,
                     ingestion_id=ingestion_id,
-                    result_metadata=result_metadata,
                 )
                 return ProcessTaskOutcome.FAIL_RETRY
             else:
@@ -311,17 +465,12 @@ class Worker(BaseWorker):
         except Exception as e:
             logger.error("task_error error=%s", str(e), exc_info=True)
             try:
-                result_metadata = TaskResultMetadata(
-                    message=str(e),
-                    type=ResultType.ERROR,
-                )
-                self._update_task_status_to_failed(
+                self._reset_task_status_to_pending(
                     organization_id=organization_id,
                     task_id=task_id,
                     source_name=source_name,
                     source_type=source_type,
                     ingestion_id=ingestion_id,
-                    result_metadata=result_metadata,
                 )
             except Exception as update_error:
                 logger.error("failed_to_update_task_status error=%s", str(update_error))
@@ -333,6 +482,13 @@ class Worker(BaseWorker):
     _WARNING_LINE_RE = re.compile(
         r"^(?:\S+\.)*(\w*Warning)\s*:\s*(.+)",
     )
+    _FATAL_ERROR_TYPES = frozenset({
+        "Out of Memory",
+        "Environment Error",
+        "Module Not Found Error",
+        "Google AI API Error",
+        "pyarrow_incompatible",
+    })
 
     def _parse_error_message(self, stderr_text: str) -> dict:
         """Parse error messages to provide a cleaner summary."""
@@ -440,6 +596,58 @@ class Worker(BaseWorker):
         except Exception as e:
             logger.error(
                 "failed_to_update_task_status_to_failed ingestion_id=%s task_id=%s organization_id=%s error=%s",
+                ingestion_id,
+                task_id,
+                organization_id,
+                str(e),
+            )
+
+    def _reset_task_status_to_pending(
+        self,
+        organization_id: str,
+        task_id: str,
+        source_name: str,
+        source_type: str,
+        ingestion_id: str,
+    ) -> None:
+        """Reset the task status to PENDING so it stays pending during retries.
+
+        The ingestion subprocess marks the task FAILED on error before exiting,
+        but the worker may schedule a retry.  Overriding back to PENDING keeps
+        the user-visible status consistent with what is actually happening.
+        """
+        try:
+            pending_task = IngestionTaskUpdate(
+                id=task_id,
+                source_name=source_name,
+                source_type=source_type,
+                status=db.TaskStatus.PENDING,
+            )
+
+            api_base_url = os.getenv("API_BASE_URL", DEFAULT_API_BASE_URL)
+            ingestion_api_key = os.getenv("INGESTION_API_KEY", "default-key")
+
+            response = requests.patch(
+                f"{api_base_url}/ingestion_task/{organization_id}",
+                json=pending_task.model_dump(mode="json"),
+                headers={
+                    "x-ingestion-api-key": ingestion_api_key,
+                    "Content-Type": "application/json",
+                },
+                timeout=10,
+            )
+            response.raise_for_status()
+
+            logger.info(
+                "task_status_reset_to_pending ingestion_id=%s task_id=%s organization_id=%s",
+                ingestion_id,
+                task_id,
+                organization_id,
+            )
+
+        except Exception as e:
+            logger.error(
+                "failed_to_reset_task_status_to_pending ingestion_id=%s task_id=%s organization_id=%s error=%s",
                 ingestion_id,
                 task_id,
                 organization_id,

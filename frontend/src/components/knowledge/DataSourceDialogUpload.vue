@@ -8,7 +8,7 @@ import {
   useCreateIngestionTaskMutation,
 } from '@/composables/queries/useDataSourcesQuery'
 import { getErrorMessage } from '@/composables/useDataSources'
-import { scopeoApi } from '@/api'
+import filesApi, { type CompletedPart } from '@/api/files'
 
 const props = defineProps<{
   modelValue: boolean
@@ -182,6 +182,62 @@ const validateSourceName = () => {
   return true
 }
 
+const MULTIPART_THRESHOLD = 50 * 1024 * 1024
+const MULTIPART_PART_SIZE = 50 * 1024 * 1024
+const PART_UPLOAD_CONCURRENCY = 4
+
+const uploadFileMultipart = async (orgId: string, file: File): Promise<string> => {
+  const contentType = file.type || 'application/octet-stream'
+  const { upload_id: uploadId, key } = await filesApi.initMultipartUpload(orgId, file.name, contentType)
+
+  try {
+    const partCount = Math.ceil(file.size / MULTIPART_PART_SIZE)
+    const partUrls = await filesApi.getPartPresignedUrls(orgId, key, uploadId, partCount)
+
+    const completedParts: CompletedPart[] = []
+    for (let batch = 0; batch < partUrls.length; batch += PART_UPLOAD_CONCURRENCY) {
+      const slice = partUrls.slice(batch, batch + PART_UPLOAD_CONCURRENCY)
+      const results = await Promise.all(
+        slice.map(async ({ part_number, presigned_url }) => {
+          const start = (part_number - 1) * MULTIPART_PART_SIZE
+          const end = Math.min(start + MULTIPART_PART_SIZE, file.size)
+          const blob = file.slice(start, end)
+
+          const res = await fetch(presigned_url, { method: 'PUT', body: blob })
+          if (!res.ok) throw new Error(`Part ${part_number} upload failed for ${file.name} (status ${res.status})`)
+
+          const etag = res.headers.get('ETag')
+          if (!etag) throw new Error(`Missing ETag for part ${part_number} of ${file.name}`)
+          return { part_number, etag }
+        }),
+      )
+      completedParts.push(...results)
+    }
+
+    completedParts.sort((a, b) => a.part_number - b.part_number)
+    await filesApi.completeMultipartUpload(orgId, key, uploadId, completedParts)
+    return key
+  } catch (err) {
+    await filesApi.abortMultipartUpload(orgId, key, uploadId).catch(abortErr => {
+      logger.error('Failed to abort multipart upload', { error: abortErr, key, uploadId })
+    })
+    throw err
+  }
+}
+
+const uploadFileSinglePut = async (
+  file: File,
+  presignedUrl: string,
+  contentType: string,
+): Promise<void> => {
+  const res = await fetch(presignedUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || contentType || 'application/octet-stream' },
+    body: file,
+  })
+  if (!res.ok) throw new Error(`Upload failed for ${file.name} (status ${res.status})`)
+}
+
 const submit = async () => {
   if (files.value.length === 0) {
     errors.value = ['Please select at least one file to upload']
@@ -198,47 +254,65 @@ const submit = async () => {
     errors.value = []
     progress.value = { current: 0, total: files.value.length }
 
-    const presignedList: Array<{ filename: string; presigned_url: string; key: string; content_type: string }> =
-      await scopeoApi.files.getPresignedUploadUrls(props.orgId, files.value)
-
-    if (!presignedList || !Array.isArray(presignedList) || presignedList.length !== files.value.length) {
-      logger.error('Invalid presigned URL response', { error: presignedList })
-      errors.value = ['Failed to get upload URLs for all files']
-      return
-    }
-
-    const CONCURRENCY_LIMIT = 10
-    const batch: Promise<void>[] = []
-    let completedCount = 0
+    const smallFiles: Array<{ file: File; index: number }> = []
+    const largeFiles: Array<{ file: File; index: number }> = []
+    const uploadedKeys: string[] = new Array(files.value.length)
 
     for (let i = 0; i < files.value.length; i++) {
-      const file = files.value[i]
-      const info = presignedList[i]
-      if (!info?.presigned_url || !info?.key) {
-        throw new Error(`Invalid presigned URL response for file ${file?.name || i + 1}`)
+      if (files.value[i].size >= MULTIPART_THRESHOLD) {
+        largeFiles.push({ file: files.value[i], index: i })
+      } else {
+        smallFiles.push({ file: files.value[i], index: i })
+      }
+    }
+
+    let completedCount = 0
+
+    if (smallFiles.length > 0) {
+      const smallFileObjects = smallFiles.map(sf => sf.file)
+      const presignedList: Array<{ filename: string; presigned_url: string; key: string; content_type: string }> =
+        await filesApi.getPresignedUploadUrls(props.orgId, smallFileObjects)
+
+      if (!presignedList || presignedList.length !== smallFiles.length) {
+        errors.value = ['Failed to get upload URLs for all files']
+        return
       }
 
-      const p = fetch(info.presigned_url, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type || info.content_type || 'application/octet-stream' },
-        body: file,
-      }).then(res => {
-        if (!res.ok) throw new Error(`Upload failed for ${file.name} (status ${res.status})`)
-        completedCount++
-        progress.value.current = completedCount
-      })
+      const CONCURRENCY_LIMIT = 10
+      const batch: Promise<void>[] = []
 
-      batch.push(p)
-      if (batch.length >= CONCURRENCY_LIMIT || i === files.value.length - 1) {
-        await Promise.all(batch)
-        batch.length = 0
+      for (let i = 0; i < smallFiles.length; i++) {
+        const { file, index } = smallFiles[i]
+        const info = presignedList[i]
+        if (!info?.presigned_url || !info?.key) {
+          throw new Error(`Invalid presigned URL response for file ${file.name}`)
+        }
+
+        const p = uploadFileSinglePut(file, info.presigned_url, info.content_type).then(() => {
+          uploadedKeys[index] = info.key
+          completedCount++
+          progress.value.current = completedCount
+        })
+
+        batch.push(p)
+        if (batch.length >= CONCURRENCY_LIMIT || i === smallFiles.length - 1) {
+          await Promise.all(batch)
+          batch.length = 0
+        }
       }
+    }
+
+    for (const { file, index } of largeFiles) {
+      const key = await uploadFileMultipart(props.orgId!, file)
+      uploadedKeys[index] = key
+      completedCount++
+      progress.value.current = completedCount
     }
 
     const filesList = files.value.map((file, idx) => ({
-      path: presignedList[idx].key,
+      path: uploadedKeys[idx],
       name: file.name,
-      s3_path: presignedList[idx].key,
+      s3_path: uploadedKeys[idx],
       last_edited_ts: format(new Date(), 'yyyy-MM-dd HH:mm:ss'),
       metadata: {},
     }))

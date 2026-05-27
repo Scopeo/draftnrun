@@ -24,9 +24,8 @@ async def get_chunks_from_document_with_mistral_ocr(
     if not mistral_ocr_api_key:
         raise ValueError("mistral_ocr_api_key is required for MISTRAL_OCR mode")
 
-    if get_presigned_url:
-        file_data_url = get_presigned_url(document.id)
-    else:
+    file_data_url = get_presigned_url(document.id) if get_presigned_url else None
+    if not file_data_url:
         content_bytes = get_file_content(document.id)
         if isinstance(content_bytes, str):
             content_bytes = content_bytes.encode("utf-8")
