@@ -57,10 +57,11 @@ def create_ingestion_task_by_organization(
 ) -> UUID:
     """Create a new source for an organization.
 
-    `source_id` is assigned here (and persisted to the IngestionTask row) so every
+    `source_id` is generated here once and forwarded on the Redis payload so every
     subprocess attempt — initial dispatch, FAIL_RETRY, or cross-worker reclaim —
-    reuses the same UUID. Previously each subprocess fell back to `uuid.uuid4()`
-    independently, scattering chunks across multiple orphan sources.
+    reuses the same UUID.  The DB row keeps `source_id = NULL` at creation because
+    the `data_sources` row doesn't exist yet (a FK constraint links the two); the
+    subprocess creates the source and sets the task's `source_id` on completion.
     """
     try:
         source_id = ingestion_task_data.source_id or uuid4()
@@ -71,7 +72,7 @@ def create_ingestion_task_by_organization(
             ingestion_task_data.source_name,
             ingestion_task_data.source_type,
             ingestion_task_data.status,
-            source_id,
+            ingestion_task_data.source_id,
         )
         track_ingestion_task_created(
             task_id, organization_id,
@@ -79,7 +80,7 @@ def create_ingestion_task_by_organization(
             user_id=user_id, api_key_id=api_key_id,
         )
 
-        LOGGER.info(f"Task created in database with ID {task_id} and source_id {source_id}")
+        LOGGER.info(f"Task created in database with ID {task_id}, redis source_id {source_id}")
 
         ingestion_id = f"ing-{str(task_id)[:8]}"
         LOGGER.info(f"Sending task to Redis with ingestion_id: {ingestion_id}")
@@ -107,7 +108,7 @@ def create_ingestion_task_by_organization(
             update_ingestion_task(
                 session,
                 organization_id,
-                source_id,
+                None,
                 ingestion_task_data.source_name,
                 ingestion_task_data.source_type,
                 db.TaskStatus.FAILED,

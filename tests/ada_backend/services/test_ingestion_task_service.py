@@ -23,13 +23,13 @@ def _make_queue(source_id=None) -> IngestionTaskQueue:
 class TestCreateIngestionTaskSourceId:
     """Regression: every subprocess attempt for a task must see the same source_id.
 
-    Previously the service passed `source_id=None` to both the DB row and Redis;
-    each subprocess attempt then independently generated a fresh `uuid.uuid4()`,
-    scattering chunks across orphan sources. The service must now assign a
-    deterministic source_id at task creation.
+    The service generates a stable `source_id` and forwards it via the Redis
+    payload.  The DB row keeps `source_id = NULL` for new sources because the
+    `data_sources` row hasn't been created yet (FK constraint).  The subprocess
+    creates the source and updates `IngestionTask.source_id` on completion.
     """
 
-    def test_generates_source_id_when_payload_omits_it(self):
+    def test_redis_payload_carries_generated_source_id_when_payload_omits_it(self):
         organization_id = uuid4()
         task_id = uuid4()
         queue = _make_queue(source_id=None)
@@ -46,12 +46,13 @@ class TestCreateIngestionTaskSourceId:
             )
 
         repo_source_id = mock_create.call_args.args[5]
-        assert isinstance(repo_source_id, UUID)
+        assert repo_source_id is None
 
         pushed_source_id = mock_push.call_args.kwargs["source_id"]
-        assert pushed_source_id == str(repo_source_id)
+        assert pushed_source_id is not None
+        UUID(pushed_source_id)
 
-    def test_db_row_and_redis_payload_use_the_same_source_id(self):
+    def test_db_row_stays_null_but_redis_gets_uuid_for_new_source(self):
         organization_id = uuid4()
         queue = _make_queue(source_id=None)
 
@@ -66,10 +67,10 @@ class TestCreateIngestionTaskSourceId:
                 ingestion_task_data=queue,
             )
 
-        repo_source_id = mock_create.call_args.args[5]
+        assert mock_create.call_args.args[5] is None
         pushed_source_id_str = mock_push.call_args.kwargs["source_id"]
         assert pushed_source_id_str is not None
-        assert str(repo_source_id) == pushed_source_id_str
+        UUID(pushed_source_id_str)
 
     def test_preserves_caller_provided_source_id_for_add_files_flow(self):
         organization_id = uuid4()
@@ -90,18 +91,19 @@ class TestCreateIngestionTaskSourceId:
         assert mock_create.call_args.args[5] == existing_source_id
         assert mock_push.call_args.kwargs["source_id"] == str(existing_source_id)
 
-    def test_two_independent_calls_produce_different_source_ids(self):
+    def test_two_independent_calls_produce_different_redis_source_ids(self):
         organization_id = uuid4()
 
-        captured_ids: list[UUID] = []
+        captured_push_ids: list[str] = []
+        original_push = MagicMock(return_value=True)
 
-        def capture(*args, **kwargs):
-            captured_ids.append(args[5])
-            return uuid4()
+        def recording_push(**kwargs):
+            captured_push_ids.append(kwargs["source_id"])
+            return True
 
         with (
-            patch(f"{MODULE}.create_ingestion_task", side_effect=capture),
-            patch(f"{MODULE}.push_ingestion_task", return_value=True),
+            patch(f"{MODULE}.create_ingestion_task", return_value=uuid4()),
+            patch(f"{MODULE}.push_ingestion_task", side_effect=recording_push),
             patch(f"{MODULE}.track_ingestion_task_created"),
         ):
             create_ingestion_task_by_organization(
@@ -115,16 +117,16 @@ class TestCreateIngestionTaskSourceId:
                 ingestion_task_data=_make_queue(source_id=None),
             )
 
-        assert len(captured_ids) == 2
-        assert captured_ids[0] != captured_ids[1]
+        assert len(captured_push_ids) == 2
+        assert captured_push_ids[0] != captured_push_ids[1]
 
-    def test_failed_redis_push_marks_task_failed_with_assigned_source_id(self):
+    def test_failed_redis_push_passes_none_source_id_to_update(self):
         organization_id = uuid4()
         task_id = uuid4()
         queue = _make_queue(source_id=None)
 
         with (
-            patch(f"{MODULE}.create_ingestion_task", return_value=task_id) as mock_create,
+            patch(f"{MODULE}.create_ingestion_task", return_value=task_id),
             patch(f"{MODULE}.push_ingestion_task", return_value=False),
             patch(f"{MODULE}.track_ingestion_task_created"),
             patch(
@@ -137,9 +139,8 @@ class TestCreateIngestionTaskSourceId:
                 ingestion_task_data=queue,
             )
 
-        assigned_source_id = mock_create.call_args.args[5]
         update_source_id_arg = mock_update.call_args.args[2]
-        assert update_source_id_arg == assigned_source_id
+        assert update_source_id_arg is None
 
 
 class TestCreateIngestionTaskErrors:
