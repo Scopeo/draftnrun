@@ -3,16 +3,19 @@ import logging
 import os
 import re
 import resource
+import signal
 import subprocess
+import threading
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
+import redis
 import requests
 
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, ResultType, TaskResultMetadata
-from workers.worker.base_worker import BaseWorker, ProcessTaskOutcome, logger, redis_client
+from workers.worker.base_worker import CONSUMER_GROUP, BaseWorker, ProcessTaskOutcome, logger, redis_client
 
 _LEVEL_RE = re.compile(r"\b(DEBUG|INFO|WARNING|ERROR|CRITICAL)\b")
 _LEVEL_MAP = {
@@ -36,6 +39,8 @@ MAX_CONCURRENT_INGESTIONS = int(os.getenv("MAX_CONCURRENT_INGESTIONS", 2))
 SUBPROCESS_MEMORY_LIMIT_MB = int(os.getenv("SUBPROCESS_MEMORY_LIMIT_MB", "4096"))
 SUBPROCESS_TIMEOUT_S = int(os.getenv("SUBPROCESS_TIMEOUT_S", "1800"))
 INGESTION_BATCH_SIZE = int(os.getenv("INGESTION_BATCH_SIZE", "50"))
+INGESTION_PEL_HEARTBEAT_INTERVAL_S = int(os.getenv("INGESTION_PEL_HEARTBEAT_INTERVAL_S", "20"))
+_KILL_GRACE_PERIOD_S = 5
 
 
 def _set_memory_limit() -> None:
@@ -45,7 +50,45 @@ def _set_memory_limit() -> None:
         resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
 
 
-# Default API base URL - use HTTP for localhost
+def _kill_process_group(process: subprocess.Popen, grace_period_s: float = _KILL_GRACE_PERIOD_S) -> None:
+    """SIGTERM the subprocess's process group, escalate to SIGKILL after a grace period.
+
+    Requires the subprocess to have been spawned with `start_new_session=True` so it is
+    the leader of its own process group; otherwise we'd nuke the worker itself.
+    """
+    if process.poll() is not None:
+        return
+    try:
+        pgid = os.getpgid(process.pid)
+    except ProcessLookupError:
+        return
+
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    except OSError as e:
+        logger.warning("killpg_sigterm_failed pid=%s pgid=%s error=%s", process.pid, pgid, str(e))
+
+    try:
+        process.wait(timeout=grace_period_s)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    except OSError as e:
+        logger.warning("killpg_sigkill_failed pid=%s pgid=%s error=%s", process.pid, pgid, str(e))
+
+    try:
+        process.wait(timeout=grace_period_s)
+    except subprocess.TimeoutExpired:
+        logger.error("subprocess_did_not_exit_after_sigkill pid=%s pgid=%s", process.pid, pgid)
+
+
 DEFAULT_API_BASE_URL = "http://localhost:8000"
 
 
@@ -60,6 +103,77 @@ class Worker(BaseWorker):
     def get_required_fields(self) -> list[str]:
         """Get required fields for ingestion task payload."""
         return ["ingestion_id"]
+
+    def _pel_heartbeat_loop(
+        self,
+        message_id: str,
+        stop_event: threading.Event,
+        interval_s: float,
+        max_duration_s: float,
+    ) -> None:
+        """Refresh the PEL idle timer for `message_id` without bumping delivery count.
+
+        Uses `XCLAIM ... JUSTID` so `times_delivered` is NOT incremented while
+        long-running ingestion subprocesses execute. Stops when `stop_event` is
+        set or when `max_duration_s` has elapsed (defense-in-depth so a genuinely
+        hung handler can still be reclaimed by the BaseWorker idle threshold).
+        """
+        consumer_name = self._consumer_name()
+        deadline = time.monotonic() + max_duration_s if max_duration_s > 0 else None
+        while not stop_event.wait(timeout=interval_s):
+            if deadline is not None and time.monotonic() > deadline:
+                logger.warning(
+                    "pel_heartbeat_max_duration_reached message_id=%s max_duration_s=%s",
+                    message_id,
+                    max_duration_s,
+                )
+                return
+            try:
+                redis_client.xclaim(
+                    self.stream_name,
+                    CONSUMER_GROUP,
+                    consumer_name,
+                    min_idle_time=0,
+                    message_ids=[message_id],
+                    justid=True,
+                )
+            except redis.ConnectionError as e:
+                logger.warning(
+                    "pel_heartbeat_redis_connection_error message_id=%s error=%s",
+                    message_id,
+                    str(e),
+                )
+            except redis.ResponseError as e:
+                logger.warning(
+                    "pel_heartbeat_redis_response_error message_id=%s error=%s",
+                    message_id,
+                    str(e),
+                )
+            except Exception as e:
+                logger.warning(
+                    "pel_heartbeat_unexpected_error message_id=%s error=%s",
+                    message_id,
+                    str(e),
+                )
+
+    def _process_and_ack(self, payload: Dict[str, Any], message_id: str, fields: Dict[str, str]) -> None:
+        stop_event = threading.Event()
+        heartbeat_thread: Optional[threading.Thread] = None
+        if INGESTION_PEL_HEARTBEAT_INTERVAL_S > 0:
+            max_duration_s = float(SUBPROCESS_TIMEOUT_S) + _KILL_GRACE_PERIOD_S * 2 if SUBPROCESS_TIMEOUT_S > 0 else 0
+            heartbeat_thread = threading.Thread(
+                target=self._pel_heartbeat_loop,
+                args=(message_id, stop_event, float(INGESTION_PEL_HEARTBEAT_INTERVAL_S), max_duration_s),
+                daemon=True,
+                name=f"ingestion-pel-heartbeat-{message_id}",
+            )
+            heartbeat_thread.start()
+        try:
+            super()._process_and_ack(payload, message_id, fields)
+        finally:
+            stop_event.set()
+            if heartbeat_thread is not None:
+                heartbeat_thread.join(timeout=float(INGESTION_PEL_HEARTBEAT_INTERVAL_S) + 1.0)
 
     def process_task(self, payload: Dict[str, Any]) -> ProcessTaskOutcome:
         """Process a single ingestion task."""
@@ -189,6 +303,7 @@ class Worker(BaseWorker):
                 env=env,
                 cwd=str(Path(__file__).parents[2]),
                 preexec_fn=_set_memory_limit,
+                start_new_session=True,
             )
 
             # Real-time logging - stream output as it happens
@@ -220,8 +335,7 @@ class Worker(BaseWorker):
                         int(time.monotonic() - start_monotonic),
                         SUBPROCESS_TIMEOUT_S,
                     )
-                    process.kill()
-                    process.wait(timeout=10)
+                    _kill_process_group(process)
                     timed_out = True
                     break
 
