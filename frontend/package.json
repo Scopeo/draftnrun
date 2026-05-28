@@ -10,6 +10,7 @@
     "test": "vitest run",
     "typecheck": "vue-tsc --noEmit",
     "lint": "eslint . -c .eslintrc.cjs --fix --ext .ts,.js,.cjs,.vue,.tsx,.jsx",
+    "lint:ci": "eslint . -c .eslintrc.cjs --ext .ts,.js,.cjs,.vue,.tsx,.jsx",
     "format": "prettier --write \"src/**/*.{ts,vue,js,scss}\"",
     "fix": "npm run format && npm run lint"
   },
