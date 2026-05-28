@@ -6,7 +6,8 @@ globs:
 ## Service Layer Conventions
 
 - Services encapsulate business logic between routers and repositories.
-- Services receive a `Session` from the router (via `Depends(get_db)`).
+- CRUD services receive a `Session` from the router (via `Depends(get_db)`).
+- Agent execution services (`run_agent`, `run_env_agent`, `run_with_tracking`, `instantiate_component`, `get_agent_for_project`, `build_graph_runner`) manage their own short-lived sessions via `with get_db_session() as session:` — do **not** pass a session from the router. This ensures DB connections are returned to the pool before expensive async work (LLM calls, HTTP requests).
 - Heavy operations: use the Redis run queue (don't block the request).
 - External calls (Supabase Edge Functions, Nango, S3): always use `httpx.AsyncClient` with timeouts.
 - Secrets: encrypted with Fernet before storage, decrypted on read via `ada_backend/utils/encryption.py`.

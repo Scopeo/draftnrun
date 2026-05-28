@@ -136,6 +136,18 @@ Bridges unmigrated components (using `AgentPayload` in/out) with the new multi-p
 - `Component.migrated = False` — checked in `run()` and `_validate_expressions()`
 - Unmigrated components don't use coercion and receive the entire `task_result.data` dict
 
+## DB Session Lifecycle for Graph Execution
+
+The agent execution path uses short-lived DB sessions to avoid holding connections during expensive async work (LLM calls, HTTP requests, component instantiation). Each function manages its own scoped session:
+
+- **`run_with_tracking`** — three independent sessions: (1) create run + set RUNNING, (2) mark COMPLETED, (3) mark FAILED. No connection held during the runner coroutine.
+- **`run_agent` / `run_env_agent`** — scoped session for setup queries (project lookup, credit checks, variable resolution), closed before graph building.
+- **`get_agent_for_project`** — scoped session for project/graph existence checks, closed before `build_graph_runner`.
+- **`build_graph_runner`** — scoped session to read nodes, edges, port mappings, and field expressions. Extracts plain Python values (IDs, tuples), then closes the session before the component instantiation loop.
+- **`instantiate_component`** — scoped session for all DB reads (parameters, sub-components, globals, secrets, tool descriptions), closed before `FACTORY_REGISTRY.create()`.
+
+None of these functions accept a `Session` parameter. The pool is configured via `ADA_DB_POOL_SIZE`, `ADA_DB_MAX_OVERFLOW`, `ADA_DB_POOL_TIMEOUT`, `ADA_DB_POOL_RECYCLE` in settings.
+
 ## SQL Local Storage Lifecycle
 
 `SQLLocalService` caches SQLAlchemy engines by `engine_url` at process level instead of creating one pool per

@@ -826,12 +826,12 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
         # Capture the current context including TraceManager.
         current_context = contextvars.copy_context()
 
-        with get_db_session() as session:
-            # TODO: Fix circular import issue - these imports are here to avoid
-            # circular dependency between entity_factory and agent_runner_service.
-            from ada_backend.repositories.graph_runner_repository import get_graph_runner_for_env
-            from ada_backend.services.agent_runner_service import get_agent_for_project
+        # TODO: Fix circular import issue - these imports are here to avoid
+        # circular dependency between entity_factory and agent_runner_service.
+        from ada_backend.repositories.graph_runner_repository import get_graph_runner_for_env
+        from ada_backend.services.agent_runner_service import get_agent_for_project
 
+        with get_db_session() as session:
             project = get_project(session, project_id)
             if not project:
                 raise ValueError(f"Project {project_id} not found")
@@ -854,7 +854,6 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
                     f"Referenced project {project_id} belongs to a different organization."
                 )
 
-            # Get and instantiate GraphRunner
             graph_runner_in_db = get_graph_runner_for_env(
                 session=session,
                 project_id=project_id,
@@ -868,17 +867,16 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
                 )
             gr_id: UUID = graph_runner_in_db.id
 
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(
-                    current_context.run,
-                    asyncio.run,
-                    get_agent_for_project(
-                        session=session,
-                        graph_runner_id=gr_id,
-                        project_id=project_id,
-                    ),
-                )
-                graph_runner = future.result()
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(
+                current_context.run,
+                asyncio.run,
+                get_agent_for_project(
+                    graph_runner_id=gr_id,
+                    project_id=project_id,
+                ),
+            )
+            graph_runner = future.result()
 
         params[target_name] = graph_runner
 
