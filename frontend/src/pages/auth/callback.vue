@@ -13,113 +13,67 @@ definePage({
 
 const router = useRouter()
 const ability = useAbility()
-
-// Use the tracking composable
 const { trackSignIn, trackSignUp, trackSessionStart } = useTracking()
 
 const loading = ref(true)
 const error = ref<string | null>(null)
 
-// Handle the authentication callback
+function handleGmailIntegrationCallback(urlParams: URLSearchParams): boolean {
+  if (urlParams.get('state') !== 'gmail_integration' || !window.opener) return false
+
+  const code = urlParams.get('code')
+  const oauthError = urlParams.get('error')
+
+  const payload = oauthError
+    ? { type: 'gmail_auth_error', error: oauthError }
+    : code
+      ? { type: 'gmail_auth_success', code }
+      : { type: 'gmail_auth_error', error: 'No authorization code received' }
+
+  window.opener.postMessage(payload, window.location.origin)
+  window.close()
+  return true
+}
+
 onMounted(async () => {
   try {
-    const route = useRoute()
     const urlParams = new URLSearchParams(window.location.search)
+    if (handleGmailIntegrationCallback(urlParams)) return
 
-    // Check if this is a Gmail integration callback
-    if (urlParams.get('state') === 'gmail_integration') {
-      const code = urlParams.get('code')
-      const error = urlParams.get('error')
+    const { accessToken, userData, userAbilityRules, isNewUser } = await handleGoogleAuthCallback()
 
-      if (window.opener) {
-        if (error) {
-          window.opener.postMessage(
-            {
-              type: 'gmail_auth_error',
-              error,
-            },
-            window.location.origin
-          )
-        } else if (code) {
-          window.opener.postMessage(
-            {
-              type: 'gmail_auth_success',
-              code,
-            },
-            window.location.origin
-          )
-        } else {
-          window.opener.postMessage(
-            {
-              type: 'gmail_auth_error',
-              error: 'No authorization code received',
-            },
-            window.location.origin
-          )
-        }
-        window.close()
-        return
-      }
+    const authStore = useAuthStore()
+    authStore.setAuth(userData, accessToken, userAbilityRules as any)
+    ability.update(userAbilityRules as any)
+
+    logger.info('Google authentication successful', { isNewUser })
+
+    const trackingData = {
+      email: userData.email,
+      username: userData.username,
+      full_name: userData.fullName,
+      avatar: userData.avatar,
+      is_new_user: isNewUser,
     }
 
-    // Normal authentication flow
-    const result = await handleGoogleAuthCallback()
+    if (isNewUser) trackSignUp('google', userData.id, { ...trackingData, is_new_user: true })
+    trackSignIn('google', userData.id, trackingData)
 
-    if (result) {
-      const { accessToken, userData, userAbilityRules, isNewUser } = result
+    const orgStore = useOrgStore()
+    trackSessionStart(userData.id, {
+      user_email: userData.email,
+      user_role: orgStore.selectedOrgRole || 'user',
+      org_count: orgStore.organizations.length,
+      is_super_admin: userData.super_admin || false,
+      auth_method: 'google',
+      is_new_user: isNewUser,
+    })
 
-      const authStore = useAuthStore()
-
-      authStore.setAuth(userData, accessToken, userAbilityRules as any)
-      ability.update(userAbilityRules as any)
-
-      logger.info('Google authentication successful', { isNewUser })
-
-      // Track authentication event
-      if (isNewUser) {
-        // Track sign up for new Google user
-        trackSignUp('google', userData.id, {
-          email: userData.email,
-          username: userData.username,
-          full_name: userData.fullName,
-          avatar: userData.avatar,
-          is_new_user: true,
-        })
-      }
-
-      // Track sign in (always happens for Google auth)
-      trackSignIn('google', userData.id, {
-        email: userData.email,
-        username: userData.username,
-        full_name: userData.fullName,
-        avatar: userData.avatar,
-        is_new_user: isNewUser,
-      })
-
-      // Track session start
-      const orgStore = useOrgStore()
-
-      trackSessionStart(userData.id, {
-        user_email: userData.email,
-        user_role: orgStore.selectedOrgRole || 'user',
-        org_count: orgStore.organizations.length,
-        is_super_admin: userData.super_admin || false,
-        auth_method: 'google',
-        is_new_user: isNewUser,
-      })
-
-      await router.replace('/')
-    } else {
-      throw new Error('Authentication failed')
-    }
+    await router.replace('/')
   } catch (err: unknown) {
     logger.error('Auth callback error', { error: err })
     error.value = err instanceof Error ? err.message : 'Authentication failed'
-
-    // Redirect to login after a delay
-    setTimeout(() => {
-      router.replace('/login')
-    }, 3000)
+    setTimeout(() => router.replace('/login'), 3000)
   } finally {
     loading.value = false
   }
