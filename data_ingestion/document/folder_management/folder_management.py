@@ -66,7 +66,7 @@ class BaseDocument(BaseModel):
 
     @property
     def url(self) -> str | None:
-        return self.metadata.get("supabase_url") or self.metadata.get("source_url", None)
+        return self.metadata.get("_supabase_url") or self.metadata.get("_source_url", None)
 
 
 class FileDocument(BaseDocument):

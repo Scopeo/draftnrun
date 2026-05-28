@@ -151,7 +151,7 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
     assert mapping_kwargs["document_reading_mode"] == DocumentReadingMode.STANDARD
 
     document_arg = chunks_mock.await_args.args[0]
-    assert document_arg.metadata["source_url"] == "https://example.com/page"
+    assert document_arg.metadata["_source_url"] == "https://example.com/page"
     assert document_arg.metadata["title"] == "Example page"
 
     assert chunks_mock.await_args.kwargs["document_chunk_mapping"] is mapping_sentinel

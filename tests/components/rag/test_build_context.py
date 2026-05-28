@@ -1,4 +1,5 @@
 from engine.components.build_context import build_context_from_source_chunks
+from engine.components.types import SourceChunk
 
 
 # 1. Test Basic SourceChunk Formatting
@@ -54,6 +55,42 @@ def test_source_chunk_filter_metadata(mock_source_chunk_many_metadata):
         "keywords: AI, Python, Programming"
     )
     assert result == expected
+
+
+def test_source_chunk_excludes_internal_metadata_keys():
+    source = SourceChunk(
+        name="internal_metadata",
+        document_name="internal_metadata",
+        url="url",
+        content="Content",
+        metadata={
+            "author": "Jane Doe",
+            "_source_url": "https://example.com",
+            "_supabase_url": "org/source/file.pdf",
+            "_reranked_score": 0.9,
+        },
+    )
+
+    result = build_context_from_source_chunks([source])
+
+    assert result == "**Source 1:**\nContent\nMetadata:\nauthor: Jane Doe"
+
+
+def test_source_chunk_allowlist_cannot_include_internal_metadata_keys():
+    source = SourceChunk(
+        name="internal_metadata",
+        document_name="internal_metadata",
+        url="url",
+        content="Content",
+        metadata={
+            "author": "Jane Doe",
+            "_source_url": "https://example.com",
+        },
+    )
+
+    result = build_context_from_source_chunks([source], llm_metadata_keys=["author", "_source_url"])
+
+    assert result == "**Source 1:**\nContent\nMetadata:\nauthor: Jane Doe"
 
 
 # 7. Test Custom Template and Content Formatting
