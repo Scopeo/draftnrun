@@ -15,7 +15,7 @@ from ada_backend.database.models import (
     UIComponent,
     UIComponentProperties,
 )
-from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB, TEMPERATURE_IN_DB
+from ada_backend.database.seed.constants import TEMPERATURE_IN_DB
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
@@ -101,10 +101,6 @@ def seed_react_sql_components(session: Session):
             *build_function_calling_service_config_definitions(
                 component_version_id=react_sql_agent_version.id,
                 params_to_seed=[
-                    ParameterLLMConfig(
-                        param_name=COMPLETION_MODEL_IN_DB,
-                        param_id=UUID("12345678-9012-3456-7890-123456789012"),
-                    ),
                     ParameterLLMConfig(
                         param_name=TEMPERATURE_IN_DB,
                         param_id=UUID("45678901-2345-6789-0123-456789012345"),

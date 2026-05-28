@@ -33,11 +33,13 @@ def mock_completion_service():
 
 
 @pytest.fixture
-def docx_agent(mock_trace_manager, mock_completion_service):
+def docx_agent(mock_trace_manager):
     return DocxTemplateAgent(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(component_instance_name="test"),
-        completion_service=mock_completion_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
     )
 
 
@@ -178,12 +180,13 @@ async def test_llm_generate_context(docx_agent, mock_completion_service):
     ResponseModel = create_model("ResponseModel", context=(ContextModel, ...), images=(ImagesModel, ...))
     fake_response = ResponseModel(context=ContextModel(name="Test"), images=ImagesModel())
     mock_completion_service.constrained_complete_with_pydantic_async = AsyncMock(return_value=fake_response)
-    result = await docx_agent._llm_generate_context(ResponseModel, "brief", {})
+    result = await docx_agent._llm_generate_context(mock_completion_service, ResponseModel, "brief", {})
     assert result.context.name == "Test"
     mock_completion_service.constrained_complete_with_pydantic_async.assert_called_once()
 
 
 @pytest.mark.asyncio
+@patch("engine.components.tools.docx_template.DocxTemplateAgent._build_completion_service")
 @patch("engine.components.tools.docx_template.analyze_docx_template")
 @patch("engine.components.tools.docx_template.build_context_response_model")
 @patch("engine.components.tools.docx_template.DocxTemplate")
@@ -195,11 +198,13 @@ async def test_run_without_io_trace_success(
     mock_docx,
     mock_build,
     mock_analyze,
+    mock_build_cs,
     docx_agent,
     mock_completion_service,
     minimal_docx,
     tmp_path,
 ):
+    mock_build_cs.return_value = mock_completion_service
     mock_span.return_value = MagicMock()
     mock_dir.return_value = tmp_path / "output"
     (tmp_path / "output").mkdir()
@@ -238,7 +243,9 @@ async def test_run_without_io_trace_base64(mock_trace_manager, mock_completion_s
     agent = DocxTemplateAgent(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(component_instance_name="test"),
-        completion_service=mock_completion_service,
+        temperature=1.0,
+        llm_api_key=None,
+        model_id_resolver=lambda _: None,
     )
     with open(minimal_docx, "rb") as f:
         template_base64 = base64.b64encode(f.read()).decode("utf-8")
@@ -251,6 +258,7 @@ async def test_run_without_io_trace_base64(mock_trace_manager, mock_completion_s
         ),
         patch("engine.components.tools.docx_template.build_context_response_model") as mock_build,
         patch("engine.components.tools.docx_template.DocxTemplate", return_value=MagicMock()),
+        patch.object(agent, "_build_completion_service", return_value=mock_completion_service),
     ):
         ContextModel = create_model("ContextModel", name=(str, ...))
         ImagesModel = create_model("ImagesModel")

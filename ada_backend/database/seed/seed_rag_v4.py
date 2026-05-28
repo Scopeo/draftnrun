@@ -10,7 +10,6 @@ from ada_backend.database.component_definition_seeding import (
 )
 from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database.seed.constants import (
-    COMPLETION_MODEL_IN_DB,
     REASONING_IN_DB,
     TEMPERATURE_IN_DB,
     VERBOSITY_IN_DB,
@@ -395,10 +394,6 @@ def seed_rag_v4_components(session: Session):
                 component_version_id=rag_agent_v4_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
-                        param_name=COMPLETION_MODEL_IN_DB,
-                        param_id=UUID("7af4208e-e8a0-46fc-87c7-34d3123afa11"),
-                    ),
-                    ParameterLLMConfig(
                         param_name=TEMPERATURE_IN_DB,
                         param_id=UUID("b71a67b7-c634-4c02-b13e-707709fce859"),
                     ),
@@ -701,13 +696,9 @@ def seed_rag_v4_parameter_groups(session: Session):
             "parameter_group_id": RAG_V4_PARAMETER_GROUP_UUIDS["advanced_knowledge_parameters"],
             "parameter_order_within_group": 5,
         },
-        UUID("7af4208e-e8a0-46fc-87c7-34d3123afa11"): {  # completion_model
-            "parameter_group_id": RAG_V4_PARAMETER_GROUP_UUIDS["llm_parameters"],
-            "parameter_order_within_group": 1,
-        },
         UUID("e446cd9c-56ac-4f91-8b52-ea6f4340ee25"): {  # prompt_template
             "parameter_group_id": RAG_V4_PARAMETER_GROUP_UUIDS["llm_parameters"],
-            "parameter_order_within_group": 2,
+            "parameter_order_within_group": 1,
         },
         UUID("b71a67b7-c634-4c02-b13e-707709fce859"): {  # temperature
             "parameter_group_id": RAG_V4_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],

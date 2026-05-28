@@ -11,7 +11,6 @@ from ada_backend.database.component_definition_seeding import (
     upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.constants import (
-    COMPLETION_MODEL_IN_DB,
     REASONING_IN_DB,
     TEMPERATURE_IN_DB,
     VERBOSITY_IN_DB,
@@ -31,7 +30,6 @@ from engine.components.categorizer import DEFAULT_CATEGORIZER_TOOL_DESCRIPTION
 CATEGORIZER_PARAMETER_IDS = {
     "categories": UUID("732e8650-793a-4fa1-94a9-c8d0143a5592"),
     "additional_context": UUID("e9c90431-c7f0-4e45-8cc1-a0d0158580e7"),
-    COMPLETION_MODEL_IN_DB: UUID("3d6b6263-7ada-4021-bb56-3ee2653e9fb3"),
     TEMPERATURE_IN_DB: UUID("0e3056f2-25b9-4a85-8cd5-d658180dc6eb"),
     VERBOSITY_IN_DB: UUID("bf687ed1-f576-4a8b-88aa-ad5c9c4b8ad4"),
     REASONING_IN_DB: UUID("cdbf4980-b611-44a1-9e59-11636ad7a585"),
@@ -84,10 +82,6 @@ def seed_categorizer_components(session: Session):
             *build_completion_service_config_definitions(
                 component_version_id=categorizer_version.id,
                 params_to_seed=[
-                    ParameterLLMConfig(
-                        param_name=COMPLETION_MODEL_IN_DB,
-                        param_id=CATEGORIZER_PARAMETER_IDS[COMPLETION_MODEL_IN_DB],
-                    ),
                     ParameterLLMConfig(
                         param_name=TEMPERATURE_IN_DB,
                         param_id=CATEGORIZER_PARAMETER_IDS[TEMPERATURE_IN_DB],

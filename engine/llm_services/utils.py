@@ -372,3 +372,13 @@ def resolve_tool_refs(tools: list[dict]) -> list[dict]:
             tool["function"]["parameters"] = resolve_schema_refs(params)
         resolved.append(tool)
     return resolved
+
+
+def get_llm_provider_and_model(llm_model: str) -> tuple[str, str]:
+
+    if ":" not in llm_model:
+        raise ValueError(f"Invalid LLM model format: {llm_model}. Expected 'provider:model_name'.")
+    parts = llm_model.split(":")
+    provider = parts[0]
+    model = ":".join(parts[1:])
+    return provider, model

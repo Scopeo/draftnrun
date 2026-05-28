@@ -2,6 +2,7 @@ import json
 import logging
 from collections.abc import Callable
 from typing import Optional, Type
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -9,7 +10,7 @@ from ada_backend.database.models import ParameterType, UIComponent, UIComponentP
 from engine.components.component import Component
 from engine.components.llm_call import LLMCallAgent, LLMCallInputs
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
-from engine.llm_services.llm_service import CompletionService
+from engine.constants import DEFAULT_MODEL
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -68,6 +69,15 @@ OUTPUT_FORMAT = {
 
 
 class ScorerInputs(BaseModel):
+    completion_model: str = Field(
+        default=DEFAULT_MODEL,
+        json_schema_extra={
+            "is_tool_input": False,
+            "parameter_type": ParameterType.LLM_MODEL,
+            "ui_component": "Select",
+            "ui_component_properties": {"label": "Model Name", "model_capabilities": ["completion"]},
+        },
+    )
     input: str = Field(
         description="The item to be scored",
         json_schema_extra={
@@ -132,10 +142,14 @@ class Scorer(Component):
 
     def __init__(
         self,
-        completion_service: CompletionService,
         trace_manager: TraceManager,
         tool_description: ToolDescription = DEFAULT_SCORER_TOOL_DESCRIPTION,
         component_attributes: Optional[ComponentAttributes] = None,
+        temperature: float = 1.0,
+        llm_api_key: Optional[str] = None,
+        verbosity: Optional[str] = None,
+        reasoning: Optional[str] = None,
+        model_id_resolver: Optional[Callable[[str], Optional[UUID]]] = None,
         capability_resolver: Optional[Callable[[list[str]], set[str]]] = None,
     ):
         if component_attributes is None:
@@ -147,9 +161,13 @@ class Scorer(Component):
         )
         self._llm_agent = LLMCallAgent(
             trace_manager=trace_manager,
-            completion_service=completion_service,
             tool_description=tool_description,
             component_attributes=component_attributes,
+            temperature=temperature,
+            llm_api_key=llm_api_key,
+            verbosity=verbosity,
+            reasoning=reasoning,
+            model_id_resolver=model_id_resolver,
             capability_resolver=capability_resolver,
         )
 
@@ -167,6 +185,7 @@ class Scorer(Component):
             messages=[ChatMessage(role="user", content=inputs.input)],
             prompt_template=prompt,
             output_format=json.dumps(OUTPUT_FORMAT),
+            completion_model=inputs.completion_model,
         )
 
         llm_outputs = await self._llm_agent._run_without_io_trace(llm_inputs, ctx)

@@ -6,6 +6,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 
+from ada_backend.database.models import ParameterType
 from engine.components.build_context import build_context_from_vocabulary_chunks
 from engine.components.component import Component
 from engine.components.rag.formatter import Formatter
@@ -15,6 +16,7 @@ from engine.components.rag.vocabulary_search import VocabularySearch
 from engine.components.synthesizer import Synthesizer
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.components.utils import extract_source_ranks, merge_qdrant_filters_with_and_conditions
+from engine.constants import DEFAULT_MODEL
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
@@ -25,6 +27,15 @@ FILTERING_CONDITION_WITH_METADATA_QDRANT = "AND"
 
 
 class RAGInputs(BaseModel):
+    completion_model: str = Field(
+        default=DEFAULT_MODEL,
+        json_schema_extra={
+            "is_tool_input": False,
+            "parameter_type": ParameterType.LLM_MODEL,
+            "ui_component": "Select",
+            "ui_component_properties": {"label": "Model Name", "model_capabilities": ["completion"]},
+        },
+    )
     query_text: str = Field(
         description="The search query for the knowledge base.", json_schema_extra={"is_tool_input": True}
     )
@@ -116,13 +127,14 @@ class RAG(Component):
             query_str=inputs.query_text,
             chunks=chunks,
             optional_contexts=vocabulary_context,
+            completion_model=inputs.completion_model,
         )
 
         sourced_response = self._formatter.format(sourced_response)
 
         if sourced_response.sources:
-            original_retrieval_ranks, original_reranker_ranks, total_retrieved, total_reranked = (
-                extract_source_ranks(sourced_response.sources)
+            original_retrieval_ranks, original_reranker_ranks, total_retrieved, total_reranked = extract_source_ranks(
+                sourced_response.sources
             )
             trace_attrs = {
                 "original_retrieval_rank": json.dumps(original_retrieval_ranks),

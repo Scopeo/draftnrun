@@ -38,26 +38,23 @@ def seed_projects(session: Session):
     """
 
     # --- Define projects ---
-    project_1 = db.Project(
+    project_1 = db.WorkflowProject(
         id=PROJECT_UUIDS["project_1"],
         name="Project1",
         description="Project 1",
         organization_id=DEFAULT_ORGANIZATION_ID,
-        type=db.ProjectType.WORKFLOW,
     )
-    graph_test_project = db.Project(
+    graph_test_project = db.WorkflowProject(
         id=PROJECT_UUIDS["graph_test_project"],
         name="Graph Test Project",
         description="Graph Test Project",
         organization_id=DEFAULT_ORGANIZATION_ID,
-        type=db.ProjectType.WORKFLOW,
     )
-    react_sql_agent_project = db.Project(
+    react_sql_agent_project = db.WorkflowProject(
         id=PROJECT_UUIDS["react_sql_agent_chatbot"],
         name="React SQL Agent",
         description="React SQL Agent based on data gouv data (population : marriage, naissance, death)",
         organization_id=UUID("01b6554c-4884-409f-a0e1-22e394bee989"),
-        type=db.ProjectType.WORKFLOW,
     )
 
     session.add_all([

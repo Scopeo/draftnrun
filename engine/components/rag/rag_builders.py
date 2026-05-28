@@ -45,7 +45,7 @@ def build_default_rag_agent(
         max_retrieved_chunks=max_retrieved_chunks,
     )
     synthesizer = Synthesizer(
-        completion_service=completion_service,
+        completion_service_factory=lambda **kwargs: completion_service,
         trace_manager=trace_manager,
         prompt_template=synthetizer_prompt,
     )
@@ -123,7 +123,9 @@ def build_s3_rag_agent(
         qdrant_service=qdrant_service,
         max_retrieved_chunks=max_retrieved_chunks,
     )
-    synthesizer = Synthesizer(completion_service=completion_service, trace_manager=trace_manager)
+    synthesizer = Synthesizer(
+        completion_service_factory=lambda **kwargs: completion_service, trace_manager=trace_manager
+    )
     return RAG(
         trace_manager=trace_manager,
         tool_description=tool_description,
@@ -156,7 +158,9 @@ def build_personal_doc_rag_agent(completion_service: CompletionService, trace_ma
         required_tool_properties=[],
     )
     retriever = DummyRetriever(trace_manager=trace_manager, whole_knowledge_base=[])
-    synthesizer = Synthesizer(completion_service=completion_service, trace_manager=trace_manager)
+    synthesizer = Synthesizer(
+        completion_service_factory=lambda **kwargs: completion_service, trace_manager=trace_manager
+    )
     return RAG(
         trace_manager=trace_manager,
         tool_description=tool_description,

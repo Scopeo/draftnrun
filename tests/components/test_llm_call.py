@@ -108,60 +108,50 @@ def input_payload_format_no_file():
 
 async def complete_side_effect(**kwargs):
     content = kwargs["messages"][0]["content"]
-    # If content is a list (with files), extract the text part
     if isinstance(content, list):
         for item in content:
             if isinstance(item, dict) and item.get("type") == "text":
                 return item["text"]
-        return "What is the content of the file?"  # fallback
+        return "What is the content of the file?"
     return content
 
 
-@pytest.fixture
-def llm_call_with_file_content():
-    trace_manager = MagicMock()
-    llm_service = MagicMock()
-    llm_service._provider = "openai"  # Set the provider to openai to support file content
-    llm_service._model_name = "gpt-4.1-mini"  # Set a model that supports files
-
-    # Use AsyncMock for the async methods
-    llm_service.complete_async = AsyncMock(side_effect=complete_side_effect)
-    llm_service.constrained_complete_with_json_schema_async = AsyncMock(side_effect=complete_side_effect)
-
-    tool_description = MagicMock()
-    component_attributes = ComponentAttributes(
-        component_instance_name="test_component",
-    )
-    file_content = "{file}"
-    return LLMCallAgent(
-        trace_manager,
-        llm_service,
-        tool_description,
-        component_attributes,
-        file_content_key=file_content,
-        capability_resolver=make_capability_resolver(llm_service),
-    )
+def _build_mock_service():
+    svc = MagicMock()
+    svc._provider = "openai"
+    svc._model_name = "gpt-4.1-mini"
+    svc._model_id = None
+    svc.complete_async = AsyncMock(side_effect=complete_side_effect)
+    svc.constrained_complete_with_json_schema_async = AsyncMock(side_effect=complete_side_effect)
+    return svc
 
 
 @pytest.fixture
-def llm_call_without_file_content():
-    trace_manager = MagicMock()
-    llm_service = MagicMock()
-    llm_service._provider = "openai"  # Set the provider to openai to support file content
-    llm_service._model_name = "gpt-4.1-mini"  # Set a model that supports files
-
-    # Use AsyncMock for the async methods
-    llm_service.complete_async = AsyncMock(side_effect=complete_side_effect)
-    llm_service.constrained_complete_with_json_schema_async = AsyncMock(side_effect=complete_side_effect)
-
-    tool_description = MagicMock()
-    component_attributes = ComponentAttributes(component_instance_name="test_component")
+def llm_call_with_file_content(monkeypatch):
+    mock_service = _build_mock_service()
+    monkeypatch.setattr(
+        "engine.components.llm_call.CompletionService", MagicMock(return_value=mock_service)
+    )
     return LLMCallAgent(
-        trace_manager,
-        llm_service,
-        tool_description,
-        component_attributes,
-        capability_resolver=make_capability_resolver(llm_service),
+        trace_manager=MagicMock(),
+        tool_description=MagicMock(),
+        component_attributes=ComponentAttributes(component_instance_name="test_component"),
+        file_content_key="{file}",
+        capability_resolver=make_capability_resolver(mock_service),
+    )
+
+
+@pytest.fixture
+def llm_call_without_file_content(monkeypatch):
+    mock_service = _build_mock_service()
+    monkeypatch.setattr(
+        "engine.components.llm_call.CompletionService", MagicMock(return_value=mock_service)
+    )
+    return LLMCallAgent(
+        trace_manager=MagicMock(),
+        tool_description=MagicMock(),
+        component_attributes=ComponentAttributes(component_instance_name="test_component"),
+        capability_resolver=make_capability_resolver(mock_service),
     )
 
 
@@ -186,11 +176,9 @@ def test_agent_input_combinations(agent, input_payload, expected_file, request):
     agent_instance = request.getfixturevalue(agent)
     payload_instance = request.getfixturevalue(input_payload)
 
-    # Convert dict to LLMCallInputs Pydantic model
     inputs = LLMCallInputs.model_validate({**payload_instance, "prompt_template": "{{input}}"})
 
     response = asyncio.run(agent_instance._run_without_io_trace(inputs, ctx={}))
 
-    # Check that the response contains the expected output
     assert isinstance(response.output, str)
     assert QUESTION in response.output

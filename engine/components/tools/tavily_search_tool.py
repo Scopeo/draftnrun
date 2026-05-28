@@ -76,7 +76,9 @@ class TavilyApiTool(Component):
         self.trace_manager = trace_manager
         self.tavily_client = TavilyClient(api_key=tavily_api_key)
         if synthesizer is None:
-            synthesizer = Synthesizer(completion_service=completion_service, trace_manager=trace_manager)
+            synthesizer = Synthesizer(
+                completion_service_factory=lambda **kwargs: completion_service, trace_manager=trace_manager
+            )
         self._synthesizer = synthesizer
 
     def search_results(

@@ -44,7 +44,6 @@ def test_clone_ai_agent_with_missing_skip_oauth_param_uses_default():
             component_version_id=AI_AGENT_COMPONENT_VERSION_ID,
             name="AI Agent",
             parameters=[
-                PipelineParameterSchema(name="completion_model", value="openai:gpt-4o"),
                 PipelineParameterSchema(name="skip_tools_with_missing_oauth", value=None),
             ],
         )
@@ -75,7 +74,6 @@ def test_clone_ai_agent_with_explicit_skip_oauth_false_stores_false():
             component_version_id=AI_AGENT_COMPONENT_VERSION_ID,
             name="AI Agent",
             parameters=[
-                PipelineParameterSchema(name="completion_model", value="openai:gpt-4o"),
                 PipelineParameterSchema(name="skip_tools_with_missing_oauth", value="False"),
             ],
         )

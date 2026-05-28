@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 from ada_backend.database.models import EnvType
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
-from ada_backend.schemas.parameter_schema import PipelineParameterSchema
+from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema
 from ada_backend.schemas.pipeline.port_instance_schema import FieldExpressionSchema, InputPortInstanceSchema
@@ -76,7 +76,9 @@ async def create_graph_with_start_node_and_ai_agent(
                 component_version_id=COMPONENT_VERSION_UUIDS["base_ai_agent"],
                 name="AI Agent",
                 parameters=[
-                    PipelineParameterSchema(name="completion_model", value=f"{provider}:{model_name}"),
+                    PipelineParameterSchema(
+                        name="completion_model", value=f"{provider}:{model_name}", kind=ParameterKind.INPUT
+                    ),
                 ],
                 is_start_node=False,
             ),

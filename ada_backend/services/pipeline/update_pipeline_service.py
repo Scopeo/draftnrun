@@ -18,14 +18,15 @@ from ada_backend.repositories.integration_repository import (
     upsert_component_instance_integration,
 )
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
+from ada_backend.repositories.port_definition_repository import get_port_definition_default
 from ada_backend.repositories.tool_port_configuration_repository import (
     delete_tool_port_configurations_for_instance,
     upsert_tool_port_configuration,
 )
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
-from ada_backend.services.entity_factory import get_llm_provider_and_model
 from engine.field_expressions.parser import parse_expression_flexible
 from engine.field_expressions.serializer import to_json as expression_to_json
+from engine.llm_services.utils import get_llm_provider_and_model
 
 LOGGER = getLogger(__name__)
 
@@ -93,14 +94,18 @@ def create_or_update_component_instance(
                     )
                     continue
 
-                model_name_param = next(
-                    (p for p in instance_data.parameters if p.name == COMPLETION_MODEL_IN_DB), None
+                model_name = get_port_definition_default(
+                    session,
+                    instance_data.component_version_id,
+                    COMPLETION_MODEL_IN_DB,
                 )
-                if model_name_param is None:
-                    raise ValueError(
-                        f"LLM Model name parameter not found in component definitions for component {component_name}"
+                if model_name is None:
+                    LOGGER.warning(
+                        f"Could not resolve completion_model for component '{component_name}'. "
+                        "Skipping LLM API key parameter creation."
                     )
-                provider, _ = get_llm_provider_and_model(model_name_param.value)
+                    continue
+                provider, _ = get_llm_provider_and_model(model_name)
                 param_secret = next((s for s in organization_secrets if s.key == f"{provider}_api_key"), None)
                 if param_secret is None:
                     LOGGER.info(
@@ -121,8 +126,7 @@ def create_or_update_component_instance(
         for param in instance_data.parameters:
             if param.name not in param_definitions:
                 raise ValueError(
-                    f"Parameter '{param.name=}' not found in component definitions for component "
-                    f"'{component_name}'"
+                    f"Parameter '{param.name=}' not found in component definitions for component '{component_name}'"
                 )
 
             param_def = param_definitions[param.name]
@@ -175,9 +179,7 @@ def create_or_update_component_instance(
                         session=session,
                         component_instance_id=instance_id,
                         parameter_definition_id=param_def.id,
-                        value=(
-                            json.dumps(param.value) if isinstance(param.value, (dict, list)) else str(param.value)
-                        ),
+                        value=(json.dumps(param.value) if isinstance(param.value, (dict, list)) else str(param.value)),
                         order=param.display_order,
                     )
 
