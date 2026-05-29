@@ -75,6 +75,19 @@ async def test_if_else_equals_true(if_else_component):
     assert result.result is True
     assert result.output == "test data"
     assert result.should_halt is False
+    assert result._directive.strategy == ExecutionStrategy.CONTINUE
+    assert result._directive.selected_edge_indices == []
+
+
+@pytest.mark.asyncio
+async def test_if_else_equals_true_with_false_path_enabled(if_else_component):
+    conditions = [Condition(value_a=5, operator="number_equal_to", value_b=5, next_logic=None)]
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="test data", enable_false_path=True)
+    result = await if_else_component._run_without_io_trace(inputs, {})
+
+    assert result.result is True
+    assert result.output == "test data"
+    assert result.should_halt is False
     assert result._directive.strategy == ExecutionStrategy.SELECTIVE_EDGE_INDICES
     assert result._directive.selected_edge_indices == [0]
 
@@ -518,10 +531,14 @@ async def test_if_else_multiple_conditions_mixed_logic(mock_trace_manager):
 # before reaching the component, so we don't need to test field expression resolution here
 
 
-def _build_if_else_graph(trace_manager: TraceManager, include_else: bool = True) -> GraphRunner:
+def _build_if_else_graph(
+    trace_manager: TraceManager,
+    include_else: bool = True,
+    true_edge_order: int | None = 0,
+) -> GraphRunner:
     graph = nx.DiGraph()
     graph.add_nodes_from(["if_else", "true_leaf"])
-    graph.add_edge("if_else", "true_leaf", order=0)
+    graph.add_edge("if_else", "true_leaf", order=true_edge_order)
 
     runnables = {
         "if_else": IfElse(
@@ -547,11 +564,30 @@ async def test_if_else_graph_executes_true_branch_only():
     result = await graph_runner.run({
         "conditions": [Condition(value_a=1, operator="number_equal_to", value_b=1, next_logic=None).model_dump()],
         "output_value_if_true": "payload",
+        "enable_false_path": True,
     })
 
     assert [message.content for message in result.messages] == ["true branch"]
     assert graph_runner.tasks["true_leaf"].state == TaskState.COMPLETED
     assert graph_runner.tasks["else_leaf"].state == TaskState.HALTED
+
+
+@pytest.mark.asyncio
+async def test_if_else_graph_true_without_false_path_continues_unordered_legacy_edge():
+    set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])
+    graph_runner = _build_if_else_graph(
+        TraceManager(project_name="test"),
+        include_else=False,
+        true_edge_order=None,
+    )
+
+    result = await graph_runner.run({
+        "conditions": [Condition(value_a=1, operator="number_equal_to", value_b=1, next_logic=None).model_dump()],
+        "output_value_if_true": "payload",
+    })
+
+    assert [message.content for message in result.messages] == ["true branch"]
+    assert graph_runner.tasks["true_leaf"].state == TaskState.COMPLETED
 
 
 @pytest.mark.asyncio

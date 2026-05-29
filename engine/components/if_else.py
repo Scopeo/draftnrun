@@ -326,6 +326,10 @@ class IfElse(Component):
             output=output_data,
             should_halt=should_halt,
         )
+        if comparison_result and not inputs.enable_false_path:
+            result._directive = ExecutionDirective(strategy=ExecutionStrategy.CONTINUE)
+            return result
+
         selected_edge_indices = [0] if comparison_result else ([1] if inputs.enable_false_path else [])
         result._directive = ExecutionDirective(
             strategy=ExecutionStrategy.SELECTIVE_EDGE_INDICES,
