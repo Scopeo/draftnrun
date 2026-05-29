@@ -7,6 +7,7 @@ from engine.components.synthesizer import Synthesizer
 from engine.components.tools.google_calendar_mcp_tool import GoogleCalendarMCPTool
 from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import ComponentAttributes, ToolDescription
+from engine.integrations.gmail.gmail_sender_v2 import GmailSenderV2
 from engine.integrations.mail_sender import MailSender
 from engine.integrations.providers import OAuthProvider
 from engine.llm_services.llm_service import CompletionService
@@ -74,6 +75,37 @@ def test_google_calendar_mcp_tool_registered():
         ),
     ]
     assert factory.constructor_method == "from_access_token"
+
+
+def test_google_calendar_neverdrop_mcp_tool_registered():
+    factory = FACTORY_REGISTRY.get(
+        component_version_id=COMPONENT_VERSION_UUIDS["google_calendar_neverdrop_mcp_tool"]
+    )
+    assert factory is not None
+    assert isinstance(factory, OAuthComponentFactory)
+    assert factory.entity_class is GoogleCalendarMCPTool
+    assert factory.oauth_bindings == [
+        OAuthBinding(
+            param_name="oauth_connection_id",
+            provider_config_key=OAuthProvider.GOOGLE_CALENDAR_NEVERDROP,
+            target_param_name="access_token",
+        ),
+    ]
+    assert factory.constructor_method == "from_access_token"
+
+
+def test_gmail_neverdrop_sender_registered():
+    factory = FACTORY_REGISTRY.get(component_version_id=COMPONENT_VERSION_UUIDS["gmail_neverdrop_sender"])
+    assert factory is not None
+    assert isinstance(factory, OAuthComponentFactory)
+    assert factory.entity_class is GmailSenderV2
+    assert factory.oauth_bindings == [
+        OAuthBinding(
+            param_name="oauth_connection_id",
+            provider_config_key=OAuthProvider.GMAIL_NEVERDROP,
+            target_param_name="access_token",
+        ),
+    ]
 
 
 def test_mail_sender_registered():

@@ -35,6 +35,18 @@ const activeConnections = computed(() => (orgDefinitions.value as VariableDefini
 const AVAILABLE_INTEGRATIONS = [
   { key: 'slack', name: 'Slack', icon: 'logos-slack-icon', description: 'Slack messaging and notifications' },
   { key: 'google-mail', name: 'Gmail', icon: 'logos-google-gmail', description: 'Gmail email integration' },
+  {
+    key: 'google-mail-neverdrop',
+    name: 'Gmail Neverdrop',
+    icon: 'logos-google-gmail',
+    description: 'Neverdrop Gmail email integration',
+  },
+  {
+    key: 'google-calendar-neverdrop',
+    name: 'Google Calendar Neverdrop',
+    icon: 'logos-google-calendar',
+    description: 'Neverdrop Google Calendar MCP integration',
+  },
   { key: 'hubspot', name: 'HubSpot', icon: 'logos-hubspot', description: 'CRM and marketing automation' },
 ]
 

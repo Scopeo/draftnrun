@@ -32,7 +32,18 @@ def seed_mcp_google_calendar_components(session: Session):
         can_use_function_calling=False,
         icon="logos:google-calendar",
     )
-    upsert_components(session, [google_calendar_mcp_tool_component])
+    google_calendar_neverdrop_mcp_tool_component = Component(
+        id=COMPONENT_UUIDS["google_calendar_neverdrop_mcp_tool"],
+        name="Google Calendar Neverdrop",
+        is_agent=True,
+        function_callable=True,
+        can_use_function_calling=False,
+        icon="logos:google-calendar",
+    )
+    upsert_components(
+        session,
+        [google_calendar_mcp_tool_component, google_calendar_neverdrop_mcp_tool_component],
+    )
 
     google_calendar_mcp_tool_version = db.ComponentVersion(
         id=COMPONENT_VERSION_UUIDS["google_calendar_mcp_tool"],
@@ -75,5 +86,49 @@ def seed_mcp_google_calendar_components(session: Session):
     upsert_component_categories(
         session=session,
         component_id=google_calendar_mcp_tool_component.id,
+        category_ids=[CATEGORY_UUIDS["integrations"], CATEGORY_UUIDS["information_retrieval"]],
+    )
+
+    google_calendar_neverdrop_mcp_tool_version = db.ComponentVersion(
+        id=COMPONENT_VERSION_UUIDS["google_calendar_neverdrop_mcp_tool"],
+        component_id=COMPONENT_UUIDS["google_calendar_neverdrop_mcp_tool"],
+        version_tag="0.0.1",
+        release_stage=db.ReleaseStage.INTERNAL,
+        description="Connect to Google Calendar Neverdrop via MCP to list, create, update, and delete events.",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["google_calendar_neverdrop_mcp_tool_description"],
+    )
+    upsert_component_versions(session, [google_calendar_neverdrop_mcp_tool_version])
+
+    google_calendar_neverdrop_mcp_tool_parameter_definitions = [
+        ComponentParameterDefinition(
+            id=UUID("c46ecec7-fefc-4219-8da9-10f890d9fd61"),
+            component_version_id=google_calendar_neverdrop_mcp_tool_version.id,
+            name="oauth_connection_id",
+            type=ParameterType.STRING,
+            nullable=True,
+            display_order=None,
+            parameter_order_within_group=0,
+            ui_component=UIComponent.OAUTH_CONNECTION,
+            ui_component_properties=UIComponentProperties(
+                label="Google Calendar Neverdrop Connection",
+                description="Select your authorized Google Calendar Neverdrop account connection",
+                provider=OAuthProvider.GOOGLE_CALENDAR_NEVERDROP.value,
+                icon="logos:google-calendar",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        )
+    ]
+
+    upsert_components_parameter_definitions(session, google_calendar_neverdrop_mcp_tool_parameter_definitions)
+
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=google_calendar_neverdrop_mcp_tool_version.component_id,
+        release_stage=google_calendar_neverdrop_mcp_tool_version.release_stage,
+        component_version_id=google_calendar_neverdrop_mcp_tool_version.id,
+    )
+
+    upsert_component_categories(
+        session=session,
+        component_id=google_calendar_neverdrop_mcp_tool_component.id,
         category_ids=[CATEGORY_UUIDS["integrations"], CATEGORY_UUIDS["information_retrieval"]],
     )

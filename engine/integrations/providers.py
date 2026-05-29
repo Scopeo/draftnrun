@@ -8,6 +8,8 @@ class OAuthProvider(StrEnum):
     NOTION = "notion"
     NOTION_NEVERDROP = "notion-neverdrop"
     GMAIL = "google-mail"
+    GMAIL_NEVERDROP = "google-mail-neverdrop"
     GOOGLE_CALENDAR = "google-calendar"
+    GOOGLE_CALENDAR_NEVERDROP = "google-calendar-neverdrop"
     OUTLOOK = "outlook"
     OUTLOOK_CALENDAR = "outlook-calendar"
