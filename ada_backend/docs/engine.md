@@ -68,6 +68,14 @@ The concrete base class implementing `Runnable`. Key attributes:
 
 When removing a component from the product, delete the runtime class, registry entry, seed data, existing DB catalog rows (with a migration), default tool description, and wrapper components that only exist to call it. Leaving only part of the catalog wiring in place can keep a dead component instantiable through backend seeds or MCP graph validation even after it disappears from the front-end.
 
+### Component Instantiation DB Usage
+
+`ada_backend/services/agent_builder_service.py` instantiates graph components while holding the graph-building SQLAlchemy
+session. Any database lookups needed to prepare factory inputs should use that existing session before calling
+`FACTORY_REGISTRY.create(...)`. Factory parameter processors in `ada_backend/services/entity_factory.py` should consume
+already-resolved values and avoid opening their own `get_db_session()` for per-component metadata such as LLM model IDs,
+because nested checkouts multiply connection-pool pressure during concurrent runs.
+
 ## Port System
 
 Three layers spanning database (backend) and runtime (engine):
