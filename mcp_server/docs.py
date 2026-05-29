@@ -741,8 +741,8 @@ Formatter, Vocabulary Search, Document Search
 **SQL/Data**: SQL Tool, React SQL Agent, Run SQL Query Tool, \
 SQL DB Service, Snowflake DB Service
 
-**Integrations**: Gmail Sender, Slack Sender, HubSpot MCP Tool, \
-Remote MCP Tool, API Call Tool
+**Integrations**: Gmail Sender, Gmail Neverdrop, Google Calendar MCP Tool, \
+Google Calendar Neverdrop, Slack Sender, HubSpot MCP Tool, Remote MCP Tool, API Call Tool
 
 **Code**: Python Code Runner, Terminal Command Runner
 
@@ -1409,7 +1409,7 @@ MCP does **not** expose the browser-based connect flow.
 ## Integration-Backed Components
 
 Some components require an integration relationship in addition to normal parameters. Examples include \
-OAuth-backed Gmail, Slack, or other provider-integrated tools.
+OAuth-backed Gmail, Gmail Neverdrop, Google Calendar Neverdrop, Slack, or other provider-integrated tools.
 
 Important MCP constraints:
 
@@ -1421,6 +1421,7 @@ the user must open the Draft'n Run web UI and manually select the OAuth connecti
 OAuth-dependent component (Gmail, Slack, HubSpot, etc.).
 - Use `list_oauth_connections` to verify which connections exist before telling the user what \
 to connect in the UI.
+- Google Neverdrop provider filters use `google-mail-neverdrop` and `google-calendar-neverdrop`.
 
 If a component catalog entry includes an `integration` block, treat it as unsafe for the generic \
 agent-tool helper unless the helper explicitly supports it.
@@ -1434,7 +1435,8 @@ inspect or change this parameter.
 
 ## Preflight Checklist: Graph with Integration-Backed Components
 
-Building a graph that uses OAuth-dependent components (Gmail, Slack, HubSpot, etc.) requires a \
+Building a graph that uses OAuth-dependent components (Gmail, Gmail Neverdrop, Google Calendar \
+Neverdrop, Slack, HubSpot, etc.) requires a \
 specific order of operations. Skipping steps causes `update_graph` to fail with errors like \
 "access_token is required".
 
@@ -1667,7 +1669,8 @@ Cron expression format:
 
 ## OAuth Connections
 
-OAuth integrations (Slack, Gmail, HubSpot) must be set up in the web UI. Requires developer role.
+OAuth integrations (Slack, Gmail, Gmail Neverdrop, Google Calendar Neverdrop, HubSpot) must be set up in the web UI.
+Requires developer role.
 
 - `list_oauth_connections(provider_config_key?)` → list connections, optional provider filter
 - `check_oauth_status(provider_config_key, connection_id)` → check a specific connection's status

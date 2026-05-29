@@ -49,7 +49,15 @@ def seed_gmail_components(session: Session):
         can_use_function_calling=False,
         icon="logos-google-gmail",
     )
-    upsert_components(session, [gmail_sender_component])
+    gmail_neverdrop_sender_component = Component(
+        id=COMPONENT_UUIDS["gmail_neverdrop_sender"],
+        name="Gmail Neverdrop",
+        is_agent=True,
+        function_callable=True,
+        can_use_function_calling=False,
+        icon="logos-google-gmail",
+    )
+    upsert_components(session, [gmail_sender_component, gmail_neverdrop_sender_component])
     gmail_sender_version = db.ComponentVersion(
         id=COMPONENT_VERSION_UUIDS["gmail_sender"],
         component_id=COMPONENT_UUIDS["gmail_sender"],
@@ -188,9 +196,64 @@ def seed_gmail_components(session: Session):
         component_version_id=gmail_sender_v3_version.id,
     )
 
+    gmail_neverdrop_sender_version = db.ComponentVersion(
+        id=COMPONENT_VERSION_UUIDS["gmail_neverdrop_sender"],
+        component_id=COMPONENT_UUIDS["gmail_neverdrop_sender"],
+        version_tag="0.0.1",
+        release_stage=db.ReleaseStage.INTERNAL,
+        description="A Neverdrop-branded component to send emails using Gmail API (with text or HTML).",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["gmail_neverdrop_sender_tool_description"],
+    )
+    upsert_component_versions(session, [gmail_neverdrop_sender_version])
+
+    gmail_neverdrop_sender_parameter_definitions = [
+        ComponentParameterDefinition(
+            id=UUID("5735186f-4961-4d4b-9065-6b4c6f95110a"),
+            component_version_id=gmail_neverdrop_sender_version.id,
+            name="oauth_connection_id",
+            type=ParameterType.STRING,
+            nullable=True,
+            display_order=0,
+            parameter_order_within_group=0,
+            ui_component=UIComponent.OAUTH_CONNECTION,
+            ui_component_properties=UIComponentProperties(
+                label="Gmail Neverdrop Connection",
+                description="Select your authorized Gmail Neverdrop account connection",
+                provider=OAuthProvider.GMAIL_NEVERDROP.value,
+                icon="logos-google-gmail",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        ),
+        ComponentParameterDefinition(
+            id=UUID("bcf88542-bcfc-4075-8d98-57714c8e8f96"),
+            component_version_id=gmail_neverdrop_sender_version.id,
+            name="save_as_draft",
+            type=ParameterType.BOOLEAN,
+            nullable=False,
+            default=True,
+            ui_component=UIComponent.CHECKBOX,
+            ui_component_properties=UIComponentProperties(
+                label="Save as Draft",
+                description="If checked, the email will be saved as a draft instead of being sent immediately.",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        ),
+    ]
+    upsert_components_parameter_definitions(session, gmail_neverdrop_sender_parameter_definitions)
+
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=gmail_neverdrop_sender_version.component_id,
+        release_stage=gmail_neverdrop_sender_version.release_stage,
+        component_version_id=gmail_neverdrop_sender_version.id,
+    )
+
     upsert_component_categories(
         session=session,
         component_id=gmail_sender_component.id,
+        category_ids=[CATEGORY_UUIDS["messaging"], CATEGORY_UUIDS["integrations"]],
+    )
+    upsert_component_categories(
+        session=session,
+        component_id=gmail_neverdrop_sender_component.id,
         category_ids=[CATEGORY_UUIDS["messaging"], CATEGORY_UUIDS["integrations"]],
     )
 
@@ -227,6 +290,21 @@ def seed_gmail_parameter_groups(session: Session):
         ),
         db.ComponentParameterGroup(
             component_version_id=COMPONENT_VERSION_UUIDS["gmail_sender_v3"],
+            parameter_group_id=GMAIL_PARAMETER_GROUP_UUIDS["attachments"],
+            group_order_within_component=3,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["gmail_neverdrop_sender"],
+            parameter_group_id=GMAIL_PARAMETER_GROUP_UUIDS["email_content"],
+            group_order_within_component=1,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["gmail_neverdrop_sender"],
+            parameter_group_id=GMAIL_PARAMETER_GROUP_UUIDS["recipients"],
+            group_order_within_component=2,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["gmail_neverdrop_sender"],
             parameter_group_id=GMAIL_PARAMETER_GROUP_UUIDS["attachments"],
             group_order_within_component=3,
         ),

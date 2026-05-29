@@ -570,6 +570,14 @@ def create_factory_registry() -> FactoryRegistry:
     )
 
     registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["gmail_neverdrop_sender"],
+        factory=OAuthComponentFactory(
+            entity_class=GmailSenderV2,
+            oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.GMAIL_NEVERDROP)],
+        ),
+    )
+
+    registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["outlook_sender"],
         factory=OAuthComponentFactory(
             entity_class=OutlookSender,
@@ -629,6 +637,16 @@ def create_factory_registry() -> FactoryRegistry:
         factory=OAuthComponentFactory(
             entity_class=GoogleCalendarMCPTool,
             oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.GOOGLE_CALENDAR)],
+            constructor_method="from_access_token",
+            parameter_processors=[build_ignore_tool_description_processor()],
+        ),
+    )
+
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["google_calendar_neverdrop_mcp_tool"],
+        factory=OAuthComponentFactory(
+            entity_class=GoogleCalendarMCPTool,
+            oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.GOOGLE_CALENDAR_NEVERDROP)],
             constructor_method="from_access_token",
             parameter_processors=[build_ignore_tool_description_processor()],
         ),
