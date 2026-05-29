@@ -86,6 +86,8 @@ def parse_expression_flexible(value: Union[str, dict, list]) -> ExpressionNode:
     Raises:
         FieldExpressionParseError: If parsing fails
     """
+    if isinstance(value, bool):
+        return LiteralNode(value=json.dumps(value))
     if isinstance(value, list):
         return LiteralNode(value=json.dumps(value))
     if isinstance(value, dict):
