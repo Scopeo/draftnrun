@@ -35,7 +35,7 @@ def seed_mcp_google_calendar_components(session: Session):
     google_calendar_neverdrop_mcp_tool_component = Component(
         id=COMPONENT_UUIDS["google_calendar_neverdrop_mcp_tool"],
         name="Google Calendar Neverdrop",
-        is_agent=False,
+        is_agent=True,
         function_callable=True,
         can_use_function_calling=False,
         icon="logos:google-calendar",
