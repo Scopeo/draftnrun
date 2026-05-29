@@ -109,7 +109,7 @@ def _coerce_str_to_bool(value: str) -> bool:
         return True
     if normalized == "false":
         return False
-    return bool(value)
+    return bool(normalized)
 
 
 class CoercionError(Exception):
