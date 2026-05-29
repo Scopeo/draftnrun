@@ -112,7 +112,9 @@ Controls post-node execution flow:
 | `HALT` | Successors of the halting node (already `COMPLETED`) are marked `HALTED` with empty data |
 | `SELECTIVE_EDGE_INDICES` | Only edges matching listed `order` indices proceed; non-selected successors and their subgraphs marked `HALTED` |
 
-Used by: Router (selective routing), IfElse (halt branch).
+Used by: Router (selective routing), If/Else (true/else routing).
+
+If/Else uses fixed edge orders: `0` for the true branch and `1` for the false/else branch. The else route is optional; when the condition is false and no `order=1` edge exists, all connected non-selected successors are halted and execution simply stops on that branch.
 
 ## Variable Resolution
 

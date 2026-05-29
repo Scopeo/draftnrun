@@ -4,7 +4,7 @@ import type { Edge } from '../types/edge.types'
 import type { ApiComponentInstance, ApiEdge, ApiRelationship, GraphData } from '../types/graph.types'
 import type { Node, NodeData, Parameter, ToolDescription } from '../types/node.types'
 import { createComponentDefinitionMap } from './componentLookup'
-import { isRouterComponent } from './routerDetection'
+import { isBranchingComponent, isIfElseComponent, isRouterComponent } from './routerDetection'
 import { generateRouterOutputs } from './routerTransformer'
 import { logger } from '@/utils/logger'
 
@@ -94,13 +94,15 @@ export const graphTransformer: GraphTransformerType = {
       // Determine node type
       const isRelationshipChild = relationshipChildIds.has(instance.id)
 
-      // Check if this is a Router component using centralized detection
+      // Check if this is a branching component using centralized detection
       const isRouter = isRouterComponent(instance)
+      const isIfElse = isIfElseComponent(instance)
+      const isBranching = isBranchingComponent(instance)
 
       let nodeType: string
       if (isStaticSubcomponent || isRelationshipChild) {
         nodeType = 'worker'
-      } else if (isRouter) {
+      } else if (isBranching) {
         nodeType = 'router'
       } else {
         nodeType = 'component'
@@ -216,7 +218,9 @@ export const graphTransformer: GraphTransformerType = {
       // WORKAROUND: Dynamically generate outputs for Router components if missing
       // The backend doesn't persist/return the outputs field, so we regenerate it from routes
       let finalOutputs = outputs
-      if (isRouter) {
+      if (isIfElse) {
+        finalOutputs = ['0', '1']
+      } else if (isRouter) {
         const { outputs: routerOutputs, routesCount } = generateRouterOutputs(formattedParameters, outputs)
         if (routesCount > 0) {
           finalOutputs = routerOutputs
