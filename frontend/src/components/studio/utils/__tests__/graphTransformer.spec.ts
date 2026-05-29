@@ -182,6 +182,18 @@ describe('graphTransformer.toFlow', () => {
               kind: 'parameter',
               is_tool_input: true,
             },
+            {
+              name: 'enable_false_path',
+              value: true,
+              type: 'boolean',
+              nullable: false,
+              default: false,
+              ui_component: 'Checkbox',
+              ui_component_properties: null,
+              is_advanced: false,
+              kind: 'parameter',
+              is_tool_input: true,
+            },
           ],
           outputs: [],
         },
@@ -200,5 +212,54 @@ describe('graphTransformer.toFlow', () => {
     expect(result.nodes[0].type).toBe('router')
     expect(result.nodes[0].data.outputs).toEqual(['0', '1'])
     expect(result.edges[0].sourceHandle).toBe('1')
+  })
+
+  it('renders If/Else without the else output when false path is disabled', () => {
+    const result = graphTransformer.toFlow({
+      component_instances: [
+        {
+          id: 'if-else-node',
+          ref: 'if_else',
+          name: 'If/Else',
+          component_id: 'component-1',
+          component_version_id: 'component-version-1',
+          component_name: 'if_else',
+          is_agent: false,
+          is_start_node: true,
+          parameters: [
+            {
+              name: 'conditions',
+              value: [],
+              type: 'json',
+              nullable: false,
+              default: null,
+              ui_component: 'ConditionBuilder',
+              ui_component_properties: null,
+              is_advanced: false,
+              kind: 'parameter',
+              is_tool_input: true,
+            },
+            {
+              name: 'enable_false_path',
+              value: 'false',
+              type: 'boolean',
+              nullable: false,
+              default: false,
+              ui_component: 'Checkbox',
+              ui_component_properties: null,
+              is_advanced: false,
+              kind: 'parameter',
+              is_tool_input: true,
+            },
+          ],
+          outputs: [],
+        },
+      ],
+      edges: [],
+      relationships: [],
+    } as any)
+
+    expect(result.nodes[0].type).toBe('router')
+    expect(result.nodes[0].data.outputs).toEqual(['0'])
   })
 })

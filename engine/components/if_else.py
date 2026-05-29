@@ -117,6 +117,18 @@ class IfElseInputs(BaseModel):
             "parameter_type": ParameterType.JSON,
         },
     )
+    enable_false_path: bool = Field(
+        default=False,
+        description="Enable an optional downstream path when the condition evaluates to false.",
+        json_schema_extra={
+            "parameter_type": ParameterType.BOOLEAN,
+            "ui_component": UIComponent.CHECKBOX,
+            "ui_component_properties": {
+                "label": "Enable false path",
+                "description": "Show an optional Else route that runs when the condition is false.",
+            },
+        },
+    )
 
 
 class IfElseOutputs(BaseModel):
@@ -314,8 +326,9 @@ class IfElse(Component):
             output=output_data,
             should_halt=should_halt,
         )
+        selected_edge_indices = [0] if comparison_result else ([1] if inputs.enable_false_path else [])
         result._directive = ExecutionDirective(
             strategy=ExecutionStrategy.SELECTIVE_EDGE_INDICES,
-            selected_edge_indices=[0 if comparison_result else 1],
+            selected_edge_indices=selected_edge_indices,
         )
         return result
