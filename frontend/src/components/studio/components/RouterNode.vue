@@ -6,7 +6,7 @@ import { computed, ref } from 'vue'
 import { Icon } from '@iconify/vue'
 import { isProviderLogo } from '../utils/node-factory.utils'
 import { isValidRouterConnection } from '../utils/connectionValidation'
-import { isIfElseComponent } from '../utils/routerDetection'
+import { hasIfElseFalsePath, isIfElseComponent } from '../utils/routerDetection'
 import type { Parameter } from '../types/node.types'
 import { parseRoutes } from '@/utils/routeHelpers'
 import { truncateString } from '@/utils/formatters'
@@ -30,6 +30,7 @@ const { edges } = useVueFlow()
 const data = computed(() => props.data || {})
 const canDelete = computed(() => props.isDraftMode)
 const isIfElse = computed(() => isIfElseComponent(data.value))
+const isFalsePathEnabled = computed(() => hasIfElseFalsePath(data.value))
 
 // Show confirmation dialog for delete
 const showDeleteConfirmation = ref(false)
@@ -45,10 +46,13 @@ const isDeletable = computed(() => {
 // Get routes from parameters using utility
 const routes = computed(() => {
   if (isIfElse.value) {
-    return [
+    const ifElseRoutes = [
       { value_a: 'Condition', operator: 'equals', value_b: 'True', routeOrder: 0 },
-      { value_a: 'Condition', operator: 'equals', value_b: 'Else', routeOrder: 1 },
     ]
+    if (isFalsePathEnabled.value) {
+      ifElseRoutes.push({ value_a: 'Condition', operator: 'equals', value_b: 'Else', routeOrder: 1 })
+    }
+    return ifElseRoutes
   }
 
   const parameters = (data.value.parameters ?? []) as Parameter[]

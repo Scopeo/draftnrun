@@ -4,7 +4,7 @@ import type { Edge } from '../types/edge.types'
 import type { ApiComponentInstance, ApiEdge, ApiRelationship, GraphData } from '../types/graph.types'
 import type { Node, NodeData, Parameter, ToolDescription } from '../types/node.types'
 import { createComponentDefinitionMap } from './componentLookup'
-import { isBranchingComponent, isIfElseComponent, isRouterComponent } from './routerDetection'
+import { hasIfElseFalsePath, isBranchingComponent, isIfElseComponent, isRouterComponent } from './routerDetection'
 import { generateRouterOutputs } from './routerTransformer'
 import { logger } from '@/utils/logger'
 
@@ -219,7 +219,7 @@ export const graphTransformer: GraphTransformerType = {
       // The backend doesn't persist/return the outputs field, so we regenerate it from routes
       let finalOutputs = outputs
       if (isIfElse) {
-        finalOutputs = ['0', '1']
+        finalOutputs = hasIfElseFalsePath({ parameters: formattedParameters }) ? ['0', '1'] : ['0']
       } else if (isRouter) {
         const { outputs: routerOutputs, routesCount } = generateRouterOutputs(formattedParameters, outputs)
         if (routesCount > 0) {

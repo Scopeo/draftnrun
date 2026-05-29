@@ -114,7 +114,7 @@ Controls post-node execution flow:
 
 Used by: Router (selective routing), If/Else (true/else routing).
 
-If/Else uses fixed edge orders: `0` for the true branch and `1` for the false/else branch. The else route is optional; when the condition is false and no `order=1` edge exists, all connected non-selected successors are halted and execution simply stops on that branch.
+If/Else uses fixed edge orders: `0` for the true branch and `1` for the false/else branch. The false route is controlled by the `enable_false_path` input, which defaults to `false`. When disabled, a false condition selects no branch and all successors are halted; when enabled, a false condition selects the `order=1` branch.
 
 ## Variable Resolution
 

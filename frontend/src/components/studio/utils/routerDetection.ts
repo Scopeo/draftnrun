@@ -42,3 +42,16 @@ export function isBranchingComponent(instance: {
 }): boolean {
   return isRouterComponent(instance) || isIfElseComponent(instance)
 }
+
+export function isTruthyBooleanValue(value: unknown): boolean {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') return ['true', '1', 'yes', 'on'].includes(value.trim().toLowerCase())
+  return Boolean(value)
+}
+
+export function hasIfElseFalsePath(instance: {
+  parameters?: Array<{ name: string; value?: unknown; default?: unknown }>
+}): boolean {
+  const param = instance.parameters?.find(p => p.name === 'enable_false_path')
+  return isTruthyBooleanValue(param?.value ?? param?.default ?? false)
+}

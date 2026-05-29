@@ -12,6 +12,7 @@ import {
 } from '@/components/studio/components/edit-sidebar/types'
 import type { FormDataShape } from '@/components/studio/components/edit-sidebar/form-initializer'
 import { createNodeData, processToolsRecursively } from '@/components/studio/utils/node-factory.utils'
+import { isIfElseComponent, isTruthyBooleanValue } from '@/components/studio/utils/routerDetection'
 import { parseJsonStringToJsonBuild, transformConditionsToJsonBuild } from '@/composables/useFieldExpressions'
 import { getComponentDefinitionFromCache } from '@/composables/queries/useComponentDefinitionsQuery'
 import { useNotifications } from '@/composables/useNotifications'
@@ -203,6 +204,10 @@ export function useEditSidebarSubmit(
         finalValue = paramValue ?? false
       }
 
+      if (paramDef?.type === 'boolean' && paramDef?.kind === 'input') {
+        finalValue = finalValue ? 'true' : 'false'
+      }
+
       if (Array.isArray(finalValue) && isUiComponentType(paramDef, 'MULTISELECT'))
         finalValue = JSON.stringify(finalValue)
 
@@ -318,6 +323,16 @@ export function useEditSidebarSubmit(
     if (!componentData.value?.id) return
     const node = nodes.value.find(n => n.id === componentData.value.id)
     if (node?.type !== 'router') return
+
+    if (isIfElseComponent(componentData.value)) {
+      const enableFalsePath = isTruthyBooleanValue(processedParameters.find(p => p.name === 'enable_false_path')?.value)
+      if (!enableFalsePath) {
+        const elseEdges = edges.value.filter(e => e.source === node.id && e.sourceHandle === '1')
+        if (elseEdges.length > 0) removeEdges(elseEdges.map(e => e.id))
+      }
+      return
+    }
+
     const routesParam = processedParameters.find(p => p.name === 'routes')
     if (!routesParam || !Array.isArray(routesParam.value)) return
 

@@ -90,6 +90,19 @@ async def test_if_else_equals_false(if_else_component):
     assert result.output is None
     assert result.should_halt is True
     assert result._directive.strategy == ExecutionStrategy.SELECTIVE_EDGE_INDICES
+    assert result._directive.selected_edge_indices == []
+
+
+@pytest.mark.asyncio
+async def test_if_else_equals_false_with_false_path_enabled(if_else_component):
+    conditions = [Condition(value_a=5, operator="number_equal_to", value_b=10, next_logic=None)]
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="test data", enable_false_path=True)
+    result = await if_else_component._run_without_io_trace(inputs, {})
+
+    assert result.result is False
+    assert result.output is None
+    assert result.should_halt is True
+    assert result._directive.strategy == ExecutionStrategy.SELECTIVE_EDGE_INDICES
     assert result._directive.selected_edge_indices == [1]
 
 
@@ -549,6 +562,7 @@ async def test_if_else_graph_executes_else_branch_when_present():
     result = await graph_runner.run({
         "conditions": [Condition(value_a=1, operator="number_equal_to", value_b=2, next_logic=None).model_dump()],
         "output_value_if_true": "payload",
+        "enable_false_path": True,
     })
 
     assert [message.content for message in result.messages] == ["else branch"]
