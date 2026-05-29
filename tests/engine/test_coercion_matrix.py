@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from engine.coercion_matrix import CoercionError, CoercionMatrix, coerce_value, get_coercion_matrix
 from engine.components.component import _coerce_inputs_for_model
 from engine.components.types import AgentPayload, ChatMessage, SourceChunk
+from engine.field_expressions.parser import parse_expression_flexible
 
 
 def test_primitive_coercions():
@@ -41,6 +42,18 @@ def test_primitive_coercions():
     assert coercion_matrix.coerce("hello", bool) is True
     assert coercion_matrix.coerce(0, bool) is False
     assert coercion_matrix.coerce(1, bool) is True
+
+
+def test_string_bool_coercion_preserves_json_boolean_literals():
+    coercion_matrix = CoercionMatrix()
+
+    false_literal = parse_expression_flexible(False)
+    assert coercion_matrix.coerce(false_literal.value, bool) is False
+    assert coercion_matrix.coerce(" false ", bool) is False
+    assert coercion_matrix.coerce("true", bool) is True
+    assert coercion_matrix.coerce(" TRUE ", bool) is True
+    assert coercion_matrix.coerce("hello", bool) is True
+    assert coercion_matrix.coerce("", bool) is False
 
 
 def test_already_correct_type():

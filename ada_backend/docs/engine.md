@@ -192,6 +192,13 @@ Folder-source ingestion can optionally force presigned URL usage for S3-backed f
 - When enabled, missing S3 metadata (`s3_path`), custom endpoint configuration (`S3_ENDPOINT_URL`), or presigned URL
   generation failures are treated as hard errors instead of silently falling back.
 
+## Field Expression Coercion
+
+`parse_expression_flexible()` accepts strings, serialized AST dicts, plain JSON dicts/lists, and booleans. Plain JSON
+dicts/lists and booleans become `LiteralNode(json.dumps(value))`. `LiteralNode` values are strings at runtime, so
+boolean JSON literals (`"true"` and `"false"`) are coerced explicitly to `bool` before the generic Python truthiness
+fallback is used for other strings.
+
 ## Key Files
 
 | Concept | File |
