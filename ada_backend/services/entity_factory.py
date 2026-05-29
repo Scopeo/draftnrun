@@ -26,7 +26,6 @@ from ada_backend.services.errors import MissingDataSourceError
 from ada_backend.services.integration_service import get_oauth_access_token
 from ada_backend.services.llm_models_service import (
     get_llm_models_by_capability_select_options_service,
-    get_model_id_by_name_service,
 )
 from engine.components.rag.cohere_reranker import CohereReranker
 from engine.components.rag.formatter import Formatter
@@ -51,12 +50,6 @@ class ParameterToValidate(BaseModel):
     argument: Any
     type: Any
     optional: bool = False
-
-
-# TODO: Remove this when llm service has only model_id as an argument
-def fetch_model_id_by_name(model_name: str) -> UUID | None:
-    with get_db_session() as session:
-        return get_model_id_by_name_service(session, model_name)
 
 
 class EntityFactory:
@@ -645,7 +638,7 @@ def build_completion_service_processor(
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
 
-        model_id = fetch_model_id_by_name(model_name)
+        model_id = params.pop("model_id", None)
 
         completion_service = CompletionService(
             provider=provider,
@@ -699,7 +692,7 @@ def build_web_service_processor(
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
 
-        model_id = fetch_model_id_by_name(model_name)
+        model_id = params.pop("model_id", None)
 
         web_service = WebSearchService(
             trace_manager=get_trace_manager(),
@@ -725,7 +718,7 @@ def build_ocr_service_processor(
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
 
-        model_id = fetch_model_id_by_name(model_name)
+        model_id = params.pop("model_id", None)
 
         ocr_service = OCRService(
             trace_manager=get_trace_manager(),
@@ -1000,7 +993,7 @@ def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterPr
             except ValueError as e:
                 raise ValueError(f"temperature must be a float, got {temperature}: {e}")
 
-        model_id = fetch_model_id_by_name(model_name)
+        model_id = params.pop("model_id", None)
 
         completion_service = CompletionService(
             provider=provider,

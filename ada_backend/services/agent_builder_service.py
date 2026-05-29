@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.context import set_current_project_id
 from ada_backend.database.models import PortSetupMode
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 from ada_backend.repositories.component_repository import (
     get_base_component_from_version,
@@ -24,6 +25,7 @@ from ada_backend.repositories.integration_repository import (
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
 from ada_backend.repositories.tool_port_configuration_repository import get_tool_port_configurations
 from ada_backend.services.errors import MissingDataSourceError, MissingIntegrationError
+from ada_backend.services.llm_models_service import get_model_id_by_name_service
 from ada_backend.services.registry import FACTORY_REGISTRY
 from ada_backend.services.tool_description_generator import generate_tool_description
 from ada_backend.utils.secret_resolver import replace_secret_placeholders
@@ -35,6 +37,15 @@ from engine.field_expressions.serializer import from_json as expression_from_jso
 from engine.graph_runner.field_expression_management import evaluate_expression
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _add_llm_model_id(session: Session, input_params: dict[str, Any]) -> None:
+    completion_model = input_params.get(COMPLETION_MODEL_IN_DB)
+    if not isinstance(completion_model, str) or ":" not in completion_model:
+        return
+
+    model_name = completion_model.split(":", 1)[1]
+    input_params["model_id"] = get_model_id_by_name_service(session, model_name)
 
 
 def get_component_params(
@@ -333,6 +344,7 @@ async def instantiate_component(
         key_to_secret = {s.key: s.secret for s in secrets}
 
     input_params = replace_secret_placeholders(input_params, key_to_secret)
+    _add_llm_model_id(session, input_params)
 
     factory = FACTORY_REGISTRY.get(component_instance.component_version_id)
     entity_class = getattr(factory, "entity_class", None)
