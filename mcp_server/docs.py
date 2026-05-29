@@ -317,6 +317,11 @@ Edge `id` can be `null` — the MCP layer auto-generates a UUID before sending t
 
 Always create an edge between sequential nodes — the engine uses topological sort on edges.
 
+Control-flow components use `order` to select branches. Router edges use the route index. \
+If/Else uses fixed orders: `0` for the true branch and `1` for the false/else branch. \
+The If/Else else edge is optional; omit the `order: 1` edge when a false condition should stop \
+that branch.
+
 ### Auto-canonical wiring — edges are enough
 
 When you create an edge, the backend auto-generates a visible RefNode field expression \
@@ -581,6 +586,7 @@ Key takeaways from this example:
 in real graphs use IDs from `get_graph`, not copied literals.
 - **Edges** use `"origin"` and `"destination"` as **plain UUID strings** (node IDs), not objects.
 - **Edge `id`** can be `null` — the MCP layer auto-generates UUIDs.
+- **If/Else branch edges** use `order: 0` for the true route and optional `order: 1` for the else route.
 - **Canonical inputs** (like `messages` on AI Agent) are auto-wired by the backend when an edge \
 exists — no need to provide `kind="input"` parameters for them.
 - **JSON-typed parameters** like `conditions` on If/Else: use `json_build` expressions to \

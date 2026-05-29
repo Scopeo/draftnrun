@@ -6,6 +6,7 @@ import { computed, ref } from 'vue'
 import { Icon } from '@iconify/vue'
 import { isProviderLogo } from '../utils/node-factory.utils'
 import { isValidRouterConnection } from '../utils/connectionValidation'
+import { isIfElseComponent } from '../utils/routerDetection'
 import type { Parameter } from '../types/node.types'
 import { parseRoutes } from '@/utils/routeHelpers'
 import { truncateString } from '@/utils/formatters'
@@ -28,6 +29,7 @@ const { edges } = useVueFlow()
 
 const data = computed(() => props.data || {})
 const canDelete = computed(() => props.isDraftMode)
+const isIfElse = computed(() => isIfElseComponent(data.value))
 
 // Show confirmation dialog for delete
 const showDeleteConfirmation = ref(false)
@@ -42,6 +44,13 @@ const isDeletable = computed(() => {
 
 // Get routes from parameters using utility
 const routes = computed(() => {
+  if (isIfElse.value) {
+    return [
+      { value_a: 'Condition', operator: 'equals', value_b: 'True', routeOrder: 0 },
+      { value_a: 'Condition', operator: 'equals', value_b: 'Else', routeOrder: 1 },
+    ]
+  }
+
   const parameters = (data.value.parameters ?? []) as Parameter[]
   const routesParam = parameters.find((p: Parameter) => p.name === 'routes')
   return parseRoutes(routesParam?.value)
@@ -55,6 +64,8 @@ const isRouteActive = (index: number): boolean => {
 // Get display value for a route condition - show the target value (value_b)
 const getRouteDisplayValue = (route: Route | null | undefined): string => {
   if (!route) return 'Empty'
+
+  if (isIfElse.value) return route.value_b || 'Empty'
 
   // Show value_b (the target value to match)
   if (route.value_b !== undefined && route.value_b !== null && route.value_b !== '') {
@@ -88,6 +99,9 @@ const cancelDelete = () => {
 const getComponentIcon = computed(() => {
   if (data.value.icon != null) {
     return data.value.icon
+  }
+  if (isIfElse.value) {
+    return 'tabler-git-branch'
   }
   return 'tabler-route'
 })
