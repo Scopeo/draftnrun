@@ -54,6 +54,7 @@ def test_string_bool_coercion_preserves_json_boolean_literals():
     assert coercion_matrix.coerce(" TRUE ", bool) is True
     assert coercion_matrix.coerce("hello", bool) is True
     assert coercion_matrix.coerce("", bool) is False
+    assert coercion_matrix.coerce("   ", bool) is False
 
 
 def test_already_correct_type():
