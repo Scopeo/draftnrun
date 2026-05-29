@@ -1,4 +1,5 @@
 import json
+from typing import get_args
 
 import pytest
 
@@ -6,6 +7,10 @@ from engine.field_expressions.ast import ConcatNode, LiteralNode, RefNode
 from engine.field_expressions.errors import FieldExpressionParseError
 from engine.field_expressions.parser import parse_expression, parse_expression_flexible, unparse_expression
 from engine.field_expressions.serializer import from_json, to_json
+
+
+def test_parse_expression_flexible_type_annotation_includes_bool():
+    assert bool in get_args(parse_expression_flexible.__annotations__["value"])
 
 
 def test_parse_literal_only():
@@ -188,7 +193,7 @@ def test_parse_expression_flexible_with_int_raises_error():
     """Test that parse_expression_flexible raises error for int input."""
     with pytest.raises(FieldExpressionParseError) as exc_info:
         parse_expression_flexible(42)
-    assert "Expected str, dict, or list, got int" in str(exc_info.value)
+    assert "Expected str, dict, list, or bool, got int" in str(exc_info.value)
     assert "42" in str(exc_info.value)
 
 
@@ -196,7 +201,7 @@ def test_parse_expression_flexible_with_none_raises_error():
     """Test that parse_expression_flexible raises error for None input."""
     with pytest.raises(FieldExpressionParseError) as exc_info:
         parse_expression_flexible(None)
-    assert "Expected str, dict, or list, got NoneType" in str(exc_info.value)
+    assert "Expected str, dict, list, or bool, got NoneType" in str(exc_info.value)
 
 
 def test_parse_expression_flexible_raw_dict_with_tokens_returns_literal():
