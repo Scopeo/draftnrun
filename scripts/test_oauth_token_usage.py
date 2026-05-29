@@ -10,7 +10,7 @@ This script validates that:
 Usage:
     uv run python -m scripts.test_oauth_token_usage \
         --connection-id <uuid> \
-        --provider slack|hubspot|google-mail
+        --provider slack|hubspot|google-mail|google-mail-neverdrop|google-calendar-neverdrop
 """
 
 import argparse
@@ -132,6 +132,32 @@ async def test_gmail_token(access_token: str) -> bool:
         return False
 
 
+async def test_google_calendar_token(access_token: str) -> bool:
+    """Test Google Calendar token with users/me/calendarList API."""
+    print_header("Testing Google Calendar API Connectivity")
+    print_info("Calling Google Calendar calendarList endpoint...")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                "https://www.googleapis.com/calendar/v3/users/me/calendarList",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            print_success("Google Calendar authentication successful!")
+            print_info(f"  Calendars returned: {len(data.get('items', []))}")
+            return True
+
+    except httpx.HTTPError as e:
+        print_error(f"HTTP error: {e}")
+        return False
+    except Exception as e:
+        print_error(f"Unexpected error: {e}")
+        return False
+
+
 async def test_notion_token(access_token: str) -> bool:
     """Test Notion token with users/me API."""
     print_header("Testing Notion API Connectivity")
@@ -192,8 +218,10 @@ async def test_token_usage(oauth_connection_id: str, provider: str):
         success = await test_slack_token(access_token)
     elif provider == "hubspot":
         success = await test_hubspot_token(access_token)
-    elif provider == "google-mail":
+    elif provider in {"google-mail", "google-mail-neverdrop"}:
         success = await test_gmail_token(access_token)
+    elif provider == "google-calendar-neverdrop":
+        success = await test_google_calendar_token(access_token)
     elif provider in {"notion", "notion-neverdrop"}:
         success = await test_notion_token(access_token)
     else:
@@ -227,7 +255,15 @@ def main():
     parser.add_argument(
         "--provider",
         required=True,
-        choices=["slack", "hubspot", "google-mail", "notion", "notion-neverdrop"],
+        choices=[
+            "slack",
+            "hubspot",
+            "google-mail",
+            "google-mail-neverdrop",
+            "google-calendar-neverdrop",
+            "notion",
+            "notion-neverdrop",
+        ],
         help="Provider key",
     )
 

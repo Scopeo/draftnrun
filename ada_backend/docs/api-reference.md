@@ -224,6 +224,8 @@ Run input data is persisted in the `run_inputs` table (keyed by `retry_group_id`
 | PATCH | `.../oauth-connections/{id}` | JWT\|ApiKey(Developer) | Update connection |
 | DELETE | `.../oauth-connections/{id}` | JWT\|ApiKey(Developer) | Revoke connection |
 
+OAuth provider keys are validated against `OAuthProvider`. Google-backed keys include `google-mail`, `google-calendar`, `google-mail-neverdrop`, and `google-calendar-neverdrop`.
+
 ## Integrations (`integration_router.py`)
 
 | Method | Path | Auth | Description |

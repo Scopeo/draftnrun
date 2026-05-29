@@ -43,6 +43,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_input_tool_description": UUID("5be22376-7d08-486b-a004-b495bae58f77"),
     "default_filter_tool_description": UUID("6cf33487-8e19-597c-b115-c5a6cbf69a88"),
     "gmail_sender_tool_description": UUID("c1d3aca1-5187-40c6-a350-e3b28b15c802"),
+    "gmail_neverdrop_sender_tool_description": UUID("a3db7517-b6db-4adc-8894-4de06087bdc6"),
     "python_code_runner_tool_description": UUID("e2b11111-2222-3333-4444-555555555555"),
     "terminal_command_runner_tool_description": UUID("e2b11112-2222-3333-4444-555555555555"),
     "default_llm_call_tool_description": UUID("b91d418d-a67f-40b9-9266-b01ca202747d"),
@@ -57,6 +58,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "hubspot_mcp_tool_description": UUID("1d6ce8b3-44ae-4c3d-a14b-2837a3a5717e"),
     "hubspot_neverdrop_mcp_tool_description": UUID("a1e7f624-6c98-4546-b769-3607819ebad2"),
     "google_calendar_mcp_tool_description": UUID("d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"),
+    "google_calendar_neverdrop_mcp_tool_description": UUID("f6db621e-6036-4ee7-9505-f9d20b972057"),
     "notion_neverdrop_mcp_tool_description": UUID("deb1f596-64d1-494d-a09c-dfb5c1211c30"),
     "outlook_sender_tool_description": UUID("31344b0e-4949-42b6-98a8-6b1dcec98f3c"),
     "mail_sender_tool_description": UUID("7fe2178e-36c6-4195-aa5b-9a9178be70e8"),
@@ -113,6 +115,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["gmail_sender_tool_description"],
         **GMAIL_SENDER_TOOL_DESCRIPTION.model_dump(),
     )
+    gmail_neverdrop_sender_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["gmail_neverdrop_sender_tool_description"],
+        **GMAIL_SENDER_TOOL_DESCRIPTION.model_dump(),
+    )
     slack_sender_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["slack_sender_tool_description"],
         **SLACK_SENDER_TOOL_DESCRIPTION.model_dump(),
@@ -161,6 +167,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["google_calendar_mcp_tool_description"],
         **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
     )
+    google_calendar_neverdrop_mcp_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["google_calendar_neverdrop_mcp_tool_description"],
+        **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
+    )
     notion_neverdrop_mcp_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["notion_neverdrop_mcp_tool_description"],
         **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
@@ -199,6 +209,7 @@ def seed_tool_description(session: Session):
             default_start_tool_description,
             default_filter_tool_description,
             gmail_sender_tool_description,
+            gmail_neverdrop_sender_tool_description,
             slack_sender_tool_description,
             python_code_runner_tool_description,
             terminal_command_runner_tool_description,
@@ -213,6 +224,7 @@ def seed_tool_description(session: Session):
             hubspot_mcp_tool_description,
             hubspot_neverdrop_mcp_tool_description,
             google_calendar_mcp_tool_description,
+            google_calendar_neverdrop_mcp_tool_description,
             notion_neverdrop_mcp_tool_description,
             outlook_sender_tool_description,
             mail_sender_tool_description,

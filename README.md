@@ -402,7 +402,7 @@ for the ingestion
 
 ### Nango OAuth Management (Self-Hosted)
 
-Nango is used as a headless OAuth token vault to handle OAuth integrations (Slack, HubSpot, etc.). Generate encryption keys:
+Nango is used as a headless OAuth token vault to handle OAuth integrations (Slack, HubSpot, Gmail, Google Calendar, and Neverdrop-branded variants). Generate encryption keys:
 
 ```bash
 # Encryption key for tokens
@@ -421,6 +421,8 @@ NANGO_DASHBOARD_PASSWORD=your-secure-password
 ```
 
 **For more details:** See [Nango documentation](https://docs.nango.dev/)
+
+Draft'n Run provider config keys currently include `google-mail` and `google-calendar` for standard Google flows, plus `google-mail-neverdrop` and `google-calendar-neverdrop` for Neverdrop-branded Google OAuth flows.
 
 ### Google OAuth Setup
 

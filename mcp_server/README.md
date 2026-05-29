@@ -137,7 +137,7 @@ Custom tools (validation, multi-step, client-side logic) are still defined as `@
 | Monitoring | Duration clamped 1–90 days. `list_traces` also accepts `start_time`/`end_time` (ISO 8601) for date range filtering. |
 | Response size | Responses > 50KB are trimmed by default. `ToolSpec.trim=False` disables trimming per tool (e.g. `get_graph`, `list_components` for round-trip safety). |
 | Session diagnostics | `get_current_context` includes `session.session_id` and `session.storage_backend` ("redis" or "memory"). |
-| Agent tools | `add_tool_to_agent` rejects non-`function_callable`, duplicate, or integration-backed tools that it cannot wire safely. Use the display name from `search_components()`, not hard-coded names. The AI Agent's `skip_tools_with_missing_oauth` parameter (default `True`) silently drops any tool whose OAuth connection is missing at agent startup. |
+| Agent tools | `add_tool_to_agent` rejects non-`function_callable`, duplicate, or integration-backed tools that it cannot wire safely. Use the display name from `search_components()`, not hard-coded names. The AI Agent's `skip_tools_with_missing_oauth` parameter (default `True`) silently drops any tool whose OAuth connection is missing at agent startup. Neverdrop-branded Google tools use the `google-mail-neverdrop` and `google-calendar-neverdrop` provider filters. |
 | Model validation | `configure_agent` validates the requested model against the agent's available options and rejects unknown or deprecated names with a clear error listing valid choices. |
 | Source creation | `create_source` validates type-specific required fields and only supports `website`/`database` (developer+ role). |
 | Knowledge mutation | `update_document_chunks` is blocked by default unless the caller explicitly confirms a full replacement. |
@@ -260,7 +260,7 @@ Any Streamable-HTTP-compatible MCP client can connect to `https://mcp.draftnrun.
 
 **Tools returning 403** — Your role in the organization may not have sufficient permissions, or the org's release stage may not include the requested resource. Check with `get_current_context`. The error message now includes the backend's detail when available.
 
-**"access_token is required" on `update_graph`** — The graph contains an integration-backed component (e.g. Gmail, Slack, HubSpot) whose OAuth connection is not set up. The backend validates integration dependencies at save time, not just at run time. Fix: connect the integration in the web UI first, or save the graph without the integration component and add it later. See `docs://integrations` preflight checklist.
+**"access_token is required" on `update_graph`** — The graph contains an integration-backed component (e.g. Gmail, Gmail Neverdrop, Google Calendar Neverdrop, Slack, HubSpot) whose OAuth connection is not set up. The backend validates integration dependencies at save time, not just at run time. Fix: connect the integration in the web UI first, or save the graph without the integration component and add it later. See `docs://integrations` preflight checklist.
 
 **"Resource not found" on graph/project operations** — IDs may have changed after a publish (which creates a fresh draft with new instance UUIDs). Re-fetch with `get_project_overview` and `get_graph` before retrying. Never reuse IDs across projects or orgs.
 
