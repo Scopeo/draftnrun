@@ -158,6 +158,7 @@ export function useEditSidebarSubmit(
         paramDef = componentDefinition.value.parameters?.find((p: any) => p.name === paramName)
       }
       let finalValue = paramValue
+      const isBooleanParam = String(paramDef?.type ?? '').toLowerCase() === 'boolean'
 
       if (paramDef?.type === 'data_source') {
         const idsToSources = (ids: string[]) =>
@@ -200,12 +201,12 @@ export function useEditSidebarSubmit(
         } else {
           finalValue = null
         }
-      } else if (paramDef?.type === 'boolean') {
+      } else if (isBooleanParam) {
         finalValue = paramValue ?? false
       }
 
-      if (paramDef?.type === 'boolean' && paramDef?.kind === 'input') {
-        finalValue = finalValue ? 'true' : 'false'
+      if (isBooleanParam && paramDef?.kind === 'input') {
+        finalValue = isTruthyBooleanValue(finalValue) ? 'true' : 'false'
       }
 
       if (Array.isArray(finalValue) && isUiComponentType(paramDef, 'MULTISELECT'))
