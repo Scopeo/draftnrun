@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, toRef, watch } from 'vue'
+import { computed, nextTick, ref, toRef, watch } from 'vue'
 import GenericConfirmDialog from '@/components/dialogs/GenericConfirmDialog.vue'
 import { useVersionSorting } from '@/composables/useVersionSorting'
 import { useVersionDeployment } from '@/composables/useVersionDeployment'
@@ -66,19 +66,22 @@ const handleContextMenu = (event: MouseEvent, graphRunnerId: string) => {
   contextMenu.openMenu(event, graphRunnerId)
 }
 
-const handleDeploy = () => {
-  if (contextMenu.menuTargetId.value) {
-    deployment.deployToProduction(contextMenu.menuTargetId.value)
-    contextMenu.closeMenu()
-  }
+const handleDeploy = async () => {
+  const graphRunnerId = contextMenu.menuTargetId.value
+  if (!graphRunnerId) return
+
+  contextMenu.closeMenu()
+  await nextTick()
+  await deployment.deployToProduction(graphRunnerId)
 }
 
 const handleLoadDraft = async () => {
-  if (contextMenu.menuTargetId.value) {
-    await draftLoading.loadAsDraft(contextMenu.menuTargetId.value)
-    contextMenu.closeMenu()
-    // Callback handles emission now
-  }
+  const graphRunnerId = contextMenu.menuTargetId.value
+  if (!graphRunnerId) return
+
+  contextMenu.closeMenu()
+  await nextTick()
+  await draftLoading.loadAsDraft(graphRunnerId)
 }
 
 // Check if current menu target is production version
@@ -150,7 +153,7 @@ const isCurrentMenuTargetProduction = computed(() => {
           :disabled="
             deployment.isDeploying.value || draftLoading.isLoadingDraft.value || isCurrentMenuTargetProduction
           "
-          @click="handleDeploy"
+          @click.stop="handleDeploy"
           @contextmenu.prevent
         >
           <template #prepend>
@@ -162,7 +165,7 @@ const isCurrentMenuTargetProduction = computed(() => {
 
         <VListItem
           :disabled="deployment.isDeploying.value || draftLoading.isLoadingDraft.value"
-          @click="handleLoadDraft"
+          @click.stop="handleLoadDraft"
           @contextmenu.prevent
         >
           <template #prepend>

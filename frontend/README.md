@@ -168,6 +168,7 @@ and `invalidateQueries` only for destructive/structural changes.
 ### Version selection
 
 The shared version selector is used by projects and agents. After version actions that refresh graph runners, `src/composables/useVersionSelection.ts` decides which runner should become current; loading a version as draft must switch to the refreshed draft runner.
+Context-menu actions in `src/components/shared/VersionSelector.vue` snapshot the target graph runner, close the menu, then open confirmation dialogs on the next Vue tick so Vuetify menu overlays do not block the dialog.
 
 ### Logging
 
