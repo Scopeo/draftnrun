@@ -114,7 +114,7 @@ Controls post-node execution flow:
 
 Used by: Router (selective routing), If/Else (true/else routing).
 
-If/Else uses fixed edge orders: `0` for the true branch and `1` for the false/else branch. The false route is controlled by the `enable_false_path` input, which defaults to `false`. When disabled, a false condition selects no branch and all successors are halted; when enabled, a false condition selects the `order=1` branch.
+If/Else uses fixed edge orders: `0` for the true branch and `1` for the false/else branch. The false route is controlled by the `enable_false_path` component parameter, which defaults to `false`. When disabled, a false condition selects no branch and all successors are halted; when enabled, a false condition selects the `order=1` branch.
 
 ## Variable Resolution
 
@@ -192,12 +192,11 @@ Folder-source ingestion can optionally force presigned URL usage for S3-backed f
 - When enabled, missing S3 metadata (`s3_path`), custom endpoint configuration (`S3_ENDPOINT_URL`), or presigned URL
   generation failures are treated as hard errors instead of silently falling back.
 
-## Field Expression Coercion
+## Field Expression Parsing
 
-`parse_expression_flexible()` accepts strings, serialized AST dicts, plain JSON dicts/lists, and booleans. Plain JSON
-dicts/lists and booleans become `LiteralNode(json.dumps(value))`. `LiteralNode` values are strings at runtime, so
-boolean JSON literals (`"true"` and `"false"`) are coerced explicitly to `bool` before the generic Python truthiness
-fallback is used for other strings.
+`parse_expression_flexible()` accepts strings, serialized AST dicts, and plain JSON dicts/lists. Plain JSON dicts/lists
+become `LiteralNode(json.dumps(value))`. Booleans that configure component behavior should be modeled as component
+parameters rather than field expressions.
 
 ## Key Files
 

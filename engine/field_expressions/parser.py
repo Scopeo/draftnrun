@@ -68,14 +68,14 @@ def parse_expression(expression_text: str) -> ExpressionNode:
     return ConcatNode(parts=parts)
 
 
-def parse_expression_flexible(value: str | dict | list | bool) -> ExpressionNode:
+def parse_expression_flexible(value: str | dict | list) -> ExpressionNode:
     """Parse an expression from either text or JSON format.
 
     This is a unified entry point that handles both text expressions
     (e.g., "@{{comp.port}}") and serialized AST dicts (e.g., {"type": "ref", ...}).
 
     Args:
-        value: Either a string expression, a serialized AST dict, a plain JSON list/dict, or a boolean.
+        value: Either a string expression, a serialized AST dict, or a plain JSON list/dict.
             The client is responsible for building json_build AST nodes for
             JSON-typed parameters that contain @{{}} refs/vars.
 
@@ -85,8 +85,6 @@ def parse_expression_flexible(value: str | dict | list | bool) -> ExpressionNode
     Raises:
         FieldExpressionParseError: If parsing fails
     """
-    if isinstance(value, bool):
-        return LiteralNode(value=json.dumps(value))
     if isinstance(value, list):
         return LiteralNode(value=json.dumps(value))
     if isinstance(value, dict):
@@ -101,7 +99,7 @@ def parse_expression_flexible(value: str | dict | list | bool) -> ExpressionNode
     elif isinstance(value, str):
         return parse_expression(value)
     else:
-        raise FieldExpressionParseError(f"Expected str, dict, list, or bool, got {type(value).__name__}: {value!r}")
+        raise FieldExpressionParseError(f"Expected str, dict, or list, got {type(value).__name__}: {value!r}")
 
 
 def unparse_expression(expression: ExpressionNode) -> str:
