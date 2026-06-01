@@ -80,10 +80,15 @@ async def test_if_else_equals_true(if_else_component):
 
 
 @pytest.mark.asyncio
-async def test_if_else_equals_true_with_false_path_enabled(if_else_component):
+async def test_if_else_equals_true_with_false_path_enabled(mock_trace_manager):
+    component = IfElse(
+        trace_manager=mock_trace_manager,
+        component_attributes=ComponentAttributes(component_instance_name="test_if_else"),
+        enable_false_path=True,
+    )
     conditions = [Condition(value_a=5, operator="number_equal_to", value_b=5, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, output_value_if_true="test data", enable_false_path=True)
-    result = await if_else_component._run_without_io_trace(inputs, {})
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="test data")
+    result = await component._run_without_io_trace(inputs, {})
 
     assert result.result is True
     assert result.output == "test data"
@@ -107,10 +112,15 @@ async def test_if_else_equals_false(if_else_component):
 
 
 @pytest.mark.asyncio
-async def test_if_else_equals_false_with_false_path_enabled(if_else_component):
+async def test_if_else_equals_false_with_false_path_enabled(mock_trace_manager):
+    component = IfElse(
+        trace_manager=mock_trace_manager,
+        component_attributes=ComponentAttributes(component_instance_name="test_if_else"),
+        enable_false_path=True,
+    )
     conditions = [Condition(value_a=5, operator="number_equal_to", value_b=10, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, output_value_if_true="test data", enable_false_path=True)
-    result = await if_else_component._run_without_io_trace(inputs, {})
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="test data")
+    result = await component._run_without_io_trace(inputs, {})
 
     assert result.result is False
     assert result.output is None
@@ -544,6 +554,7 @@ def _build_if_else_graph(
         "if_else": IfElse(
             trace_manager=trace_manager,
             component_attributes=ComponentAttributes(component_instance_name="if_else"),
+            enable_false_path=include_else,
         ),
         "true_leaf": FixedResponse(trace_manager, message="true branch", name="true_leaf"),
     }
@@ -564,7 +575,6 @@ async def test_if_else_graph_executes_true_branch_only():
     result = await graph_runner.run({
         "conditions": [Condition(value_a=1, operator="number_equal_to", value_b=1, next_logic=None).model_dump()],
         "output_value_if_true": "payload",
-        "enable_false_path": True,
     })
 
     assert [message.content for message in result.messages] == ["true branch"]
@@ -598,7 +608,6 @@ async def test_if_else_graph_executes_else_branch_when_present():
     result = await graph_runner.run({
         "conditions": [Condition(value_a=1, operator="number_equal_to", value_b=2, next_logic=None).model_dump()],
         "output_value_if_true": "payload",
-        "enable_false_path": True,
     })
 
     assert [message.content for message in result.messages] == ["else branch"]

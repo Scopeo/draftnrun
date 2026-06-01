@@ -103,15 +103,6 @@ def extract_string_from_dict(data: dict) -> str:
         return str(data)
 
 
-def _coerce_str_to_bool(value: str) -> bool:
-    normalized = value.strip().lower()
-    if normalized == "true":
-        return True
-    if normalized == "false":
-        return False
-    return bool(normalized)
-
-
 class CoercionError(Exception):
     """Raised when a coercion operation fails."""
 
@@ -162,7 +153,6 @@ class CoercionMatrix:
         self._coercers[(str, Optional[dict])] = lambda x: json.loads(x)
         self._coercers[(str, list)] = lambda x: json.loads(x)
         self._coercers[(str, Optional[list])] = lambda x: json.loads(x)
-        self._coercers[(str, bool)] = _coerce_str_to_bool
 
         # Passthrough coercions (no-op)
         self._coercers[(list[ChatMessage], list[ChatMessage])] = lambda x: x

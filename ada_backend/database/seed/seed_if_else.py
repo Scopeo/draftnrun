@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
@@ -5,6 +7,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
     upsert_component_versions,
     upsert_components,
+    upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
@@ -45,6 +48,25 @@ def seed_if_else_components(session: Session):
     upsert_component_versions(
         session=session,
         component_versions=[if_else_version],
+    )
+    upsert_components_parameter_definitions(
+        session=session,
+        component_parameter_definitions=[
+            db.ComponentParameterDefinition(
+                id=UUID("43c0cd9a-31e8-4380-8cf2-a88eb04a24b8"),
+                component_version_id=if_else_version.id,
+                name="enable_false_path",
+                type=db.ParameterType.BOOLEAN,
+                nullable=False,
+                default=False,
+                display_order=2,
+                ui_component=db.UIComponent.CHECKBOX,
+                ui_component_properties={
+                    "label": "Enable false path",
+                    "description": "Show an optional Else route that runs when the condition is false.",
+                },
+            ),
+        ],
     )
 
     upsert_component_categories(
