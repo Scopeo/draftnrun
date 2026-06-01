@@ -3,6 +3,7 @@ import { computed, toRef, watch } from 'vue'
 import VersionSelector from './VersionSelector.vue'
 import { logger } from '@/utils/logger'
 import { useVersionRefresh } from '@/composables/useVersionRefresh'
+import { resolveGraphRunnerAfterVersionAction } from '@/composables/useVersionSelection'
 import { useCurrentAgent } from '@/composables/queries/useAgentsQuery'
 import { useCurrentProject } from '@/composables/queries/useProjectsQuery'
 import type { GraphRunner } from '@/types/version'
@@ -99,20 +100,14 @@ const handleDeployed = async (graphRunnerId: string, env: 'production' | 'draft'
         emit('refresh-project')
       }
 
-      // Handle case where current graph runner no longer exists (for both agents and projects)
-      if (currentGraphRunner.value) {
-        const runnerStillExists = updatedGraphRunners.some(
-          r => r.graph_runner_id === currentGraphRunner.value?.graph_runner_id
-        )
+      const runnerToSelect = resolveGraphRunnerAfterVersionAction({
+        currentGraphRunner: currentGraphRunner.value,
+        updatedGraphRunners,
+        env,
+      })
 
-        if (!runnerStillExists) {
-          // Select the new draft if available, otherwise the first runner
-          const newDraftRunner = updatedGraphRunners.find(r => r.env === 'draft')
-          const replacementRunner = newDraftRunner || updatedGraphRunners[0]
-          if (replacementRunner) {
-            setCurrentGraphRunner(replacementRunner)
-          }
-        }
+      if (runnerToSelect) {
+        setCurrentGraphRunner(runnerToSelect)
       }
     }
   } catch (error) {

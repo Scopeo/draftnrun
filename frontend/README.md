@@ -165,6 +165,10 @@ One file per domain (e.g. `useAgentsQuery.ts`, `useProjectsQuery.ts`).
 Mutations use `useMutation` with cache patching (`setQueryData`) for inline edits
 and `invalidateQueries` only for destructive/structural changes.
 
+### Version selection
+
+The shared version selector is used by projects and agents. After version actions that refresh graph runners, `src/composables/useVersionSelection.ts` decides which runner should become current; loading a version as draft must switch to the refreshed draft runner.
+
 ### Logging
 
 Centralized `logger` in `src/utils/logger.ts` with Sentry integration.
