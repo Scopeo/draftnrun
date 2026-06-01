@@ -222,20 +222,7 @@ def seed_gmail_components(session: Session):
                 provider=OAuthProvider.GMAIL_NEVERDROP.value,
                 icon="logos-google-gmail",
             ).model_dump(exclude_unset=True, exclude_none=True),
-        ),
-        ComponentParameterDefinition(
-            id=UUID("bcf88542-bcfc-4075-8d98-57714c8e8f96"),
-            component_version_id=gmail_neverdrop_sender_version.id,
-            name="save_as_draft",
-            type=ParameterType.BOOLEAN,
-            nullable=False,
-            default=True,
-            ui_component=UIComponent.CHECKBOX,
-            ui_component_properties=UIComponentProperties(
-                label="Save as Draft",
-                description="If checked, the email will be saved as a draft instead of being sent immediately.",
-            ).model_dump(exclude_unset=True, exclude_none=True),
-        ),
+        )
     ]
     upsert_components_parameter_definitions(session, gmail_neverdrop_sender_parameter_definitions)
 

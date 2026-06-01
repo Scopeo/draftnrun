@@ -26,7 +26,10 @@ from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_D
 from engine.components.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.components.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
-from engine.integrations.gmail.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
+from engine.integrations.gmail.gmail_sender import (
+    GMAIL_NEVERDROP_SENDER_TOOL_DESCRIPTION,
+    GMAIL_SENDER_TOOL_DESCRIPTION,
+)
 from engine.integrations.mail_sender import MAIL_SENDER_TOOL_DESCRIPTION
 from engine.integrations.outlook.outlook_sender import OUTLOOK_SENDER_TOOL_DESCRIPTION
 from engine.integrations.slack.slack_sender import SLACK_SENDER_TOOL_DESCRIPTION
@@ -117,7 +120,7 @@ def seed_tool_description(session: Session):
     )
     gmail_neverdrop_sender_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["gmail_neverdrop_sender_tool_description"],
-        **GMAIL_SENDER_TOOL_DESCRIPTION.model_dump(),
+        **GMAIL_NEVERDROP_SENDER_TOOL_DESCRIPTION.model_dump(),
     )
     slack_sender_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["slack_sender_tool_description"],
