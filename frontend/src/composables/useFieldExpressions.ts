@@ -606,9 +606,11 @@ export function transformJsonBuildToConditions(jsonBuildNode: JsonBuildNode): Co
     result.operator = condition.operator || ''
     result.value_b = condition.value_b ? restoreFieldValue(condition.value_b) : ''
 
-    // Add logical_operator if present (for Condition type)
-    if ('logical_operator' in condition && !result.logical_operator) {
-      result.logical_operator = condition.logical_operator || 'AND'
+    const nextLogic = condition.next_logic ?? condition.logical_operator
+    delete result.logical_operator
+
+    if (nextLogic) {
+      result.next_logic = nextLogic
     }
 
     return result
@@ -696,9 +698,8 @@ export function transformConditionsToJsonBuild(conditions: Condition[]): JsonBui
       value_b: condition.value_b ? processFieldValue(condition.value_b) : condition.value_b,
     }
 
-    // Add logical_operator if present (for Condition type)
-    if ('logical_operator' in condition && condition.logical_operator) {
-      result.logical_operator = condition.logical_operator
+    if (condition.next_logic) {
+      result.next_logic = condition.next_logic
     }
 
     return result
