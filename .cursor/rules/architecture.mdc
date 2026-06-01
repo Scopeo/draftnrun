@@ -36,6 +36,11 @@ DAG of ComponentInstances connected via FieldExpressions (JSON AST). See `ada_ba
 
 `draft` / `production` bound to specific GraphRunner versions via `ProjectEnvironmentBinding`. Each `Run` records its `graph_runner_id` (set when the worker transitions the run to `RUNNING`).
 
+### Frontend Version Selection
+
+Projects and agents share the frontend version selector. After graph runner refreshes caused by version actions, keep current-runner selection logic in `frontend/src/composables/useVersionSelection.ts`; loading a version as draft should select the refreshed draft runner, even when the source version still exists.
+When adding version-selector context-menu actions, snapshot `menuTargetId`, close both the context menu and underlying select menu, then open follow-up dialogs only after Vue has flushed overlay teardown so Vuetify menu overlays do not block the dialog.
+
 ### Project Tags
 
 Free-form string tags on projects via `project_tags` table (many-to-many). Tags are lowercase, unique per project. Used for filtering/organizing projects in the UI. Git-synced projects automatically receive a `"github"` tag. Management endpoints: `POST /projects/{id}/tags`, `DELETE /projects/{id}/tags/{tag}`. List endpoint supports `?tags=foo&tags=bar` filter (AND semantics). Org-level autocomplete: `GET /projects/org/{org_id}/tags`.
