@@ -66,12 +66,18 @@ const handleContextMenu = (event: MouseEvent, graphRunnerId: string) => {
   contextMenu.openMenu(event, graphRunnerId)
 }
 
+const closeVersionMenus = async () => {
+  contextMenu.closeMenu()
+  isSelectMenuOpen.value = false
+  await nextTick()
+  await nextTick()
+}
+
 const handleDeploy = async () => {
   const graphRunnerId = contextMenu.menuTargetId.value
   if (!graphRunnerId) return
 
-  contextMenu.closeMenu()
-  await nextTick()
+  await closeVersionMenus()
   await deployment.deployToProduction(graphRunnerId)
 }
 
@@ -79,8 +85,7 @@ const handleLoadDraft = async () => {
   const graphRunnerId = contextMenu.menuTargetId.value
   if (!graphRunnerId) return
 
-  contextMenu.closeMenu()
-  await nextTick()
+  await closeVersionMenus()
   await draftLoading.loadAsDraft(graphRunnerId)
 }
 

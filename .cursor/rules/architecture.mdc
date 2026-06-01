@@ -39,7 +39,7 @@ DAG of ComponentInstances connected via FieldExpressions (JSON AST). See `ada_ba
 ### Frontend Version Selection
 
 Projects and agents share the frontend version selector. After graph runner refreshes caused by version actions, keep current-runner selection logic in `frontend/src/composables/useVersionSelection.ts`; loading a version as draft should select the refreshed draft runner, even when the source version still exists.
-When adding version-selector context-menu actions, snapshot `menuTargetId`, close the context menu, then open follow-up dialogs on the next Vue tick so Vuetify menu overlays do not block the dialog.
+When adding version-selector context-menu actions, snapshot `menuTargetId`, close both the context menu and underlying select menu, then open follow-up dialogs only after Vue has flushed overlay teardown so Vuetify menu overlays do not block the dialog.
 
 ### Project Tags
 
