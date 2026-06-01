@@ -1,4 +1,5 @@
 import base64
+import inspect
 from email import message_from_bytes
 from unittest.mock import MagicMock, patch
 
@@ -71,12 +72,16 @@ class TestCreateRawMailMessageFromHeader:
 
 
 class TestGmailNeverdropSender:
+    def test_constructor_does_not_accept_save_as_draft(self):
+        signature = inspect.signature(GmailNeverdropSender)
+
+        assert "save_as_draft" not in signature.parameters
+
     @pytest.mark.asyncio
-    async def test_sends_email_even_when_draft_requested(self):
+    async def test_sends_email(self):
         sender = GmailNeverdropSender(
             trace_manager=MagicMock(),
             component_attributes=ComponentAttributes(component_instance_name="gmail_neverdrop"),
-            save_as_draft=True,
         )
         sender.gmail_send_email = MagicMock(return_value={"id": "sent-1"})
         sender.gmail_create_draft = MagicMock()

@@ -203,7 +203,6 @@ class GmailNeverdropSender(GmailSenderV2):
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
         access_token: Optional[SecretStr] = None,
-        save_as_draft: bool = False,
         tool_description: ToolDescription = GMAIL_NEVERDROP_SENDER_TOOL_DESCRIPTION,
     ):
         super().__init__(
