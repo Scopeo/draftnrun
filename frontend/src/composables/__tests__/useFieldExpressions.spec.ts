@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseJsonStringToJsonBuild } from '../useFieldExpressions'
+import {
+  parseJsonStringToJsonBuild,
+  transformConditionsToJsonBuild,
+  transformJsonBuildToConditions,
+} from '../useFieldExpressions'
 
 describe('parseJsonStringToJsonBuild', () => {
   describe('basic inputs', () => {
@@ -160,5 +164,61 @@ describe('parseJsonStringToJsonBuild', () => {
       expect(node.template.inline).toContain('prefix ')
       expect(node.template.inline).toContain(' suffix')
     })
+  })
+})
+
+describe('condition json_build transforms', () => {
+  it('serializes IfElse connectors as next_logic', () => {
+    const result = transformConditionsToJsonBuild([
+      {
+        value_a: '{"status_agent_ia": null}',
+        value_b: 'en cours',
+        operator: 'text_contains',
+        next_logic: 'OR',
+      },
+      {
+        value_a: 'Selma',
+        value_b: 'Selma',
+        operator: 'text_equals',
+      },
+    ])
+
+    expect(result.template).toEqual([
+      {
+        value_a: '{"status_agent_ia": null}',
+        operator: 'text_contains',
+        value_b: 'en cours',
+        next_logic: 'OR',
+      },
+      {
+        value_a: 'Selma',
+        operator: 'text_equals',
+        value_b: 'Selma',
+      },
+    ])
+  })
+
+  it('normalizes legacy logical_operator when loading conditions', () => {
+    const result = transformJsonBuildToConditions({
+      type: 'json_build',
+      template: [
+        {
+          value_a: 'a',
+          operator: 'text_equals',
+          value_b: 'b',
+          logical_operator: 'OR',
+        },
+      ],
+      refs: {},
+    })
+
+    expect(result).toEqual([
+      {
+        value_a: 'a',
+        operator: 'text_equals',
+        value_b: 'b',
+        next_logic: 'OR',
+      },
+    ])
   })
 })
