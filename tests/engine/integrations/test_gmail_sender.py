@@ -1,8 +1,13 @@
 import base64
+import inspect
 from email import message_from_bytes
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+import pytest
+
+from engine.components.types import ComponentAttributes
 from engine.integrations.gmail.gmail_sender import GmailSenderInputs
+from engine.integrations.gmail.gmail_sender_v2 import GmailNeverdropSender
 from engine.integrations.gmail.gmail_utils import create_raw_mail_message
 from engine.integrations.utils import normalize_str_list
 
@@ -64,3 +69,53 @@ class TestCreateRawMailMessageFromHeader:
     def test_from_header_uses_alias_when_provided(self, _mock):
         raw = create_raw_mail_message(subject="hi", sender_email_address="alias@example.com", body="body")
         assert self._decode_from(raw) == "alias@example.com"
+
+
+class TestGmailNeverdropSender:
+    def test_constructor_does_not_accept_save_as_draft(self):
+        signature = inspect.signature(GmailNeverdropSender)
+
+        assert "save_as_draft" not in signature.parameters
+
+    @pytest.mark.asyncio
+    async def test_sends_email(self):
+        sender = GmailNeverdropSender(
+            trace_manager=MagicMock(),
+            component_attributes=ComponentAttributes(component_instance_name="gmail_neverdrop"),
+        )
+        sender.gmail_send_email = MagicMock(return_value={"id": "sent-1"})
+        sender.gmail_create_draft = MagicMock()
+
+        out = await sender._run_without_io_trace(
+            GmailNeverdropSender.get_inputs_schema()(
+                mail_subject="subject",
+                mail_body="body",
+                email_recipients=["to@example.com"],
+            ),
+            {},
+        )
+
+        assert out.message_id == "sent-1"
+        assert out.status == "Email sent successfully with ID: sent-1"
+        sender.gmail_send_email.assert_called_once()
+        sender.gmail_create_draft.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_rejects_missing_recipients_instead_of_creating_draft(self):
+        sender = GmailNeverdropSender(
+            trace_manager=MagicMock(),
+            component_attributes=ComponentAttributes(component_instance_name="gmail_neverdrop"),
+        )
+        sender.gmail_create_draft = MagicMock()
+
+        with pytest.raises(ValueError, match="drafts are not supported"):
+            await sender._run_without_io_trace(
+                GmailNeverdropSender.get_inputs_schema()(
+                    mail_subject="subject",
+                    mail_body="body",
+                    email_recipients=[],
+                ),
+                {},
+            )
+
+        sender.gmail_create_draft.assert_not_called()

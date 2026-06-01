@@ -73,7 +73,7 @@ from engine.components.tools.python_code_runner import PythonCodeRunner
 from engine.components.tools.terminal_command_runner import TerminalCommandRunner
 from engine.components.web_search_tool_openai import WebSearchOpenAITool
 from engine.integrations.gmail.gmail_sender import GmailSender
-from engine.integrations.gmail.gmail_sender_v2 import GmailSenderV2
+from engine.integrations.gmail.gmail_sender_v2 import GmailNeverdropSender, GmailSenderV2
 from engine.integrations.mail_sender import MailSender
 from engine.integrations.outlook.outlook_sender import OutlookSender
 from engine.integrations.providers import OAuthProvider
@@ -572,7 +572,7 @@ def create_factory_registry() -> FactoryRegistry:
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["gmail_neverdrop_sender"],
         factory=OAuthComponentFactory(
-            entity_class=GmailSenderV2,
+            entity_class=GmailNeverdropSender,
             oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.GMAIL_NEVERDROP)],
         ),
     )

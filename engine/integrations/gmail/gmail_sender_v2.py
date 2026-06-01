@@ -10,7 +10,9 @@ from pydantic import BaseModel, SecretStr
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.integrations.gmail.gmail_sender import (
+    GMAIL_NEVERDROP_SENDER_TOOL_DESCRIPTION,
     GMAIL_SENDER_TOOL_DESCRIPTION,
+    GmailNeverdropSenderInputs,
     GmailSenderInputs,
     GmailSenderOutputs,
 )
@@ -189,3 +191,29 @@ class GmailSenderV2(Component):
             status = f"Email sent successfully with ID: {sent_message['id']}"
             message_id = sent_message["id"]
         return GmailSenderOutputs(status=status, message_id=message_id)
+
+
+class GmailNeverdropSender(GmailSenderV2):
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return GmailNeverdropSenderInputs
+
+    def __init__(
+        self,
+        trace_manager: TraceManager,
+        component_attributes: ComponentAttributes,
+        access_token: Optional[SecretStr] = None,
+        tool_description: ToolDescription = GMAIL_NEVERDROP_SENDER_TOOL_DESCRIPTION,
+    ):
+        super().__init__(
+            trace_manager=trace_manager,
+            component_attributes=component_attributes,
+            access_token=access_token,
+            save_as_draft=False,
+            tool_description=tool_description,
+        )
+
+    async def _run_without_io_trace(self, inputs: GmailNeverdropSenderInputs, ctx: dict) -> GmailSenderOutputs:
+        if not inputs.email_recipients:
+            raise ValueError("Gmail Neverdrop requires at least one recipient; drafts are not supported.")
+        return await super()._run_without_io_trace(inputs, ctx)
