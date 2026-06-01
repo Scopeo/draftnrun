@@ -112,7 +112,9 @@ Controls post-node execution flow:
 | `HALT` | Successors of the halting node (already `COMPLETED`) are marked `HALTED` with empty data |
 | `SELECTIVE_EDGE_INDICES` | Only edges matching listed `order` indices proceed; non-selected successors and their subgraphs marked `HALTED` |
 
-Used by: Router (selective routing), IfElse (halt branch).
+Used by: Router (selective routing), If/Else (true/else routing).
+
+If/Else uses fixed edge orders: `0` for the true branch and `1` for the false/else branch. The false route is controlled by the `enable_false_path` component parameter, which defaults to `false`. When disabled, a false condition selects no branch and all successors are halted; when enabled, a false condition selects the `order=1` branch.
 
 ## Variable Resolution
 
@@ -189,6 +191,12 @@ Folder-source ingestion can optionally force presigned URL usage for S3-backed f
   This mode is intended for cloud AWS S3 deployments where generated presigned URLs are externally reachable.
 - When enabled, missing S3 metadata (`s3_path`), custom endpoint configuration (`S3_ENDPOINT_URL`), or presigned URL
   generation failures are treated as hard errors instead of silently falling back.
+
+## Field Expression Parsing
+
+`parse_expression_flexible()` accepts strings, serialized AST dicts, and plain JSON dicts/lists. Plain JSON dicts/lists
+become `LiteralNode(json.dumps(value))`. Booleans that configure component behavior should be modeled as component
+parameters rather than field expressions.
 
 ## Key Files
 

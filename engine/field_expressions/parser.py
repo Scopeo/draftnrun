@@ -1,7 +1,6 @@
 import json
 import logging
 import re
-from typing import Union
 
 import sentry_sdk
 
@@ -69,14 +68,14 @@ def parse_expression(expression_text: str) -> ExpressionNode:
     return ConcatNode(parts=parts)
 
 
-def parse_expression_flexible(value: Union[str, dict, list]) -> ExpressionNode:
+def parse_expression_flexible(value: str | dict | list) -> ExpressionNode:
     """Parse an expression from either text or JSON format.
 
     This is a unified entry point that handles both text expressions
     (e.g., "@{{comp.port}}") and serialized AST dicts (e.g., {"type": "ref", ...}).
 
     Args:
-        value: Either a string expression, a serialized AST dict, or a list.
+        value: Either a string expression, a serialized AST dict, or a plain JSON list/dict.
             The client is responsible for building json_build AST nodes for
             JSON-typed parameters that contain @{{}} refs/vars.
 

@@ -1,14 +1,14 @@
 import logging
 from enum import Enum
-from typing import Any, Literal, Type
+from typing import Any, Literal, Optional, Type
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator
 
 from ada_backend.database.models import ParameterType, UIComponent
 from ada_backend.database.utils import DEFAULT_TOOL_DESCRIPTION
 from engine.components.component import Component
-from engine.components.types import ComponentAttributes, ToolDescription
+from engine.components.types import ComponentAttributes, ExecutionDirective, ExecutionStrategy, ToolDescription
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -133,6 +133,7 @@ class IfElseOutputs(BaseModel):
         description="Signal to halt downstream execution (true when condition is false).",
         json_schema_extra={"parameter_type": ParameterType.BOOLEAN},
     )
+    _directive: Optional[ExecutionDirective] = PrivateAttr(default=None)
 
 
 class IfElse(Component):
@@ -156,12 +157,14 @@ class IfElse(Component):
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
         tool_description: ToolDescription = DEFAULT_TOOL_DESCRIPTION,
+        enable_false_path: bool = False,
     ):
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
+        self.enable_false_path = enable_false_path
 
     def _is_empty(self, value: Any) -> bool:
         if value is None:
@@ -308,11 +311,18 @@ class IfElse(Component):
             output_data = None
             should_halt = True
 
-        # TODO: Migrate to ExecutionDirective pattern
-        # Replace should_halt with _directive field:
-        #   _directive=ExecutionDirective(strategy=HALT if not comparison_result else CONTINUE)
-        return IfElseOutputs(
+        result = IfElseOutputs(
             result=comparison_result,
             output=output_data,
             should_halt=should_halt,
         )
+        if comparison_result and not self.enable_false_path:
+            result._directive = ExecutionDirective(strategy=ExecutionStrategy.CONTINUE)
+            return result
+
+        selected_edge_indices = [0] if comparison_result else ([1] if self.enable_false_path else [])
+        result._directive = ExecutionDirective(
+            strategy=ExecutionStrategy.SELECTIVE_EDGE_INDICES,
+            selected_edge_indices=selected_edge_indices,
+        )
+        return result

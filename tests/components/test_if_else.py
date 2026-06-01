@@ -1,15 +1,55 @@
 from unittest.mock import MagicMock
 
+import networkx as nx
 import pytest
+from pydantic import BaseModel
 
+from engine.components.component import Component
 from engine.components.if_else import (
     Condition,
     IfElse,
     IfElseInputs,
     IfElseOutputs,
 )
-from engine.components.types import ComponentAttributes
+from engine.components.types import ComponentAttributes, ExecutionStrategy, ToolDescription
+from engine.graph_runner.graph_runner import GraphRunner
+from engine.graph_runner.types import TaskState
+from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_manager import TraceManager
+
+
+class FixedResponse(Component):
+    migrated = True
+
+    class Inputs(BaseModel):
+        input: str | None = None
+
+    class Outputs(BaseModel):
+        output: str
+
+    @classmethod
+    def get_inputs_schema(cls):
+        return cls.Inputs
+
+    @classmethod
+    def get_outputs_schema(cls):
+        return cls.Outputs
+
+    def __init__(self, trace_manager: TraceManager, message: str, name: str):
+        super().__init__(
+            trace_manager=trace_manager,
+            tool_description=ToolDescription(
+                name=name,
+                description="",
+                tool_properties={},
+                required_tool_properties=[],
+            ),
+            component_attributes=ComponentAttributes(component_instance_name=name),
+        )
+        self._message = message
+
+    async def _run_without_io_trace(self, inputs: Inputs, ctx: dict) -> Outputs:  # type: ignore
+        return self.Outputs(output=self._message)
 
 
 @pytest.fixture
@@ -35,6 +75,26 @@ async def test_if_else_equals_true(if_else_component):
     assert result.result is True
     assert result.output == "test data"
     assert result.should_halt is False
+    assert result._directive.strategy == ExecutionStrategy.CONTINUE
+    assert result._directive.selected_edge_indices == []
+
+
+@pytest.mark.asyncio
+async def test_if_else_equals_true_with_false_path_enabled(mock_trace_manager):
+    component = IfElse(
+        trace_manager=mock_trace_manager,
+        component_attributes=ComponentAttributes(component_instance_name="test_if_else"),
+        enable_false_path=True,
+    )
+    conditions = [Condition(value_a=5, operator="number_equal_to", value_b=5, next_logic=None)]
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="test data")
+    result = await component._run_without_io_trace(inputs, {})
+
+    assert result.result is True
+    assert result.output == "test data"
+    assert result.should_halt is False
+    assert result._directive.strategy == ExecutionStrategy.SELECTIVE_EDGE_INDICES
+    assert result._directive.selected_edge_indices == [0]
 
 
 @pytest.mark.asyncio
@@ -47,6 +107,26 @@ async def test_if_else_equals_false(if_else_component):
     assert result.result is False
     assert result.output is None
     assert result.should_halt is True
+    assert result._directive.strategy == ExecutionStrategy.SELECTIVE_EDGE_INDICES
+    assert result._directive.selected_edge_indices == []
+
+
+@pytest.mark.asyncio
+async def test_if_else_equals_false_with_false_path_enabled(mock_trace_manager):
+    component = IfElse(
+        trace_manager=mock_trace_manager,
+        component_attributes=ComponentAttributes(component_instance_name="test_if_else"),
+        enable_false_path=True,
+    )
+    conditions = [Condition(value_a=5, operator="number_equal_to", value_b=10, next_logic=None)]
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="test data")
+    result = await component._run_without_io_trace(inputs, {})
+
+    assert result.result is False
+    assert result.output is None
+    assert result.should_halt is True
+    assert result._directive.strategy == ExecutionStrategy.SELECTIVE_EDGE_INDICES
+    assert result._directive.selected_edge_indices == [1]
 
 
 @pytest.mark.asyncio
@@ -459,3 +539,92 @@ async def test_if_else_multiple_conditions_mixed_logic(mock_trace_manager):
 
 # Field expressions like @{{instance_id.output}} are handled automatically by the framework
 # before reaching the component, so we don't need to test field expression resolution here
+
+
+def _build_if_else_graph(
+    trace_manager: TraceManager,
+    include_else: bool = True,
+    true_edge_order: int | None = 0,
+) -> GraphRunner:
+    graph = nx.DiGraph()
+    graph.add_nodes_from(["if_else", "true_leaf"])
+    graph.add_edge("if_else", "true_leaf", order=true_edge_order)
+
+    runnables = {
+        "if_else": IfElse(
+            trace_manager=trace_manager,
+            component_attributes=ComponentAttributes(component_instance_name="if_else"),
+            enable_false_path=include_else,
+        ),
+        "true_leaf": FixedResponse(trace_manager, message="true branch", name="true_leaf"),
+    }
+
+    if include_else:
+        graph.add_node("else_leaf")
+        graph.add_edge("if_else", "else_leaf", order=1)
+        runnables["else_leaf"] = FixedResponse(trace_manager, message="else branch", name="else_leaf")
+
+    return GraphRunner(graph=graph, runnables=runnables, start_nodes=["if_else"], trace_manager=trace_manager)
+
+
+@pytest.mark.asyncio
+async def test_if_else_graph_executes_true_branch_only():
+    set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])
+    graph_runner = _build_if_else_graph(TraceManager(project_name="test"))
+
+    result = await graph_runner.run({
+        "conditions": [Condition(value_a=1, operator="number_equal_to", value_b=1, next_logic=None).model_dump()],
+        "output_value_if_true": "payload",
+    })
+
+    assert [message.content for message in result.messages] == ["true branch"]
+    assert graph_runner.tasks["true_leaf"].state == TaskState.COMPLETED
+    assert graph_runner.tasks["else_leaf"].state == TaskState.HALTED
+
+
+@pytest.mark.asyncio
+async def test_if_else_graph_true_without_false_path_continues_unordered_legacy_edge():
+    set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])
+    graph_runner = _build_if_else_graph(
+        TraceManager(project_name="test"),
+        include_else=False,
+        true_edge_order=None,
+    )
+
+    result = await graph_runner.run({
+        "conditions": [Condition(value_a=1, operator="number_equal_to", value_b=1, next_logic=None).model_dump()],
+        "output_value_if_true": "payload",
+    })
+
+    assert [message.content for message in result.messages] == ["true branch"]
+    assert graph_runner.tasks["true_leaf"].state == TaskState.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_if_else_graph_executes_else_branch_when_present():
+    set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])
+    graph_runner = _build_if_else_graph(TraceManager(project_name="test"))
+
+    result = await graph_runner.run({
+        "conditions": [Condition(value_a=1, operator="number_equal_to", value_b=2, next_logic=None).model_dump()],
+        "output_value_if_true": "payload",
+    })
+
+    assert [message.content for message in result.messages] == ["else branch"]
+    assert graph_runner.tasks["true_leaf"].state == TaskState.HALTED
+    assert graph_runner.tasks["else_leaf"].state == TaskState.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_if_else_graph_false_without_else_halts_downstream():
+    set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])
+    graph_runner = _build_if_else_graph(TraceManager(project_name="test"), include_else=False)
+
+    result = await graph_runner.run({
+        "conditions": [Condition(value_a=1, operator="number_equal_to", value_b=2, next_logic=None).model_dump()],
+        "output_value_if_true": "payload",
+    })
+
+    assert [message.content for message in result.messages] == [""]
+    assert graph_runner.tasks["if_else"].state == TaskState.COMPLETED
+    assert graph_runner.tasks["true_leaf"].state == TaskState.HALTED
