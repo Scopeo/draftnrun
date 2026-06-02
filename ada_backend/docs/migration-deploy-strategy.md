@@ -7,11 +7,12 @@ exist yet.
 
 ## Strategies
 
-| Strategy | When | Deploy order |
-|---|---|---|
-| `migrate-first` | Only additive ops (add column, create table, create index) | Run migration, then roll out new code |
-| `code-first` | Only destructive ops (drop column, drop table) | Roll out new code, then run migration |
-| `breaking` | Rename, type change, mixed add+drop, or manual label | Scale pods to zero, migrate, scale back up |
+- `migrate-first`: only additive ops (add column, create table, create index).
+  Run migration, then roll out new code.
+- `code-first`: only destructive ops (drop column, drop table). Roll out new
+  code, then run migration.
+- `breaking`: rename, type change, mixed add+drop, or manual label. Scale pods
+  to zero, migrate, scale back up.
 
 ## How detection works
 
@@ -53,6 +54,14 @@ Set it to `"migrate-first"`, `"code-first"`, or `"breaking"` to override
 auto-detection. This is **required** when the migration uses `op.execute()` or
 `op.get_bind()` — CI will fail if those are present without an explicit
 override.
+
+## Data backup tables
+
+Migrations that need temporary data backups for downgrade safety should prefix
+those tables with `_alembic_`. Alembic autogenerate ignores these
+migration-private tables so pytest-alembic does not report them as model drift.
+Downgrade paths that restore from these backups should fail explicitly if the
+expected backup table is missing.
 
 ## CI behaviour
 

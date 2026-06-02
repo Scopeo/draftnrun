@@ -77,6 +77,21 @@ GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
     required_tool_properties=["mail_subject"],
 )
 
+GMAIL_NEVERDROP_SENDER_TOOL_DESCRIPTION = ToolDescription(
+    name="Gmail Neverdrop",
+    description="A tool to send emails using Gmail Neverdrop.",
+    tool_properties={
+        **GMAIL_SENDER_TOOL_DESCRIPTION.tool_properties,
+        "email_recipients": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "description": "List of email addresses to send the email to.",
+        },
+    },
+    required_tool_properties=["mail_subject", "email_recipients"],
+)
+
 
 class GmailSenderInputs(BaseModel):
     from_email: Optional[str] = Field(
@@ -174,6 +189,18 @@ class GmailSenderInputs(BaseModel):
     @classmethod
     def validate_email_attachments(cls, v):
         return normalize_str_list(v)
+
+
+class GmailNeverdropSenderInputs(GmailSenderInputs):
+    email_recipients: list[str] = Field(
+        description="List of email addresses to send the email to.",
+        json_schema_extra={
+            "is_tool_input": True,
+            "display_order": 4,
+            "parameter_group_id": GMAIL_GROUP_RECIPIENTS_ID,
+            "parameter_order_within_group": 1,
+        },
+    )
 
 
 class GmailSenderOutputs(BaseModel):

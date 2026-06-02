@@ -68,7 +68,7 @@ The concrete base class implementing `Runnable`. Key attributes:
 
 When removing a component from the product, delete the runtime class, registry entry, seed data, existing DB catalog rows (with a migration), default tool description, and wrapper components that only exist to call it. Leaving only part of the catalog wiring in place can keep a dead component instantiable through backend seeds or MCP graph validation even after it disappears from the front-end.
 
-Integration-backed catalog entries can share a runtime class while using distinct OAuth provider keys. For example, Gmail Neverdrop reuses `GmailSenderV2` with `google-mail-neverdrop`, and Google Calendar Neverdrop reuses `GoogleCalendarMCPTool` with `google-calendar-neverdrop`. Neverdrop-branded Gmail and Google Calendar components are agent-available (`is_agent=True`) and function-callable.
+Integration-backed catalog entries can share a runtime class while using distinct OAuth provider keys. For example, Google Calendar Neverdrop reuses `GoogleCalendarMCPTool` with `google-calendar-neverdrop`. Gmail Neverdrop uses the `GmailSenderV2` send path with `google-mail-neverdrop`, but drafts are disabled, recipients are required, and no `save_as_draft` runtime argument is exposed. Neverdrop-branded Gmail and Google Calendar components are agent-available (`is_agent=True`) and function-callable.
 
 ### Component Instantiation DB Usage
 
