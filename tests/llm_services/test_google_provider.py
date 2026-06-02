@@ -63,7 +63,12 @@ async def test_google_function_call_converts_tool_response_history():
     ]
 
     with patch("engine.llm_services.providers.google_provider.openai.AsyncOpenAI", return_value=client):
-        response, prompt_tokens, completion_tokens, total_tokens = await provider.function_call_without_structured_output(
+        (
+            response,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
+        ) = await provider.function_call_without_structured_output(
             messages=messages,
             tools=[create_weather_tool()],
             tool_choice="auto",
