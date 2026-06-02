@@ -2,7 +2,6 @@ from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import ModuleType
 
-
 MIGRATION_PATH = (
     Path(__file__).parents[2]
     / "ada_backend/database/alembic/versions/2f23d1a93b76_remove_gmail_neverdrop_draft_parameter.py"
