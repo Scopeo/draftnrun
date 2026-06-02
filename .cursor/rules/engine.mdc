@@ -16,6 +16,7 @@ globs:
 - Secret handling: runtime secrets use `SecretStr` (`pydantic.SecretStr`) and are unwrapped only at explicit execution boundaries (`unwrap_secrets()` / `get_secret_value()`).
 - Observability boundary: `engine/trace/serializer.py` masks `SecretStr`; `shared/log_redaction.py` is best-effort defense-in-depth for untyped payloads/events and is shared by API, scheduler, engine, and worker processes.
 - Default OpenAI chat-capable model is `gpt-5-mini`; provider-qualified references and completion-model catalog defaults should use `openai:gpt-5-mini`.
+- `GoogleProvider` must not replay prior assistant `tool_calls` in multi-turn function-calling requests; Gemini requires hidden `thought_signature` data that the OpenAI-compatible response does not expose. Preserve tool outputs by converting `tool` role messages into user-visible tool-result context.
 - `requires_tool_name = True` for components that need a `tool_name` input (MCP tools, API tools).
 - Legacy system: some components still use `AgentPayload` pattern (`migrated = False`). New components MUST use the multi-port `NodeData` system (`migrated = True`).
 - `SQLLocalService` engine pools are cached per `engine_url` (process-level). Avoid patterns that instantiate many services for the same URL expecting independent pools.

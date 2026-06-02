@@ -43,21 +43,21 @@ CAPABILITY_MATRIX = {
     },
     "google": {
         "text": {
-            "complete": ["gemini-2.0-flash-lite"],
-            "complete_structured_pydantic": ["gemini-2.0-flash-lite"],
-            "complete_structured_json_schema": ["gemini-2.0-flash-lite"],
-            "function_call": ["gemini-2.0-flash-lite"],
-            "function_call_structured": ["gemini-2.0-flash-lite"],
-            "function_call_multi_turn": ["gemini-2.0-flash-lite"],
-            "function_call_tool_choice_none": ["gemini-2.0-flash-lite"],
-            "function_call_empty_tools": ["gemini-2.0-flash-lite"],
-            "function_call_with_system": ["gemini-2.0-flash-lite"],
-            "function_call_both_tools_and_structured": ["gemini-2.0-flash-lite"],
+            "complete": ["gemini-3.1-flash-lite"],
+            "complete_structured_pydantic": ["gemini-3.1-flash-lite"],
+            "complete_structured_json_schema": ["gemini-3.1-flash-lite"],
+            "function_call": ["gemini-3.1-flash-lite"],
+            "function_call_structured": ["gemini-3.1-flash-lite"],
+            "function_call_multi_turn": ["gemini-3.1-flash-lite"],
+            "function_call_tool_choice_none": ["gemini-3.1-flash-lite"],
+            "function_call_empty_tools": ["gemini-3.1-flash-lite"],
+            "function_call_with_system": ["gemini-3.1-flash-lite"],
+            "function_call_both_tools_and_structured": ["gemini-3.1-flash-lite"],
         },
         "vision": {
-            "complete": ["gemini-2.0-flash-lite"],
-            "complete_structured": ["gemini-2.0-flash-lite"],
-            "function_call_structured": ["gemini-2.0-flash-lite"],
+            "complete": ["gemini-3.1-flash-lite"],
+            "complete_structured": ["gemini-3.1-flash-lite"],
+            "function_call_structured": ["gemini-3.1-flash-lite"],
         },
         "specialized": {
             "embedding": [],
@@ -158,7 +158,7 @@ def get_provider_model_pairs(modality: str, capability: str) -> list[tuple[str, 
 
     Example:
         >>> get_provider_model_pairs("text", "complete")
-        [("openai", "gpt-5-mini"), ("google", "gemini-2.0-flash-lite"), ...]
+        [("openai", "gpt-5-mini"), ("google", "gemini-3.1-flash-lite"), ...]
     """
     pairs = []
     for provider, capabilities in CAPABILITY_MATRIX.items():

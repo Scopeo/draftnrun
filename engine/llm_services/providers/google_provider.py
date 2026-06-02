@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 import openai
 from google import genai
@@ -38,6 +38,46 @@ class GoogleProvider(BaseProvider):
             return msg, status_code
         return BaseProvider.extract_error_message(exc)
 
+    def _convert_messages_for_google(self, messages: list[dict] | str) -> list[dict] | str:
+        if isinstance(messages, str):
+            return messages
+
+        converted_messages: list[dict[str, Any]] = []
+        tool_call_names: dict[str, str] = {}
+        for message in messages:
+            role = message.get("role")
+            content = message.get("content")
+
+            if role == "assistant" and message.get("tool_calls"):
+                for tool_call in message.get("tool_calls", []):
+                    function = tool_call.get("function", {})
+                    call_id = tool_call.get("id")
+                    if call_id and function.get("name"):
+                        tool_call_names[call_id] = function["name"]
+                if content:
+                    converted_messages.append({"role": "assistant", "content": content})
+                continue
+
+            if role == "tool":
+                tool_call_id = message.get("tool_call_id")
+                tool_name = tool_call_names.get(tool_call_id, tool_call_id or "unknown")
+                converted_messages.append({
+                    "role": "user",
+                    "content": f"Tool {tool_name} returned: {self._format_tool_result_content(content)}",
+                })
+                continue
+
+            cleaned = {k: v for k, v in message.items() if k not in {"tool_calls", "tool_call_id"} and v is not None}
+            converted_messages.append(cleaned)
+
+        return converted_messages
+
+    @staticmethod
+    def _format_tool_result_content(content: Any) -> str:
+        if isinstance(content, str):
+            return content
+        return json.dumps(content, ensure_ascii=False)
+
     async def complete(
         self,
         messages: list[dict] | str,
@@ -45,13 +85,14 @@ class GoogleProvider(BaseProvider):
         stream: bool,
         **kwargs,
     ) -> tuple[str, int, int, int]:
+        converted_messages = self._convert_messages_for_google(messages)
         client = openai.AsyncOpenAI(
             api_key=self._api_key,
             base_url=self._base_url,
         )
         response = await client.chat.completions.create(
             model=self._model_name,
-            messages=messages,
+            messages=converted_messages,
             temperature=temperature,
         )
 
@@ -127,9 +168,10 @@ class GoogleProvider(BaseProvider):
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
 
+        converted_messages = self._convert_messages_for_google(messages)
         response = await client.chat.completions.create(
             model=self._model_name,
-            messages=messages,
+            messages=converted_messages,
             temperature=temperature,
             stream=stream,
             response_format=response_format_schema,
@@ -178,13 +220,14 @@ class GoogleProvider(BaseProvider):
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
 
+        converted_messages = self._convert_messages_for_google(messages)
         client = openai.AsyncOpenAI(
             api_key=self._api_key,
             base_url=self._base_url,
         )
         response = await client.chat.completions.create(
             model=self._model_name,
-            messages=messages,
+            messages=converted_messages,
             temperature=temperature,
             stream=stream,
             response_format=response_format_schema,
@@ -220,11 +263,12 @@ class GoogleProvider(BaseProvider):
             return response, prompt_tokens, completion_tokens, total_tokens
 
         tools = resolve_tool_refs(tools)
+        converted_messages = self._convert_messages_for_google(messages)
 
         client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
         response = await client.chat.completions.create(
             model=self._model_name,
-            messages=messages,
+            messages=converted_messages,
             tools=tools,
             temperature=temperature,
             stream=stream,

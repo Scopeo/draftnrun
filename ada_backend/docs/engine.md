@@ -84,6 +84,11 @@ Engine completion, web search, and vision service constructors use OpenAI by def
 vision services is `gpt-5-mini` (`openai:gpt-5-mini` when represented as a provider-qualified model reference). The
 component catalog's default `completion_model` parameter also uses `openai:gpt-5-mini`.
 
+Google/Gemini function-calling uses an OpenAI-compatible endpoint, but replayed Gemini function-call parts require hidden
+`thought_signature` data that the endpoint response does not expose. `GoogleProvider` therefore normalizes multi-turn
+tool history by omitting prior assistant `tool_calls` and passing each `tool` response back as user-visible tool-result
+context.
+
 ## Port System
 
 Three layers spanning database (backend) and runtime (engine):
