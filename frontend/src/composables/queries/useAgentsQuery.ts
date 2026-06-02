@@ -384,7 +384,7 @@ export function useUpdateAgentMutation() {
         } else {
           modelParameters.push({
             name: 'completion_model',
-            value: ensureProviderModelFormat(data.model_config?.model || 'openai:gpt-4o'),
+            value: ensureProviderModelFormat(data.model_config?.model || 'openai:gpt-5-mini'),
           })
 
           const uiInitialParam = cachedAgent?.parameters?.find(p => p.name === 'initial_prompt')?.value

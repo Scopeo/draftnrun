@@ -111,7 +111,7 @@ def test_basic_completion(provider: str, model: str) -> None:
 
 This creates separate test instances like:
 - `test_basic_completion[openai/gpt-4o-mini]`
-- `test_basic_completion[google/gemini-2.0-flash-lite]`
+- `test_basic_completion[google/gemini-3.1-flash-lite]`
 - etc.
 
 ## Result Matrix
@@ -120,9 +120,9 @@ After running tests, a markdown table is generated in `external_api_calls_matrix
 
 | Capability | openai | google | cerebras | mistral | anthropic |
 |------------|--------|--------|----------|---------|-----------|
-| Text / Complete | ✅ gpt-4o-mini | ✅ gemini-2.0-flash-lite | ✅ gpt-oss-120b | ✅ mistral-small-latest | ✅ claude-haiku-4-5-20251001 |
-| Text / Function Call | ✅ gpt-4o-mini | ✅ gemini-2.0-flash-lite | ✅ gpt-oss-120b | ✅ mistral-small-latest | ✅ claude-haiku-4-5-20251001 |
-| Vision / Complete | ✅ gpt-4o-mini | ✅ gemini-2.0-flash-lite | N/A | ✅ pixtral-large-latest | ✅ claude-haiku-4-5-20251001 |
+| Text / Complete | ✅ gpt-4o-mini | ✅ gemini-3.1-flash-lite | ✅ gpt-oss-120b | ✅ mistral-small-latest | ✅ claude-haiku-4-5-20251001 |
+| Text / Function Call | ✅ gpt-4o-mini | ✅ gemini-3.1-flash-lite | ✅ gpt-oss-120b | ✅ mistral-small-latest | ✅ claude-haiku-4-5-20251001 |
+| Vision / Complete | ✅ gpt-4o-mini | ✅ gemini-3.1-flash-lite | N/A | ✅ pixtral-large-latest | ✅ claude-haiku-4-5-20251001 |
 | Specialized / OCR | N/A | N/A | N/A | ✅ mistral-ocr-latest | N/A |
 
 Legend:

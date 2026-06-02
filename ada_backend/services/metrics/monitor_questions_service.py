@@ -53,7 +53,7 @@ async def monitor_questions(db_service: DBService, project_id: UUID, agent_input
     trace_manager = TraceManager(project_name="ada_backend")
     llm_service = CompletionService(
         provider="openai",
-        model_name="gpt-4.1-mini",
+        model_name="gpt-5-mini",
         trace_manager=trace_manager,
         temperature=0.5,
     )

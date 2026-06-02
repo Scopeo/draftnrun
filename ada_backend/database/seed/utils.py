@@ -136,7 +136,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
 }
 
 DEFAULT_MODEL_WEB_SEARCH = "openai:gpt-5-mini"
-DEFAULT_MODEL = "anthropic:claude-haiku-4-5"
+DEFAULT_MODEL = "openai:gpt-5-mini"
 DEFAULT_EMBEDDING_MODEL = "openai:text-embedding-3-large"
 DEFAULT_OCR_MODEL = "mistral:mistral-ocr-latest"
 ANTHROPIC_MODELS = [
