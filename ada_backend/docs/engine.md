@@ -80,7 +80,7 @@ because nested checkouts multiply connection-pool pressure during concurrent run
 
 ### LLM Service Defaults
 
-Engine LLM service constructors use OpenAI by default. The default chat-capable model for completion, web search, and
+Engine completion, web search, and vision service constructors use OpenAI by default. The default chat-capable model for completion, web search, and
 vision services is `gpt-5-mini` (`openai:gpt-5-mini` when represented as a provider-qualified model reference). The
 component catalog's default `completion_model` parameter also uses `openai:gpt-5-mini`.
 
