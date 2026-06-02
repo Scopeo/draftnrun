@@ -11,5 +11,6 @@ class OAuthProvider(StrEnum):
     GMAIL_NEVERDROP = "google-mail-neverdrop"
     GOOGLE_CALENDAR = "google-calendar"
     GOOGLE_CALENDAR_NEVERDROP = "google-calendar-neverdrop"
+    GOOGLE_CONTACT_NEVERDROP = "google-contact-neverdrop"
     OUTLOOK = "outlook"
     OUTLOOK_CALENDAR = "outlook-calendar"

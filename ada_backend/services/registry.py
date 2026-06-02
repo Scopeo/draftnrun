@@ -65,6 +65,7 @@ from engine.components.table_lookup import TableLookup
 from engine.components.tools.api_call_tool import APICallTool
 from engine.components.tools.docx_template import DocxTemplateAgent
 from engine.components.tools.google_calendar_mcp_tool import GoogleCalendarMCPTool
+from engine.components.tools.google_contacts_mcp_tool import GoogleContactsMCPTool
 from engine.components.tools.hubspot_mcp_tool import HubSpotMCPTool
 from engine.components.tools.linkup_tool import LinkupSearchTool
 from engine.components.tools.notion_mcp_tool import NotionMCPTool
@@ -647,6 +648,16 @@ def create_factory_registry() -> FactoryRegistry:
         factory=OAuthComponentFactory(
             entity_class=GoogleCalendarMCPTool,
             oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.GOOGLE_CALENDAR_NEVERDROP)],
+            constructor_method="from_access_token",
+            parameter_processors=[build_ignore_tool_description_processor()],
+        ),
+    )
+
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["google_contacts_neverdrop_mcp_tool"],
+        factory=OAuthComponentFactory(
+            entity_class=GoogleContactsMCPTool,
+            oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.GOOGLE_CONTACT_NEVERDROP)],
             constructor_method="from_access_token",
             parameter_processors=[build_ignore_tool_description_processor()],
         ),
