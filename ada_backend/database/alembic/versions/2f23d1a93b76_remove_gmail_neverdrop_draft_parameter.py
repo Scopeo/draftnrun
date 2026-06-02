@@ -19,6 +19,7 @@ deploy_strategy = "code-first"
 GMAIL_NEVERDROP_COMPONENT_VERSION_ID = "78b85445-5a79-4ecd-8c31-f849b0b35d9a"
 GMAIL_NEVERDROP_SAVE_AS_DRAFT_PARAM_ID = "bcf88542-bcfc-4075-8d98-57714c8e8f96"
 BACKUP_TABLE = "_alembic_2f23d1a93b76_gmail_neverdrop_draft_costs"
+BASIC_PARAMETERS_BACKUP_TABLE = "_alembic_2f23d1a93b76_gmail_neverdrop_draft_basic_parameters"
 
 
 def upgrade() -> None:
@@ -59,6 +60,36 @@ def upgrade() -> None:
         ON CONFLICT (id) DO NOTHING
     """)
     op.execute(f"""
+        CREATE TABLE IF NOT EXISTS {BASIC_PARAMETERS_BACKUP_TABLE} (
+            id uuid PRIMARY KEY,
+            component_instance_id uuid NOT NULL,
+            parameter_definition_id uuid NOT NULL,
+            value varchar,
+            organization_secret_id uuid,
+            "order" integer
+        )
+    """)
+    op.execute(f"""
+        INSERT INTO {BASIC_PARAMETERS_BACKUP_TABLE} (
+            id,
+            component_instance_id,
+            parameter_definition_id,
+            value,
+            organization_secret_id,
+            "order"
+        )
+        SELECT
+            id,
+            component_instance_id,
+            parameter_definition_id,
+            value,
+            organization_secret_id,
+            "order"
+        FROM basic_parameters
+        WHERE parameter_definition_id = '{GMAIL_NEVERDROP_SAVE_AS_DRAFT_PARAM_ID}'::uuid
+        ON CONFLICT (id) DO NOTHING
+    """)
+    op.execute(f"""
         DELETE FROM basic_parameters
         WHERE parameter_definition_id = '{GMAIL_NEVERDROP_SAVE_AS_DRAFT_PARAM_ID}'::uuid
     """)
@@ -78,15 +109,16 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(f"""
-        CREATE TABLE IF NOT EXISTS credits.{BACKUP_TABLE} (
-            id uuid PRIMARY KEY,
-            credits_per jsonb,
-            credits_per_call double precision,
-            credits_per_input_token double precision,
-            credits_per_output_token double precision,
-            component_parameter_definition_id uuid NOT NULL,
-            parameter_value varchar
-        )
+        DO $$
+        BEGIN
+            IF to_regclass('credits.{BACKUP_TABLE}') IS NULL THEN
+                RAISE EXCEPTION 'Missing backup table credits.{BACKUP_TABLE}';
+            END IF;
+            IF to_regclass('public.{BASIC_PARAMETERS_BACKUP_TABLE}') IS NULL THEN
+                RAISE EXCEPTION 'Missing backup table {BASIC_PARAMETERS_BACKUP_TABLE}';
+            END IF;
+        END;
+        $$;
     """)
     op.execute(f"""
         INSERT INTO component_parameter_definitions (
@@ -100,9 +132,9 @@ def downgrade() -> None:
             ui_component_properties,
             is_advanced
         )
-        VALUES (
+        SELECT
             '{GMAIL_NEVERDROP_SAVE_AS_DRAFT_PARAM_ID}'::uuid,
-            '{GMAIL_NEVERDROP_COMPONENT_VERSION_ID}'::uuid,
+            component_versions.id,
             'save_as_draft',
             'boolean',
             FALSE,
@@ -115,7 +147,27 @@ def downgrade() -> None:
                 'If checked, the email will be saved as a draft instead of being sent immediately.'
             ),
             FALSE
+        FROM component_versions
+        WHERE component_versions.id = '{GMAIL_NEVERDROP_COMPONENT_VERSION_ID}'::uuid
+        ON CONFLICT (id) DO NOTHING
+    """)
+    op.execute(f"""
+        INSERT INTO basic_parameters (
+            id,
+            component_instance_id,
+            parameter_definition_id,
+            value,
+            organization_secret_id,
+            "order"
         )
+        SELECT
+            id,
+            component_instance_id,
+            parameter_definition_id,
+            value,
+            organization_secret_id,
+            "order"
+        FROM {BASIC_PARAMETERS_BACKUP_TABLE}
         ON CONFLICT (id) DO NOTHING
     """)
     op.execute(f"""
@@ -151,3 +203,4 @@ def downgrade() -> None:
         ON CONFLICT (id) DO NOTHING
     """)
     op.execute(f"DROP TABLE IF EXISTS credits.{BACKUP_TABLE}")
+    op.execute(f"DROP TABLE IF EXISTS {BASIC_PARAMETERS_BACKUP_TABLE}")

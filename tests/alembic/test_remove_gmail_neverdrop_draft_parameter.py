@@ -37,6 +37,9 @@ def test_upgrade_backs_up_parameter_value_costs_before_deleting_them() -> None:
     assert f"INSERT INTO credits.{migration.BACKUP_TABLE}" in statements
     assert "FROM credits.parameter_value_costs" in statements
     assert "JOIN credits.costs ON costs.id = parameter_value_costs.id" in statements
+    assert f"CREATE TABLE IF NOT EXISTS {migration.BASIC_PARAMETERS_BACKUP_TABLE}" in statements
+    assert f"INSERT INTO {migration.BASIC_PARAMETERS_BACKUP_TABLE}" in statements
+    assert "FROM basic_parameters" in statements
     assert "DELETE FROM credits.parameter_value_costs" in statements
     assert "DELETE FROM credits.costs" in statements
 
@@ -49,9 +52,18 @@ def test_downgrade_restores_parameter_value_costs_from_backup() -> None:
     migration.downgrade()
 
     statements = "\n".join(recorder.statements)
+    assert f"CREATE TABLE IF NOT EXISTS credits.{migration.BACKUP_TABLE}" not in statements
+    assert f"CREATE TABLE IF NOT EXISTS {migration.BASIC_PARAMETERS_BACKUP_TABLE}" not in statements
+    assert f"to_regclass('credits.{migration.BACKUP_TABLE}')" in statements
+    assert f"to_regclass('public.{migration.BASIC_PARAMETERS_BACKUP_TABLE}')" in statements
+    assert f"Missing backup table {migration.BASIC_PARAMETERS_BACKUP_TABLE}" in statements
     assert "INSERT INTO component_parameter_definitions" in statements
+    assert "FROM component_versions" in statements
     assert '"default"' in statements
+    assert "INSERT INTO basic_parameters" in statements
+    assert f"FROM {migration.BASIC_PARAMETERS_BACKUP_TABLE}" in statements
     assert "INSERT INTO credits.costs" in statements
     assert "INSERT INTO credits.parameter_value_costs" in statements
     assert f"FROM credits.{migration.BACKUP_TABLE}" in statements
+    assert f"DROP TABLE IF EXISTS {migration.BASIC_PARAMETERS_BACKUP_TABLE}" in statements
     assert f"DROP TABLE IF EXISTS credits.{migration.BACKUP_TABLE}" in statements

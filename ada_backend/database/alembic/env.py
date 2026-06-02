@@ -55,6 +55,10 @@ def include_object(object, name, type_, reflected, compare_to):
     if type_ == "table" and name == "apscheduler_jobs":
         return False
 
+    # Ignore migration-private backup tables kept temporarily for data-safe downgrades
+    if type_ == "table" and name.startswith("_alembic_"):
+        return False
+
     # Exclude tables in test schema
     if type_ == "table" and str(object.schema) == "test_schema":
         return False

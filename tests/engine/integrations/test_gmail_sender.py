@@ -1,12 +1,11 @@
 import base64
-import inspect
 from email import message_from_bytes
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from engine.components.types import ComponentAttributes
-from engine.integrations.gmail.gmail_sender import GmailSenderInputs
+from engine.integrations.gmail.gmail_sender import GMAIL_NEVERDROP_SENDER_TOOL_DESCRIPTION, GmailSenderInputs
 from engine.integrations.gmail.gmail_sender_v2 import GmailNeverdropSender
 from engine.integrations.gmail.gmail_utils import create_raw_mail_message
 from engine.integrations.utils import normalize_str_list
@@ -72,10 +71,15 @@ class TestCreateRawMailMessageFromHeader:
 
 
 class TestGmailNeverdropSender:
-    def test_constructor_does_not_accept_save_as_draft(self):
-        signature = inspect.signature(GmailNeverdropSender)
+    def test_tool_description_requires_non_empty_recipients(self):
+        email_recipients = GMAIL_NEVERDROP_SENDER_TOOL_DESCRIPTION.tool_properties["email_recipients"]
 
-        assert "save_as_draft" not in signature.parameters
+        assert email_recipients["minItems"] == 1
+
+    def test_input_schema_does_not_include_save_as_draft(self):
+        input_schema = GmailNeverdropSender.get_inputs_schema()
+
+        assert "save_as_draft" not in input_schema.model_fields
 
     @pytest.mark.asyncio
     async def test_sends_email(self):

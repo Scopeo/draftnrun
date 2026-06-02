@@ -85,6 +85,7 @@ GMAIL_NEVERDROP_SENDER_TOOL_DESCRIPTION = ToolDescription(
         "email_recipients": {
             "type": "array",
             "items": {"type": "string"},
+            "minItems": 1,
             "description": "List of email addresses to send the email to.",
         },
     },
