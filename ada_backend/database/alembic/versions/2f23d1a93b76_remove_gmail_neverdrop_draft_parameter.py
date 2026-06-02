@@ -95,7 +95,7 @@ def downgrade() -> None:
             name,
             type,
             nullable,
-            default,
+            "default",
             ui_component,
             ui_component_properties,
             is_advanced

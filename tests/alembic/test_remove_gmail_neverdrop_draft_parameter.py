@@ -50,6 +50,7 @@ def test_downgrade_restores_parameter_value_costs_from_backup() -> None:
 
     statements = "\n".join(recorder.statements)
     assert "INSERT INTO component_parameter_definitions" in statements
+    assert '"default"' in statements
     assert "INSERT INTO credits.costs" in statements
     assert "INSERT INTO credits.parameter_value_costs" in statements
     assert f"FROM credits.{migration.BACKUP_TABLE}" in statements
