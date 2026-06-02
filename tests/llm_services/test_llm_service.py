@@ -5,7 +5,13 @@ import pytest
 from pydantic import BaseModel
 
 from engine.llm_services.constrained_output_models import OutputFormatModel
-from engine.llm_services.llm_service import DEFAULT_TEMPERATURE, CompletionService, EmbeddingService
+from engine.llm_services.llm_service import (
+    DEFAULT_TEMPERATURE,
+    CompletionService,
+    EmbeddingService,
+    VisionService,
+    WebSearchService,
+)
 from engine.trace.span_context import set_tracing_span
 
 
@@ -44,6 +50,17 @@ def test_completion_service():
         assert response is not None
         assert isinstance(response, str)
         assert len(response) > 0
+
+
+def test_openai_llm_service_defaults_to_gpt_5_mini():
+    completion_service = CompletionService(trace_manager=MagicMock(), api_key="fake-key")
+    web_search_service = WebSearchService(trace_manager=MagicMock(), api_key="fake-key")
+    vision_service = VisionService(trace_manager=MagicMock(), api_key="fake-key")
+
+    assert completion_service._provider == "openai"
+    assert completion_service._model_name == "gpt-5-mini"
+    assert web_search_service._model_name == "gpt-5-mini"
+    assert vision_service._model_name == "gpt-5-mini"
 
 
 @pytest.mark.asyncio

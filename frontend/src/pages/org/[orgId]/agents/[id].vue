@@ -229,7 +229,7 @@ const saveAgent = async (create_snapshot = false) => {
       description: agent.value.description,
       initial_prompt: agent.value.parameters?.find(p => p.name === 'initial_prompt')?.value || '',
       model_config: {
-        model: agent.value.model_config?.model || 'gpt-4',
+        model: agent.value.model_config?.model || 'openai:gpt-5-mini',
         temperature: agent.value.model_config?.temperature || 0.7,
         max_tokens: agent.value.model_config?.max_tokens || 2000,
       },

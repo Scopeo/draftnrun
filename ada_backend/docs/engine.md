@@ -78,6 +78,12 @@ session. Any database lookups needed to prepare factory inputs should use that e
 already-resolved values and avoid opening their own `get_db_session()` for per-component metadata such as LLM model IDs,
 because nested checkouts multiply connection-pool pressure during concurrent runs.
 
+### LLM Service Defaults
+
+Engine LLM service constructors use OpenAI by default. The default chat-capable model for completion, web search, and
+vision services is `gpt-5-mini` (`openai:gpt-5-mini` when represented as a provider-qualified model reference). The
+component catalog's default `completion_model` parameter also uses `openai:gpt-5-mini`.
+
 ## Port System
 
 Three layers spanning database (backend) and runtime (engine):

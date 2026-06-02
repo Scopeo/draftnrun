@@ -9,7 +9,7 @@ export function transformModelParametersToConfig(modelParameters: BackendAgentPa
   modelParameters.forEach(param => {
     switch (param.name) {
       case 'completion_model':
-        config.model = param.value ?? param.default ?? 'gpt-4'
+        config.model = param.value ?? param.default ?? 'openai:gpt-5-mini'
         break
       case 'default_temperature':
         config.temperature = param.value ?? param.default ?? 0.7
@@ -54,7 +54,7 @@ export function transformBackendParametersToLegacy(parameters: BackendAgentParam
  * Ensure model format is provider:model
  */
 export function ensureProviderModelFormat(model: string): string {
-  if (!model) return 'openai:gpt-4o'
+  if (!model) return 'openai:gpt-5-mini'
 
   // If already has provider prefix, return as-is
   if (model.includes(':')) return model
