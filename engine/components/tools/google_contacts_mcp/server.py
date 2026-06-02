@@ -16,7 +16,11 @@ with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     from fastmcp import FastMCP
 
-from engine.components.tools.google_contacts_mcp.client import DEFAULT_PERSON_FIELDS, GoogleContactsClient
+from engine.components.tools.google_contacts_mcp.client import (
+    DEFAULT_OTHER_CONTACTS_READ_MASK,
+    DEFAULT_PERSON_FIELDS,
+    GoogleContactsClient,
+)
 from engine.components.types import ToolDescription
 from engine.llm_services.utils import resolve_schema_refs
 
@@ -27,7 +31,7 @@ _client: GoogleContactsClient
 @mcp.tool(
     name="contacts_list_contacts",
     description=(
-        "List contacts from the authenticated Google account. Returns people resources "
+        "List contacts and Other contacts from the authenticated Google account. Returns people resources "
         "with names, email addresses, phone numbers, organizations, photos, and metadata by default."
     ),
 )
@@ -35,11 +39,17 @@ async def contacts_list_contacts(
     max_results: Annotated[int, Field(ge=1, le=1000)] = 100,
     person_fields: str = DEFAULT_PERSON_FIELDS,
     page_token: str | None = None,
+    include_other_contacts: bool = True,
+    other_contacts_page_token: str | None = None,
+    other_contacts_read_mask: str = DEFAULT_OTHER_CONTACTS_READ_MASK,
 ) -> dict[str, Any]:
     return await _client.list_contacts(
         max_results=max_results,
         person_fields=person_fields,
         page_token=page_token,
+        include_other_contacts=include_other_contacts,
+        other_contacts_page_token=other_contacts_page_token,
+        other_contacts_read_mask=other_contacts_read_mask,
     )
 
 
