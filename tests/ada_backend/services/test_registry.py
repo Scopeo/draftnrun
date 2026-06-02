@@ -5,6 +5,7 @@ from ada_backend.services.entity_factory import OAuthBinding, OAuthComponentFact
 from ada_backend.services.registry import FACTORY_REGISTRY
 from engine.components.synthesizer import Synthesizer
 from engine.components.tools.google_calendar_mcp_tool import GoogleCalendarMCPTool
+from engine.components.tools.google_contacts_mcp_tool import GoogleContactsMCPTool
 from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.integrations.gmail.gmail_sender_v2 import GmailNeverdropSender
@@ -88,6 +89,23 @@ def test_google_calendar_neverdrop_mcp_tool_registered():
         OAuthBinding(
             param_name="oauth_connection_id",
             provider_config_key=OAuthProvider.GOOGLE_CALENDAR_NEVERDROP,
+            target_param_name="access_token",
+        ),
+    ]
+    assert factory.constructor_method == "from_access_token"
+
+
+def test_google_contacts_neverdrop_mcp_tool_registered():
+    factory = FACTORY_REGISTRY.get(
+        component_version_id=COMPONENT_VERSION_UUIDS["google_contacts_neverdrop_mcp_tool"]
+    )
+    assert factory is not None
+    assert isinstance(factory, OAuthComponentFactory)
+    assert factory.entity_class is GoogleContactsMCPTool
+    assert factory.oauth_bindings == [
+        OAuthBinding(
+            param_name="oauth_connection_id",
+            provider_config_key=OAuthProvider.GOOGLE_CONTACT_NEVERDROP,
             target_param_name="access_token",
         ),
     ]
