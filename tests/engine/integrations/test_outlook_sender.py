@@ -18,6 +18,16 @@ class TestOutlookSenderInputsValidation:
         assert inputs.email_attachments[0].url == "https://example.com/report"
         assert inputs.email_attachments[0].filename == "report"
 
+    def test_json_string_attachment_list_is_accepted(self):
+        inputs = OutlookSenderInputs(
+            mail_subject="test",
+            email_attachments='[{"url": "https://example.com/report.pdf", "filename": "report.pdf"}]',
+        )
+
+        assert inputs.email_attachments
+        assert inputs.email_attachments[0].url == "https://example.com/report.pdf"
+        assert inputs.email_attachments[0].filename == "report.pdf"
+
     def test_dict_attachment_is_accepted(self):
         inputs = OutlookSenderInputs(
             mail_subject="test",

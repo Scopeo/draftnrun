@@ -1,4 +1,5 @@
 import ipaddress
+import json
 import logging
 import socket
 from datetime import datetime, timedelta, timezone
@@ -70,6 +71,12 @@ AttachmentInput = str | Path | EmailAttachment
 def normalize_email_attachments(v: Any) -> Any:
     if v is None:
         return []
+    if isinstance(v, str):
+        stripped_value = v.strip()
+        if stripped_value.startswith("["):
+            v = json.loads(stripped_value)
+        else:
+            v = [v]
     if not isinstance(v, list):
         return v
     normalized: list[EmailAttachment] = []

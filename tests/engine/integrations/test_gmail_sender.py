@@ -41,6 +41,15 @@ class TestNormalizeEmailAttachments:
     def test_list_of_strings_converts_to_attachment_models(self):
         assert normalize_email_attachments(["file.pdf"]) == [EmailAttachment(path="file.pdf", filename="file.pdf")]
 
+    def test_json_string_list_converts_to_attachment_models(self):
+        attachments = normalize_email_attachments(
+            '[{"url": "https://example.com/report.pdf", "filename": "report.pdf"}]'
+        )
+
+        assert attachments == [
+            EmailAttachment(url="https://example.com/report.pdf", filename="report.pdf")
+        ]
+
     def test_none_becomes_empty_list(self):
         assert normalize_email_attachments(None) == []
 
@@ -74,6 +83,15 @@ class TestGmailSenderInputsValidation:
     def test_list_of_strings_is_accepted(self):
         inputs = GmailSenderInputs(mail_subject="test", email_attachments=["file.pdf"])
         assert inputs.email_attachments == [EmailAttachment(path="file.pdf", filename="file.pdf")]
+
+    def test_json_string_list_is_accepted(self):
+        inputs = GmailSenderInputs(
+            mail_subject="test",
+            email_attachments='[{"url": "https://example.com/report.pdf", "filename": "report.pdf"}]',
+        )
+        assert inputs.email_attachments == [
+            EmailAttachment(url="https://example.com/report.pdf", filename="report.pdf")
+        ]
 
     def test_none_becomes_empty_list(self):
         inputs = GmailSenderInputs(mail_subject="test", email_attachments=None)
