@@ -142,9 +142,9 @@ def seed_mail_sender_components(session: Session):
             parameter_order_within_group=0,
             ui_component=UIComponent.EXCLUSIVE_OAUTH_CONNECTION,
             ui_component_properties={
-                "label": "Gmail Connection",
-                "description": "Select a Gmail connection.",
-                "provider": OAuthProvider.GMAIL.value,
+                "label": "NeverDrop Gmail Connection",
+                "description": "Select a NeverDrop Gmail connection.",
+                "provider": OAuthProvider.GMAIL_NEVERDROP.value,
                 "icon": "logos-google-gmail",
             },
         ),
@@ -164,20 +164,6 @@ def seed_mail_sender_components(session: Session):
                 "provider": OAuthProvider.OUTLOOK.value,
                 "icon": "custom-microsoft-outlook",
             },
-        ),
-        ComponentParameterDefinition(
-            id=UUID("875d4b3b-1dee-4a8b-93e8-cd9d7362666f"),
-            component_version_id=mail_sender_v2_version.id,
-            name="save_as_draft",
-            type=ParameterType.BOOLEAN,
-            nullable=False,
-            default=True,
-            ui_component=UIComponent.CHECKBOX,
-            ui_component_properties=UIComponentProperties(
-                type="checkbox",
-                label="Save as Draft",
-                description="If checked, the email will be saved as a draft instead of being sent immediately.",
-            ).model_dump(exclude_unset=True, exclude_none=True),
         ),
     ]
     upsert_components_parameter_definitions(session, mail_sender_v2_parameter_definitions)
