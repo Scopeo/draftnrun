@@ -79,6 +79,9 @@ GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
                     "filename": {"type": "string"},
                 },
                 "required": ["filename"],
+                "additionalProperties": False,
+                "minProperties": 2,
+                "maxProperties": 2,
             },
             "description": (
                 "List of attachment objects. Each item must include filename and either url or path."

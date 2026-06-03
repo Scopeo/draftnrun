@@ -31,8 +31,9 @@ def _ensure_paths(attachments: Optional[Iterable[AttachmentInput]]) -> list[tupl
         else:
             attachment_path = Path(source)
             if attachment_path.is_absolute():
-                raise ValueError(f"Attachment path escapes the output directory: {source}")
-            local_path = (output_dir / attachment_path).resolve(strict=False)
+                local_path = attachment_path.resolve(strict=False)
+            else:
+                local_path = (output_dir / attachment_path).resolve(strict=False)
             if not local_path.is_relative_to(output_dir):
                 raise ValueError(f"Attachment path escapes the output directory: {source}")
         if not local_path.is_file():

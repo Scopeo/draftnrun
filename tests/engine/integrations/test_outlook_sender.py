@@ -8,6 +8,16 @@ from engine.integrations.utils import EmailAttachment
 
 
 class TestOutlookSenderInputsValidation:
+    def test_string_attachment_is_accepted(self):
+        inputs = OutlookSenderInputs(
+            mail_subject="test",
+            email_attachments=["https://example.com/report"],
+        )
+
+        assert inputs.email_attachments
+        assert inputs.email_attachments[0].url == "https://example.com/report"
+        assert inputs.email_attachments[0].filename == "report"
+
     def test_dict_attachment_is_accepted(self):
         inputs = OutlookSenderInputs(
             mail_subject="test",
@@ -51,6 +61,10 @@ class TestOutlookSenderInputsValidation:
         assert schema["properties"]["url"]["type"] == "string"
         assert schema["properties"]["path"]["type"] == "string"
         assert schema["properties"]["filename"]["type"] == "string"
+        assert schema["required"] == ["filename"]
+        assert schema["additionalProperties"] is False
+        assert schema["minProperties"] == 2
+        assert schema["maxProperties"] == 2
 
     def test_attachment_input_schema_does_not_use_unions(self):
         schema = OutlookSenderInputs.model_json_schema()["properties"]["email_attachments"]

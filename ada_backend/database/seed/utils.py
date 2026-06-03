@@ -105,6 +105,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "gmail_sender": UUID("af96bb40-c9ea-4851-a663-f0e64363fcb2"),
     "gmail_sender_v2": UUID("c6d0006f-dbff-472b-bdff-e64cec48f289"),
     "gmail_sender_v3": UUID("b0475ed4-c122-46cc-8d10-13e4168765f8"),
+    "gmail_sender_v4": UUID("36719cc8-bc36-449d-a1b2-756763d80e91"),
     "gmail_neverdrop_sender": UUID("78b85445-5a79-4ecd-8c31-f849b0b35d9a"),
     "gmail_neverdrop_sender_v2": UUID("96b34a53-6831-47fc-8002-9a29fc78b386"),
     "python_code_runner": UUID("e2b00000-0000-1111-2222-333333333333"),

@@ -3,6 +3,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
+from ada_backend.database.seed.seed_tool_description import (
+    LEGACY_EMAIL_ATTACHMENTS_PROPERTY,
+    _with_legacy_email_attachments,
+)
 from engine.components.types import ComponentAttributes
 from engine.integrations.gmail.gmail_sender import GmailSenderInputs
 from engine.integrations.mail_sender import (
@@ -62,6 +66,16 @@ def test_attachment_tool_schema_does_not_use_unions():
     assert schema["properties"]["url"]["type"] == "string"
     assert schema["properties"]["path"]["type"] == "string"
     assert schema["properties"]["filename"]["type"] == "string"
+    assert schema["required"] == ["filename"]
+    assert schema["additionalProperties"] is False
+    assert schema["minProperties"] == 2
+    assert schema["maxProperties"] == 2
+
+
+def test_legacy_attachment_tool_schema_uses_string_items():
+    legacy_tool_description = _with_legacy_email_attachments(MAIL_SENDER_TOOL_DESCRIPTION)
+
+    assert legacy_tool_description.tool_properties["email_attachments"] == LEGACY_EMAIL_ATTACHMENTS_PROPERTY
 
 
 @pytest.mark.asyncio

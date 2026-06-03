@@ -28,7 +28,7 @@ const model = defineModel<AttachmentValue[] | undefined>({ default: () => [] })
 const normalizedModel = computed<AttachmentObject[]>({
   get: () => (Array.isArray(model.value) ? model.value.map(normalizeAttachment) : []),
   set: value => {
-    model.value = value.filter(attachment => attachment.url)
+    model.value = value.filter(attachment => attachment.url && attachment.url.trim().length > 0)
   },
 })
 

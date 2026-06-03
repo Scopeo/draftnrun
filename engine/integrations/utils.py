@@ -57,6 +57,8 @@ class EmailAttachment(BaseModel):
         self.filename = Path(self.filename.strip()).name
         if not self.url and not self.path:
             raise ValueError("Attachment must include either 'url' or 'path'.")
+        if self.url and self.path:
+            raise ValueError("Attachment must include exactly one of 'url' or 'path'.")
         if not self.filename:
             raise ValueError("Attachment must include a non-empty 'filename'.")
         return self
@@ -132,7 +134,8 @@ def _open_validated_download_stream(client: httpx.Client, url: str) -> httpx.Res
     current_url = url
     for redirect_count in range(_MAX_DOWNLOAD_REDIRECTS + 1):
         _validate_download_url(current_url)
-        response = client.send(client.build_request("GET", current_url), stream=True)
+        request_url, headers = _build_validated_download_request(current_url)
+        response = client.send(client.build_request("GET", request_url, headers=headers), stream=True)
         if not response.is_redirect:
             return response
         location = response.headers.get("location")
@@ -153,20 +156,33 @@ def _validate_download_url(url: str) -> None:
         raise ValueError("Attachment URLs must not contain credentials.")
     if not parsed.hostname:
         raise ValueError("Attachment URL must include a hostname.")
-    _validate_download_hostname(parsed.hostname)
 
 
-def _validate_download_hostname(hostname: str) -> None:
+def _build_validated_download_request(url: str) -> tuple[str, dict[str, str]]:
+    parsed = urlparse(url)
+    if not parsed.hostname:
+        raise ValueError("Attachment URL must include a hostname.")
+    ip = _resolve_download_ip(parsed.hostname, parsed.port)
+    host = parsed.hostname if parsed.port is None else f"{parsed.hostname}:{parsed.port}"
+    request_host = f"[{ip}]" if isinstance(ip, ipaddress.IPv6Address) else str(ip)
+    port = f":{parsed.port}" if parsed.port is not None else ""
+    path = parsed.path or "/"
+    query = f"?{parsed.query}" if parsed.query else ""
+    return f"{parsed.scheme}://{request_host}{port}{path}{query}", {"Host": host}
+
+
+def _resolve_download_ip(hostname: str, port: int | None = None) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
     try:
-        addr_infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+        addr_infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
     except socket.gaierror as error:
         raise ValueError(f"Could not resolve attachment URL hostname: {hostname}") from error
     if not addr_infos:
         raise ValueError(f"Could not resolve attachment URL hostname: {hostname}")
     for addr_info in addr_infos:
         ip = ipaddress.ip_address(addr_info[4][0])
-        if _is_disallowed_download_ip(ip):
-            raise ValueError(f"Attachment URL resolves to a disallowed address: {ip}")
+        if not _is_disallowed_download_ip(ip):
+            return ip
+    raise ValueError(f"Attachment URL resolves to a disallowed address: {addr_infos[0][4][0]}")
 
 
 def _is_disallowed_download_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:

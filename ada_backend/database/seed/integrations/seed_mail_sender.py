@@ -126,7 +126,7 @@ def seed_mail_sender_components(session: Session):
         version_tag="0.0.2",
         release_stage=db.ReleaseStage.INTERNAL,
         description="Send email via Gmail or Outlook with named URL attachments.",
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["mail_sender_tool_description"],
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["mail_sender_v2_tool_description"],
     )
     upsert_component_versions(session, [mail_sender_v2_version])
 

@@ -72,6 +72,8 @@ Integration-backed catalog entries can share a runtime class while using distinc
 
 Mail sender components (`Gmail Sender`, `Gmail Neverdrop`, `Outlook Sender`, and unified `Mail Sender`) accept `email_attachments` as legacy string path/URL entries or provider-safe object entries shaped like `{"url": "...", "filename": "..."}` or `{"path": "...", "filename": "..."}`. String attachments are normalized to object attachments before runtime. Object attachments download from `url` or read from `path` and attach using the provided `filename`, which lets workflows control the displayed file name in Gmail MIME messages and Microsoft Graph payloads. Attachment URL downloads validate each URL and redirect target before streaming, rejecting non-HTTP(S) schemes and private/reserved network addresses.
 
+When changing the public attachment input contract, seed a new `ToolDescription` row and point only the new component version at it. Older mail sender component versions keep legacy string-item tool descriptions while the runtime remains backwards-compatible.
+
 ### Component Instantiation DB Usage
 
 `ada_backend/services/agent_builder_service.py` instantiates graph components while holding the graph-building SQLAlchemy
