@@ -9,6 +9,7 @@ import httpx
 import requests
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
@@ -34,14 +35,49 @@ def normalize_str_list(v: Any) -> Any:
     return v
 
 
+class EmailAttachment(BaseModel):
+    url: str
+    filename: str
+
+
+AttachmentInput = str | Path | EmailAttachment
+
+
+def normalize_email_attachments(v: Any) -> Any:
+    if not isinstance(v, list):
+        return v
+    normalized: list[str | EmailAttachment] = []
+    for attachment in v:
+        if isinstance(attachment, EmailAttachment):
+            normalized.append(attachment)
+            continue
+        if isinstance(attachment, dict):
+            normalized.append(EmailAttachment.model_validate(attachment))
+            continue
+        normalized.append(str(attachment))
+    return normalized
+
+
+def get_attachment_source(attachment: AttachmentInput) -> str:
+    if isinstance(attachment, EmailAttachment):
+        return attachment.url
+    return str(attachment)
+
+
+def get_attachment_filename(attachment: AttachmentInput, local_path: Path) -> str:
+    if isinstance(attachment, EmailAttachment):
+        return Path(attachment.filename).name
+    return local_path.name
+
+
 def is_url(value: str) -> bool:
     return isinstance(value, str) and value.startswith(("http://", "https://"))
 
 
-def download_to_local(url: str, output_dir: Path) -> Path:
+def download_to_local(url: str, output_dir: Path, filename: str | None = None) -> Path:
     parsed = urlparse(url)
-    filename = Path(parsed.path).name or "attachment"
-    path = output_dir / filename
+    resolved_filename = Path(filename).name if filename else Path(parsed.path).name or "attachment"
+    path = output_dir / resolved_filename
     LOGGER.info("Downloading attachment from URL to %s", path)
     with httpx.stream("GET", url, follow_redirects=True) as resp:
         resp.raise_for_status()

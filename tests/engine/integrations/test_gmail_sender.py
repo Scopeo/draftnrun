@@ -8,7 +8,7 @@ from engine.components.types import ComponentAttributes
 from engine.integrations.gmail.gmail_sender import GMAIL_NEVERDROP_SENDER_TOOL_DESCRIPTION, GmailSenderInputs
 from engine.integrations.gmail.gmail_sender_v2 import GmailNeverdropSender
 from engine.integrations.gmail.gmail_utils import create_raw_mail_message
-from engine.integrations.utils import normalize_str_list
+from engine.integrations.utils import EmailAttachment, normalize_email_attachments, normalize_str_list
 
 
 class TestNormalizeStrList:
@@ -28,20 +28,43 @@ class TestNormalizeStrList:
         assert normalize_str_list([]) == []
 
 
+class TestNormalizeEmailAttachments:
+    def test_list_of_strings_passes_through(self):
+        assert normalize_email_attachments(["file.pdf"]) == ["file.pdf"]
+
+    def test_none_passes_through(self):
+        assert normalize_email_attachments(None) is None
+
+    def test_dict_attachment_is_preserved(self):
+        attachments = normalize_email_attachments([{"url": "https://example.com/report", "filename": "report.pdf"}])
+
+        assert attachments == [EmailAttachment(url="https://example.com/report", filename="report.pdf")]
+
+    def test_dict_attachment_requires_url_and_filename(self):
+        with pytest.raises(ValueError, match="url"):
+            normalize_email_attachments([{"url": "https://example.com/report"}])
+
+
 class TestGmailSenderInputsValidation:
-    """Regression: email_attachments uses normalize_str_list via field_validator."""
+    """Regression: email_attachments uses normalize_email_attachments via field_validator."""
 
-    def test_single_string_wrapped_in_list(self):
-        inputs = GmailSenderInputs(mail_subject="test", email_attachments="file.pdf")
+    def test_list_of_strings_passes_through(self):
+        inputs = GmailSenderInputs(mail_subject="test", email_attachments=["file.pdf"])
         assert inputs.email_attachments == ["file.pdf"]
-
-    def test_nested_list_is_flattened(self):
-        inputs = GmailSenderInputs(mail_subject="test", email_attachments=[["a.pdf", "b.docx"]])
-        assert inputs.email_attachments == ["a.pdf", "b.docx"]
 
     def test_none_stays_none(self):
         inputs = GmailSenderInputs(mail_subject="test", email_attachments=None)
         assert inputs.email_attachments is None
+
+    def test_dict_attachment_is_accepted(self):
+        inputs = GmailSenderInputs(
+            mail_subject="test",
+            email_attachments=[{"url": "https://example.com/report", "filename": "custom.pdf"}],
+        )
+
+        assert inputs.email_attachments
+        assert inputs.email_attachments[0].url == "https://example.com/report"
+        assert inputs.email_attachments[0].filename == "custom.pdf"
 
 
 class TestFromEmailField:
@@ -68,6 +91,31 @@ class TestCreateRawMailMessageFromHeader:
     def test_from_header_uses_alias_when_provided(self, _mock):
         raw = create_raw_mail_message(subject="hi", sender_email_address="alias@example.com", body="body")
         assert self._decode_from(raw) == "alias@example.com"
+
+
+class TestCreateRawMailMessageAttachments:
+    def _decode_message(self, raw: dict):
+        return message_from_bytes(base64.urlsafe_b64decode(raw["raw"]))
+
+    def test_dict_attachment_uses_custom_filename(self, tmp_path, monkeypatch):
+        def fake_download_to_local(url: str, output_dir, filename: str | None = None):
+            path = output_dir / (filename or "downloaded.txt")
+            path.write_text(f"downloaded from {url}")
+            return path
+
+        monkeypatch.setattr("engine.integrations.gmail.gmail_utils.get_output_dir", lambda: tmp_path)
+        monkeypatch.setattr("engine.integrations.gmail.gmail_utils.download_to_local", fake_download_to_local)
+
+        raw = create_raw_mail_message(
+            subject="hi",
+            sender_email_address="primary@example.com",
+            body="body",
+            attachments=[EmailAttachment(url="https://example.com/generated", filename="custom-name.txt")],
+        )
+
+        message = self._decode_message(raw)
+        attachments = [part for part in message.walk() if part.get_content_disposition() == "attachment"]
+        assert [part.get_filename() for part in attachments] == ["custom-name.txt"]
 
 
 class TestGmailNeverdropSender:

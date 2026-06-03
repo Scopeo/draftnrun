@@ -12,6 +12,7 @@ import GenericConfirmDialog from '@/components/dialogs/GenericConfirmDialog.vue'
 import ParameterLabel from '@/components/shared/ParameterLabel.vue'
 import ComponentSelectionCarousel from '@/components/studio/components/ComponentSelectionCarousel.vue'
 import EditSidebar from '@/components/studio/components/EditSidebar.vue'
+import AttachmentListInput from '@/components/studio/inputs/AttachmentListInput.vue'
 import StudioShell from '@/components/studio/StudioShell.vue'
 import { isProviderLogo } from '@/components/studio/utils/node-factory.utils'
 import { type Agent, useCurrentAgent } from '@/composables/queries/useAgentsQuery'
@@ -389,6 +390,18 @@ const getComponentConfig = (param: any) => {
   const uiComponent = param.ui_component || 'TextField'
   const uiProps = param.ui_component_properties || {}
   const label = getParamLabel(param, uiProps)
+
+  if (param.name === 'email_attachments') {
+    return {
+      component: AttachmentListInput,
+      props: {
+        label,
+        description: uiProps.description || param.description,
+        readonly: !isDraftMode.value,
+        color: 'primary',
+      },
+    }
+  }
 
   switch (uiComponent) {
     case 'Checkbox':

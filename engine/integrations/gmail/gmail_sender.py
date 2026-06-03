@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 from typing import Iterable, Optional, Type
 from uuid import UUID
 
@@ -13,10 +12,12 @@ from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.integrations.gmail.gmail_utils import create_raw_mail_message
 from engine.integrations.utils import (
+    AttachmentInput,
+    EmailAttachment,
     get_gmail_sender_service,
     get_google_user_email,
     get_oauth_access_token,
-    normalize_str_list,
+    normalize_email_attachments,
 )
 from engine.trace.trace_manager import TraceManager
 from settings import settings
@@ -70,8 +71,22 @@ GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
         },
         "email_attachments": {
             "type": "array",
-            "items": {"type": "string"},
-            "description": ("List of file paths to attach to the email."),
+            "items": {
+                "oneOf": [
+                    {"type": "string"},
+                    {
+                        "type": "object",
+                        "properties": {
+                            "url": {"type": "string"},
+                            "filename": {"type": "string"},
+                        },
+                        "required": ["url", "filename"],
+                    },
+                ],
+            },
+            "description": (
+                "List of file paths or attachment objects with url and filename to attach to the email."
+            ),
         },
     },
     required_tool_properties=["mail_subject"],
@@ -167,9 +182,9 @@ class GmailSenderInputs(BaseModel):
             "parameter_order_within_group": 3,
         },
     )
-    email_attachments: Optional[list[str]] = Field(
+    email_attachments: Optional[list[str | EmailAttachment]] = Field(
         default=None,
-        description="List of file paths to attach to the email.",
+        description="List of file paths or attachment objects with url and filename to attach to the email.",
         json_schema_extra={
             "is_tool_input": True,
             "display_order": 7,
@@ -188,7 +203,7 @@ class GmailSenderInputs(BaseModel):
     @field_validator("email_attachments", mode="before")
     @classmethod
     def validate_email_attachments(cls, v):
-        return normalize_str_list(v)
+        return normalize_email_attachments(v)
 
 
 class GmailNeverdropSenderInputs(GmailSenderInputs):
@@ -257,7 +272,7 @@ class GmailSender(Component):
         email_recipients: Optional[list[str]] = None,
         cc: Optional[list[str]] = None,
         bcc: Optional[list[str]] = None,
-        attachments: Optional[Iterable[str | Path]] = None,
+        attachments: Optional[Iterable[AttachmentInput]] = None,
         html_body: Optional[str] = None,
     ):
         try:
@@ -286,7 +301,7 @@ class GmailSender(Component):
         email_recipients: Optional[list[str]] = None,
         cc: Optional[list[str]] = None,
         bcc: Optional[list[str]] = None,
-        attachments: Optional[Iterable[str | Path]] = None,
+        attachments: Optional[Iterable[AttachmentInput]] = None,
         html_body: Optional[str] = None,
     ):
         try:

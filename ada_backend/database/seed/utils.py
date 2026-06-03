@@ -105,6 +105,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "gmail_sender": UUID("af96bb40-c9ea-4851-a663-f0e64363fcb2"),
     "gmail_sender_v2": UUID("c6d0006f-dbff-472b-bdff-e64cec48f289"),
     "gmail_sender_v3": UUID("b0475ed4-c122-46cc-8d10-13e4168765f8"),
+    "gmail_sender_v4": UUID("b6493f99-fc50-43eb-968b-263de3652a89"),
     "gmail_neverdrop_sender": UUID("78b85445-5a79-4ecd-8c31-f849b0b35d9a"),
     "python_code_runner": UUID("e2b00000-0000-1111-2222-333333333333"),
     "terminal_command_runner": UUID("e2b10000-1111-2222-3333-444444444444"),
@@ -130,7 +131,9 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "router": UUID("9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a"),
     "categorizer": UUID("c4a1e2f3-5d6b-4c7a-8e9f-1a2b3c4d5e6f"),
     "outlook_sender": UUID("6e3b9e9b-ab98-4189-88b7-41b8bf2aa07c"),
+    "outlook_sender_v2": UUID("e51ff5fe-150a-45bf-a595-4b4eec88ff98"),
     "mail_sender": UUID("ced15521-e358-4b57-a9ac-47672dd1657b"),
+    "mail_sender_v2": UUID("de791f12-380c-4991-8a92-7740d946f7eb"),
     "scorer": UUID("f1a2b3c4-d5e6-7890-abcd-ef1234567892"),
     "outlook_calendar_mcp_tool": UUID("3585dacd-2088-4069-99c8-40049026d4ac"),
 }

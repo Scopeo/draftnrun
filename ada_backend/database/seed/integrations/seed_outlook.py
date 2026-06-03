@@ -100,6 +100,56 @@ def seed_outlook_components(session: Session):
         component_version_id=outlook_sender_version.id,
     )
 
+    outlook_sender_v2_version = db.ComponentVersion(
+        id=COMPONENT_VERSION_UUIDS["outlook_sender_v2"],
+        component_id=COMPONENT_UUIDS["outlook_sender"],
+        version_tag="0.0.2",
+        release_stage=db.ReleaseStage.INTERNAL,
+        description="A component to send emails using Microsoft Outlook with named URL attachments.",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["outlook_sender_tool_description"],
+    )
+    upsert_component_versions(session, [outlook_sender_v2_version])
+
+    outlook_sender_v2_parameter_definitions = [
+        ComponentParameterDefinition(
+            id=UUID("7e6d9be3-cd00-475c-85ac-7c0653f635db"),
+            component_version_id=outlook_sender_v2_version.id,
+            name="oauth_connection_id",
+            type=ParameterType.STRING,
+            nullable=True,
+            display_order=0,
+            parameter_order_within_group=0,
+            ui_component=UIComponent.OAUTH_CONNECTION,
+            ui_component_properties=UIComponentProperties(
+                label="Outlook Connection",
+                description="Select your authorized Microsoft Outlook account connection",
+                provider=OAuthProvider.OUTLOOK.value,
+                icon="custom-microsoft-outlook",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        ),
+        ComponentParameterDefinition(
+            id=UUID("472c054a-a029-49e6-86be-cc0e53844f6f"),
+            component_version_id=outlook_sender_v2_version.id,
+            name="save_as_draft",
+            type=ParameterType.BOOLEAN,
+            nullable=False,
+            default=True,
+            ui_component=UIComponent.CHECKBOX,
+            ui_component_properties=UIComponentProperties(
+                label="Save as Draft",
+                description="If checked, the email will be saved as a draft instead of being sent immediately.",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        ),
+    ]
+    upsert_components_parameter_definitions(session, outlook_sender_v2_parameter_definitions)
+
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=outlook_sender_v2_version.component_id,
+        release_stage=outlook_sender_v2_version.release_stage,
+        component_version_id=outlook_sender_v2_version.id,
+    )
+
     upsert_component_categories(
         session=session,
         component_id=outlook_sender_component.id,
@@ -139,6 +189,21 @@ def seed_outlook_parameter_groups(session: Session):
         ),
         db.ComponentParameterGroup(
             component_version_id=COMPONENT_VERSION_UUIDS["outlook_sender"],
+            parameter_group_id=OUTLOOK_PARAMETER_GROUP_UUIDS["attachments"],
+            group_order_within_component=3,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["outlook_sender_v2"],
+            parameter_group_id=OUTLOOK_PARAMETER_GROUP_UUIDS["email_content"],
+            group_order_within_component=1,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["outlook_sender_v2"],
+            parameter_group_id=OUTLOOK_PARAMETER_GROUP_UUIDS["recipients"],
+            group_order_within_component=2,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["outlook_sender_v2"],
             parameter_group_id=OUTLOOK_PARAMETER_GROUP_UUIDS["attachments"],
             group_order_within_component=3,
         ),
