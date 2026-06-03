@@ -28,7 +28,7 @@ const model = defineModel<AttachmentValue[] | undefined>({ default: () => [] })
 const normalizedModel = computed<AttachmentObject[]>({
   get: () => (Array.isArray(model.value) ? model.value.map(normalizeAttachment) : []),
   set: value => {
-    model.value = value.filter(attachment => attachment.url || attachment.filename)
+    model.value = value.filter(attachment => attachment.url)
   },
 })
 
@@ -116,7 +116,7 @@ function inferFilename(value: string): string {
   </div>
 </template>
 
-<style scoped>
+<style lang="scss" scoped>
 .attachment-row {
   background: rgba(var(--v-theme-surface), 0.6);
 }

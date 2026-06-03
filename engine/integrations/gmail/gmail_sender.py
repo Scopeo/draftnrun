@@ -72,20 +72,16 @@ GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
         "email_attachments": {
             "type": "array",
             "items": {
-                "oneOf": [
-                    {"type": "string"},
-                    {
-                        "type": "object",
-                        "properties": {
-                            "url": {"type": "string"},
-                            "filename": {"type": "string"},
-                        },
-                        "required": ["url", "filename"],
-                    },
-                ],
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string"},
+                    "path": {"type": "string"},
+                    "filename": {"type": "string"},
+                },
+                "required": ["filename"],
             },
             "description": (
-                "List of file paths or attachment objects with url and filename to attach to the email."
+                "List of attachment objects. Each item must include filename and either url or path."
             ),
         },
     },
@@ -182,9 +178,9 @@ class GmailSenderInputs(BaseModel):
             "parameter_order_within_group": 3,
         },
     )
-    email_attachments: Optional[list[str | EmailAttachment]] = Field(
-        default=None,
-        description="List of file paths or attachment objects with url and filename to attach to the email.",
+    email_attachments: list[EmailAttachment] = Field(
+        default_factory=list,
+        description="List of attachment objects. Each item must include filename and either url or path.",
         json_schema_extra={
             "is_tool_input": True,
             "display_order": 7,

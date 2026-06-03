@@ -7,6 +7,7 @@ from typing import Iterable, Optional
 
 from engine.integrations.utils import (
     AttachmentInput,
+    EmailAttachment,
     download_to_local,
     get_attachment_filename,
     get_attachment_source,
@@ -18,16 +19,22 @@ logger = logging.getLogger(__name__)
 
 
 def _ensure_paths(attachments: Optional[Iterable[AttachmentInput]]) -> list[tuple[Path, str]]:
-    output_dir = get_output_dir()
+    output_dir = get_output_dir().resolve()
     if not attachments:
         return []
     paths: list[tuple[Path, str]] = []
     for att in attachments:
         source = get_attachment_source(att)
         if is_url(source):
-            local_path = download_to_local(source, output_dir, get_attachment_filename(att, Path(source)))
+            filename = get_attachment_filename(att, Path(source)) if isinstance(att, EmailAttachment) else None
+            local_path = download_to_local(source, output_dir, filename).resolve()
         else:
-            local_path = output_dir / Path(source)
+            attachment_path = Path(source)
+            if attachment_path.is_absolute():
+                raise ValueError(f"Attachment path escapes the output directory: {source}")
+            local_path = (output_dir / attachment_path).resolve(strict=False)
+            if not local_path.is_relative_to(output_dir):
+                raise ValueError(f"Attachment path escapes the output directory: {source}")
         if not local_path.is_file():
             raise FileNotFoundError(f"Attachment not found or not a file: {local_path}")
         paths.append((local_path, get_attachment_filename(att, local_path)))

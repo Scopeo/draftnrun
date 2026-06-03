@@ -5,10 +5,19 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from engine.components.types import ComponentAttributes
-from engine.integrations.gmail.gmail_sender import GMAIL_NEVERDROP_SENDER_TOOL_DESCRIPTION, GmailSenderInputs
+from engine.integrations.gmail.gmail_sender import (
+    GMAIL_NEVERDROP_SENDER_TOOL_DESCRIPTION,
+    GMAIL_SENDER_TOOL_DESCRIPTION,
+    GmailSenderInputs,
+)
 from engine.integrations.gmail.gmail_sender_v2 import GmailNeverdropSender
 from engine.integrations.gmail.gmail_utils import create_raw_mail_message
-from engine.integrations.utils import EmailAttachment, normalize_email_attachments, normalize_str_list
+from engine.integrations.utils import (
+    EmailAttachment,
+    download_to_local,
+    normalize_email_attachments,
+    normalize_str_list,
+)
 
 
 class TestNormalizeStrList:
@@ -29,32 +38,36 @@ class TestNormalizeStrList:
 
 
 class TestNormalizeEmailAttachments:
-    def test_list_of_strings_passes_through(self):
-        assert normalize_email_attachments(["file.pdf"]) == ["file.pdf"]
+    def test_list_of_strings_converts_to_attachment_models(self):
+        assert normalize_email_attachments(["file.pdf"]) == [EmailAttachment(path="file.pdf", filename="file.pdf")]
 
-    def test_none_passes_through(self):
-        assert normalize_email_attachments(None) is None
+    def test_none_becomes_empty_list(self):
+        assert normalize_email_attachments(None) == []
 
     def test_dict_attachment_is_preserved(self):
         attachments = normalize_email_attachments([{"url": "https://example.com/report", "filename": "report.pdf"}])
 
         assert attachments == [EmailAttachment(url="https://example.com/report", filename="report.pdf")]
 
-    def test_dict_attachment_requires_url_and_filename(self):
-        with pytest.raises(ValueError, match="url"):
+    def test_dict_attachment_requires_filename(self):
+        with pytest.raises(ValueError, match="filename"):
             normalize_email_attachments([{"url": "https://example.com/report"}])
+
+    def test_dict_attachment_requires_url_or_path(self):
+        with pytest.raises(ValueError, match="url.*path"):
+            normalize_email_attachments([{"filename": "report.pdf"}])
 
 
 class TestGmailSenderInputsValidation:
     """Regression: email_attachments uses normalize_email_attachments via field_validator."""
 
-    def test_list_of_strings_passes_through(self):
+    def test_list_of_strings_is_accepted(self):
         inputs = GmailSenderInputs(mail_subject="test", email_attachments=["file.pdf"])
-        assert inputs.email_attachments == ["file.pdf"]
+        assert inputs.email_attachments == [EmailAttachment(path="file.pdf", filename="file.pdf")]
 
-    def test_none_stays_none(self):
+    def test_none_becomes_empty_list(self):
         inputs = GmailSenderInputs(mail_subject="test", email_attachments=None)
-        assert inputs.email_attachments is None
+        assert inputs.email_attachments == []
 
     def test_dict_attachment_is_accepted(self):
         inputs = GmailSenderInputs(
@@ -65,6 +78,34 @@ class TestGmailSenderInputsValidation:
         assert inputs.email_attachments
         assert inputs.email_attachments[0].url == "https://example.com/report"
         assert inputs.email_attachments[0].filename == "custom.pdf"
+
+    def test_path_attachment_is_accepted(self):
+        inputs = GmailSenderInputs(
+            mail_subject="test",
+            email_attachments=[{"path": "report.pdf", "filename": "custom.pdf"}],
+        )
+
+        assert inputs.email_attachments
+        assert inputs.email_attachments[0].path == "report.pdf"
+        assert inputs.email_attachments[0].filename == "custom.pdf"
+
+    def test_attachment_tool_schema_does_not_use_unions(self):
+        schema = GMAIL_SENDER_TOOL_DESCRIPTION.tool_properties["email_attachments"]["items"]
+
+        assert "oneOf" not in schema
+        assert "anyOf" not in schema
+        assert schema["type"] == "object"
+        assert schema["properties"]["url"]["type"] == "string"
+        assert schema["properties"]["path"]["type"] == "string"
+        assert schema["properties"]["filename"]["type"] == "string"
+
+    def test_attachment_input_schema_does_not_use_unions(self):
+        schema = GmailSenderInputs.model_json_schema()["properties"]["email_attachments"]
+
+        assert "oneOf" not in schema
+        assert "anyOf" not in schema
+        assert "oneOf" not in schema["items"]
+        assert "anyOf" not in schema["items"]
 
 
 class TestFromEmailField:
@@ -116,6 +157,49 @@ class TestCreateRawMailMessageAttachments:
         message = self._decode_message(raw)
         attachments = [part for part in message.walk() if part.get_content_disposition() == "attachment"]
         assert [part.get_filename() for part in attachments] == ["custom-name.txt"]
+
+    def test_plain_url_attachment_uses_url_path_filename_without_query(self, tmp_path, monkeypatch):
+        captured_filenames: list[str | None] = []
+
+        def fake_download_to_local(url: str, output_dir, filename: str | None = None):
+            captured_filenames.append(filename)
+            path = output_dir / "downloaded.txt"
+            path.write_text(f"downloaded from {url}")
+            return path
+
+        monkeypatch.setattr("engine.integrations.gmail.gmail_utils.get_output_dir", lambda: tmp_path)
+        monkeypatch.setattr("engine.integrations.gmail.gmail_utils.download_to_local", fake_download_to_local)
+
+        create_raw_mail_message(
+            subject="hi",
+            sender_email_address="primary@example.com",
+            body="body",
+            attachments=["https://example.com/report.txt?signature=secret"],
+        )
+
+        assert captured_filenames == [None]
+
+    def test_local_attachment_rejects_path_traversal(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("engine.integrations.gmail.gmail_utils.get_output_dir", lambda: tmp_path)
+
+        with pytest.raises(ValueError, match="escapes"):
+            create_raw_mail_message(
+                subject="hi",
+                sender_email_address="primary@example.com",
+                body="body",
+                attachments=["../secret.txt"],
+            )
+
+
+class TestDownloadToLocal:
+    def test_rejects_private_resolved_addresses(self, tmp_path, monkeypatch):
+        def fake_getaddrinfo(hostname, port, type):
+            return [(None, None, None, "", ("127.0.0.1", 0))]
+
+        monkeypatch.setattr("engine.integrations.utils.socket.getaddrinfo", fake_getaddrinfo)
+
+        with pytest.raises(ValueError, match="disallowed"):
+            download_to_local("https://example.com/report.txt", tmp_path)
 
 
 class TestGmailNeverdropSender:

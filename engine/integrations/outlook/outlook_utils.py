@@ -9,6 +9,7 @@ import httpx
 from engine.integrations.outlook.errors import AttachmentNotFoundError, AttachmentPathError, AttachmentTooLargeError
 from engine.integrations.utils import (
     AttachmentInput,
+    EmailAttachment,
     download_to_local,
     get_attachment_filename,
     get_attachment_source,
@@ -31,10 +32,13 @@ def _ensure_paths(attachments: Optional[Iterable[AttachmentInput]]) -> list[tupl
     for attachment in attachments:
         source = get_attachment_source(attachment)
         if is_url(source):
+            filename = (
+                get_attachment_filename(attachment, Path(source)) if isinstance(attachment, EmailAttachment) else None
+            )
             local_path = download_to_local(
                 source,
                 output_dir,
-                get_attachment_filename(attachment, Path(source)),
+                filename,
             ).resolve()
         else:
             attachment_path = Path(source)

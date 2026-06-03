@@ -5,7 +5,12 @@ from pydantic import SecretStr
 
 from engine.components.types import ComponentAttributes
 from engine.integrations.gmail.gmail_sender import GmailSenderInputs
-from engine.integrations.mail_sender import MailSender, MailSenderConfigurationError, MailSenderOutputs
+from engine.integrations.mail_sender import (
+    MAIL_SENDER_TOOL_DESCRIPTION,
+    MailSender,
+    MailSenderConfigurationError,
+    MailSenderOutputs,
+)
 
 
 @pytest.fixture
@@ -46,6 +51,17 @@ def test_is_available_both_connected(component_attrs: ComponentAttributes):
         outlook_access_token=SecretStr("o"),
     )
     assert sender.is_available()
+
+
+def test_attachment_tool_schema_does_not_use_unions():
+    schema = MAIL_SENDER_TOOL_DESCRIPTION.tool_properties["email_attachments"]["items"]
+
+    assert "oneOf" not in schema
+    assert "anyOf" not in schema
+    assert schema["type"] == "object"
+    assert schema["properties"]["url"]["type"] == "string"
+    assert schema["properties"]["path"]["type"] == "string"
+    assert schema["properties"]["filename"]["type"] == "string"
 
 
 @pytest.mark.asyncio
