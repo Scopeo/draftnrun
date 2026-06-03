@@ -43,7 +43,7 @@ MAIL_SENDER_PARAMETER_GROUP_UUIDS: dict[str, UUID] = {
 def seed_mail_sender_components(session: Session):
     mail_sender_component = Component(
         id=COMPONENT_UUIDS["mail_sender"],
-        name="Email Sender",
+        name="NeverDrop Email Sender",
         is_agent=True,
         function_callable=True,
         can_use_function_calling=False,
