@@ -571,7 +571,23 @@ def create_factory_registry() -> FactoryRegistry:
     )
 
     registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["gmail_sender_v4"],
+        factory=OAuthComponentFactory(
+            entity_class=GmailSenderV2,
+            oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.GMAIL)],
+        ),
+    )
+
+    registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["gmail_neverdrop_sender"],
+        factory=OAuthComponentFactory(
+            entity_class=GmailNeverdropSender,
+            oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.GMAIL_NEVERDROP)],
+        ),
+    )
+
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["gmail_neverdrop_sender_v2"],
         factory=OAuthComponentFactory(
             entity_class=GmailNeverdropSender,
             oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.GMAIL_NEVERDROP)],
@@ -587,7 +603,34 @@ def create_factory_registry() -> FactoryRegistry:
     )
 
     registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["outlook_sender_v2"],
+        factory=OAuthComponentFactory(
+            entity_class=OutlookSender,
+            oauth_bindings=[OAuthBinding(provider_config_key=OAuthProvider.OUTLOOK)],
+        ),
+    )
+
+    registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["mail_sender"],
+        factory=OAuthComponentFactory(
+            entity_class=MailSender,
+            oauth_bindings=[
+                OAuthBinding(
+                    param_name="gmail_oauth_connection_id",
+                    provider_config_key=OAuthProvider.GMAIL,
+                    target_param_name="gmail_access_token",
+                ),
+                OAuthBinding(
+                    param_name="outlook_oauth_connection_id",
+                    provider_config_key=OAuthProvider.OUTLOOK,
+                    target_param_name="outlook_access_token",
+                ),
+            ],
+        ),
+    )
+
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["mail_sender_v2"],
         factory=OAuthComponentFactory(
             entity_class=MailSender,
             oauth_bindings=[

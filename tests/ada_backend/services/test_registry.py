@@ -8,8 +8,9 @@ from engine.components.tools.google_calendar_mcp_tool import GoogleCalendarMCPTo
 from engine.components.tools.google_contacts_mcp_tool import GoogleContactsMCPTool
 from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import ComponentAttributes, ToolDescription
-from engine.integrations.gmail.gmail_sender_v2 import GmailNeverdropSender
+from engine.integrations.gmail.gmail_sender_v2 import GmailNeverdropSender, GmailSenderV2
 from engine.integrations.mail_sender import MailSender
+from engine.integrations.outlook.outlook_sender import OutlookSender
 from engine.integrations.providers import OAuthProvider
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_context import set_trace_manager
@@ -143,6 +144,50 @@ def test_mail_sender_registered():
             target_param_name="outlook_access_token",
         ),
     ]
+
+
+@pytest.mark.parametrize(
+    ("component_version_key", "entity_class", "oauth_bindings"),
+    [
+        (
+            "gmail_sender_v4",
+            GmailSenderV2,
+            [OAuthBinding(provider_config_key=OAuthProvider.GMAIL)],
+        ),
+        (
+            "gmail_neverdrop_sender_v2",
+            GmailNeverdropSender,
+            [OAuthBinding(provider_config_key=OAuthProvider.GMAIL_NEVERDROP)],
+        ),
+        (
+            "outlook_sender_v2",
+            OutlookSender,
+            [OAuthBinding(provider_config_key=OAuthProvider.OUTLOOK)],
+        ),
+        (
+            "mail_sender_v2",
+            MailSender,
+            [
+                OAuthBinding(
+                    param_name="gmail_oauth_connection_id",
+                    provider_config_key=OAuthProvider.GMAIL,
+                    target_param_name="gmail_access_token",
+                ),
+                OAuthBinding(
+                    param_name="outlook_oauth_connection_id",
+                    provider_config_key=OAuthProvider.OUTLOOK,
+                    target_param_name="outlook_access_token",
+                ),
+            ],
+        ),
+    ],
+)
+def test_new_sender_versions_registered(component_version_key, entity_class, oauth_bindings):
+    factory = FACTORY_REGISTRY.get(component_version_id=COMPONENT_VERSION_UUIDS[component_version_key])
+    assert factory is not None
+    assert isinstance(factory, OAuthComponentFactory)
+    assert factory.entity_class is entity_class
+    assert factory.oauth_bindings == oauth_bindings
 
 
 @pytest.mark.asyncio
