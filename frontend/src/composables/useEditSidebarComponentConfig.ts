@@ -6,7 +6,6 @@ import { VSlider } from 'vuetify/components/VSlider'
 import { VSwitch } from 'vuetify/components/VSwitch'
 import { VTextarea } from 'vuetify/components/VTextarea'
 import { VTextField } from 'vuetify/components/VTextField'
-import AttachmentListInput from '@/components/studio/inputs/AttachmentListInput.vue'
 import FieldExpressionInput from '@/components/studio/inputs/FieldExpressionInput.vue'
 import OAuthConnectionInput from '@/components/studio/inputs/OAuthConnectionInput.vue'
 import CategoriesBuilder from '@/components/studio/components/CategoriesBuilder.vue'
@@ -55,18 +54,6 @@ export function useEditSidebarComponentConfig(
   const getGraphNodesData = () => nodes.value.map(n => ({ id: n.id, ...n.data }))
 
   function getComponentConfig(param: SidebarParameter): ComponentConfig {
-    if (param.name === 'email_attachments') {
-      return {
-        component: AttachmentListInput,
-        props: {
-          label: param.ui_component_properties?.label || 'Attachments',
-          description: param.ui_component_properties?.description,
-          readonly: isReadOnlyMode.value || !!param.ui_component_properties?.readonly,
-          color: isWorker.value ? 'secondary' : 'primary',
-        },
-      }
-    }
-
     if (componentData.value?.component_id === '4c8f9e2d-1a3b-4567-8901-234567890abc' && param.name === 'project_id') {
       const projectId = formData.value.parameters[param.name]
       const projectName = projectId ? getProjectName(projectId) : null
