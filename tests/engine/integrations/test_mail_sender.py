@@ -3,9 +3,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
+from ada_backend.database.seed.seed_tool_description import (
+    LEGACY_EMAIL_ATTACHMENTS_PROPERTY,
+    _with_legacy_email_attachments,
+)
 from engine.components.types import ComponentAttributes
 from engine.integrations.gmail.gmail_sender import GmailSenderInputs
-from engine.integrations.mail_sender import MailSender, MailSenderConfigurationError, MailSenderOutputs
+from engine.integrations.mail_sender import (
+    MAIL_SENDER_TOOL_DESCRIPTION,
+    MailSender,
+    MailSenderConfigurationError,
+    MailSenderOutputs,
+)
 
 
 @pytest.fixture
@@ -46,6 +55,27 @@ def test_is_available_both_connected(component_attrs: ComponentAttributes):
         outlook_access_token=SecretStr("o"),
     )
     assert sender.is_available()
+
+
+def test_attachment_tool_schema_does_not_use_unions():
+    schema = MAIL_SENDER_TOOL_DESCRIPTION.tool_properties["email_attachments"]["items"]
+
+    assert "oneOf" not in schema
+    assert "anyOf" not in schema
+    assert schema["type"] == "object"
+    assert schema["properties"]["url"]["type"] == "string"
+    assert schema["properties"]["path"]["type"] == "string"
+    assert schema["properties"]["filename"]["type"] == "string"
+    assert schema["required"] == ["filename"]
+    assert schema["additionalProperties"] is False
+    assert schema["minProperties"] == 2
+    assert schema["maxProperties"] == 2
+
+
+def test_legacy_attachment_tool_schema_uses_string_items():
+    legacy_tool_description = _with_legacy_email_attachments(MAIL_SENDER_TOOL_DESCRIPTION)
+
+    assert legacy_tool_description.tool_properties["email_attachments"] == LEGACY_EMAIL_ATTACHMENTS_PROPERTY
 
 
 @pytest.mark.asyncio

@@ -1,20 +1,32 @@
+import ipaddress
+import json
 import logging
+import socket
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from uuid import UUID
 
 import httpx
 import requests
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from pydantic import BaseModel, model_validator
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.repositories.integration_repository import get_integration_secret, update_integration_secret
 
 LOGGER = logging.getLogger(__name__)
+
+_DOWNLOAD_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
+_MAX_DOWNLOAD_REDIRECTS = 5
+_DISALLOWED_DOWNLOAD_NETWORKS = (
+    ipaddress.ip_network("100.64.0.0/10"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("fe80::/10"),
+)
 
 
 def normalize_str_list(v: Any) -> Any:
@@ -34,21 +46,166 @@ def normalize_str_list(v: Any) -> Any:
     return v
 
 
+class EmailAttachment(BaseModel):
+    url: str = ""
+    path: str = ""
+    filename: str
+
+    @model_validator(mode="after")
+    def validate_source(self) -> "EmailAttachment":
+        self.url = self.url.strip()
+        self.path = self.path.strip()
+        self.filename = Path(self.filename.strip()).name
+        if not self.url and not self.path:
+            raise ValueError("Attachment must include either 'url' or 'path'.")
+        if self.url and self.path:
+            raise ValueError("Attachment must include exactly one of 'url' or 'path'.")
+        if not self.filename:
+            raise ValueError("Attachment must include a non-empty 'filename'.")
+        return self
+
+
+AttachmentInput = str | Path | EmailAttachment
+
+
+def normalize_email_attachments(v: Any) -> Any:
+    if v is None:
+        return []
+    if isinstance(v, str):
+        stripped_value = v.strip()
+        if stripped_value.startswith("["):
+            v = json.loads(stripped_value)
+        else:
+            v = [v]
+    if not isinstance(v, list):
+        return v
+    normalized: list[EmailAttachment] = []
+    for attachment in v:
+        if isinstance(attachment, EmailAttachment):
+            normalized.append(attachment)
+            continue
+        if isinstance(attachment, dict):
+            normalized.append(EmailAttachment.model_validate(attachment))
+            continue
+        source = str(attachment)
+        filename = _infer_attachment_filename(source)
+        if is_url(source):
+            normalized.append(EmailAttachment(url=source, filename=filename))
+        else:
+            normalized.append(EmailAttachment(path=source, filename=filename))
+    return normalized
+
+
+def get_attachment_source(attachment: AttachmentInput) -> str:
+    if isinstance(attachment, EmailAttachment):
+        return attachment.url or attachment.path
+    return str(attachment)
+
+
+def get_attachment_filename(attachment: AttachmentInput, local_path: Path) -> str:
+    if isinstance(attachment, EmailAttachment):
+        return Path(attachment.filename).name
+    return local_path.name
+
+
 def is_url(value: str) -> bool:
     return isinstance(value, str) and value.startswith(("http://", "https://"))
 
 
-def download_to_local(url: str, output_dir: Path) -> Path:
+def _infer_attachment_filename(source: str) -> str:
+    if is_url(source):
+        parsed = urlparse(source)
+        return Path(parsed.path).name or "attachment"
+    return Path(source).name
+
+
+def download_to_local(url: str, output_dir: Path, filename: str | None = None) -> Path:
+    _validate_download_url(url)
     parsed = urlparse(url)
-    filename = Path(parsed.path).name or "attachment"
-    path = output_dir / filename
+    resolved_filename = Path(filename).name if filename else Path(parsed.path).name or "attachment"
+    path = output_dir / resolved_filename
     LOGGER.info("Downloading attachment from URL to %s", path)
-    with httpx.stream("GET", url, follow_redirects=True) as resp:
-        resp.raise_for_status()
-        with path.open("wb") as f:
-            for chunk in resp.iter_bytes():
-                f.write(chunk)
+    with httpx.Client(timeout=_DOWNLOAD_TIMEOUT, follow_redirects=False) as client:
+        response = _open_validated_download_stream(client, url)
+        try:
+            response.raise_for_status()
+            with path.open("wb") as f:
+                for chunk in response.iter_bytes():
+                    f.write(chunk)
+        finally:
+            response.close()
     return path
+
+
+def _open_validated_download_stream(client: httpx.Client, url: str) -> httpx.Response:
+    current_url = url
+    for redirect_count in range(_MAX_DOWNLOAD_REDIRECTS + 1):
+        _validate_download_url(current_url)
+        request_url, headers, sni_hostname = _build_validated_download_request(current_url)
+        request = client.build_request("GET", request_url, headers=headers)
+        if sni_hostname:
+            request.extensions["sni_hostname"] = sni_hostname
+        response = client.send(request, stream=True)
+        if not response.is_redirect:
+            return response
+        location = response.headers.get("location")
+        response.close()
+        if not location:
+            raise ValueError(f"Attachment download redirect missing Location header: {current_url}")
+        if redirect_count == _MAX_DOWNLOAD_REDIRECTS:
+            raise ValueError(f"Attachment download exceeded {_MAX_DOWNLOAD_REDIRECTS} redirects: {url}")
+        current_url = urljoin(current_url, location)
+    raise ValueError(f"Attachment download exceeded {_MAX_DOWNLOAD_REDIRECTS} redirects: {url}")
+
+
+def _validate_download_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError(f"Unsupported attachment URL scheme: {parsed.scheme}")
+    if parsed.username or parsed.password:
+        raise ValueError("Attachment URLs must not contain credentials.")
+    if not parsed.hostname:
+        raise ValueError("Attachment URL must include a hostname.")
+
+
+def _build_validated_download_request(url: str) -> tuple[str, dict[str, str], str | None]:
+    parsed = urlparse(url)
+    if not parsed.hostname:
+        raise ValueError("Attachment URL must include a hostname.")
+    ip = _resolve_download_ip(parsed.hostname, parsed.port)
+    host = parsed.hostname if parsed.port is None else f"{parsed.hostname}:{parsed.port}"
+    request_host = f"[{ip}]" if isinstance(ip, ipaddress.IPv6Address) else str(ip)
+    port = f":{parsed.port}" if parsed.port is not None else ""
+    path = parsed.path or "/"
+    query = f"?{parsed.query}" if parsed.query else ""
+    sni_hostname = parsed.hostname if parsed.scheme == "https" else None
+    return f"{parsed.scheme}://{request_host}{port}{path}{query}", {"Host": host}, sni_hostname
+
+
+def _resolve_download_ip(hostname: str, port: int | None = None) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
+    try:
+        addr_infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as error:
+        raise ValueError(f"Could not resolve attachment URL hostname: {hostname}") from error
+    if not addr_infos:
+        raise ValueError(f"Could not resolve attachment URL hostname: {hostname}")
+    for addr_info in addr_infos:
+        ip = ipaddress.ip_address(addr_info[4][0])
+        if not _is_disallowed_download_ip(ip):
+            return ip
+    raise ValueError(f"Attachment URL resolves to a disallowed address: {addr_infos[0][4][0]}")
+
+
+def _is_disallowed_download_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+        or any(ip in network for network in _DISALLOWED_DOWNLOAD_NETWORKS)
+    )
 
 
 # TODO: Delete after full migration to Nango

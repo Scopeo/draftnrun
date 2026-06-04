@@ -57,8 +57,21 @@ MAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
         },
         "email_attachments": {
             "type": "array",
-            "items": {"type": "string"},
-            "description": "List of file paths to attach to the email.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string"},
+                    "path": {"type": "string"},
+                    "filename": {"type": "string"},
+                },
+                "required": ["filename"],
+                "additionalProperties": False,
+                "minProperties": 2,
+                "maxProperties": 2,
+            },
+            "description": (
+                "List of attachment objects. Each item must include filename and either url or path."
+            ),
         },
     },
     required_tool_properties=["mail_subject"],

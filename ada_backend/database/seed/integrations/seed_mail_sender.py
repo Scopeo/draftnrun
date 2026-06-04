@@ -43,7 +43,7 @@ MAIL_SENDER_PARAMETER_GROUP_UUIDS: dict[str, UUID] = {
 def seed_mail_sender_components(session: Session):
     mail_sender_component = Component(
         id=COMPONENT_UUIDS["mail_sender"],
-        name="Email Sender",
+        name="NeverDrop Email Sender",
         is_agent=True,
         function_callable=True,
         can_use_function_calling=False,
@@ -120,6 +120,61 @@ def seed_mail_sender_components(session: Session):
         component_version_id=mail_sender_version.id,
     )
 
+    mail_sender_v2_version = db.ComponentVersion(
+        id=COMPONENT_VERSION_UUIDS["mail_sender_v2"],
+        component_id=COMPONENT_UUIDS["mail_sender"],
+        version_tag="0.0.2",
+        release_stage=db.ReleaseStage.INTERNAL,
+        description="Send email via Gmail or Outlook with named URL attachments.",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["mail_sender_v2_tool_description"],
+    )
+    upsert_component_versions(session, [mail_sender_v2_version])
+
+    mail_sender_v2_parameter_definitions = [
+        ComponentParameterDefinition(
+            id=UUID("448f69d7-e0fc-4248-acaa-a44cfbbf8712"),
+            component_version_id=mail_sender_v2_version.id,
+            name="gmail_oauth_connection_id",
+            type=ParameterType.STRING,
+            nullable=True,
+            display_order=0,
+            parameter_group_id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["connection"],
+            parameter_order_within_group=0,
+            ui_component=UIComponent.EXCLUSIVE_OAUTH_CONNECTION,
+            ui_component_properties={
+                "label": "NeverDrop Gmail Connection",
+                "description": "Select a NeverDrop Gmail connection.",
+                "provider": OAuthProvider.GMAIL_NEVERDROP.value,
+                "icon": "logos-google-gmail",
+            },
+        ),
+        ComponentParameterDefinition(
+            id=UUID("6156b218-6ba0-42a7-9ebf-9b0f8e707b1d"),
+            component_version_id=mail_sender_v2_version.id,
+            name="outlook_oauth_connection_id",
+            type=ParameterType.STRING,
+            nullable=True,
+            display_order=1,
+            parameter_group_id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["connection"],
+            parameter_order_within_group=1,
+            ui_component=UIComponent.EXCLUSIVE_OAUTH_CONNECTION,
+            ui_component_properties={
+                "label": "Outlook Connection",
+                "description": "Select an Outlook connection.",
+                "provider": OAuthProvider.OUTLOOK.value,
+                "icon": "custom-microsoft-outlook",
+            },
+        ),
+    ]
+    upsert_components_parameter_definitions(session, mail_sender_v2_parameter_definitions)
+
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=mail_sender_v2_version.component_id,
+        release_stage=mail_sender_v2_version.release_stage,
+        component_version_id=mail_sender_v2_version.id,
+    )
+
     upsert_component_categories(
         session=session,
         component_id=mail_sender_component.id,
@@ -168,6 +223,26 @@ def seed_mail_sender_component_parameter_groups(session: Session):
         ),
         db.ComponentParameterGroup(
             component_version_id=COMPONENT_VERSION_UUIDS["mail_sender"],
+            parameter_group_id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["attachments"],
+            group_order_within_component=3,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["mail_sender_v2"],
+            parameter_group_id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["connection"],
+            group_order_within_component=0,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["mail_sender_v2"],
+            parameter_group_id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["email_content"],
+            group_order_within_component=1,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["mail_sender_v2"],
+            parameter_group_id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["recipients"],
+            group_order_within_component=2,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["mail_sender_v2"],
             parameter_group_id=MAIL_SENDER_PARAMETER_GROUP_UUIDS["attachments"],
             group_order_within_component=3,
         ),

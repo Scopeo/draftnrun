@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 from typing import Iterable, Optional, Type
 
 from googleapiclient.errors import HttpError
@@ -17,7 +16,7 @@ from engine.integrations.gmail.gmail_sender import (
     GmailSenderOutputs,
 )
 from engine.integrations.gmail.gmail_utils import create_raw_mail_message
-from engine.integrations.utils import get_gmail_sender_service, get_google_user_email
+from engine.integrations.utils import AttachmentInput, get_gmail_sender_service, get_google_user_email
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
@@ -91,7 +90,7 @@ class GmailSenderV2(Component):
         email_recipients: Optional[list[str]] = None,
         cc: Optional[list[str]] = None,
         bcc: Optional[list[str]] = None,
-        attachments: Optional[Iterable[str | Path]] = None,
+        attachments: Optional[Iterable[AttachmentInput]] = None,
         html_body: Optional[str] = None,
         sender_email: Optional[str] = None,
     ):
@@ -121,7 +120,7 @@ class GmailSenderV2(Component):
         email_recipients: Optional[list[str]] = None,
         cc: Optional[list[str]] = None,
         bcc: Optional[list[str]] = None,
-        attachments: Optional[Iterable[str | Path]] = None,
+        attachments: Optional[Iterable[AttachmentInput]] = None,
         html_body: Optional[str] = None,
         sender_email: Optional[str] = None,
     ):

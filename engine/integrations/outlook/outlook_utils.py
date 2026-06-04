@@ -7,7 +7,14 @@ from typing import Any, Iterable, Optional
 import httpx
 
 from engine.integrations.outlook.errors import AttachmentNotFoundError, AttachmentPathError, AttachmentTooLargeError
-from engine.integrations.utils import download_to_local, is_url
+from engine.integrations.utils import (
+    AttachmentInput,
+    EmailAttachment,
+    download_to_local,
+    get_attachment_filename,
+    get_attachment_source,
+    is_url,
+)
 from engine.temps_folder_utils import get_output_dir
 
 LOGGER = logging.getLogger(__name__)
@@ -17,25 +24,33 @@ GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
 _INLINE_ATTACHMENT_LIMIT_BYTES = 3 * 1024 * 1024  # 3 MB — Graph API inline attachment limit
 
 
-def _ensure_paths(attachments: Optional[Iterable[str | Path]]) -> list[Path]:
+def _ensure_paths(attachments: Optional[Iterable[AttachmentInput]]) -> list[tuple[Path, str]]:
     output_dir = get_output_dir().resolve()
     if not attachments:
         return []
-    paths: list[Path] = []
+    paths: list[tuple[Path, str]] = []
     for attachment in attachments:
-        if is_url(str(attachment)):
-            local_path = download_to_local(str(attachment), output_dir)
+        source = get_attachment_source(attachment)
+        if is_url(source):
+            filename = (
+                get_attachment_filename(attachment, Path(source)) if isinstance(attachment, EmailAttachment) else None
+            )
+            local_path = download_to_local(
+                source,
+                output_dir,
+                filename,
+            ).resolve()
         else:
-            attachment_path = Path(attachment)
+            attachment_path = Path(source)
             if attachment_path.is_absolute():
                 local_path = attachment_path.resolve()
             else:
                 local_path = (output_dir / attachment_path).resolve()
             if not local_path.is_relative_to(output_dir):
-                raise AttachmentPathError(str(attachment))
+                raise AttachmentPathError(source)
         if not local_path.is_file():
             raise AttachmentNotFoundError(str(local_path))
-        paths.append(local_path)
+        paths.append((local_path, get_attachment_filename(attachment, local_path)))
     return paths
 
 
@@ -45,18 +60,18 @@ def _build_recipients(emails: Optional[list[str]]) -> list[dict[str, Any]]:
     return [{"emailAddress": {"address": addr}} for addr in emails]
 
 
-def _build_attachments(attachments: Optional[Iterable[str | Path]]) -> list[dict[str, Any]]:
+def _build_attachments(attachments: Optional[Iterable[AttachmentInput]]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
-    for path in _ensure_paths(attachments):
+    for path, filename in _ensure_paths(attachments):
         file_size = path.stat().st_size
         if file_size >= _INLINE_ATTACHMENT_LIMIT_BYTES:
-            raise AttachmentTooLargeError(path.name, file_size, _INLINE_ATTACHMENT_LIMIT_BYTES)
-        mime, _ = mimetypes.guess_type(path.name)
+            raise AttachmentTooLargeError(filename, file_size, _INLINE_ATTACHMENT_LIMIT_BYTES)
+        mime, _ = mimetypes.guess_type(filename)
         content_type = mime or "application/octet-stream"
         data = path.read_bytes()
         result.append({
             "@odata.type": "#microsoft.graph.fileAttachment",
-            "name": path.name,
+            "name": filename,
             "contentType": content_type,
             "contentBytes": base64.b64encode(data).decode(),
         })
@@ -69,7 +84,7 @@ def build_graph_mail_payload(
     recipients: Optional[list[str]] = None,
     cc: Optional[list[str]] = None,
     bcc: Optional[list[str]] = None,
-    attachments: Optional[Iterable[str | Path]] = None,
+    attachments: Optional[Iterable[AttachmentInput]] = None,
     html_body: Optional[str] = None,
 ) -> dict[str, Any]:
     """Build a Microsoft Graph API message resource JSON payload."""

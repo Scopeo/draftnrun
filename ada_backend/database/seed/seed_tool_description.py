@@ -34,6 +34,12 @@ from engine.integrations.mail_sender import MAIL_SENDER_TOOL_DESCRIPTION
 from engine.integrations.outlook.outlook_sender import OUTLOOK_SENDER_TOOL_DESCRIPTION
 from engine.integrations.slack.slack_sender import SLACK_SENDER_TOOL_DESCRIPTION
 
+LEGACY_EMAIL_ATTACHMENTS_PROPERTY = {
+    "type": "array",
+    "items": {"type": "string"},
+    "description": "List of file paths or URLs to attach to the email.",
+}
+
 TOOL_DESCRIPTION_UUIDS = {
     "default_ai_agent_description": UUID("1a4d4098-c2b4-4078-96a6-0a8f9c7d018c"),
     "tavily_tool_description": UUID("768450eb-b07a-4efc-bbb9-48c9b1a9f556"),
@@ -46,7 +52,9 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_input_tool_description": UUID("5be22376-7d08-486b-a004-b495bae58f77"),
     "default_filter_tool_description": UUID("6cf33487-8e19-597c-b115-c5a6cbf69a88"),
     "gmail_sender_tool_description": UUID("c1d3aca1-5187-40c6-a350-e3b28b15c802"),
+    "gmail_sender_v4_tool_description": UUID("88ac0314-ca9f-41a0-8857-ac4918412499"),
     "gmail_neverdrop_sender_tool_description": UUID("a3db7517-b6db-4adc-8894-4de06087bdc6"),
+    "gmail_neverdrop_sender_v2_tool_description": UUID("dd339903-eae1-4159-99da-2b8f19f9d926"),
     "python_code_runner_tool_description": UUID("e2b11111-2222-3333-4444-555555555555"),
     "terminal_command_runner_tool_description": UUID("e2b11112-2222-3333-4444-555555555555"),
     "default_llm_call_tool_description": UUID("b91d418d-a67f-40b9-9266-b01ca202747d"),
@@ -65,11 +73,19 @@ TOOL_DESCRIPTION_UUIDS = {
     "google_contacts_neverdrop_mcp_tool_description": UUID("be12b440-a998-4786-82cc-5c5a4c3d3ad1"),
     "notion_neverdrop_mcp_tool_description": UUID("deb1f596-64d1-494d-a09c-dfb5c1211c30"),
     "outlook_sender_tool_description": UUID("31344b0e-4949-42b6-98a8-6b1dcec98f3c"),
+    "outlook_sender_v2_tool_description": UUID("33eaf1ec-a6e6-42da-991d-77d194014e0d"),
     "mail_sender_tool_description": UUID("7fe2178e-36c6-4195-aa5b-9a9178be70e8"),
+    "mail_sender_v2_tool_description": UUID("7bf8272e-1fff-4b18-a5c8-7d9e7a42e776"),
     "default_sql_tool_description": UUID("7a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d"),
     "scorer_tool_description": UUID("8f9d4c3e-7a2b-4e1d-9c8f-5b6a3d2e1f0b"),
     "outlook_calendar_mcp_tool_description": UUID("3b1d4b54-10ad-45d0-8051-7ad389b36378"),
 }
+
+
+def _with_legacy_email_attachments(tool_description):
+    legacy_tool_description = tool_description.model_copy(deep=True)
+    legacy_tool_description.tool_properties["email_attachments"] = LEGACY_EMAIL_ATTACHMENTS_PROPERTY
+    return legacy_tool_description
 
 
 def seed_tool_description(session: Session):
@@ -117,10 +133,18 @@ def seed_tool_description(session: Session):
     )
     gmail_sender_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["gmail_sender_tool_description"],
+        **_with_legacy_email_attachments(GMAIL_SENDER_TOOL_DESCRIPTION).model_dump(),
+    )
+    gmail_sender_v4_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["gmail_sender_v4_tool_description"],
         **GMAIL_SENDER_TOOL_DESCRIPTION.model_dump(),
     )
     gmail_neverdrop_sender_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["gmail_neverdrop_sender_tool_description"],
+        **_with_legacy_email_attachments(GMAIL_NEVERDROP_SENDER_TOOL_DESCRIPTION).model_dump(),
+    )
+    gmail_neverdrop_sender_v2_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["gmail_neverdrop_sender_v2_tool_description"],
         **GMAIL_NEVERDROP_SENDER_TOOL_DESCRIPTION.model_dump(),
     )
     slack_sender_tool_description = db.ToolDescription(
@@ -185,10 +209,18 @@ def seed_tool_description(session: Session):
     )
     outlook_sender_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["outlook_sender_tool_description"],
+        **_with_legacy_email_attachments(OUTLOOK_SENDER_TOOL_DESCRIPTION).model_dump(),
+    )
+    outlook_sender_v2_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["outlook_sender_v2_tool_description"],
         **OUTLOOK_SENDER_TOOL_DESCRIPTION.model_dump(),
     )
     mail_sender_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["mail_sender_tool_description"],
+        **_with_legacy_email_attachments(MAIL_SENDER_TOOL_DESCRIPTION).model_dump(),
+    )
+    mail_sender_v2_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["mail_sender_v2_tool_description"],
         **MAIL_SENDER_TOOL_DESCRIPTION.model_dump(),
     )
     default_sql_tool_description = db.ToolDescription(
@@ -217,7 +249,9 @@ def seed_tool_description(session: Session):
             default_start_tool_description,
             default_filter_tool_description,
             gmail_sender_tool_description,
+            gmail_sender_v4_tool_description,
             gmail_neverdrop_sender_tool_description,
+            gmail_neverdrop_sender_v2_tool_description,
             slack_sender_tool_description,
             python_code_runner_tool_description,
             terminal_command_runner_tool_description,
@@ -236,7 +270,9 @@ def seed_tool_description(session: Session):
             google_contacts_neverdrop_mcp_tool_description,
             notion_neverdrop_mcp_tool_description,
             outlook_sender_tool_description,
+            outlook_sender_v2_tool_description,
             mail_sender_tool_description,
+            mail_sender_v2_tool_description,
             default_sql_tool_description,
             scorer_tool_description,
             outlook_calendar_mcp_tool_description,
