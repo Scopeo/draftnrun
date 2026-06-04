@@ -146,6 +146,7 @@ const handleConnectionUpdate = (value: string | null) => {
         :label="selectedParam.ui_component_properties?.label || selectedParam.name"
         :description="selectedParam.ui_component_properties?.description"
         :readonly="readonly"
+        :auto-select-single-definition="false"
         @update:model-value="handleConnectionUpdate"
       />
     </div>

@@ -24,6 +24,7 @@ interface Props {
   label?: string
   description?: string
   readonly?: boolean
+  autoSelectSingleDefinition?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -31,6 +32,7 @@ const props = withDefaults(defineProps<Props>(), {
   label: 'OAuth Connection',
   description: 'Connect your account to continue',
   readonly: false,
+  autoSelectSingleDefinition: true,
 })
 
 const emit = defineEmits<{
@@ -96,7 +98,14 @@ watch(
   [providerDefinitions, isLoadingDefinitions],
   ([defs, loading]) => {
     const firstDefinitionId = defs?.[0]?.id
-    if (!loading && defs && defs.length === 1 && !props.modelValue && firstDefinitionId) {
+    if (
+      props.autoSelectSingleDefinition &&
+      !loading &&
+      defs &&
+      defs.length === 1 &&
+      !props.modelValue &&
+      firstDefinitionId
+    ) {
       emit('update:modelValue', firstDefinitionId)
     }
   },
