@@ -636,7 +636,7 @@ def create_factory_registry() -> FactoryRegistry:
             oauth_bindings=[
                 OAuthBinding(
                     param_name="gmail_oauth_connection_id",
-                    provider_config_key=OAuthProvider.GMAIL,
+                    provider_config_key=OAuthProvider.GMAIL_NEVERDROP,
                     target_param_name="gmail_access_token",
                 ),
                 OAuthBinding(

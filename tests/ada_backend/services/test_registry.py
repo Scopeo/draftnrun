@@ -170,7 +170,7 @@ def test_mail_sender_registered():
             [
                 OAuthBinding(
                     param_name="gmail_oauth_connection_id",
-                    provider_config_key=OAuthProvider.GMAIL,
+                    provider_config_key=OAuthProvider.GMAIL_NEVERDROP,
                     target_param_name="gmail_access_token",
                 ),
                 OAuthBinding(
@@ -222,4 +222,39 @@ async def test_mail_sender_factory_resolves_oauth_bindings(monkeypatch):
         ("outlook-definition-id", OAuthProvider.OUTLOOK),
     ]
     assert component._gmail_access_token.get_secret_value() == "gmail-access-token"
+    assert component._outlook_access_token.get_secret_value() == "outlook-access-token"
+
+
+@pytest.mark.asyncio
+async def test_mail_sender_v2_factory_resolves_neverdrop_gmail_oauth_binding(monkeypatch):
+    set_trace_manager(MockTraceManager(project_name="test_project"))
+
+    resolved_requests: list[tuple[str | None, str]] = []
+
+    async def fake_resolve_oauth_access_token(definition_id: str | None, provider_config_key: str) -> str | None:
+        resolved_requests.append((definition_id, provider_config_key))
+        tokens = {
+            OAuthProvider.GMAIL_NEVERDROP: "gmail-neverdrop-access-token",
+            OAuthProvider.OUTLOOK: "outlook-access-token",
+        }
+        return tokens[provider_config_key]
+
+    monkeypatch.setattr(
+        "ada_backend.services.entity_factory.resolve_oauth_access_token",
+        fake_resolve_oauth_access_token,
+    )
+
+    component = await FACTORY_REGISTRY.create(
+        component_version_id=COMPONENT_VERSION_UUIDS["mail_sender_v2"],
+        component_attributes=ComponentAttributes(component_instance_name="mail_sender_v2"),
+        gmail_oauth_connection_id="gmail-neverdrop-definition-id",
+        outlook_oauth_connection_id="outlook-definition-id",
+    )
+
+    assert isinstance(component, MailSender)
+    assert resolved_requests == [
+        ("gmail-neverdrop-definition-id", OAuthProvider.GMAIL_NEVERDROP),
+        ("outlook-definition-id", OAuthProvider.OUTLOOK),
+    ]
+    assert component._gmail_access_token.get_secret_value() == "gmail-neverdrop-access-token"
     assert component._outlook_access_token.get_secret_value() == "outlook-access-token"
