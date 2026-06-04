@@ -165,6 +165,20 @@ def seed_mail_sender_components(session: Session):
                 "icon": "custom-microsoft-outlook",
             },
         ),
+        ComponentParameterDefinition(
+            id=UUID("66e1d789-9cd3-4ab8-b6a5-0d4b3abad2ee"),
+            component_version_id=mail_sender_v2_version.id,
+            name="save_as_draft",
+            type=ParameterType.BOOLEAN,
+            nullable=False,
+            default=True,
+            ui_component=UIComponent.CHECKBOX,
+            ui_component_properties=UIComponentProperties(
+                type="checkbox",
+                label="Save as Draft",
+                description="If checked, the email will be saved as a draft instead of being sent immediately.",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        ),
     ]
     upsert_components_parameter_definitions(session, mail_sender_v2_parameter_definitions)
 
