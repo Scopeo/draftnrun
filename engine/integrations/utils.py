@@ -141,8 +141,11 @@ def _open_validated_download_stream(client: httpx.Client, url: str) -> httpx.Res
     current_url = url
     for redirect_count in range(_MAX_DOWNLOAD_REDIRECTS + 1):
         _validate_download_url(current_url)
-        request_url, headers = _build_validated_download_request(current_url)
-        response = client.send(client.build_request("GET", request_url, headers=headers), stream=True)
+        request_url, headers, sni_hostname = _build_validated_download_request(current_url)
+        request = client.build_request("GET", request_url, headers=headers)
+        if sni_hostname:
+            request.extensions["sni_hostname"] = sni_hostname
+        response = client.send(request, stream=True)
         if not response.is_redirect:
             return response
         location = response.headers.get("location")
@@ -165,7 +168,7 @@ def _validate_download_url(url: str) -> None:
         raise ValueError("Attachment URL must include a hostname.")
 
 
-def _build_validated_download_request(url: str) -> tuple[str, dict[str, str]]:
+def _build_validated_download_request(url: str) -> tuple[str, dict[str, str], str | None]:
     parsed = urlparse(url)
     if not parsed.hostname:
         raise ValueError("Attachment URL must include a hostname.")
@@ -175,7 +178,8 @@ def _build_validated_download_request(url: str) -> tuple[str, dict[str, str]]:
     port = f":{parsed.port}" if parsed.port is not None else ""
     path = parsed.path or "/"
     query = f"?{parsed.query}" if parsed.query else ""
-    return f"{parsed.scheme}://{request_host}{port}{path}{query}", {"Host": host}
+    sni_hostname = parsed.hostname if parsed.scheme == "https" else None
+    return f"{parsed.scheme}://{request_host}{port}{path}{query}", {"Host": host}, sni_hostname
 
 
 def _resolve_download_ip(hostname: str, port: int | None = None) -> ipaddress.IPv4Address | ipaddress.IPv6Address:

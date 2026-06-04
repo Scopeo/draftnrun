@@ -249,8 +249,8 @@ class TestDownloadToLocal:
         with pytest.raises(ValueError, match="disallowed"):
             download_to_local("https://example.com/report.txt", tmp_path)
 
-    def test_connects_to_validated_ip_with_original_host_header(self, tmp_path, monkeypatch):
-        captured_requests: list[tuple[str, str | None]] = []
+    def test_connects_to_validated_ip_with_original_host_header_and_sni(self, tmp_path, monkeypatch):
+        captured_requests: list[tuple[str, str | None, str | None]] = []
 
         def fake_getaddrinfo(hostname, port, type):
             return [(None, None, None, "", ("93.184.216.34", 0))]
@@ -268,7 +268,9 @@ class TestDownloadToLocal:
                 return None
 
         def fake_send(self, request, stream):
-            captured_requests.append((str(request.url), request.headers.get("host")))
+            captured_requests.append(
+                (str(request.url), request.headers.get("host"), request.extensions.get("sni_hostname"))
+            )
             return FakeResponse()
 
         monkeypatch.setattr("engine.integrations.utils.socket.getaddrinfo", fake_getaddrinfo)
@@ -276,7 +278,7 @@ class TestDownloadToLocal:
 
         download_to_local("https://example.com/report.txt?token=abc", tmp_path)
 
-        assert captured_requests == [("https://93.184.216.34/report.txt?token=abc", "example.com")]
+        assert captured_requests == [("https://93.184.216.34/report.txt?token=abc", "example.com", "example.com")]
 
 
 class TestGmailNeverdropSender:
