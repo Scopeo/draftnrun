@@ -61,9 +61,6 @@ const getTabIndex = (paramName: string, index: number) => {
 
 const selectProvider = (paramName: string) => {
   if (props.readonly) return
-  if (selectedParamName.value && selectedParamName.value !== paramName) {
-    props.formData[selectedParamName.value] = null
-  }
   selectedParamName.value = paramName
 }
 
@@ -95,8 +92,17 @@ const handleArrowNavigation = (event: KeyboardEvent, currentParamName: string) =
 }
 
 const handleConnectionUpdate = (value: string | null) => {
-  if (selectedParamName.value) {
-    props.formData[selectedParamName.value] = value
+  const paramName = selectedParamName.value
+  if (!paramName) return
+
+  props.formData[paramName] = value
+
+  if (value) {
+    props.parameters.forEach(param => {
+      if (param.name !== paramName) {
+        props.formData[param.name] = null
+      }
+    })
   }
 }
 </script>
