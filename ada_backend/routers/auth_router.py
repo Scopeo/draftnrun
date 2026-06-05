@@ -10,7 +10,7 @@ from supabase import Client, create_client
 
 from ada_backend.context import get_request_context
 from ada_backend.database.models import ApiKeyType
-from ada_backend.database.setup_db import get_db
+from ada_backend.database.setup_db import get_db, get_db_session
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.schemas.auth_schema import (
     ApiKeyCreatedResponse,
@@ -402,10 +402,15 @@ async def delete_api_key_route(
 
 async def verify_api_key_dependency(
     x_api_key: str = Header(..., alias="X-API-Key"),
-    session: Session = Depends(get_db),
 ) -> VerifiedApiKey:
     """
     Dependency to verify an API key from the 'X-API-Key' header.
+
+    Uses a short-lived DB session (not ``Depends(get_db)``) so the connection is returned to the
+    pool right after the key lookup. This dependency guards the long-running agent-run endpoints;
+    with a request-scoped session the connection stayed checked out (idle-in-transaction on the
+    org_api_keys lookup) for the entire run, so under concurrency every in-flight request pinned a
+    pool connection and exhausted the pool, crash-looping the API (DRA-1313).
     """
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
@@ -413,7 +418,8 @@ async def verify_api_key_dependency(
     cleaned_x_api_key = x_api_key.replace("\\n", "\n").strip('"')
 
     try:
-        return verify_api_key(session, private_key=cleaned_x_api_key)
+        with get_db_session() as session:
+            return verify_api_key(session, private_key=cleaned_x_api_key)
     except ValueError as e:
         LOGGER.error("API key verification failed", exc_info=True)
         raise HTTPException(status_code=401, detail="Invalid API key") from e
@@ -534,7 +540,6 @@ def user_has_access_to_organization_xor_verify_api_key(allowed_roles: set[str]):
         organization_id: UUID,
         authorization: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
         x_api_key: str | None = Header(None, alias="X-API-Key"),
-        session: Session = Depends(get_db),
     ) -> AuthenticatedEntity:
         """Flexible authentication: tries user auth first, falls back to API key auth."""
 
@@ -565,7 +570,7 @@ def user_has_access_to_organization_xor_verify_api_key(allowed_roles: set[str]):
 
         if x_api_key:
             try:
-                verified_api_key = await verify_api_key_dependency(x_api_key=x_api_key, session=session)
+                verified_api_key = await verify_api_key_dependency(x_api_key=x_api_key)
                 if verified_api_key.organization_id != organization_id:
                     LOGGER.exception(
                         "API Key is for organization %s => access to organization %s denied",
