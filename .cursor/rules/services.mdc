@@ -16,4 +16,5 @@ globs:
 - Never log full parameter dicts after `replace_secret_placeholders()`; log only parameter names (`list(params.keys())`). Apply the same rule to structured `extra=` logger kwargs.
 - Prefer UUID-typed identifiers in service-facing schemas and payload models; only stringify UUIDs at API/JSON boundaries.
 - Prefer typed schemas/models for service return payloads; avoid untyped `dict` returns when a stable shape exists.
+- When generating storage keys with namespace prefixes (for example, `organization_id/...`), sanitize only the leaf filename segment and preserve path separators required for the namespace.
 - See `ada_backend/docs/` for domain-specific documentation.

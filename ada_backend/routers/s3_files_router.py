@@ -1,6 +1,6 @@
 import logging
 from typing import Annotated, Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
@@ -11,15 +11,35 @@ from ada_backend.routers.auth_router import (
 )
 from ada_backend.schemas.auth_schema import AuthenticatedEntity, SupabaseUser
 from ada_backend.schemas.ingestion_task_schema import S3UploadedInformation
-from ada_backend.schemas.s3_file_schema import S3UploadURL, UploadFileRequest
+from ada_backend.schemas.s3_file_schema import (
+    AbortMultipartRequest,
+    CompleteMultipartRequest,
+    MultipartInitRequest,
+    MultipartInitResponse,
+    PresignedPartURL,
+    PresignPartRequest,
+    S3UploadURL,
+    UploadFileRequest,
+)
 from ada_backend.services.s3_files_service import (
+    abort_multipart_upload,
+    complete_multipart_upload,
     delete_file_from_s3,
+    generate_presigned_part_urls,
     generate_s3_upload_presigned_urls_service,
-    upload_file_to_s3,
+    init_multipart_upload,
+    upload_organization_file_to_s3,
 )
 
 router = APIRouter(tags=["S3 File Uploads"])
 LOGGER = logging.getLogger(__name__)
+
+
+def _validate_organization_key(organization_id: UUID, key: str) -> None:
+    expected_prefix = f"{organization_id}/"
+    sanitized_expected_prefix = expected_prefix.replace("-", "_")
+    if not (key.startswith(expected_prefix) or key.startswith(sanitized_expected_prefix)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="S3 key does not belong to organization")
 
 
 @router.post(
@@ -67,8 +87,13 @@ async def upload_files(
     try:
         for file in files:
             content_bytes = await file.read()
-            s3_filename = f"{organization_id}/{uuid4()}_{file.filename}"
-            uploaded_files.append(upload_file_to_s3(file_name=s3_filename, byte_content=content_bytes))
+            uploaded_files.append(
+                upload_organization_file_to_s3(
+                    organization_id=organization_id,
+                    filename=file.filename,
+                    byte_content=content_bytes,
+                )
+            )
         return uploaded_files
     except Exception as e:
         LOGGER.exception(
@@ -103,3 +128,81 @@ async def delete_files(
             file_ids,
         )
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
+
+
+@router.post(
+    "/organizations/{organization_id}/files/multipart/init",
+    response_model=MultipartInitResponse,
+)
+async def multipart_upload_init(
+    organization_id: UUID,
+    request: MultipartInitRequest,
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+) -> MultipartInitResponse:
+    return init_multipart_upload(
+        organization_id=organization_id,
+        filename=request.filename,
+        content_type=request.content_type,
+    )
+
+
+@router.post(
+    "/organizations/{organization_id}/files/multipart/presign-parts",
+    response_model=list[PresignedPartURL],
+)
+async def multipart_presign_parts(
+    organization_id: UUID,
+    request: PresignPartRequest,
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+) -> list[PresignedPartURL]:
+    _validate_organization_key(organization_id, request.key)
+    return generate_presigned_part_urls(
+        key=request.key,
+        upload_id=request.upload_id,
+        part_count=request.part_count,
+    )
+
+
+@router.post(
+    "/organizations/{organization_id}/files/multipart/complete",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def multipart_upload_complete(
+    organization_id: UUID,
+    request: CompleteMultipartRequest,
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+) -> None:
+    _validate_organization_key(organization_id, request.key)
+    complete_multipart_upload(
+        key=request.key,
+        upload_id=request.upload_id,
+        parts=request.parts,
+    )
+
+
+@router.post(
+    "/organizations/{organization_id}/files/multipart/abort",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def multipart_upload_abort(
+    organization_id: UUID,
+    request: AbortMultipartRequest,
+    auth: Annotated[
+        AuthenticatedEntity,
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+) -> None:
+    _validate_organization_key(organization_id, request.key)
+    abort_multipart_upload(
+        key=request.key,
+        upload_id=request.upload_id,
+    )

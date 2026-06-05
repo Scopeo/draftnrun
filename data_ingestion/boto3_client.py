@@ -1,8 +1,10 @@
 import logging
 import re
+from io import BytesIO
 from typing import Optional
 
 import boto3
+from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
@@ -12,6 +14,16 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_SIGNATURE_VERSION = "s3v4"
 DEFAULT_CONFIG_S3 = {"addressing_style": "path"}
+
+MULTIPART_THRESHOLD = 50 * 1024 * 1024
+MULTIPART_CHUNKSIZE = 50 * 1024 * 1024
+MAX_CONCURRENCY = 10
+
+TRANSFER_CONFIG = TransferConfig(
+    multipart_threshold=MULTIPART_THRESHOLD,
+    multipart_chunksize=MULTIPART_CHUNKSIZE,
+    max_concurrency=MAX_CONCURRENCY,
+)
 
 
 def get_s3_boto3_client(
@@ -84,10 +96,14 @@ def create_bucket(s3_client, bucket_name: str) -> bool:
 
 
 def upload_file_to_bucket(s3_client, bucket_name: str, key: str, byte_content: bytes) -> None:
-    """"""
     try:
-        s3_client.put_object(Bucket=bucket_name, Key=key, Body=byte_content)
-        LOGGER.info(f"Successfully Uploaded to s3 '{key}' on the  bucket '{bucket_name}'.")
+        s3_client.upload_fileobj(
+            BytesIO(byte_content),
+            bucket_name,
+            key,
+            Config=TRANSFER_CONFIG,
+        )
+        LOGGER.info(f"Successfully Uploaded to s3 '{key}' on the bucket '{bucket_name}'.")
     except Exception as e:
         LOGGER.error(f"Unexpected error while uploading '{key}' to bucket '{bucket_name}': {e}")
         raise ValueError(f"Failed to upload file '{key}' to bucket '{bucket_name}': {e}")
