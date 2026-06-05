@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, toRef, watch } from 'vue'
+import { computed, ref, toRef } from 'vue'
 import GenericConfirmDialog from '@/components/dialogs/GenericConfirmDialog.vue'
 import { useVersionSorting } from '@/composables/useVersionSorting'
 import { useVersionDeployment } from '@/composables/useVersionDeployment'
@@ -42,10 +42,6 @@ const contextMenu = useContextMenu()
 // VSelect menu state
 const isSelectMenuOpen = ref(false)
 
-// Close context menu whenever the VSelect open state changes; otherwise the
-// context menu can be left open against an item element that has just unmounted.
-watch(isSelectMenuOpen, () => contextMenu.closeMenu())
-
 // Watch for deployment completion (watcher only stops spinner, doesn't emit)
 deployment.watchDeploymentCompletion(
   toRef(() => props.graphRunners),
@@ -63,6 +59,9 @@ const handleContextMenu = (event: MouseEvent, graphRunnerId: string) => {
   const runner = props.graphRunners.find(r => r.graph_runner_id === graphRunnerId)
   if (runner?.env === 'draft') return // Don't show menu for draft
 
+  // Close the dropdown so the cursor-positioned context menu is the only open overlay.
+  // Two stacked overlays is what made the menu unclickable/stuck (DRA-1310).
+  isSelectMenuOpen.value = false
   contextMenu.openMenu(event, graphRunnerId)
 }
 
@@ -136,11 +135,12 @@ const isCurrentMenuTargetProduction = computed(() => {
       </template>
     </VSelect>
 
-    <!-- Context menu for deployment actions (single shared instance, outside item loop) -->
+    <!-- Context menu for deployment actions: positioned at the cursor via coordinates rather than
+         anchored to a dropdown item (which unmounts and leaves the menu stuck) — DRA-1310. -->
     <VMenu
       v-if="projectId"
       v-model="contextMenu.menuVisible.value"
-      :activator="contextMenu.menuActivatorElement.value as any"
+      :target="[contextMenu.menuPosition.value.x, contextMenu.menuPosition.value.y]"
       location="bottom end"
       :close-on-content-click="false"
       @click:outside="contextMenu.closeMenu"
