@@ -424,6 +424,8 @@ NANGO_DASHBOARD_PASSWORD=your-secure-password
 
 Draft'n Run provider config keys currently include `google-mail` and `google-calendar` for standard Google flows, plus `google-mail-neverdrop` and `google-calendar-neverdrop` for Neverdrop-branded Google OAuth flows.
 
+The HubSpot MCP component uses the `hubspot` OAuth provider. Its `crm_upsert_contact_by_email` tool returns the HubSpot contact `id`, the `operation` (`created` or `updated`), and a `remote_url` to the contact record when the connected portal can be resolved. Portal metadata is cached per HubSpot client; if lookup fails after a successful contact write, `remote_url` is returned as an empty string.
+
 ### Google OAuth Setup
 
 To enable Google login, set these in your credentials.env:

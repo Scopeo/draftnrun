@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 import engine.components.tools.hubspot_mcp.server as hubspot_server
@@ -37,6 +38,32 @@ async def test_get_token_hubspot_metadata_returns_user_data(client):
     assert result["user"] == "owner@example.com"
     assert result["user_id"] == 42
     assert result["hub_id"] == 123456
+    mock_http_client.get.assert_called_once_with("/oauth/v1/access-tokens/test-access-token")
+
+
+@pytest.mark.asyncio
+async def test_get_token_hubspot_metadata_caches_successful_response(client):
+    mock_response = MagicMock()
+    mock_response.is_success = True
+    mock_response.json.return_value = {
+        "user": "owner@example.com",
+        "user_id": 42,
+        "hub_id": 123456,
+        "hub_domain": "example.hubspot.com",
+        "token_type": "bearer",
+    }
+
+    mock_http_client = AsyncMock()
+    mock_http_client.get.return_value = mock_response
+    mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+    mock_http_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("engine.components.tools.hubspot_mcp.client.httpx.AsyncClient", return_value=mock_http_client):
+        first_result = await client.get_token_hubspot_metadata()
+        second_result = await client.get_token_hubspot_metadata()
+
+    assert first_result == second_result
+    assert second_result["hub_id"] == 123456
     mock_http_client.get.assert_called_once_with("/oauth/v1/access-tokens/test-access-token")
 
 
@@ -98,6 +125,7 @@ async def test_crm_upsert_contact_by_email_creates_without_object_id():
     expected = {"vid": 123, "isNew": True}
     mock_client = AsyncMock()
     mock_client.request.return_value = expected
+    mock_client.get_token_hubspot_metadata.return_value = {"hub_id": 456}
 
     with patch("engine.components.tools.hubspot_mcp.server._client", mock_client, create=True):
         result = await hubspot_server.crm_upsert_contact_by_email(
@@ -108,7 +136,11 @@ async def test_crm_upsert_contact_by_email_creates_without_object_id():
             ),
         )
 
-    assert result == {"id": "123", "operation": "created"}
+    assert result == {
+        "id": "123",
+        "operation": "created",
+        "remote_url": "https://app.hubspot.com/contacts/456/contact/123",
+    }
     mock_client.request.assert_called_once_with(
         "post",
         "/contacts/v1/contact/createOrUpdate/email/ada@example.com",
@@ -120,6 +152,7 @@ async def test_crm_upsert_contact_by_email_creates_without_object_id():
             ]
         },
     )
+    mock_client.get_token_hubspot_metadata.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -127,6 +160,7 @@ async def test_crm_upsert_contact_by_email_updates_with_object_id():
     expected = {"id": "contact-123"}
     mock_client = AsyncMock()
     mock_client.request.return_value = expected
+    mock_client.get_token_hubspot_metadata.return_value = {"hub_id": 456}
 
     with patch("engine.components.tools.hubspot_mcp.server._client", mock_client, create=True):
         result = await hubspot_server.crm_upsert_contact_by_email(
@@ -137,12 +171,45 @@ async def test_crm_upsert_contact_by_email_updates_with_object_id():
             ),
         )
 
-    assert result == {"id": "contact-123", "operation": "updated"}
+    assert result == {
+        "id": "contact-123",
+        "operation": "updated",
+        "remote_url": "https://app.hubspot.com/contacts/456/contact/contact-123",
+    }
     mock_client.request.assert_called_once_with(
         "patch",
         "/crm/v3/objects/contacts/contact-123",
         json={"properties": {"email": "ada@example.com", "firstname": "Ada"}},
     )
+    mock_client.get_token_hubspot_metadata.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_crm_upsert_contact_by_email_returns_empty_remote_url_when_metadata_unavailable():
+    mock_client = AsyncMock()
+    mock_client.request.return_value = {"vid": 123, "isNew": True}
+    mock_client.get_token_hubspot_metadata.side_effect = RuntimeError("metadata unavailable")
+
+    with patch("engine.components.tools.hubspot_mcp.server._client", mock_client, create=True):
+        result = await hubspot_server.crm_upsert_contact_by_email(
+            properties=hubspot_server.ContactProperties(email="ada@example.com"),
+        )
+
+    assert result == {"id": "123", "operation": "created", "remote_url": ""}
+
+
+@pytest.mark.asyncio
+async def test_crm_upsert_contact_by_email_returns_empty_remote_url_when_metadata_request_fails():
+    mock_client = AsyncMock()
+    mock_client.request.return_value = {"vid": 123, "isNew": True}
+    mock_client.get_token_hubspot_metadata.side_effect = httpx.ConnectError("metadata unavailable")
+
+    with patch("engine.components.tools.hubspot_mcp.server._client", mock_client, create=True):
+        result = await hubspot_server.crm_upsert_contact_by_email(
+            properties=hubspot_server.ContactProperties(email="ada@example.com"),
+        )
+
+    assert result == {"id": "123", "operation": "created", "remote_url": ""}
 
 
 @pytest.mark.asyncio

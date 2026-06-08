@@ -1429,6 +1429,8 @@ OAuth-dependent component (Gmail, Slack, HubSpot, etc.).
 - Use `list_oauth_connections` to verify which connections exist before telling the user what \
 to connect in the UI.
 - Google Neverdrop provider filters use `google-mail-neverdrop` and `google-calendar-neverdrop`.
+- HubSpot MCP `crm_upsert_contact_by_email` returns `id`, `operation`, and `remote_url`. \
+`remote_url` is empty only when the HubSpot portal metadata cannot be resolved after the upsert.
 
 If a component catalog entry includes an `integration` block, treat it as unsafe for the generic \
 agent-tool helper unless the helper explicitly supports it.
