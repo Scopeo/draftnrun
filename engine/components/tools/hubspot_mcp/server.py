@@ -7,9 +7,12 @@ Run:
 Expects HUBSPOT_ACCESS_TOKEN in the environment.
 """
 
+import logging
 import warnings
 from enum import Enum
 from typing import Any, Literal, Optional
+
+import httpx
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -31,6 +34,7 @@ from engine.llm_services.utils import resolve_schema_refs
 
 mcp = FastMCP("hubspot-crm")
 _client: HubSpotClient  # assigned in __main__ before mcp.run()
+LOGGER = logging.getLogger(__name__)
 
 
 class Tag(str, Enum):
@@ -194,16 +198,18 @@ async def crm_upsert_contact_by_email(
 
     if objectId:
         result = await _client.request("patch", f"/crm/v3/objects/contacts/{objectId}", json={"properties": payload})
-        return {"id": result.get("id", objectId), "operation": "updated"}
+        contact_id = str(result.get("id", objectId))
+        return {
+            "id": contact_id,
+            "operation": "updated",
+            "remote_url": await _build_contact_remote_url(contact_id),
+        }
 
     email = payload.get("email")
     if not email:
         raise ValueError("crm_upsert_contact_by_email requires properties.email when objectId is not provided")
 
-    legacy_payload = [
-        {"property": key, "value": value}
-        for key, value in payload.items()
-    ]
+    legacy_payload = [{"property": key, "value": value} for key, value in payload.items()]
     result = await _client.request(
         "post",
         f"/contacts/v1/contact/createOrUpdate/email/{email}",
@@ -218,7 +224,26 @@ async def crm_upsert_contact_by_email(
 
     is_new = bool(result.get("isNew"))
     operation = "created" if is_new else "updated"
-    return {"id": str(vid) if vid is not None else "", "operation": operation}
+    contact_id = str(vid) if vid is not None else ""
+    return {
+        "id": contact_id,
+        "operation": operation,
+        "remote_url": await _build_contact_remote_url(contact_id),
+    }
+
+
+async def _build_contact_remote_url(contact_id: str) -> str:
+    if not contact_id:
+        return ""
+    try:
+        metadata = await _client.get_token_hubspot_metadata()
+    except (RuntimeError, httpx.HTTPError) as exc:
+        LOGGER.warning("Could not fetch HubSpot portal metadata for contact URL: %s", exc)
+        return ""
+    hub_id = metadata.get("hub_id")
+    if not hub_id:
+        return ""
+    return f"https://app.hubspot.com/contacts/{hub_id}/contact/{contact_id}"
 
 
 @mcp.tool(
