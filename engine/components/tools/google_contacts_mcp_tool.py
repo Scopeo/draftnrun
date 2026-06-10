@@ -16,6 +16,7 @@ from engine.trace.trace_manager import TraceManager
 _DEFAULT_TOOLS = {
     "contacts_list_contacts",
     "contacts_get_contact",
+    "contacts_search_contacts",
 }
 
 
@@ -34,9 +35,7 @@ class GoogleContactsMCPTool(LocalMCPTool):
         allowed = allowed_tools if allowed_tools is not None else _DEFAULT_TOOLS
         tool_descriptions = await get_tool_descriptions(allowed)
 
-        env = (
-            {"GOOGLE_CONTACTS_ACCESS_TOKEN": access_token.get_secret_value()} if access_token is not None else None
-        )
+        env = {"GOOGLE_CONTACTS_ACCESS_TOKEN": access_token.get_secret_value()} if access_token is not None else None
 
         return cls(
             trace_manager=trace_manager,

@@ -18,6 +18,8 @@ from googleapiclient.discovery import build
 
 DEFAULT_PERSON_FIELDS = "names,emailAddresses,phoneNumbers,organizations,photos,metadata"
 DEFAULT_OTHER_CONTACTS_READ_MASK = "names,emailAddresses,phoneNumbers,photos,metadata"
+# otherContacts.search only accepts these fields in its readMask (no photos/organizations).
+DEFAULT_OTHER_CONTACTS_SEARCH_READ_MASK = "names,emailAddresses,phoneNumbers,metadata"
 
 
 class GoogleContactsClient:
@@ -45,15 +47,20 @@ class GoogleContactsClient:
         include_other_contacts: bool = True,
         other_contacts_page_token: str | None = None,
         other_contacts_read_mask: str = DEFAULT_OTHER_CONTACTS_READ_MASK,
+        sync_token: str | None = None,
+        other_contacts_sync_token: str | None = None,
     ) -> dict[str, Any]:
         def _build_request(service: Any):
             kwargs: dict[str, Any] = {
                 "resourceName": "people/me",
                 "personFields": person_fields,
                 "pageSize": max_results,
+                "requestSyncToken": True,
             }
             if page_token:
                 kwargs["pageToken"] = page_token
+            if sync_token:
+                kwargs["syncToken"] = sync_token
             return service.people().connections().list(**kwargs)
 
         result = await self._execute(_build_request)
@@ -62,6 +69,7 @@ class GoogleContactsClient:
                 max_results=max_results,
                 read_mask=other_contacts_read_mask,
                 page_token=other_contacts_page_token,
+                sync_token=other_contacts_sync_token,
             )
             if include_other_contacts
             else None
@@ -73,6 +81,10 @@ class GoogleContactsClient:
             "nextOtherContactsPageToken": (
                 other_contacts_result.get("nextOtherContactsPageToken") if other_contacts_result else None
             ),
+            "nextSyncToken": result.get("nextSyncToken"),
+            "nextOtherContactsSyncToken": (
+                other_contacts_result.get("nextOtherContactsSyncToken") if other_contacts_result else None
+            ),
             "totalPeople": result.get("totalPeople"),
             "totalItems": result.get("totalItems"),
         }
@@ -82,21 +94,69 @@ class GoogleContactsClient:
         max_results: int = 100,
         read_mask: str = DEFAULT_OTHER_CONTACTS_READ_MASK,
         page_token: str | None = None,
+        sync_token: str | None = None,
     ) -> dict[str, Any]:
         def _build_request(service: Any):
             kwargs: dict[str, Any] = {
                 "readMask": read_mask,
                 "pageSize": max_results,
+                "requestSyncToken": True,
             }
             if page_token:
                 kwargs["pageToken"] = page_token
+            if sync_token:
+                kwargs["syncToken"] = sync_token
             return service.otherContacts().list(**kwargs)
 
         result = await self._execute(_build_request)
         return {
             "otherContacts": result.get("otherContacts", []),
             "nextOtherContactsPageToken": result.get("nextPageToken"),
+            "nextOtherContactsSyncToken": result.get("nextSyncToken"),
             "totalSize": result.get("totalSize"),
+        }
+
+    async def search_contacts(
+        self,
+        query: str,
+        page_size: int = 10,
+        person_fields: str = DEFAULT_PERSON_FIELDS,
+        other_contacts_read_mask: str = DEFAULT_OTHER_CONTACTS_SEARCH_READ_MASK,
+        warmup_retry_delay_seconds: float = 2.0,
+    ) -> dict[str, Any]:
+        if not query.strip():
+            raise ValueError("query is required")
+
+        def _build_contacts_search(service: Any):
+            return service.people().searchContacts(query=query, pageSize=page_size, readMask=person_fields)
+
+        def _build_other_contacts_search(service: Any):
+            return service.otherContacts().search(query=query, pageSize=page_size, readMask=other_contacts_read_mask)
+
+        def _unwrap(result: Any) -> list[dict[str, Any]]:
+            return [
+                item["person"] for item in result.get("results", []) if isinstance(item, dict) and "person" in item
+            ]
+
+        async def _run_search() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+            contacts_result, other_contacts_result = await asyncio.gather(
+                self._execute(_build_contacts_search),
+                self._execute(_build_other_contacts_search),
+            )
+            return _unwrap(contacts_result), _unwrap(other_contacts_result)
+
+        contacts, other_contacts = await _run_search()
+        if not contacts and not other_contacts and warmup_retry_delay_seconds > 0:
+            # The People API search endpoints serve from a lazily-built cache; the
+            # first request after idle warms it up and may return empty. Per the
+            # Google docs, wait a moment and retry once before trusting an empty
+            # result. A warm cache (the common case) never pays this delay.
+            await asyncio.sleep(warmup_retry_delay_seconds)
+            contacts, other_contacts = await _run_search()
+
+        return {
+            "contacts": contacts,
+            "otherContacts": other_contacts,
         }
 
     async def get_contact(
