@@ -235,7 +235,7 @@ class TestGoogleContactsClient:
         client._build_service.assert_called_once_with()
 
     @pytest.mark.asyncio
-    async def test_search_contacts_warms_up_then_searches_both_sources(self):
+    async def test_search_contacts_returns_immediately_when_cache_is_warm(self):
         service = MagicMock()
         search = service.people.return_value.searchContacts
         search.return_value.execute.return_value = {"results": [{"person": {"resourceName": "people/c1"}}]}
@@ -249,15 +249,37 @@ class TestGoogleContactsClient:
 
         result = await client.search_contacts(query="ada@x.io", page_size=5)
 
-        assert search.call_count == 2
-        search.assert_any_call(query="", pageSize=5, readMask=DEFAULT_PERSON_FIELDS)
-        search.assert_any_call(query="ada@x.io", pageSize=5, readMask=DEFAULT_PERSON_FIELDS)
-        assert other_search.call_count == 2
-        other_search.assert_any_call(query="ada@x.io", pageSize=5, readMask=DEFAULT_OTHER_CONTACTS_SEARCH_READ_MASK)
+        search.assert_called_once_with(query="ada@x.io", pageSize=5, readMask=DEFAULT_PERSON_FIELDS)
+        other_search.assert_called_once_with(
+            query="ada@x.io", pageSize=5, readMask=DEFAULT_OTHER_CONTACTS_SEARCH_READ_MASK
+        )
         assert result == {
             "contacts": [{"resourceName": "people/c1"}],
             "otherContacts": [{"resourceName": "otherContacts/o1"}],
         }
+
+    @pytest.mark.asyncio
+    async def test_search_contacts_waits_and_retries_once_when_cold_cache_returns_empty(self):
+        service = MagicMock()
+        search = service.people.return_value.searchContacts
+        search.return_value.execute.side_effect = [
+            {"results": []},
+            {"results": [{"person": {"resourceName": "people/c1"}}]},
+        ]
+        other_search = service.otherContacts.return_value.search
+        other_search.return_value.execute.side_effect = [{"results": []}, {"results": []}]
+
+        client = object.__new__(GoogleContactsClient)
+        client._build_service = MagicMock(return_value=service)
+
+        with patch(
+            "engine.components.tools.google_contacts_mcp.client.asyncio.sleep", new_callable=AsyncMock
+        ) as mock_sleep:
+            result = await client.search_contacts(query="ada@x.io", page_size=5)
+
+        mock_sleep.assert_awaited_once_with(2.0)
+        assert search.call_count == 2
+        assert result["contacts"] == [{"resourceName": "people/c1"}]
 
     @pytest.mark.asyncio
     async def test_search_contacts_rejects_blank_query(self):

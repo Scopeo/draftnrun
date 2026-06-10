@@ -122,47 +122,41 @@ class GoogleContactsClient:
         page_size: int = 10,
         person_fields: str = DEFAULT_PERSON_FIELDS,
         other_contacts_read_mask: str = DEFAULT_OTHER_CONTACTS_SEARCH_READ_MASK,
-        warmup: bool = True,
+        warmup_retry_delay_seconds: float = 2.0,
     ) -> dict[str, Any]:
         if not query.strip():
             raise ValueError("query is required")
 
-        def _build_contacts_search(search_query: str) -> Callable[[Any], Any]:
-            def _build(service: Any):
-                return service.people().searchContacts(query=search_query, pageSize=page_size, readMask=person_fields)
+        def _build_contacts_search(service: Any):
+            return service.people().searchContacts(query=query, pageSize=page_size, readMask=person_fields)
 
-            return _build
-
-        def _build_other_contacts_search(search_query: str) -> Callable[[Any], Any]:
-            def _build(service: Any):
-                return service.otherContacts().search(
-                    query=search_query, pageSize=page_size, readMask=other_contacts_read_mask
-                )
-
-            return _build
-
-        if warmup:
-            # The People API search endpoints serve from a lazily-built cache; Google
-            # recommends an empty-query warmup request before the real search.
-            await asyncio.gather(
-                self._execute(_build_contacts_search("")),
-                self._execute(_build_other_contacts_search("")),
-                return_exceptions=True,
-            )
-
-        contacts_result, other_contacts_result = await asyncio.gather(
-            self._execute(_build_contacts_search(query)),
-            self._execute(_build_other_contacts_search(query)),
-        )
+        def _build_other_contacts_search(service: Any):
+            return service.otherContacts().search(query=query, pageSize=page_size, readMask=other_contacts_read_mask)
 
         def _unwrap(result: Any) -> list[dict[str, Any]]:
             return [
                 item["person"] for item in result.get("results", []) if isinstance(item, dict) and "person" in item
             ]
 
+        async def _run_search() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+            contacts_result, other_contacts_result = await asyncio.gather(
+                self._execute(_build_contacts_search),
+                self._execute(_build_other_contacts_search),
+            )
+            return _unwrap(contacts_result), _unwrap(other_contacts_result)
+
+        contacts, other_contacts = await _run_search()
+        if not contacts and not other_contacts and warmup_retry_delay_seconds > 0:
+            # The People API search endpoints serve from a lazily-built cache; the
+            # first request after idle warms it up and may return empty. Per the
+            # Google docs, wait a moment and retry once before trusting an empty
+            # result. A warm cache (the common case) never pays this delay.
+            await asyncio.sleep(warmup_retry_delay_seconds)
+            contacts, other_contacts = await _run_search()
+
         return {
-            "contacts": _unwrap(contacts_result),
-            "otherContacts": _unwrap(other_contacts_result),
+            "contacts": contacts,
+            "otherContacts": other_contacts,
         }
 
     async def get_contact(
