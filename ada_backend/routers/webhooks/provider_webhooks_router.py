@@ -1,5 +1,6 @@
 import logging
 from typing import Any, Dict
+from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -17,6 +18,10 @@ from ada_backend.services.webhooks.errors import (
 from ada_backend.services.webhooks.resend_service import (
     get_resend_webhook_service,
     verify_svix_signature,
+)
+from ada_backend.services.webhooks.typeform_service import (
+    get_typeform_webhook_service,
+    verify_typeform_signature,
 )
 from ada_backend.services.webhooks.webhook_service import process_webhook_event
 
@@ -67,12 +72,13 @@ async def receive_resend_webhook(
 ):
     try:
         raw_body = await request.body()
-        payload = await request.json()
 
         webhook = get_resend_webhook_service(session)
 
         headers_dict = dict(request.headers)
         verify_svix_signature(headers_dict, raw_body, webhook.external_client_id)
+
+        payload = await request.json()
 
         result = await process_webhook_event(
             provider=WebhookProvider.RESEND,
@@ -100,3 +106,34 @@ async def receive_resend_webhook(
     except Exception as e:
         LOGGER.error(f"Error processing Resend webhook: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post("/webhooks/typeform/{webhook_id}")
+async def receive_typeform_webhook(
+    webhook_id: UUID,
+    request: Request,
+    session: Session = Depends(get_db),
+):
+    raw_body = await request.body()
+
+    webhook = get_typeform_webhook_service(session, webhook_id)
+    signing_secret = webhook.get_signing_secret()
+
+    verify_typeform_signature(dict(request.headers), raw_body, signing_secret)
+
+    payload = await request.json()
+
+    result = await process_webhook_event(
+        provider=WebhookProvider.TYPEFORM,
+        payload=payload,
+        webhook=webhook,
+    )
+
+    if result.status not in [
+        WebhookProcessingStatus.DUPLICATE,
+        WebhookProcessingStatus.RECEIVED,
+    ]:
+        error_message = "Failed to process Typeform webhook"
+        LOGGER.error(f"Failed to process Typeform webhook: {result.status}", exc_info=True)
+        raise HTTPException(status_code=400, detail=error_message)
+    return {"status": "ok"}

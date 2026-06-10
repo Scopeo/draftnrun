@@ -1700,6 +1700,17 @@ Alerts require `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to be configured on the 
 If either is missing, alerting silently no-ops. Only runs triggered by webhooks or crons fire alerts \
 (API/sandbox/QA runs do not).
 
+## Webhooks
+
+Typeform webhooks can be registered from MCP for a project:
+
+- `create_typeform_webhook(project_id, events?, filter_options?, rotate_secret=false)` → creates or reuses \
+a Typeform webhook, creates the project trigger, and returns `callback_url`. The response includes \
+`signing_secret` only when the webhook secret is newly created or rotated. Developer+.
+
+Paste `callback_url` into Typeform's webhook URL and `signing_secret` into Typeform's webhook secret field. \
+If the secret is lost, call again with `rotate_secret=true` and update the secret in Typeform.
+
 ## Git Sync
 
 One-way deploy from a GitHub repo to Draft'n Run. On each push to the watched branch, \
@@ -1762,7 +1773,7 @@ DOMAIN_DESCRIPTIONS: dict[str, str] = {
     "integrations": "Function-callable tools, OAuth lifecycle, integration-backed components",
     "known-quirks": "Backend/MCP caveats that require explicit workarounds",
     "qa": "QA datasets, judges, evaluations",
-    "admin": "API keys, crons, OAuth, monitoring, alert emails, git sync",
+    "admin": "API keys, crons, OAuth, monitoring, alert emails, webhooks, git sync",
 }
 
 

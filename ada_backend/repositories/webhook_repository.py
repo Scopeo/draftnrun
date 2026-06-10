@@ -9,6 +9,12 @@ from ada_backend.database import models as db
 LOGGER = logging.getLogger(__name__)
 
 
+def get_webhook_by_id_and_provider(
+    session: Session, webhook_id: UUID, provider: db.WebhookProvider
+) -> Optional[db.Webhook]:
+    return session.query(db.Webhook).filter(db.Webhook.id == webhook_id, db.Webhook.provider == provider).first()
+
+
 def get_webhook_by_external_client_id(
     session: Session, provider: db.WebhookProvider, external_client_id: str
 ) -> Optional[db.Webhook]:

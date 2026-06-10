@@ -6,19 +6,26 @@ Draft'n Run has three webhook patterns: provider webhooks (external services pus
 
 **Router**: `routers/webhooks/provider_webhooks_router.py`
 
-External services (Aircall, Resend) push events directly to the backend:
+External services (Aircall, Resend, Typeform) push events directly to the backend:
 
 | Endpoint | Provider | Verification |
 |---|---|---|
 | `POST /webhooks/aircall` | Aircall | Token in payload |
 | `POST /webhooks/resend` | Resend | Svix signature header |
+| `POST /webhooks/typeform/{webhook_id}` | Typeform | `Typeform-Signature` HMAC SHA-256 header over the raw request body |
 
-Both endpoints:
+Provider endpoints:
+
 1. Verify provider-specific signature/token
 2. Deduplicate via Redis SET NX with TTL (`check_and_set_webhook_event`)
 3. Push to Redis Stream (`REDIS_WEBHOOK_STREAM`) via XADD
 
-**Providers** (enum `WebhookProvider`): `resend`, `aircall`, `slack`, `direct_trigger`.
+Raw-body signatures, such as Typeform's HMAC header, are verified before parsing JSON so malformed unauthenticated payloads are rejected by the signature check first.
+Webhook service failures, including signature, configuration, not-found, and queueing errors, propagate as `ServiceError` subclasses and are translated by the global error handler.
+
+**Providers** (enum `WebhookProvider`): `resend`, `aircall`, `slack`, `typeform`, `direct_trigger`.
+
+Typeform setup is project-scoped via `POST /projects/{project_id}/webhooks/typeform` (developer role). The setup response returns a `callback_url` and a `signing_secret` when a webhook is created or rotated. The callback URL is built from `ADA_URL`; setup fails if `ADA_URL` is not configured so webhooks cannot be pointed at the wrong environment. Paste the callback URL into Typeform's webhook URL and the signing secret into Typeform's webhook secret field. Existing webhooks do not return the stored secret again unless `rotate_secret=true`.
 
 ## Pattern 2: User-Triggered Webhooks
 
@@ -53,7 +60,7 @@ reusing the parent `cron_run_id`.
 
 ## Event Routing
 
-### Provider webhooks (Aircall, Resend)
+### Provider webhooks (Aircall, Resend, Typeform)
 
 ```text
 Provider → POST /webhooks/{provider}
@@ -105,7 +112,7 @@ The worker maps these markers to processing outcomes and applies ACK policy acco
 
 ## Data Model
 
-- **`Webhook`** (`webhooks`): `organization_id`, `provider`, `external_client_id`. Indexed by `(provider, external_client_id)`.
+- **`Webhook`** (`webhooks`): `organization_id`, `provider`, `external_client_id`, `encrypted_signing_secret` (nullable, used by Typeform). Indexed by `(provider, external_client_id)`.
 - **`IntegrationTrigger`** (`integration_triggers`): Links webhook → project. Has `events` (JSONB), `events_hash`, `enabled`, `filter_options` (JSONB). Unique on `(webhook_id, events_hash, project_id)`.
 - **`Run`** (`runs`): `event_id` (nullable) links the run back to the originating webhook event. For direct triggers, the Run is created before enqueue so it's visible in DB throughout the entire lifecycle.
 
@@ -133,11 +140,14 @@ When a webhook- or cron-triggered run transitions to `FAILED`, an email alert is
 
 ## Key Files
 
-- `routers/webhooks/provider_webhooks_router.py` — Aircall, Resend endpoints
+- `routers/webhooks/provider_webhooks_router.py` — Aircall, Resend, Typeform receiver endpoints
+- `routers/webhooks/webhook_config_router.py` — Typeform setup endpoint
 - `routers/webhooks/webhook_trigger_router.py` — user-triggered webhook
 - `routers/webhooks/webhook_internal_router.py` — worker-called endpoints
 - `routers/alert_email_router.py` — CRUD for alert email recipients
 - `services/webhooks/webhook_service.py` — execution, filtering, input preparation
+- `services/webhooks/typeform_service.py` — Typeform signature verification and event IDs
+- `services/webhooks/typeform_setup_service.py` — Typeform webhook setup
 - `services/alerting/alert_service.py` — run failure alert logic
 - `services/alerting/email_service.py` — Resend email sending wrapper
 - `schemas/webhook_schema.py` — Pydantic schemas

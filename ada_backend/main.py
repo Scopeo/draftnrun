@@ -56,6 +56,7 @@ from ada_backend.routers.template_router import router as template_router
 from ada_backend.routers.trace_router import router as trace_router
 from ada_backend.routers.variables_router import org_router as variables_router
 from ada_backend.routers.webhooks.provider_webhooks_router import router as provider_webhooks_router
+from ada_backend.routers.webhooks.webhook_config_router import router as webhook_config_router
 from ada_backend.routers.webhooks.webhook_internal_router import router as webhook_internal_router
 from ada_backend.routers.webhooks.webhook_trigger_router import router as webhook_trigger_router
 from ada_backend.routers.widget_router import router as widget_router
@@ -290,6 +291,7 @@ app.include_router(widget_router)
 app.include_router(git_sync_webhook_router)
 app.include_router(git_sync_org_router)
 app.include_router(provider_webhooks_router)
+app.include_router(webhook_config_router)
 app.include_router(webhook_internal_router)
 app.include_router(webhook_trigger_router)
 app.include_router(scheduler_internal_router)

@@ -35,6 +35,7 @@ from ada_backend.services.webhooks.resend_service import (
     get_resend_event_id,
     prepare_resend_workflow_input,
 )
+from ada_backend.services.webhooks.typeform_service import get_typeform_event_id
 from ada_backend.utils.redis_client import (
     check_and_set_webhook_event,
     push_webhook_event,
@@ -82,6 +83,8 @@ def get_webhook_event_id(payload: Dict[str, Any], provider: WebhookProvider) -> 
         return get_aircall_event_id(payload)
     elif provider == WebhookProvider.RESEND:
         return get_resend_event_id(payload)
+    elif provider == WebhookProvider.TYPEFORM:
+        return get_typeform_event_id(payload)
     else:
         LOGGER.error(f"Webhook event id not found for provider: {provider}")
         raise WebhookEventIdNotFoundError(provider=provider, payload=payload)

@@ -143,6 +143,7 @@ class WebhookProvider(StrEnum):
     RESEND = "resend"
     AIRCALL = "aircall"
     SLACK = "slack"
+    TYPEFORM = "typeform"
     DIRECT_TRIGGER = "direct_trigger"
 
 
@@ -2416,6 +2417,7 @@ class Webhook(Base):
     organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     provider = mapped_column(make_pg_enum(WebhookProvider), nullable=False)
     external_client_id = mapped_column(String, nullable=False)
+    encrypted_signing_secret = mapped_column(String, nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -2426,6 +2428,14 @@ class Webhook(Base):
 
     def __str__(self):
         return f"Webhook(id={self.id}, provider={self.provider}, external_client_id={self.external_client_id[:4]}...)"
+
+    def set_signing_secret(self, signing_secret: str) -> None:
+        self.encrypted_signing_secret = CIPHER.encrypt(signing_secret.encode()).decode()
+
+    def get_signing_secret(self) -> str | None:
+        if not self.encrypted_signing_secret:
+            return None
+        return CIPHER.decrypt(self.encrypted_signing_secret.encode()).decode()
 
 
 class IntegrationTrigger(Base):

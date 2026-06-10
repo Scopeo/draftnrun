@@ -77,3 +77,20 @@ class WebhookExecuteResponse(BaseModel):
     processed: int
     total: int
     results: List[WebhookExecuteResult]
+
+
+class TypeformWebhookCreateRequest(BaseModel):
+    events: Optional[Dict[str, Any]] = None
+    filter_options: Optional[Dict[str, Any]] = None
+    rotate_secret: bool = Field(default=False, description="Generate a new Typeform signing secret for this webhook.")
+
+
+class TypeformWebhookCreateResponse(BaseModel):
+    webhook_id: UUID
+    integration_trigger_id: UUID
+    callback_url: str
+    signing_secret: Optional[str] = None
+    secret_available: bool = Field(
+        default=False,
+        description="True when signing_secret is included in this response.",
+    )

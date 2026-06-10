@@ -23,6 +23,7 @@ def register_all_tools(mcp: FastMCP) -> None:
         qa,
         runs,
         variables,
+        webhooks,
     )
 
     modules = [
@@ -42,6 +43,7 @@ def register_all_tools(mcp: FastMCP) -> None:
         oauth_connections,
         alert_emails,
         git_sync,
+        webhooks,
     ]
     for module in modules:
         try:
