@@ -206,10 +206,10 @@ def prepare_workflow_input(payload: Dict[str, Any], provider: str) -> Dict[str, 
             return prepare_resend_workflow_input(payload)
         case _:
             return {
+                **payload,
                 "messages": [
                     {"role": "user", "content": json.dumps(payload, default=str)},
                 ],
-                "webhook_payload": payload,
             }
 
 

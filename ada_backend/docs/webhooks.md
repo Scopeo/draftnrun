@@ -9,7 +9,7 @@ Draft'n Run has three webhook patterns: provider webhooks (external services pus
 External services (Aircall, Resend, Typeform) push events directly to the backend:
 
 | Endpoint | Provider | Verification |
-|---|---|---|
+| --- | --- | --- |
 | `POST /webhooks/aircall` | Aircall | Token in payload |
 | `POST /webhooks/resend` | Resend | Svix signature header |
 | `POST /webhooks/typeform/{webhook_id}` | Typeform | `Typeform-Signature` HMAC SHA-256 header over the raw request body |
@@ -44,7 +44,7 @@ API users trigger workflow runs via webhook:
 Called by the webhook worker after consuming from the Redis stream:
 
 | Endpoint | Purpose |
-|---|---|
+| --- | --- |
 | `POST /internal/webhooks/{webhook_id}/execute` | Resolve triggers, prepare input, run workflows |
 | `POST /internal/webhooks/projects/{project_id}/envs/{env}/run` | Enqueue workflow run to durable Redis run queue (202). Accepts optional `run_id` query param to reuse a pre-created run; body may include `cron_id` for scheduler correlation and `cron_run_id` for top-level scheduler-owned executions. The RunQueueWorker picks up and executes the run with heartbeat-based orphan recovery. |
 | `PATCH /internal/webhooks/projects/{project_id}/runs/{run_id}/fail` | Mark a pre-created run as FAILED (called by worker on dead-letter). Validates project ownership. |
@@ -57,6 +57,11 @@ handles CronRun state transitions (QUEUED→RUNNING→COMPLETED/ERROR). Endpoint
 reusing the parent `cron_run_id`.
 
 `WebhookExecuteResult.run_id` is a UUID (nullable), serialized as a UUID string in JSON responses.
+
+Provider webhook workflow input is prepared by `services/webhooks/webhook_service.py`. For default providers such as
+Aircall and Typeform, the original webhook payload fields are passed through at the top level and the same raw payload is
+also serialized into a single user `messages` entry. Do not add a nested `webhook_payload` copy. Resend is provider-specific:
+it fetches email content from the Resend API and passes the formatted email fields instead of the raw event body.
 
 ## Event Routing
 
