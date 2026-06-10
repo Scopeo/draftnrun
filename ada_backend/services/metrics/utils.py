@@ -254,8 +254,10 @@ def _safe_jsonb_first_element(raw_content: str | None) -> dict:
         return {}
 
 
-def query_trace_by_trace_id(trace_id: str) -> pd.DataFrame:
+def query_trace_by_trace_id(trace_id: str, project_id: UUID) -> pd.DataFrame:
     # TODO: add credits per unit
+    # Scoped to the authorized project so spans from another tenant that would
+    # share a trace_id are never returned.
     query = (
         "WITH span_credits AS ("
         "  SELECT "
@@ -264,7 +266,7 @@ def query_trace_by_trace_id(trace_id: str) -> pd.DataFrame:
         "        COALESCE(su.credits_per_call, 0))::numeric, 0) as credits "
         "  FROM credits.span_usages su "
         "  JOIN traces.spans s ON s.span_id = su.span_id "
-        "  WHERE s.trace_rowid = %(trace_id)s "
+        "  WHERE s.trace_rowid = %(trace_id)s AND s.project_id = %(project_id)s "
         "  GROUP BY su.span_id "
         ") "
         "SELECT s.*, m.input_content, m.output_content, "
@@ -275,11 +277,11 @@ def query_trace_by_trace_id(trace_id: str) -> pd.DataFrame:
         "FROM traces.spans s "
         "LEFT JOIN traces.span_messages m ON m.span_id = s.span_id "
         "LEFT JOIN span_credits sc ON sc.span_id = s.span_id "
-        "WHERE s.trace_rowid = %(trace_id)s "
+        "WHERE s.trace_rowid = %(trace_id)s AND s.project_id = %(project_id)s "
         "ORDER BY s.start_time ASC;"
     )
     session = get_session_trace()
-    df = pd.read_sql_query(query, session.bind, params={"trace_id": str(trace_id)})
+    df = pd.read_sql_query(query, session.bind, params={"trace_id": str(trace_id), "project_id": str(project_id)})
     session.close()
     df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
     df = df.replace({np.nan: None})

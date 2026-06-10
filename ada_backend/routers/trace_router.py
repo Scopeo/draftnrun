@@ -87,19 +87,21 @@ async def get_span_trace(
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    await _check_user_access_to_trace(user, trace_id, session)
+    project_id = await _check_user_access_to_trace(user, trace_id, session)
     try:
-        response = get_span_trace_service(user.id, trace_id)
+        response = get_span_trace_service(user.id, trace_id, project_id)
         return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-async def _check_user_access_to_trace(user: SupabaseUser, trace_id: str, session: Session) -> None:
+async def _check_user_access_to_trace(user: SupabaseUser, trace_id: str, session: Session) -> UUID:
     """Verify the user belongs to the org owning the trace's project.
 
     The trace_id is not project-scoped in the URL, so tenancy must be resolved
-    from the trace's spans before returning span contents.
+    from the trace's spans before returning span contents. Returns the trace's
+    project_id so the span query can be scoped to it — spans from any other
+    project that happened to share a trace_id are never returned.
     """
     project_id = query_trace_project_id(trace_id)
     if project_id is None:
@@ -113,3 +115,4 @@ async def _check_user_access_to_trace(user: SupabaseUser, trace_id: str, session
         raise HTTPException(status_code=403, detail="You don't have access to this trace") from e
     if access.role not in UserRights.MEMBER.value:
         raise HTTPException(status_code=403, detail="You don't have access to this trace")
+    return project_id
