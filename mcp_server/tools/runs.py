@@ -237,7 +237,13 @@ def register(mcp: FastMCP) -> None:
 
             try:
                 run_status = await api.get(f"/projects/{project_id}/runs/{run_id}", jwt)
-            except (httpx.HTTPError, ToolError) as exc:
+            except ToolError as exc:
+                if not exc.is_transient:
+                    raise
+                logger.warning("Transient error polling run %s: %s", run_id, exc)
+                interval = min(interval + 1, MAX_POLL_INTERVAL)
+                continue
+            except httpx.HTTPError as exc:
                 logger.warning("Transient error polling run %s: %s", run_id, exc)
                 interval = min(interval + 1, MAX_POLL_INTERVAL)
                 continue

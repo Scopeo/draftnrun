@@ -20,8 +20,18 @@ class ToolError(FastMCPToolError):
     """Backend/tool error whose message must reach the MCP client.
 
     Subclasses FastMCP's ToolError so the actionable messages survive even if
-    ``mask_error_details`` is ever enabled on the server.
+    ``mask_error_details`` is ever enabled on the server. ``status_code``
+    carries the backend HTTP status so callers can tell transient 5xx errors
+    apart from non-transient 4xx ones (e.g. in polling loops).
     """
+
+    def __init__(self, message: str, *, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+    @property
+    def is_transient(self) -> bool:
+        return self.status_code is None or self.status_code >= 500 or self.status_code == 429
 
 
 _client: httpx.AsyncClient | None = None
@@ -118,7 +128,8 @@ async def _handle_response(response: httpx.Response, *, trim: bool = True) -> An
         raise ToolError(
             f"Authentication failed{request_context}. Your session may have expired — reconnect to refresh. "
             "Next step: check your MCP client's server status, then call get_current_context() "
-            "to verify your session."
+            "to verify your session.",
+            status_code=401,
         )
 
     if response.status_code == 403:
@@ -129,36 +140,41 @@ async def _handle_response(response: httpx.Response, *, trim: bool = True) -> An
             "then see docs://getting-started for the role hierarchy."
         )
         if detail:
-            raise ToolError(f"{base} {detail}{hint}")
-        raise ToolError(f"{base} You may lack the required role for this operation.{hint}")
+            raise ToolError(f"{base} {detail}{hint}", status_code=403)
+        raise ToolError(f"{base} You may lack the required role for this operation.{hint}", status_code=403)
 
     if response.status_code == 404:
         detail = _extract_error_detail(response)
         raise ToolError(
             f"Resource not found{request_context}.{f' {detail}' if detail else ''} "
             "Next step: verify the ID came from a list_*/get_* call in this session — "
-            "never reuse IDs across projects or orgs."
+            "never reuse IDs across projects or orgs.",
+            status_code=404,
         )
 
     if response.status_code == 429:
         retry_after = response.headers.get("Retry-After", "unknown")
-        raise ToolError(f"Rate limited by backend{request_context}. Retry after {retry_after}s.")
+        raise ToolError(f"Rate limited by backend{request_context}. Retry after {retry_after}s.", status_code=429)
 
     if response.status_code == 500:
         detail = _extract_error_detail(response)
         raise ToolError(
             f"The backend hit an unexpected error{request_context}. "
             "This is not caused by your input — retry the call. "
-            f"If it persists, the issue is server-side.{f' Detail: {detail}' if detail else ''}"
+            f"If it persists, the issue is server-side.{f' Detail: {detail}' if detail else ''}",
+            status_code=500,
         )
 
     if response.status_code == 502:
         raise ToolError(
-            f"The backend is temporarily unreachable (gateway error){request_context}. Retry in a few seconds."
+            f"The backend is temporarily unreachable (gateway error){request_context}. Retry in a few seconds.",
+            status_code=502,
         )
 
     if response.status_code == 503:
-        raise ToolError(f"The backend is temporarily unavailable{request_context}. Retry in a few seconds.")
+        raise ToolError(
+            f"The backend is temporarily unavailable{request_context}. Retry in a few seconds.", status_code=503
+        )
 
     if response.status_code >= 400:
         detail = ""
@@ -171,7 +187,9 @@ async def _handle_response(response: httpx.Response, *, trim: bool = True) -> An
             detail = detail.strip()
         if not detail:
             detail = f"No error detail returned by the server (HTTP {response.status_code})"
-        raise ToolError(f"Backend error {response.status_code}{request_context}: {detail}")
+        raise ToolError(
+            f"Backend error {response.status_code}{request_context}: {detail}", status_code=response.status_code
+        )
 
     try:
         data = response.json()

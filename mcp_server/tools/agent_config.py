@@ -67,9 +67,9 @@ def _merge_model_parameters(
 
     merged = []
     for param in existing_params:
-        existing_value = param.get("value")
-        if existing_value is None:
-            existing_value = param.get("default")
+        # Round-trip fidelity: an explicit value of None is preserved (it may be
+        # intentional, e.g. max_tokens unset); only a missing key falls back.
+        existing_value = param["value"] if "value" in param else param.get("default")
         p = {"name": param["name"], "value": existing_value}
         if param["name"] in backend_updates:
             p["value"] = backend_updates[param["name"]]
@@ -237,12 +237,12 @@ def register(mcp: FastMCP) -> None:
         merged_params = _merge_model_parameters(existing_params, updates)
 
         initial_prompt_param = next((p for p in merged_params if p["name"] == "initial_prompt"), None)
-        if initial_prompt_param:
+        if initial_prompt_param and initial_prompt_param["value"] is not None:
             final_prompt = initial_prompt_param["value"]
         elif system_prompt is not None:
             final_prompt = system_prompt
         else:
-            final_prompt = current.get("system_prompt", "")
+            final_prompt = current.get("system_prompt") or ""
 
         update_data = {
             "name": name if name is not None else current.get("name", ""),

@@ -58,24 +58,20 @@ def get_secret_keys(
 async def add_or_update_secret_to_organization(
     organization_id: UUID,
     secret_key: str,
+    body: OrganizationSecretUpsertRequest,
     auth: Annotated[
         AuthenticatedEntity,
         Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.ADMIN.value)),
     ],
-    body: OrganizationSecretUpsertRequest | None = None,
-    # Deprecated: query-string transport leaks secret values into access logs.
-    # Kept until all clients send the JSON body.
-    secret: str | None = None,
     sqlaclhemy_db_session: Session = Depends(get_db),
 ) -> OrganizationSecretResponse:
-    secret_value = body.value if body is not None else secret
-    if not secret_value:
+    if not body.value:
         raise HTTPException(
             status_code=422,
             detail='Provide the secret value in the JSON body: {"value": "..."}',
         )
     try:
-        return await upsert_secret_to_org_service(sqlaclhemy_db_session, organization_id, secret_key, secret_value)
+        return await upsert_secret_to_org_service(sqlaclhemy_db_session, organization_id, secret_key, body.value)
     except ValueError as e:
         LOGGER.error(
             f"Failed to upsert secret {secret_key} for organization {organization_id}: {str(e)}", exc_info=True

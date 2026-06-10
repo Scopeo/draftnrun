@@ -181,3 +181,15 @@ def test_tool_error_is_fastmcp_tool_error():
     from fastmcp.exceptions import ToolError as FastMCPToolError
 
     assert issubclass(ToolError, FastMCPToolError)
+
+
+@pytest.mark.asyncio
+async def test_tool_errors_carry_status_code_and_transience():
+    for status, transient in [(401, False), (403, False), (404, False), (429, True), (500, True), (503, True)]:
+        response = httpx.Response(status, text="")
+        with pytest.raises(ToolError) as exc_info:
+            await _handle_response(response)
+        assert exc_info.value.status_code == status
+        assert exc_info.value.is_transient is transient
+
+    assert ToolError("no status").is_transient is True

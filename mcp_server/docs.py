@@ -1610,7 +1610,7 @@ QA dataset entries store custom column values keyed by column UUID, not by the h
 column name. Writing `{"my column": "value"}` will persist in the database but will NOT display \
 in the frontend (the frontend resolves columns by UUID).
 
-Always call `list_custom_columns(project_id, dataset_id)` first to get the `column_id` → \
+Always call `list_custom_columns(dataset_id)` first to get the `column_id` → \
 `column_name` mapping, then use `column_id` as the key in `custom_columns` dicts. See `docs://qa` \
 for the full workflow.
 
