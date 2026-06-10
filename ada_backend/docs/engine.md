@@ -70,6 +70,10 @@ The concrete base class implementing `Runnable`. Key attributes:
 text result, it also exposes that value as `artifacts.text` so downstream field expressions can inject it with
 `@{{<python_runner_instance_id>.artifacts::text}}` without relying on nested array traversal.
 
+When a tracing context provides `shared_sandbox`, the runner reuses it only after a successful async health check on the
+current event loop. If the health check fails, including closed-loop errors from a previously cached E2B client, the helper
+discards the stale sandbox and creates a fresh one for the current context.
+
 ### Component Catalog Lifecycle
 
 When removing a component from the product, delete the runtime class, registry entry, seed data, existing DB catalog rows (with a migration), default tool description, and wrapper components that only exist to call it. Leaving only part of the catalog wiring in place can keep a dead component instantiable through backend seeds or MCP graph validation even after it disappears from the front-end.
