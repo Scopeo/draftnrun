@@ -16,6 +16,7 @@ from pydantic import SecretStr
 from engine.components.tools.google_contacts_mcp import server as contacts_server
 from engine.components.tools.google_contacts_mcp.client import (
     DEFAULT_OTHER_CONTACTS_READ_MASK,
+    DEFAULT_OTHER_CONTACTS_SEARCH_READ_MASK,
     DEFAULT_PERSON_FIELDS,
     GoogleContactsClient,
 )
@@ -129,10 +130,12 @@ class TestGoogleContactsClient:
             resourceName="people/me",
             personFields=DEFAULT_PERSON_FIELDS,
             pageSize=25,
+            requestSyncToken=True,
         )
         service.otherContacts.return_value.list.assert_called_once_with(
             readMask=DEFAULT_OTHER_CONTACTS_READ_MASK,
             pageSize=25,
+            requestSyncToken=True,
             pageToken="other-page",
         )
         assert result == {
@@ -140,10 +143,46 @@ class TestGoogleContactsClient:
             "otherContacts": [{"resourceName": "otherContacts/c456"}],
             "nextPageToken": "next-page",
             "nextOtherContactsPageToken": "next-other-page",
+            "nextSyncToken": None,
+            "nextOtherContactsSyncToken": None,
             "totalPeople": 1,
             "totalItems": None,
         }
         assert client._build_service.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_list_contacts_threads_sync_tokens(self):
+        service = MagicMock()
+        connections = service.people.return_value.connections.return_value
+        connections.list.return_value.execute.return_value = {
+            "connections": [],
+            "nextSyncToken": "sync-2",
+        }
+        service.otherContacts.return_value.list.return_value.execute.return_value = {
+            "otherContacts": [],
+            "nextSyncToken": "other-sync-2",
+        }
+
+        client = object.__new__(GoogleContactsClient)
+        client._build_service = MagicMock(return_value=service)
+
+        result = await client.list_contacts(sync_token="sync-1", other_contacts_sync_token="other-sync-1")
+
+        connections.list.assert_called_once_with(
+            resourceName="people/me",
+            personFields=DEFAULT_PERSON_FIELDS,
+            pageSize=100,
+            requestSyncToken=True,
+            syncToken="sync-1",
+        )
+        service.otherContacts.return_value.list.assert_called_once_with(
+            readMask=DEFAULT_OTHER_CONTACTS_READ_MASK,
+            pageSize=100,
+            requestSyncToken=True,
+            syncToken="other-sync-1",
+        )
+        assert result["nextSyncToken"] == "sync-2"
+        assert result["nextOtherContactsSyncToken"] == "other-sync-2"
 
     @pytest.mark.asyncio
     async def test_list_contacts_can_skip_other_contacts(self):
@@ -184,14 +223,47 @@ class TestGoogleContactsClient:
         service.otherContacts.return_value.list.assert_called_once_with(
             readMask=DEFAULT_OTHER_CONTACTS_READ_MASK,
             pageSize=25,
+            requestSyncToken=True,
             pageToken="page",
         )
         assert result == {
             "otherContacts": [{"resourceName": "otherContacts/c456"}],
             "nextOtherContactsPageToken": "next-other-page",
+            "nextOtherContactsSyncToken": None,
             "totalSize": 1,
         }
         client._build_service.assert_called_once_with()
+
+    @pytest.mark.asyncio
+    async def test_search_contacts_warms_up_then_searches_both_sources(self):
+        service = MagicMock()
+        search = service.people.return_value.searchContacts
+        search.return_value.execute.return_value = {"results": [{"person": {"resourceName": "people/c1"}}]}
+        other_search = service.otherContacts.return_value.search
+        other_search.return_value.execute.return_value = {
+            "results": [{"person": {"resourceName": "otherContacts/o1"}}]
+        }
+
+        client = object.__new__(GoogleContactsClient)
+        client._build_service = MagicMock(return_value=service)
+
+        result = await client.search_contacts(query="ada@x.io", page_size=5)
+
+        assert search.call_count == 2
+        search.assert_any_call(query="", pageSize=5, readMask=DEFAULT_PERSON_FIELDS)
+        search.assert_any_call(query="ada@x.io", pageSize=5, readMask=DEFAULT_PERSON_FIELDS)
+        assert other_search.call_count == 2
+        other_search.assert_any_call(query="ada@x.io", pageSize=5, readMask=DEFAULT_OTHER_CONTACTS_SEARCH_READ_MASK)
+        assert result == {
+            "contacts": [{"resourceName": "people/c1"}],
+            "otherContacts": [{"resourceName": "otherContacts/o1"}],
+        }
+
+    @pytest.mark.asyncio
+    async def test_search_contacts_rejects_blank_query(self):
+        client = object.__new__(GoogleContactsClient)
+        with pytest.raises(ValueError, match="query"):
+            await client.search_contacts(query="   ")
 
     @pytest.mark.asyncio
     async def test_concurrent_requests_use_separate_services(self):
@@ -255,6 +327,36 @@ class TestGoogleContactsServerTools:
             include_other_contacts=True,
             other_contacts_page_token=None,
             other_contacts_read_mask=DEFAULT_OTHER_CONTACTS_READ_MASK,
+            sync_token=None,
+            other_contacts_sync_token=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_contacts_list_contacts_normalizes_empty_sync_tokens(self):
+        mock_client = AsyncMock()
+        mock_client.list_contacts = AsyncMock(return_value={"contacts": []})
+
+        with patch.object(contacts_server, "_client", mock_client, create=True):
+            await contacts_server.contacts_list_contacts(sync_token="", other_contacts_sync_token="")
+
+        kwargs = mock_client.list_contacts.await_args.kwargs
+        assert kwargs["sync_token"] is None
+        assert kwargs["other_contacts_sync_token"] is None
+
+    @pytest.mark.asyncio
+    async def test_contacts_search_contacts_delegates_to_client(self):
+        mock_client = AsyncMock()
+        mock_client.search_contacts = AsyncMock(return_value={"contacts": [], "otherContacts": []})
+
+        with patch.object(contacts_server, "_client", mock_client, create=True):
+            result = await contacts_server.contacts_search_contacts(query="ada@x.io", page_size=5)
+
+        assert result == {"contacts": [], "otherContacts": []}
+        mock_client.search_contacts.assert_awaited_once_with(
+            query="ada@x.io",
+            page_size=5,
+            person_fields=DEFAULT_PERSON_FIELDS,
+            other_contacts_read_mask=DEFAULT_OTHER_CONTACTS_SEARCH_READ_MASK,
         )
 
     @pytest.mark.asyncio

@@ -40,7 +40,8 @@ def seed_mcp_google_contacts_components(session: Session):
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.INTERNAL,
         description=(
-            "Connect to Google Contacts Neverdrop via MCP to list contacts, list Other contacts, and get contacts."
+            "Connect to Google Contacts Neverdrop via MCP to list, search, and get contacts and Other "
+            "contacts, with sync-token support for incremental change feeds."
         ),
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["google_contacts_neverdrop_mcp_tool_description"],
     )

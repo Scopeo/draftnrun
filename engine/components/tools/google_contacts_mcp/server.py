@@ -18,6 +18,7 @@ with warnings.catch_warnings():
 
 from engine.components.tools.google_contacts_mcp.client import (
     DEFAULT_OTHER_CONTACTS_READ_MASK,
+    DEFAULT_OTHER_CONTACTS_SEARCH_READ_MASK,
     DEFAULT_PERSON_FIELDS,
     GoogleContactsClient,
 )
@@ -32,7 +33,9 @@ _client: GoogleContactsClient
     name="contacts_list_contacts",
     description=(
         "List contacts and Other contacts from the authenticated Google account. Returns people resources "
-        "with names, email addresses, phone numbers, organizations, photos, and metadata by default."
+        "with names, email addresses, phone numbers, organizations, photos, and metadata by default. "
+        "Always returns nextSyncToken / nextOtherContactsSyncToken on the last page; pass sync_token / "
+        "other_contacts_sync_token to fetch only changes (including deletions) since that token."
     ),
 )
 async def contacts_list_contacts(
@@ -42,6 +45,8 @@ async def contacts_list_contacts(
     include_other_contacts: bool = True,
     other_contacts_page_token: str | None = None,
     other_contacts_read_mask: str = DEFAULT_OTHER_CONTACTS_READ_MASK,
+    sync_token: str | None = None,
+    other_contacts_sync_token: str | None = None,
 ) -> dict[str, Any]:
     return await _client.list_contacts(
         max_results=max_results,
@@ -49,6 +54,29 @@ async def contacts_list_contacts(
         page_token=page_token,
         include_other_contacts=include_other_contacts,
         other_contacts_page_token=other_contacts_page_token,
+        other_contacts_read_mask=other_contacts_read_mask,
+        sync_token=sync_token or None,
+        other_contacts_sync_token=other_contacts_sync_token or None,
+    )
+
+
+@mcp.tool(
+    name="contacts_search_contacts",
+    description=(
+        "Search contacts and Other contacts of the authenticated Google account by name, email address, or "
+        "phone number prefix. Returns at most page_size matches per source (Google caps search at 30)."
+    ),
+)
+async def contacts_search_contacts(
+    query: str,
+    page_size: Annotated[int, Field(ge=1, le=30)] = 10,
+    person_fields: str = DEFAULT_PERSON_FIELDS,
+    other_contacts_read_mask: str = DEFAULT_OTHER_CONTACTS_SEARCH_READ_MASK,
+) -> dict[str, Any]:
+    return await _client.search_contacts(
+        query=query,
+        page_size=page_size,
+        person_fields=person_fields,
         other_contacts_read_mask=other_contacts_read_mask,
     )
 
