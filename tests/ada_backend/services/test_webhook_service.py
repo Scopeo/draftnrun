@@ -8,7 +8,20 @@ import pytest
 
 from ada_backend.database.models import RunStatus
 from ada_backend.services.webhooks.errors import WebhookServiceError
-from ada_backend.services.webhooks.webhook_service import process_direct_trigger_event
+from ada_backend.services.webhooks.webhook_service import prepare_workflow_input, process_direct_trigger_event
+
+
+def test_prepare_workflow_input_flattens_provider_payload_and_keeps_message_copy():
+    payload = {"event_id": "evt-1", "form_response": {"token": "token-1"}}
+
+    workflow_input = prepare_workflow_input(payload, "typeform")
+
+    assert workflow_input["event_id"] == "evt-1"
+    assert workflow_input["form_response"] == {"token": "token-1"}
+    assert workflow_input["messages"] == [
+        {"role": "user", "content": '{"event_id": "evt-1", "form_response": {"token": "token-1"}}'},
+    ]
+    assert "webhook_payload" not in workflow_input
 
 
 def test_process_direct_trigger_event_persists_input_before_redis_handoff():
