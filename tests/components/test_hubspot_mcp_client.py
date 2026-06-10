@@ -252,6 +252,29 @@ async def test_notes_upsert_for_contact_creates_and_associates_note():
 
 
 @pytest.mark.asyncio
+async def test_notes_upsert_for_contact_auto_fills_missing_timestamp():
+    expected = {"id": "note-123"}
+    mock_client = AsyncMock()
+    mock_client.request.return_value = expected
+
+    with (
+        patch("engine.components.tools.hubspot_mcp.server._client", mock_client, create=True),
+        patch(
+            "engine.components.tools.hubspot_mcp.server._current_hubspot_timestamp",
+            return_value="2026-02-27T10:00:00Z",
+        ),
+    ):
+        result = await hubspot_server.notes_upsert_for_contact(
+            contactId="contact-123",
+            properties=hubspot_server.NoteProperties(hs_note_body="Created body"),
+        )
+
+    assert result == {"id": "note-123", "operation": "created", "contactId": "contact-123"}
+    request_payload = mock_client.request.call_args.kwargs["json"]
+    assert request_payload["properties"]["hs_timestamp"] == "2026-02-27T10:00:00Z"
+
+
+@pytest.mark.asyncio
 async def test_notes_upsert_for_contact_updates_existing_note():
     expected = {"id": "note-123"}
     mock_client = AsyncMock()

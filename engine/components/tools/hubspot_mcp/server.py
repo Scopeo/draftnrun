@@ -9,6 +9,7 @@ Expects HUBSPOT_ACCESS_TOKEN in the environment.
 
 import logging
 import warnings
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal, Optional
 
@@ -35,6 +36,10 @@ from engine.llm_services.utils import resolve_schema_refs
 mcp = FastMCP("hubspot-crm")
 _client: HubSpotClient  # assigned in __main__ before mcp.run()
 LOGGER = logging.getLogger(__name__)
+
+
+def _current_hubspot_timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 class Tag(str, Enum):
@@ -266,6 +271,9 @@ async def notes_upsert_for_contact(
 
     if skipIfBodyEmpty and not str(note_body).strip():
         return {"id": "", "operation": "skipped", "contactId": contactId}
+
+    if not payload.get("hs_timestamp"):
+        payload["hs_timestamp"] = _current_hubspot_timestamp()
 
     if objectId:
         result = await _client.request("patch", f"/crm/v3/objects/notes/{objectId}", json={"properties": payload})

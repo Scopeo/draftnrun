@@ -112,7 +112,13 @@ class NoteProperties(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     hs_note_body: str
-    hs_timestamp: str = Field(description="ISO 8601 datetime (e.g. '2026-02-27T10:00:00Z'). Required by HubSpot.")
+    hs_timestamp: Optional[str] = Field(
+        default=None,
+        description=(
+            "ISO 8601 datetime (e.g. '2026-02-27T10:00:00Z'). "
+            "Auto-filled with the current UTC time when omitted by notes_upsert_for_contact."
+        ),
+    )
     hubspot_owner_id: Optional[str] = None
 
 
