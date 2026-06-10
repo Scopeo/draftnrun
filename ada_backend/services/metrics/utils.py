@@ -286,16 +286,14 @@ def query_trace_by_trace_id(trace_id: str) -> pd.DataFrame:
     return df
 
 
-def query_trace_project_ids(trace_id: str) -> List[UUID]:
-    """Return the distinct project IDs that the trace's spans belong to."""
-    session = get_session_trace()
-    result = session.execute(
-        text("SELECT DISTINCT project_id FROM traces.spans WHERE trace_rowid = :trace_id"),
-        {"trace_id": str(trace_id)},
-    )
-    rows = result.fetchall()
-    session.close()
-    return [UUID(str(row[0])) for row in rows if row[0] is not None]
+def query_trace_project_id(trace_id: str) -> Optional[UUID]:
+    """Return the project ID a trace belongs to, or None if the trace has no spans."""
+    with get_session_trace() as session:
+        row = session.execute(
+            text("SELECT project_id FROM traces.spans WHERE trace_rowid = :trace_id LIMIT 1"),
+            {"trace_id": str(trace_id)},
+        ).first()
+    return UUID(str(row[0])) if row and row[0] is not None else None
 
 
 def calculate_calls_per_day(df: pd.DataFrame, all_dates_df: pd.DataFrame) -> pd.DataFrame:

@@ -16,7 +16,7 @@ from ada_backend.routers.auth_router import (
 )
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.trace_schema import PaginatedRootTracesResponse, TraceSpan
-from ada_backend.services.metrics.utils import query_trace_project_ids
+from ada_backend.services.metrics.utils import query_trace_project_id
 from ada_backend.services.trace_service import (
     get_root_traces_by_project,
     get_span_trace_service,
@@ -101,16 +101,15 @@ async def _check_user_access_to_trace(user: SupabaseUser, trace_id: str, session
     The trace_id is not project-scoped in the URL, so tenancy must be resolved
     from the trace's spans before returning span contents.
     """
-    project_ids = query_trace_project_ids(trace_id)
-    if not project_ids:
+    project_id = query_trace_project_id(trace_id)
+    if project_id is None:
         raise HTTPException(status_code=404, detail="Trace not found")
-    for project_id in project_ids:
-        project = get_project(session, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Trace not found")
-        try:
-            access = await get_user_access_to_organization(user=user, organization_id=project.organization_id)
-        except ValueError as e:
-            raise HTTPException(status_code=403, detail="You don't have access to this trace") from e
-        if access.role not in UserRights.MEMBER.value:
-            raise HTTPException(status_code=403, detail="You don't have access to this trace")
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Trace not found")
+    try:
+        access = await get_user_access_to_organization(user=user, organization_id=project.organization_id)
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail="You don't have access to this trace") from e
+    if access.role not in UserRights.MEMBER.value:
+        raise HTTPException(status_code=403, detail="You don't have access to this trace")
