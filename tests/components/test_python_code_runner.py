@@ -194,6 +194,57 @@ async def test_run_without_io_trace_success(
 
 
 @pytest.mark.asyncio
+@patch("engine.components.tools.python_code_runner.get_output_dir")
+async def test_run_without_io_trace_exposes_text_artifact(mock_get_output_dir, python_code_runner_tool):
+    execution_result = {
+        "results": [
+            {
+                "text": "first result",
+                "html": None,
+                "markdown": None,
+                "svg": None,
+                "png": None,
+                "jpeg": None,
+                "pdf": None,
+                "latex": None,
+                "json": None,
+                "javascript": None,
+                "data": None,
+                "chart": None,
+                "is_main_result": False,
+                "extra": {},
+            },
+            {
+                "text": "main result",
+                "html": None,
+                "markdown": None,
+                "svg": None,
+                "png": None,
+                "jpeg": None,
+                "pdf": None,
+                "latex": None,
+                "json": None,
+                "javascript": None,
+                "data": None,
+                "chart": None,
+                "is_main_result": True,
+                "extra": {},
+            },
+        ],
+        "stdout": [],
+        "stderr": [],
+        "error": None,
+        "execution_count": 1,
+    }
+    python_code_runner_tool.execute_python_code = AsyncMock(return_value=(execution_result, []))
+
+    result = await python_code_runner_tool._run_without_io_trace(PythonCodeRunnerToolInputs(python_code="2 + 2"), {})
+
+    assert result.artifacts["execution_result"] == execution_result
+    assert result.artifacts["text"] == "main result"
+
+
+@pytest.mark.asyncio
 @patch("engine.components.tools.sandbox_utils.AsyncSandbox")
 @patch("engine.components.tools.sandbox_utils.get_tracing_span")
 @patch("engine.components.tools.python_code_runner.get_output_dir")

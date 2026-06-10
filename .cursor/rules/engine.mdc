@@ -19,6 +19,7 @@ globs:
 - `GoogleProvider` must not replay prior assistant `tool_calls` in multi-turn function-calling requests; Gemini requires hidden `thought_signature` data that the OpenAI-compatible response does not expose. Preserve tool outputs by converting `tool` role messages into user-visible tool-result context.
 - `requires_tool_name = True` for components that need a `tool_name` input (MCP tools, API tools).
 - Legacy system: some components still use `AgentPayload` pattern (`migrated = False`). New components MUST use the multi-port `NodeData` system (`migrated = True`).
+- Python Code Runner keeps the full E2B payload in `artifacts.execution_result`; when a text result exists, it also exposes `artifacts.text` for `@{{instance.artifacts::text}}` injection. Shared E2B sandboxes from tracing context must pass a current-loop async health check before reuse; stale or closed-loop clients are discarded and replaced.
 - `SQLLocalService` engine pools are cached per `engine_url` (process-level). Avoid patterns that instantiate many services for the same URL expecting independent pools.
 - In ingestion code paths, reuse one `SQLLocalService` per job when possible, and ensure `await close()` is called in a `finally` block.
 - `IS_CLOUD_S3` controls folder-source ingestion URL strategy: keep it `False` in local/dev and custom `S3_ENDPOINT_URL` setups (direct file reads; presigned URL getter returns `None`), set it `True` in cloud AWS S3 prod to require presigned URL generation and fail fast on missing URLs.
