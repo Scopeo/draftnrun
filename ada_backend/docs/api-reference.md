@@ -196,6 +196,8 @@ Run input data is persisted in the `run_inputs` table (keyed by `retry_group_id`
 | POST | `/webhooks/trigger/{project_id}/envs/{env}` | ApiKey | User-triggered webhook |
 | POST | `/webhooks/aircall` | Public | Aircall provider webhook |
 | POST | `/webhooks/resend` | Public | Resend provider webhook |
+| POST | `/webhooks/typeform/{webhook_id}` | Public | Typeform provider webhook with `Typeform-Signature` verification |
+| POST | `/projects/{project_id}/webhooks/typeform` | JWT(Developer) | Create/reuse Typeform webhook setup and return callback URL plus one-time signing secret |
 | POST | `/internal/webhooks/{webhook_id}/execute` | WebhookKey | Internal: execute webhook |
 | POST | `/internal/webhooks/projects/{project_id}/envs/{env}/run` | WebhookKey | Internal: enqueue run |
 

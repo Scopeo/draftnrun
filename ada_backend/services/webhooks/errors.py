@@ -22,6 +22,8 @@ class WebhookEmptyTokenError(WebhookServiceError):
 class WebhookNotFoundError(WebhookServiceError):
     """Raised when a webhook is not found."""
 
+    status_code = 404
+
     def __init__(self, provider: WebhookProvider, external_client_id: str):
         self.provider = provider
         self.external_client_id = external_client_id
@@ -69,7 +71,7 @@ class WebhookQueueError(WebhookServiceError):
 
 
 class WebhookSignatureVerificationError(WebhookServiceError):
-    """Raised when Svix signature verification fails."""
+    """Raised when webhook signature verification fails."""
 
     status_code = 401
 

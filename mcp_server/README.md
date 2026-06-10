@@ -75,7 +75,7 @@ All domain content lives in `docs.py` (single source of truth).
 
 ## Tool Reference
 
-~94 tools across 15 modules. Use `get_guide(domain)` or the docs:// resources above for detailed usage.
+~95 tools across 16 modules. Use `get_guide(domain)` or the docs:// resources above for detailed usage.
 
 | Module | Tools | Highlights |
 |---|---|---|
@@ -95,6 +95,7 @@ All domain content lives in `docs.py` (single source of truth).
 | OAuth | 3 | List, check status, revoke |
 | Alert Emails | 3 | `list_alert_emails`, `create_alert_email`, `delete_alert_email` — per-project run failure recipients (developer+) |
 | Git Sync | 4 | `configure_git_sync`, `list_git_sync_configs`, `get_git_sync_config`, `disconnect_git_sync` — scan a GitHub repo for `graph.json` files, create projects + sync configs; one-way deploy on push (developer+) |
+| Webhooks | 1 | `create_typeform_webhook` — create/reuse a Typeform webhook and return the callback URL plus signing secret when created/rotated (developer+) |
 | **Docs** | **1** | **`get_guide(domain)` — fallback for domain docs** |
 
 `get_project_overview(project_id)` is the default orientation tool for any version-aware work. It returns the editable draft runner, current production runner, production-only capability hints, warnings, and safe next steps.
@@ -129,7 +130,7 @@ Custom tools (validation, multi-step, client-side logic) are still defined as `@
 
 | Guard | Description |
 |---|---|
-| RBAC | Variables/secrets require admin. Deletions require developer+. `create_agent`, cron writes (create/update/delete/pause/resume), OAuth tools, and `update_document_chunks` require developer+. `trigger_cron` requires member role or above. `invite_org_member` checks admin/super_admin on the target org, not just the active org. |
+| RBAC | Variables/secrets require admin. Deletions require developer+. `create_agent`, cron writes (create/update/delete/pause/resume), OAuth tools, `create_typeform_webhook`, and `update_document_chunks` require developer+. `trigger_cron` requires member role or above. `invite_org_member` checks admin/super_admin on the target org, not just the active org. |
 | Component search | `search_components` rejects blank or whitespace-only queries. |
 | Release stage | Component catalog auto-filtered by org tier. Cannot be overridden by the AI. |
 | Agent name | `create_agent` rejects empty/whitespace names. |
