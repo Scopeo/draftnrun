@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType, EnvType
-from ada_backend.database.setup_db import get_db
+from ada_backend.database.setup_db import get_db, get_db_session
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.routers.auth_router import (
     UserRights,
@@ -83,11 +83,10 @@ async def get_root_traces(
 async def get_span_trace(
     trace_id: str,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
-    session: Session = Depends(get_db),
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    project_id = await _check_user_access_to_trace(user, trace_id, session)
+    project_id = await _check_user_access_to_trace(user, trace_id)
     try:
         response = get_span_trace_service(user.id, trace_id, project_id)
         return response
@@ -95,7 +94,7 @@ async def get_span_trace(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-async def _check_user_access_to_trace(user: SupabaseUser, trace_id: str, session: Session) -> UUID:
+async def _check_user_access_to_trace(user: SupabaseUser, trace_id: str) -> UUID:
     """Verify the user belongs to the org owning the trace's project.
 
     The trace_id is not project-scoped in the URL, so tenancy must be resolved
@@ -106,7 +105,8 @@ async def _check_user_access_to_trace(user: SupabaseUser, trace_id: str, session
     project_id = query_trace_project_id(trace_id)
     if project_id is None:
         raise HTTPException(status_code=404, detail="Trace not found")
-    project = get_project(session, project_id)
+    with get_db_session() as session:
+        project = get_project(session, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Trace not found")
     try:
