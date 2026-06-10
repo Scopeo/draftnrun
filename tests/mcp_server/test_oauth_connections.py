@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from mcp_server.tools import _factory, oauth_connections
+from mcp_server.tools._roles import DEVELOPER_ROLES
 from tests.mcp_server.conftest import FAKE_CONN_ID
 
 
@@ -20,7 +21,7 @@ async def test_list_oauth_connections_requires_role(monkeypatch, fake_mcp):
     result = await fake_mcp.tools["list_oauth_connections"]()
 
     assert result == [{"id": "c1"}]
-    role_mock.assert_awaited_once_with("user-123", "developer", "admin", "super_admin")
+    role_mock.assert_awaited_once_with("user-123", *DEVELOPER_ROLES)
     get_mock.assert_awaited_once_with("/organizations/org-123/oauth-connections", "jwt-token", trim=True)
 
 
@@ -38,7 +39,7 @@ async def test_check_oauth_status_sends_query_params(monkeypatch, fake_mcp):
     result = await fake_mcp.tools["check_oauth_status"]("google-mail", FAKE_CONN_ID)
 
     assert result == {"status": "active"}
-    role_mock.assert_awaited_once_with("user-123", "developer", "admin", "super_admin")
+    role_mock.assert_awaited_once_with("user-123", *DEVELOPER_ROLES)
     get_mock.assert_awaited_once_with(
         "/organizations/org-123/oauth-connections/status",
         "jwt-token",
@@ -62,7 +63,7 @@ async def test_revoke_oauth_sends_provider_query_param(monkeypatch, fake_mcp):
     result = await fake_mcp.tools["revoke_oauth"](FAKE_CONN_ID, "slack")
 
     assert result == {"status": "ok"}
-    role_mock.assert_awaited_once_with("user-123", "developer", "admin", "super_admin")
+    role_mock.assert_awaited_once_with("user-123", *DEVELOPER_ROLES)
     delete_mock.assert_awaited_once_with(
         f"/organizations/org-123/oauth-connections/{FAKE_CONN_ID}",
         "jwt-token",

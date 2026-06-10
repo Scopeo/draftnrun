@@ -254,7 +254,7 @@ def _safe_jsonb_first_element(raw_content: str | None) -> dict:
         return {}
 
 
-def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
+def query_trace_by_trace_id(trace_id: str) -> pd.DataFrame:
     # TODO: add credits per unit
     query = (
         "WITH span_credits AS ("
@@ -264,7 +264,7 @@ def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
         "        COALESCE(su.credits_per_call, 0))::numeric, 0) as credits "
         "  FROM credits.span_usages su "
         "  JOIN traces.spans s ON s.span_id = su.span_id "
-        f"  WHERE s.trace_rowid = '{trace_id}' "
+        "  WHERE s.trace_rowid = %(trace_id)s "
         "  GROUP BY su.span_id "
         ") "
         "SELECT s.*, m.input_content, m.output_content, "
@@ -275,15 +275,27 @@ def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
         "FROM traces.spans s "
         "LEFT JOIN traces.span_messages m ON m.span_id = s.span_id "
         "LEFT JOIN span_credits sc ON sc.span_id = s.span_id "
-        f"WHERE s.trace_rowid = '{trace_id}' "
+        "WHERE s.trace_rowid = %(trace_id)s "
         "ORDER BY s.start_time ASC;"
     )
     session = get_session_trace()
-    df = pd.read_sql_query(query, session.bind)
+    df = pd.read_sql_query(query, session.bind, params={"trace_id": str(trace_id)})
     session.close()
     df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
     df = df.replace({np.nan: None})
     return df
+
+
+def query_trace_project_ids(trace_id: str) -> List[UUID]:
+    """Return the distinct project IDs that the trace's spans belong to."""
+    session = get_session_trace()
+    result = session.execute(
+        text("SELECT DISTINCT project_id FROM traces.spans WHERE trace_rowid = :trace_id"),
+        {"trace_id": str(trace_id)},
+    )
+    rows = result.fetchall()
+    session.close()
+    return [UUID(str(row[0])) for row in rows if row[0] is not None]
 
 
 def calculate_calls_per_day(df: pd.DataFrame, all_dates_df: pd.DataFrame) -> pd.DataFrame:

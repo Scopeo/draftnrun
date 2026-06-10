@@ -19,6 +19,7 @@ from urllib.parse import quote
 from uuid import UUID
 
 from fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from mcp_server.client import api
@@ -50,6 +51,9 @@ class ToolSpec:
                         (keys = param names).
         body_org_key:   If set, inject ``org_id`` into the JSON body under this key.
         org_query_key:  If set, inject ``org_id`` as this query-string parameter.
+        annotations:    Explicit MCP tool annotation overrides (readOnlyHint,
+                        destructiveHint, idempotentHint, openWorldHint). Merged on
+                        top of the defaults derived from the HTTP method.
     """
 
     name: str
@@ -66,11 +70,13 @@ class ToolSpec:
     org_query_key: str | None = None
     return_annotation: type = dict
     trim: bool = True
+    annotations: dict[str, bool] | None = None
 
 
 def _validate_spec(spec: ToolSpec) -> None:
     """Fail fast on common ToolSpec misconfigurations."""
     import re
+
     placeholders = set(re.findall(r"\{(\w+)\}", spec.path))
     path_param_names = {p.name for p in spec.path_params}
     auto_resolved = set()
@@ -166,7 +172,24 @@ def _build_handler(spec: ToolSpec):
     return handler
 
 
+def derive_annotations(spec: ToolSpec) -> ToolAnnotations:
+    """Derive MCP tool annotations from the spec so clients can distinguish
+    safe reads from destructive writes (confirmation UX, auto-approval)."""
+    hints: dict[str, bool] = {"openWorldHint": False}
+    if spec.method == "get":
+        hints["readOnlyHint"] = True
+        hints["destructiveHint"] = False
+        hints["idempotentHint"] = True
+    else:
+        hints["readOnlyHint"] = False
+        hints["destructiveHint"] = spec.method == "delete" or spec.description.startswith("Destructive")
+        hints["idempotentHint"] = spec.method in ("put", "delete")
+    if spec.annotations:
+        hints.update(spec.annotations)
+    return ToolAnnotations(**hints)
+
+
 def register_proxy_tools(mcp: FastMCP, specs: list[ToolSpec]) -> None:
     for spec in specs:
         _validate_spec(spec)
-        mcp.tool()(_build_handler(spec))
+        mcp.tool(annotations=derive_annotations(spec))(_build_handler(spec))

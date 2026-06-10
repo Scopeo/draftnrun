@@ -15,16 +15,17 @@ from tests.mcp_server.conftest import (
 @pytest.fixture
 def mcp(fake_mcp, monkeypatch):
     monkeypatch.setattr(_factory, "_get_auth", lambda: ("jwt-token", "user-1"))
+    monkeypatch.setattr(_factory, "require_org_context", AsyncMock(return_value={"org_id": FAKE_ORG_ID}))
     qa.register(fake_mcp)
     return fake_mcp
 
 
 @pytest.mark.asyncio
-async def test_update_dataset_sends_name_as_query_param(mcp, monkeypatch):
+async def test_update_dataset_uses_session_org_and_sends_name_as_query_param(mcp, monkeypatch):
     patch_mock = AsyncMock(return_value={"ok": True})
     monkeypatch.setattr(_factory.api, "patch", patch_mock)
 
-    await mcp.tools["update_dataset"](FAKE_ORG_ID, FAKE_DATASET_ID, "New Name")
+    await mcp.tools["update_dataset"](FAKE_DATASET_ID, "New Name")
 
     patch_mock.assert_awaited_once_with(
         f"/organizations/{FAKE_ORG_ID}/qa/datasets/{FAKE_DATASET_ID}",

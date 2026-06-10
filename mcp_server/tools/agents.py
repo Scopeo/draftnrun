@@ -8,8 +8,10 @@ from pydantic import Field
 
 from mcp_server.client import api
 from mcp_server.context import require_role
+from mcp_server.tools._annotations import NON_DESTRUCTIVE_WRITE
 from mcp_server.tools._defaults import generate_entity_defaults
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
+from mcp_server.tools._roles import DEVELOPER_ROLES
 from mcp_server.tools.context_tools import _get_auth
 
 PROXY_SPECS: list[ToolSpec] = [
@@ -43,7 +45,7 @@ PROXY_SPECS: list[ToolSpec] = [
 def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, PROXY_SPECS)
 
-    @mcp.tool()
+    @mcp.tool(annotations=NON_DESTRUCTIVE_WRITE)
     async def create_agent(
         name: Annotated[str, Field(description="Agent name. Must not be empty or whitespace-only.")],
         description: Annotated[str, Field(description="Optional description.")] = "",
@@ -64,7 +66,7 @@ def register(mcp: FastMCP) -> None:
             raise ValueError("Agent name must not be empty or whitespace-only.")
 
         jwt, user_id = _get_auth()
-        org = await require_role(user_id, "developer", "admin", "super_admin")
+        org = await require_role(user_id, *DEVELOPER_ROLES)
         defaults = generate_entity_defaults()
         return await api.post(
             f"/org/{org['org_id']}/agents",

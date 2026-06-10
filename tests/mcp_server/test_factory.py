@@ -13,10 +13,12 @@ from tests.mcp_server.conftest import FAKE_KEY_ID, FAKE_PROJECT_ID
 class FakeMCP:
     def __init__(self):
         self.tools = {}
+        self.tool_annotations = {}
 
-    def tool(self):
+    def tool(self, annotations=None):
         def decorator(func):
             self.tools[func.__name__] = func
+            self.tool_annotations[func.__name__] = annotations
             return func
 
         return decorator
@@ -40,15 +42,18 @@ async def test_auth_only_get(monkeypatch, mcp):
     get_mock = AsyncMock(return_value={"ok": True})
     monkeypatch.setattr(_factory.api, "get", get_mock)
 
-    register_proxy_tools(mcp, [
-        ToolSpec(
-            name="get_thing",
-            description="Get a thing.",
-            method="get",
-            path="/things/{thing_id}",
-            path_params=(Param("thing_id", str),),
-        ),
-    ])
+    register_proxy_tools(
+        mcp,
+        [
+            ToolSpec(
+                name="get_thing",
+                description="Get a thing.",
+                method="get",
+                path="/things/{thing_id}",
+                path_params=(Param("thing_id", str),),
+            ),
+        ],
+    )
 
     result = await mcp.tools["get_thing"](FAKE_PROJECT_ID)
 
@@ -66,16 +71,19 @@ async def test_org_scoped_get(monkeypatch, mcp):
     monkeypatch.setattr(_factory, "require_org_context", org_mock)
     monkeypatch.setattr(_factory.api, "get", get_mock)
 
-    register_proxy_tools(mcp, [
-        ToolSpec(
-            name="list_things",
-            description="List things.",
-            method="get",
-            path="/orgs/{org_id}/things",
-            scope="org",
-            return_annotation=list,
-        ),
-    ])
+    register_proxy_tools(
+        mcp,
+        [
+            ToolSpec(
+                name="list_things",
+                description="List things.",
+                method="get",
+                path="/orgs/{org_id}/things",
+                scope="org",
+                return_annotation=list,
+            ),
+        ],
+    )
 
     result = await mcp.tools["list_things"]()
 
@@ -94,17 +102,20 @@ async def test_role_scoped_delete(monkeypatch, mcp):
     monkeypatch.setattr(_factory, "require_role", role_mock)
     monkeypatch.setattr(_factory.api, "delete", del_mock)
 
-    register_proxy_tools(mcp, [
-        ToolSpec(
-            name="delete_thing",
-            description="Delete.",
-            method="delete",
-            path="/orgs/{org_id}/things/{tid}",
-            scope="role",
-            roles=("admin",),
-            path_params=(Param("tid", str),),
-        ),
-    ])
+    register_proxy_tools(
+        mcp,
+        [
+            ToolSpec(
+                name="delete_thing",
+                description="Delete.",
+                method="delete",
+                path="/orgs/{org_id}/things/{tid}",
+                scope="role",
+                roles=("admin",),
+                path_params=(Param("tid", str),),
+            ),
+        ],
+    )
 
     await mcp.tools["delete_thing"]("t-99")
 
@@ -120,15 +131,18 @@ async def test_path_params_are_url_encoded(monkeypatch, mcp):
     get_mock = AsyncMock(return_value={})
     monkeypatch.setattr(_factory.api, "get", get_mock)
 
-    register_proxy_tools(mcp, [
-        ToolSpec(
-            name="get_item",
-            description="Get.",
-            method="get",
-            path="/items/{name}",
-            path_params=(Param("name", str),),
-        ),
-    ])
+    register_proxy_tools(
+        mcp,
+        [
+            ToolSpec(
+                name="get_item",
+                description="Get.",
+                method="get",
+                path="/items/{name}",
+                path_params=(Param("name", str),),
+            ),
+        ],
+    )
 
     await mcp.tools["get_item"]("a/b c?d=1")
 
@@ -143,15 +157,18 @@ async def test_body_param_passthrough(monkeypatch, mcp):
     post_mock = AsyncMock(return_value={"id": "new"})
     monkeypatch.setattr(_factory.api, "post", post_mock)
 
-    register_proxy_tools(mcp, [
-        ToolSpec(
-            name="create_thing",
-            description="Create.",
-            method="post",
-            path="/things",
-            body_param=Param("data", dict),
-        ),
-    ])
+    register_proxy_tools(
+        mcp,
+        [
+            ToolSpec(
+                name="create_thing",
+                description="Create.",
+                method="post",
+                path="/things",
+                body_param=Param("data", dict),
+            ),
+        ],
+    )
 
     await mcp.tools["create_thing"]({"name": "X"})
 
@@ -166,15 +183,18 @@ async def test_body_fields_assembled(monkeypatch, mcp):
     del_mock = AsyncMock(return_value={"status": "ok"})
     monkeypatch.setattr(_factory.api, "delete", del_mock)
 
-    register_proxy_tools(mcp, [
-        ToolSpec(
-            name="revoke_key",
-            description="Revoke.",
-            method="delete",
-            path="/keys",
-            body_fields=(Param("key_id", str),),
-        ),
-    ])
+    register_proxy_tools(
+        mcp,
+        [
+            ToolSpec(
+                name="revoke_key",
+                description="Revoke.",
+                method="delete",
+                path="/keys",
+                body_fields=(Param("key_id", str),),
+            ),
+        ],
+    )
 
     await mcp.tools["revoke_key"](FAKE_KEY_ID)
 
@@ -191,22 +211,27 @@ async def test_body_org_key_injects_org_id(monkeypatch, mcp):
     monkeypatch.setattr(_factory, "require_org_context", org_mock)
     monkeypatch.setattr(_factory.api, "post", post_mock)
 
-    register_proxy_tools(mcp, [
-        ToolSpec(
-            name="create_org_key",
-            description="Create.",
-            method="post",
-            path="/org-keys",
-            scope="org",
-            body_fields=(Param("name", str, default=""),),
-            body_org_key="organization_id",
-        ),
-    ])
+    register_proxy_tools(
+        mcp,
+        [
+            ToolSpec(
+                name="create_org_key",
+                description="Create.",
+                method="post",
+                path="/org-keys",
+                scope="org",
+                body_fields=(Param("name", str, default=""),),
+                body_org_key="organization_id",
+            ),
+        ],
+    )
 
     await mcp.tools["create_org_key"](name="my-key")
 
     post_mock.assert_awaited_once_with(
-        "/org-keys", "jwt-tok", trim=True,
+        "/org-keys",
+        "jwt-tok",
+        trim=True,
         json={"name": "my-key", "organization_id": "org-5"},
     )
 
@@ -221,17 +246,20 @@ async def test_org_query_key_injects_org_id_as_param(monkeypatch, mcp):
     monkeypatch.setattr(_factory, "require_org_context", org_mock)
     monkeypatch.setattr(_factory.api, "get", get_mock)
 
-    register_proxy_tools(mcp, [
-        ToolSpec(
-            name="list_org_keys",
-            description="List.",
-            method="get",
-            path="/org-keys",
-            scope="org",
-            org_query_key="organization_id",
-            return_annotation=list,
-        ),
-    ])
+    register_proxy_tools(
+        mcp,
+        [
+            ToolSpec(
+                name="list_org_keys",
+                description="List.",
+                method="get",
+                path="/org-keys",
+                scope="org",
+                org_query_key="organization_id",
+                return_annotation=list,
+            ),
+        ],
+    )
 
     await mcp.tools["list_org_keys"]()
 
@@ -246,16 +274,19 @@ async def test_query_params_forwarded(monkeypatch, mcp):
     get_mock = AsyncMock(return_value=[])
     monkeypatch.setattr(_factory.api, "get", get_mock)
 
-    register_proxy_tools(mcp, [
-        ToolSpec(
-            name="list_filtered",
-            description="List.",
-            method="get",
-            path="/items",
-            query_params=(Param("status", str, default=None),),
-            return_annotation=list,
-        ),
-    ])
+    register_proxy_tools(
+        mcp,
+        [
+            ToolSpec(
+                name="list_filtered",
+                description="List.",
+                method="get",
+                path="/items",
+                query_params=(Param("status", str, default=None),),
+                return_annotation=list,
+            ),
+        ],
+    )
 
     await mcp.tools["list_filtered"](status="active")
     get_mock.assert_awaited_once_with("/items", "jwt-tok", trim=True, status="active")
@@ -266,16 +297,19 @@ async def test_query_params_none_skipped(monkeypatch, mcp):
     get_mock = AsyncMock(return_value=[])
     monkeypatch.setattr(_factory.api, "get", get_mock)
 
-    register_proxy_tools(mcp, [
-        ToolSpec(
-            name="list_maybe",
-            description="List.",
-            method="get",
-            path="/items",
-            query_params=(Param("filter", str, default=None),),
-            return_annotation=list,
-        ),
-    ])
+    register_proxy_tools(
+        mcp,
+        [
+            ToolSpec(
+                name="list_maybe",
+                description="List.",
+                method="get",
+                path="/items",
+                query_params=(Param("filter", str, default=None),),
+                return_annotation=list,
+            ),
+        ],
+    )
 
     await mcp.tools["list_maybe"]()
     get_mock.assert_awaited_once_with("/items", "jwt-tok", trim=True)
@@ -289,41 +323,50 @@ async def test_query_params_none_skipped(monkeypatch, mcp):
 
 def test_validate_spec_rejects_unresolved_placeholder(mcp):
     with pytest.raises(ValueError, match="unresolved placeholders"):
-        register_proxy_tools(mcp, [
-            ToolSpec(
-                name="bad_tool",
-                description="Bad.",
-                method="get",
-                path="/things/{thing_id}",
-            ),
-        ])
+        register_proxy_tools(
+            mcp,
+            [
+                ToolSpec(
+                    name="bad_tool",
+                    description="Bad.",
+                    method="get",
+                    path="/things/{thing_id}",
+                ),
+            ],
+        )
 
 
 def test_validate_spec_rejects_body_org_key_without_org_scope(mcp):
     with pytest.raises(ValueError, match="body_org_key.*requires scope"):
-        register_proxy_tools(mcp, [
-            ToolSpec(
-                name="bad_tool",
-                description="Bad.",
-                method="post",
-                path="/things",
-                scope="auth",
-                body_org_key="org_id",
-            ),
-        ])
+        register_proxy_tools(
+            mcp,
+            [
+                ToolSpec(
+                    name="bad_tool",
+                    description="Bad.",
+                    method="post",
+                    path="/things",
+                    scope="auth",
+                    body_org_key="org_id",
+                ),
+            ],
+        )
 
 
 def test_validate_spec_rejects_role_scope_without_roles(mcp):
     with pytest.raises(ValueError, match="scope='role' requires"):
-        register_proxy_tools(mcp, [
-            ToolSpec(
-                name="bad_tool",
-                description="Bad.",
-                method="get",
-                path="/things",
-                scope="role",
-            ),
-        ])
+        register_proxy_tools(
+            mcp,
+            [
+                ToolSpec(
+                    name="bad_tool",
+                    description="Bad.",
+                    method="get",
+                    path="/things",
+                    scope="role",
+                ),
+            ],
+        )
 
 
 # --- UUID type annotation ---
@@ -331,15 +374,19 @@ def test_validate_spec_rejects_role_scope_without_roles(mcp):
 
 def test_uuid_param_annotation_propagated(mcp):
     from uuid import UUID
-    register_proxy_tools(mcp, [
-        ToolSpec(
-            name="get_widget",
-            description="Get.",
-            method="get",
-            path="/widgets/{widget_id}",
-            path_params=(Param("widget_id", UUID),),
-        ),
-    ])
+
+    register_proxy_tools(
+        mcp,
+        [
+            ToolSpec(
+                name="get_widget",
+                description="Get.",
+                method="get",
+                path="/widgets/{widget_id}",
+                path_params=(Param("widget_id", UUID),),
+            ),
+        ],
+    )
 
     fn = mcp.tools["get_widget"]
     assert fn.__annotations__["widget_id"] is UUID
@@ -353,18 +400,21 @@ async def test_body_fields_none_values_omitted(monkeypatch, mcp):
     post_mock = AsyncMock(return_value={"id": "new"})
     monkeypatch.setattr(_factory.api, "post", post_mock)
 
-    register_proxy_tools(mcp, [
-        ToolSpec(
-            name="create_with_optional",
-            description="Create.",
-            method="post",
-            path="/things",
-            body_fields=(
-                Param("name", str),
-                Param("tag", str, default=None),
+    register_proxy_tools(
+        mcp,
+        [
+            ToolSpec(
+                name="create_with_optional",
+                description="Create.",
+                method="post",
+                path="/things",
+                body_fields=(
+                    Param("name", str),
+                    Param("tag", str, default=None),
+                ),
             ),
-        ),
-    ])
+        ],
+    )
 
     await mcp.tools["create_with_optional"](name="X")
     post_mock.assert_awaited_once_with("/things", "jwt-tok", trim=True, json={"name": "X"})
@@ -374,15 +424,18 @@ async def test_body_fields_none_values_omitted(monkeypatch, mcp):
 
 
 def test_handler_has_correct_name_and_doc(mcp):
-    register_proxy_tools(mcp, [
-        ToolSpec(
-            name="my_tool",
-            description="Does something useful.",
-            method="get",
-            path="/x",
-            path_params=(Param("x_id", str, description="The X ID."),),
-        ),
-    ])
+    register_proxy_tools(
+        mcp,
+        [
+            ToolSpec(
+                name="my_tool",
+                description="Does something useful.",
+                method="get",
+                path="/x",
+                path_params=(Param("x_id", str, description="The X ID."),),
+            ),
+        ],
+    )
 
     fn = mcp.tools["my_tool"]
     assert fn.__name__ == "my_tool"
@@ -403,16 +456,69 @@ async def test_trim_false_passed_to_api(monkeypatch, mcp):
     get_mock = AsyncMock(return_value={"big": "data"})
     monkeypatch.setattr(_factory.api, "get", get_mock)
 
-    register_proxy_tools(mcp, [
-        ToolSpec(
-            name="get_full",
-            description="Get.",
-            method="get",
-            path="/things/{thing_id}",
-            path_params=(Param("thing_id", str),),
-            trim=False,
-        ),
-    ])
+    register_proxy_tools(
+        mcp,
+        [
+            ToolSpec(
+                name="get_full",
+                description="Get.",
+                method="get",
+                path="/things/{thing_id}",
+                path_params=(Param("thing_id", str),),
+                trim=False,
+            ),
+        ],
+    )
 
     await mcp.tools["get_full"](FAKE_PROJECT_ID)
     get_mock.assert_awaited_once_with(f"/things/{FAKE_PROJECT_ID}", "jwt-tok", trim=False)
+
+
+# --- derive_annotations ---
+
+from mcp_server.tools._factory import derive_annotations  # noqa: E402
+
+
+def _minimal_spec(**kwargs):
+    defaults = dict(name="t", description="Test tool.", method="get", path="/x")
+    defaults.update(kwargs)
+    return ToolSpec(**defaults)
+
+
+def test_get_specs_are_read_only():
+    ann = derive_annotations(_minimal_spec(method="get"))
+    assert ann.readOnlyHint is True
+    assert ann.destructiveHint is False
+    assert ann.idempotentHint is True
+    assert ann.openWorldHint is False
+
+
+def test_delete_specs_are_destructive_and_idempotent():
+    ann = derive_annotations(_minimal_spec(method="delete"))
+    assert ann.readOnlyHint is False
+    assert ann.destructiveHint is True
+    assert ann.idempotentHint is True
+
+
+def test_destructive_description_marks_post_as_destructive():
+    ann = derive_annotations(_minimal_spec(method="post", description="Destructive. Drop it."))
+    assert ann.destructiveHint is True
+
+
+def test_plain_post_is_not_destructive():
+    ann = derive_annotations(_minimal_spec(method="post"))
+    assert ann.destructiveHint is False
+    assert ann.idempotentHint is False
+
+
+def test_explicit_annotations_override_derived():
+    ann = derive_annotations(_minimal_spec(method="post", annotations={"openWorldHint": True}))
+    assert ann.openWorldHint is True
+
+
+def test_registered_proxy_tools_carry_annotations(monkeypatch):
+    mcp = FakeMCP()
+    register_proxy_tools(mcp, [_minimal_spec(name="anno_probe")])
+    ann = mcp.tool_annotations["anno_probe"]
+    assert ann is not None
+    assert ann.readOnlyHint is True

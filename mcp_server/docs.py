@@ -11,6 +11,8 @@ from typing import Annotated
 from fastmcp import FastMCP
 from pydantic import Field
 
+from mcp_server.tools._annotations import READ_ONLY
+
 # Doc example UUIDs: never hand-write hex; generate with \
 # `uv run python -c "import uuid; print(uuid.uuid4())"`.
 _GRAPH_DOC_THREE_NODE_EXAMPLE_IDS: tuple[str, str, str] = (
@@ -58,9 +60,10 @@ See `docs://known-quirks` for details on the sequencing requirement.
 
 `SUPER_ADMIN > ADMIN > DEVELOPER > MEMBER`
 
-- **Member**: read-only access (list, get)
-- **Developer**: create/update/delete resources, run graphs, manage cron jobs, OAuth connections, knowledge mutations
-- **Admin**: manage variables, secrets, invite members
+- **Member**: read access (list, get), run agents, manually trigger existing crons
+- **Developer**: create/update/delete resources, run graphs, manage cron jobs, OAuth connections, \
+knowledge mutations, create project API keys
+- **Admin**: manage variables, secrets, invite members, create/revoke API keys (org keys and revocations)
 - **SuperAdmin**: org limits, cost management
 
 If a tool returns a role error, check with `get_current_context`.
@@ -122,7 +125,7 @@ not call providers or infer tokens from prompts. Use `years`/`months` lists or `
 model breakdowns depend on stored `model_id`
 - Batch deletions: `delete_datasets`, `delete_entries`, `delete_judges` accept lists of IDs
 - Graph updates send the full graph structure — always `get_graph` first, modify, then `update_graph`
-- Secrets values are write-only; `list_secrets` returns masked values
+- Secret values are write-only; `list_secrets` returns key names only
 - OAuth connections must be set up in the web UI with explicit user permission — use \
 `check_oauth_status` to verify
 - Fetch `docs://versioning` before saving, publishing, scheduling, or reasoning about live vs editable versions
@@ -948,7 +951,7 @@ Variable definitions can be global or project-scoped:
 
 1. `list_variable_definitions` → see all definitions
 2. `upsert_variable_definition(name, definition)` → create/update
-3. `delete_variable_definition(id)` → remove
+3. `delete_variable_definition(name)` → remove
 
 Frontend behavior to mirror mentally:
 
@@ -960,16 +963,16 @@ Frontend behavior to mirror mentally:
 Named overrides for variable definitions (e.g., per-environment or per-client):
 
 1. `list_variable_sets` → see all sets
-2. `upsert_variable_set(name, values)` → create/update
-3. `delete_variable_set(id)` → remove
+2. `upsert_variable_set(set_id, data)` → create/update
+3. `delete_variable_set(set_id)` → remove
 
 ## Secrets
 
 Encrypted key-value pairs (API keys, credentials):
 
-1. `list_secrets` → returns masked values
+1. `list_secrets` → returns key names only (never values)
 2. `upsert_secret(key, value)` → create/update (write-only)
-3. `delete_secret(id)` → remove
+3. `delete_secret(key)` → remove
 
 ## Resolution at Runtime
 
@@ -1143,14 +1146,17 @@ GRAPHS = (
 _QA_DOC = """\
 # QA & Evaluation
 
+Dataset, entry, custom-column, and judge tools operate on the **active organization** \
+(`select_organization` first). Only `run_qa`, `run_evaluation`, and `get_evaluations` take a `project_id`.
+
 ## Datasets
 
 Test case collections for evaluating agent quality:
 
-1. `list_datasets(project_id)` → find existing datasets
-2. `create_dataset(project_id, dataset_data)` → create one or more datasets (`dataset_data.datasets_name`)
-3. `update_dataset(project_id, dataset_id, dataset_name)` → rename a dataset
-4. `delete_datasets(project_id, dataset_ids)` → batch delete
+1. `list_datasets()` → find existing datasets (active organization)
+2. `create_dataset(dataset_data)` → create one or more datasets (`dataset_data.datasets_name`)
+3. `update_dataset(dataset_id, dataset_name)` → rename a dataset
+4. `delete_datasets(dataset_ids)` → batch delete (developer+)
 
 Dataset names are not unique — duplicates are allowed. Always call `list_datasets` first and \
 reuse an existing `dataset_id` instead of creating a new dataset with the same name.
@@ -1159,12 +1165,12 @@ reuse an existing `dataset_id` instead of creating a new dataset with the same n
 
 Individual test cases within a dataset:
 
-1. `list_entries(project_id, dataset_id)` → paginated response: \
+1. `list_entries(dataset_id)` → paginated response: \
 `{pagination: {...}, inputs_groundtruths: [...]}`
-2. `create_entries(project_id, dataset_id, inputs_groundtruths)` → batch create
-3. `update_entries(project_id, dataset_id, inputs_groundtruths)` → batch update
-4. `delete_entries(project_id, dataset_id, input_groundtruth_ids)` → batch delete
-5. `save_trace_to_qa(project_id, dataset_id, trace_id)` → save a trace as a test case
+2. `create_entries(dataset_id, inputs_groundtruths)` → batch create
+3. `update_entries(dataset_id, inputs_groundtruths)` → batch update
+4. `delete_entries(dataset_id, input_groundtruth_ids)` → batch delete (developer+)
+5. `save_trace_to_qa(dataset_id, trace_id)` → save a trace as a test case
 
 Entry shape for create:
 
@@ -1188,7 +1194,7 @@ store the data but it will NOT appear in the frontend.
 
 Safe workflow:
 
-1. `list_custom_columns(project_id, dataset_id)` → get `column_id` (UUID) and `column_name` \
+1. `list_custom_columns(dataset_id)` → get `column_id` (UUID) and `column_name` \
 (display label) for each column
 2. Use the `column_id` as the key in `custom_columns` dicts when creating or updating entries:
    `{"custom_columns": {"__GRAPH_DOC_QA_COL__": "my value"}}`
@@ -1203,9 +1209,10 @@ use `export_dataset_csv` instead.
 
 Round-trip dataset operations via CSV text:
 
-1. `export_dataset_csv(project_id, dataset_id)` → returns CSV text with columns: \
-`position`, `input` (JSON string), `expected_output`, plus custom column display names
-2. `import_dataset_csv(project_id, dataset_id, csv_content)` → imports CSV entries into a dataset
+1. `export_dataset_csv(dataset_id)` → returns CSV text with columns: \
+`position`, `input` (JSON string), `expected_output`, plus custom column display names. \
+Output is capped at ~200K chars — a truncated export ends with a `#TRUNCATED` line; never re-import it
+2. `import_dataset_csv(dataset_id, csv_content)` → imports CSV entries into a dataset (max ~1MB)
 
 CSV import rules:
 - Required columns: `input` (valid JSON), `expected_output`
@@ -1218,28 +1225,28 @@ CSV import rules:
 
 To reorganize, sort, or migrate entries between datasets:
 
-1. `export_dataset_csv(project_id, source_dataset_id)` → get all entries as CSV
+1. `export_dataset_csv(source_dataset_id)` → get all entries as CSV
 2. Process the CSV (sort rows, filter, edit values)
-3. `create_dataset(project_id, {"datasets_name": ["target"]})` → create destination (or reuse existing)
-4. `import_dataset_csv(project_id, target_dataset_id, modified_csv)` → import sorted entries
-5. Verify with `list_entries(project_id, target_dataset_id)` (check `total_items` in pagination)
+3. `create_dataset({"datasets_name": ["target"]})` → create destination (or reuse existing)
+4. `import_dataset_csv(target_dataset_id, modified_csv)` → import sorted entries
+5. Verify with `list_entries(target_dataset_id)` (check `total_items` in pagination)
 
 To replace entries in an existing dataset:
 
-1. `export_dataset_csv(project_id, dataset_id)` → snapshot current state
+1. `export_dataset_csv(dataset_id)` → snapshot current state
 2. `list_entries` → collect all entry IDs
-3. `delete_entries(project_id, dataset_id, all_ids)` → clear
-4. `import_dataset_csv(project_id, dataset_id, modified_csv)` → re-import
+3. `delete_entries(dataset_id, all_ids)` → clear
+4. `import_dataset_csv(dataset_id, modified_csv)` → re-import
 
 ## Judges
 
 LLM-based evaluators that score agent responses:
 
-1. `list_judges(project_id)` → see judges
+1. `list_judges()` → see judges (active organization)
 2. `get_judge_defaults` → default judge config template
-3. `create_judge(project_id, judge_data)` → new judge
-4. `update_judge(project_id, judge_id, judge_data)` → modify
-5. `delete_judges(project_id, judge_ids)` → batch delete
+3. `create_judge(judge_data)` → new judge
+4. `update_judge(judge_id, judge_data)` → modify
+5. `delete_judges(judge_ids)` → batch delete (developer+)
 
 Judge shape for create:
 
@@ -1593,8 +1600,8 @@ will often truncate.
 Workarounds:
 
 - Use smaller `page_size` (10–20) and paginate manually
-- Use `export_dataset_csv` for full dataset retrieval — it paginates internally and returns \
-CSV text that won't be truncated by the MCP response limiter
+- Use `export_dataset_csv` for bulk dataset retrieval — it paginates internally and returns \
+CSV text with its own ~200K char cap (a truncated export ends with a `#TRUNCATED` line)
 - Never assume a `_truncated` response contains all data
 
 ## Custom Column Keys Are UUIDs, Not Display Names
@@ -1717,13 +1724,14 @@ If the secret is lost, call again with `rotate_secret=true` and update the secre
 ## Git Sync
 
 One-way deploy from a GitHub repo to Draft'n Run. On each push to the watched branch, \
-the backend fetches `graph.json` and deploys it to production (the user's draft is never touched). \
-Requires the Draft'n Run GitHub App installed on the repo.
+changed graphs are deployed to production and changed prompts get new versions \
+(the user's draft is never touched). Requires the Draft'n Run GitHub App installed on the repo.
 
 - `configure_git_sync(github_owner, github_repo_name, branch?, github_installation_id, project_type?)` \
-→ scan the repo for all `graph.json` files, create a project + sync config for each. Developer+. \
-A single repo can contain multiple projects (one per subfolder). Folders already linked are skipped. \
-`project_type` defaults to "workflow". Returns 422 if no `graph.json` found.
+→ scan the repo's `draftnrun/` folder structure and import projects + prompts. Developer+. \
+Projects live under `draftnrun/projects/<name>/` (each with `graph.json` + component files); \
+prompts live under `draftnrun/prompts/` as `.md` files. Folders already linked are skipped. \
+`project_type` defaults to "workflow". Returns 422 if the repo has no `draftnrun/` root folder.
 - `list_git_sync_configs()` → list all git sync configs in the active org.
 - `get_git_sync_config(config_id)` → config details including last sync status/commit and `last_sync_error` \
   (human-readable error on failure, null on success).
@@ -1732,7 +1740,8 @@ A single repo can contain multiple projects (one per subfolder). Folders already
 Setup prerequisites:
 1. User installs the Draft'n Run GitHub App on their repo (via GitHub UI).
 2. User provides the `github_installation_id` from the GitHub App install page.
-3. The repo must contain at least one `graph.json` file in the write format (`GraphUpdateSchema`).
+3. The repo must contain a `draftnrun/` root folder with `projects/` (graph.json per project) \
+and/or `prompts/` content.
 
 ## Monitoring
 
@@ -1740,8 +1749,8 @@ Setup prerequisites:
 Also accepts `start_time`/`end_time` (ISO 8601) for precise date range filtering; \
 when provided, `duration` is ignored
 - `get_trace_tree(trace_id)` → full span tree with timings (`trace_id` is an OTel hex string, e.g. `0x6d4e...`)
-- `get_org_charts(duration_days)` → usage charts (1–90 days)
-- `get_org_kpis(duration_days)` → key metrics
+- `get_org_charts(duration)` → usage charts (days, clamped 1–90)
+- `get_org_kpis(duration)` → key metrics (days, clamped 1–90)
 - `get_credit_usage` → credit consumption
 - `get_org_token_usage(years?, months?, by_model=true)` → input/output token usage by \
 monthly period from stored trace spans. `years` and `months` accept lists or `"all"`; \
@@ -1811,7 +1820,7 @@ def register(mcp: FastMCP) -> None:
 
     available_domains = ", ".join(sorted(DOMAINS.keys()))
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_guide(
         domain: Annotated[
             str,

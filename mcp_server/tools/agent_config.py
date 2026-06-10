@@ -17,6 +17,7 @@ from pydantic import Field
 
 from mcp_server.client import ToolError, api
 from mcp_server.context import require_org_context
+from mcp_server.tools._annotations import DESTRUCTIVE_WRITE, IDEMPOTENT_WRITE, NON_DESTRUCTIVE_WRITE
 from mcp_server.tools._defaults import ensure_provider_model_format
 from mcp_server.tools.context_tools import _get_auth
 
@@ -47,8 +48,7 @@ def _validate_model_choice(prefixed_model: str, existing_params: list[dict]) -> 
         return
     labels = [f"{opt.get('label', '?')} → {opt['value']}" for opt in options if "value" in opt]
     raise ValueError(
-        f"Model '{prefixed_model}' is not available on this agent. "
-        f"Pick one of:\n  " + "\n  ".join(labels)
+        f"Model '{prefixed_model}' is not available on this agent. Pick one of:\n  " + "\n  ".join(labels)
     )
 
 
@@ -67,7 +67,10 @@ def _merge_model_parameters(
 
     merged = []
     for param in existing_params:
-        p = {"name": param["name"], "value": param.get("value", param.get("default"))}
+        existing_value = param.get("value")
+        if existing_value is None:
+            existing_value = param.get("default")
+        p = {"name": param["name"], "value": existing_value}
         if param["name"] in backend_updates:
             p["value"] = backend_updates[param["name"]]
         merged.append(p)
@@ -92,15 +95,18 @@ async def _fetch_component_by_name(jwt: str, org_id: str, release_stage: str, co
 
     available = sorted({c.get("name", c.get("component_name", "?")) for c in components})
     raise ValueError(
-        f"Component '{component_name}' not found in the catalog. "
-        f"Available components: {', '.join(available[:30])}"
+        f"Component '{component_name}' not found in the catalog. Available components: {', '.join(available[:30])}"
     )
+
+
+def _component_version_id(component: dict) -> str | None:
+    return component.get("component_version_id") or component.get("version_id") or component.get("id")
 
 
 def _validate_agent_tool_component(component: dict, existing_tools: list[dict]) -> None:
     """Reject tool additions that the frontend or backend would not handle safely."""
     component_name = component.get("name") or component.get("component_name") or "unknown"
-    component_version_id = component.get("component_version_id") or component.get("id")
+    component_version_id = _component_version_id(component)
 
     if not component.get("function_callable", False):
         raise ValueError(
@@ -162,9 +168,9 @@ def _build_tool_entry(component: dict, tool_parameters: dict) -> dict:
         params.append(p)
 
     return {
-        "name": component.get("name", component.get("component_name")),
-        "component_id": component.get("component_id", component.get("id")),
-        "component_version_id": component.get("component_version_id") or component.get("version_id"),
+        "name": component.get("name") or component.get("component_name"),
+        "component_id": component.get("component_id") or component.get("id"),
+        "component_version_id": _component_version_id(component),
         "component_name": component.get("name", component.get("component_name")),
         "component_description": component.get("description"),
         "parameters": params,
@@ -174,37 +180,27 @@ def _build_tool_entry(component: dict, tool_parameters: dict) -> dict:
 
 
 def register(mcp: FastMCP) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=IDEMPOTENT_WRITE)
     async def configure_agent(
-        agent_id: Annotated[
-            UUID, Field(description="The agent (project) ID (from list_agents or create_agent).")
-        ],
+        agent_id: Annotated[UUID, Field(description="The agent (project) ID (from list_agents or create_agent).")],
         graph_runner_id: Annotated[
             UUID, Field(description="The graph runner version ID (from get_project_overview).")
         ],
-        system_prompt: Annotated[
-            Optional[str], Field(description="The agent's instructions / system prompt.")
-        ] = None,
+        system_prompt: Annotated[Optional[str], Field(description="The agent's instructions / system prompt.")] = None,
         model: Annotated[
             Optional[str],
             Field(
                 description="LLM model identifier exactly as listed in the agent's completion_model"
                 " options (e.g. 'gpt-4.1', 'anthropic:claude-sonnet-4-5')."
-                " Raises ValueError if not in the available options."
+                " Names outside the available options are rejected with the list of valid choices."
             ),
         ] = None,
         temperature: Annotated[
-            Optional[float], Field(description="Sampling temperature (0.0 - 2.0).")
+            Optional[float], Field(description="Sampling temperature (0.0 - 2.0).", ge=0.0, le=2.0)
         ] = None,
-        max_tokens: Annotated[
-            Optional[int], Field(description="Maximum response tokens.")
-        ] = None,
-        name: Annotated[
-            Optional[str], Field(description="Update the agent's display name.")
-        ] = None,
-        description: Annotated[
-            Optional[str], Field(description="Update the agent's description.")
-        ] = None,
+        max_tokens: Annotated[Optional[int], Field(description="Maximum response tokens.")] = None,
+        name: Annotated[Optional[str], Field(description="Update the agent's display name.")] = None,
+        description: Annotated[Optional[str], Field(description="Update the agent's description.")] = None,
     ) -> dict:
         """Configure an agent's model settings and system prompt.
 
@@ -241,11 +237,12 @@ def register(mcp: FastMCP) -> None:
         merged_params = _merge_model_parameters(existing_params, updates)
 
         initial_prompt_param = next((p for p in merged_params if p["name"] == "initial_prompt"), None)
-        final_prompt = (
-            initial_prompt_param["value"]
-            if initial_prompt_param
-            else (system_prompt or "")
-        )
+        if initial_prompt_param:
+            final_prompt = initial_prompt_param["value"]
+        elif system_prompt is not None:
+            final_prompt = system_prompt
+        else:
+            final_prompt = current.get("system_prompt", "")
 
         update_data = {
             "name": name if name is not None else current.get("name", ""),
@@ -280,11 +277,9 @@ def register(mcp: FastMCP) -> None:
             "hint": "Test with run, or add tools with add_tool_to_agent.",
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=NON_DESTRUCTIVE_WRITE)
     async def add_tool_to_agent(
-        agent_id: Annotated[
-            UUID, Field(description="The agent (project) ID (from list_agents or create_agent).")
-        ],
+        agent_id: Annotated[UUID, Field(description="The agent (project) ID (from list_agents or create_agent).")],
         graph_runner_id: Annotated[
             UUID, Field(description="The graph runner version ID (from get_project_overview).")
         ],
@@ -350,11 +345,9 @@ def register(mcp: FastMCP) -> None:
             "total_tools": len(existing_tools),
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTRUCTIVE_WRITE)
     async def remove_tool_from_agent(
-        agent_id: Annotated[
-            UUID, Field(description="The agent (project) ID (from list_agents or create_agent).")
-        ],
+        agent_id: Annotated[UUID, Field(description="The agent (project) ID (from list_agents or create_agent).")],
         graph_runner_id: Annotated[
             UUID, Field(description="The graph runner version ID (from get_project_overview).")
         ],
@@ -368,16 +361,13 @@ def register(mcp: FastMCP) -> None:
         existing_tools = current.get("tools", [])
         target = component_name.lower()
         filtered = [
-            t for t in existing_tools
-            if (t.get("component_name") or "").lower() != target
-            and (t.get("name") or "").lower() != target
+            t
+            for t in existing_tools
+            if (t.get("component_name") or "").lower() != target and (t.get("name") or "").lower() != target
         ]
         if len(filtered) == len(existing_tools):
             tool_names = [t.get("component_name") or t.get("name") for t in existing_tools]
-            raise ValueError(
-                f"Tool '{component_name}' not found on this agent. "
-                f"Current tools: {tool_names}"
-            )
+            raise ValueError(f"Tool '{component_name}' not found on this agent. Current tools: {tool_names}")
 
         update_data = {
             "name": current.get("name", ""),
@@ -391,5 +381,6 @@ def register(mcp: FastMCP) -> None:
         return {
             "status": "ok",
             "removed_tool": component_name,
+            "removed_count": len(existing_tools) - len(filtered),
             "remaining_tools": len(filtered),
         }

@@ -14,8 +14,9 @@ import httpx
 from fastmcp import FastMCP
 from pydantic import Field
 
-from mcp_server.client import api
+from mcp_server.client import ToolError, api
 from mcp_server.context import require_org_context
+from mcp_server.tools._annotations import EXECUTION, READ_ONLY
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
 from mcp_server.tools.context_tools import _get_auth
 
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_POLL_INTERVAL = 2
 MAX_POLL_INTERVAL = 10
+MAX_RUN_TIMEOUT = 600
 
 _P_PROJECT = Param("project_id", UUID, description="The project ID (from list_projects or get_project_overview).")
 _P_RUN = Param("run_id", UUID, description="The run ID (from list_runs or run).")
@@ -61,7 +63,7 @@ PROXY_SPECS: list[ToolSpec] = [
 def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, PROXY_SPECS)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def list_runs(
         project_id: Annotated[
             Optional[UUID],
@@ -69,7 +71,11 @@ def register(mcp: FastMCP) -> None:
         ] = None,
         status: Annotated[
             Optional[str],
-            Field(description="Filter by status: 'pending', 'running', 'completed', or 'failed'."),
+            Field(
+                description=(
+                    "Filter by status: 'pending', 'running', 'completed', or 'failed'. Comma-separated for multiple."
+                )
+            ),
         ] = None,
         trigger: Annotated[
             Optional[str],
@@ -111,7 +117,7 @@ def register(mcp: FastMCP) -> None:
         if project_id is not None:
             params["project_ids"] = str(project_id)
         if status is not None:
-            params["statuses"] = status
+            params["statuses"] = [s for s in (s.strip() for s in status.split(",")) if s]
         if trigger is not None:
             params["triggers"] = [t for t in (t.strip() for t in trigger.split(",")) if t]
         if env is not None:
@@ -122,7 +128,7 @@ def register(mcp: FastMCP) -> None:
             params["date_to"] = date_to
         return await api.get(f"/org/{org['org_id']}/runs", jwt, **params)
 
-    @mcp.tool()
+    @mcp.tool(annotations=EXECUTION)
     async def retry_run(
         project_id: Annotated[
             UUID,
@@ -154,7 +160,7 @@ def register(mcp: FastMCP) -> None:
             json=body,
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=EXECUTION)
     async def run(
         project_id: Annotated[
             UUID,
@@ -170,7 +176,10 @@ def register(mcp: FastMCP) -> None:
                 description=('Request body dict — must contain "messages", may contain additional Start-node fields.'),
             ),
         ],
-        timeout: Annotated[int, Field(description="Max seconds to wait for completion.")] = 60,
+        timeout: Annotated[
+            int,
+            Field(description=f"Max seconds to wait for completion (capped at {MAX_RUN_TIMEOUT})."),
+        ] = 60,
     ) -> dict:
         """Run an agent or workflow and wait for the result.
 
@@ -196,6 +205,7 @@ def register(mcp: FastMCP) -> None:
         """
         if not isinstance(timeout, int) or timeout <= 0:
             raise ValueError("timeout must be a positive integer")
+        timeout = min(timeout, MAX_RUN_TIMEOUT)
         if "messages" not in payload:
             raise ValueError(
                 "payload must contain a 'messages' key. "
@@ -227,7 +237,7 @@ def register(mcp: FastMCP) -> None:
 
             try:
                 run_status = await api.get(f"/projects/{project_id}/runs/{run_id}", jwt)
-            except httpx.HTTPError as exc:
+            except (httpx.HTTPError, ToolError) as exc:
                 logger.warning("Transient error polling run %s: %s", run_id, exc)
                 interval = min(interval + 1, MAX_POLL_INTERVAL)
                 continue
@@ -237,7 +247,7 @@ def register(mcp: FastMCP) -> None:
             if status == "completed":
                 try:
                     return await api.get(f"/projects/{project_id}/runs/{run_id}/result", jwt)
-                except httpx.HTTPError:
+                except (httpx.HTTPError, ToolError):
                     return {
                         "status": "completed",
                         "run_id": run_id,

@@ -24,11 +24,13 @@ FAKE_OTEL_TRACE_ID = "0x6d4e58f8ef17eae5436d8577814f6e60"
 class FakeMCP:
     def __init__(self):
         self.tools = {}
+        self.tool_annotations = {}
         self.resources = {}
 
-    def tool(self):
+    def tool(self, annotations=None):
         def decorator(func):
             self.tools[func.__name__] = func
+            self.tool_annotations[func.__name__] = annotations
             return func
 
         return decorator

@@ -9,10 +9,20 @@ import logging
 from typing import Any
 
 import httpx
+from fastmcp.exceptions import ToolError as FastMCPToolError
 
 from mcp_server.settings import settings
 
 logger = logging.getLogger(__name__)
+
+
+class ToolError(FastMCPToolError):
+    """Backend/tool error whose message must reach the MCP client.
+
+    Subclasses FastMCP's ToolError so the actionable messages survive even if
+    ``mask_error_details`` is ever enabled on the server.
+    """
+
 
 _client: httpx.AsyncClient | None = None
 
@@ -41,24 +51,32 @@ def _trim_response(data: Any) -> Any:
     if isinstance(data, list):
         meta["_total_items"] = len(data)
         meta["_included_items"] = 0
+        envelope_size = len(json.dumps({**meta, "partial_data": []}, default=str))
+        budget = max_size - envelope_size
+        used = 0
         subset: list = []
         for item in data:
-            tentative = {**meta, "partial_data": subset + [item], "_included_items": len(subset) + 1}
-            if len(json.dumps(tentative, default=str)) > max_size:
+            item_size = len(json.dumps(item, default=str)) + 2  # ", " separator
+            if used + item_size > budget:
                 break
             subset.append(item)
+            used += item_size
         if subset:
             meta["partial_data"] = subset
             meta["_included_items"] = len(subset)
         return meta
 
     if isinstance(data, dict):
+        envelope_size = len(json.dumps({**meta, "partial_data": {}}, default=str))
+        budget = max_size - envelope_size
+        used = 0
         subset_dict: dict = {}
         for key, value in data.items():
-            tentative = {**meta, "partial_data": {**subset_dict, key: value}}
-            if len(json.dumps(tentative, default=str)) > max_size:
+            entry_size = len(json.dumps({key: value}, default=str))
+            if used + entry_size > budget:
                 break
             subset_dict[key] = value
+            used += entry_size
         if subset_dict:
             meta["partial_data"] = subset_dict
         return meta
@@ -136,15 +154,11 @@ async def _handle_response(response: httpx.Response, *, trim: bool = True) -> An
 
     if response.status_code == 502:
         raise ToolError(
-            f"The backend is temporarily unreachable (gateway error){request_context}. "
-            "Retry in a few seconds."
+            f"The backend is temporarily unreachable (gateway error){request_context}. Retry in a few seconds."
         )
 
     if response.status_code == 503:
-        raise ToolError(
-            f"The backend is temporarily unavailable{request_context}. "
-            "Retry in a few seconds."
-        )
+        raise ToolError(f"The backend is temporarily unavailable{request_context}. Retry in a few seconds.")
 
     if response.status_code >= 400:
         detail = ""
@@ -167,10 +181,6 @@ async def _handle_response(response: httpx.Response, *, trim: bool = True) -> An
     return _trim_response(data) if trim else data
 
 
-class ToolError(Exception):
-    pass
-
-
 class DraftnrunClient:
     async def get(self, path: str, token: str, *, trim: bool = True, **params: Any) -> Any:
         client = _get_client()
@@ -191,10 +201,16 @@ class DraftnrunClient:
         return await _handle_response(response, trim=trim)
 
     async def post_file(
-        self, path: str, token: str, *,
-        file_content: bytes, filename: str, field_name: str = "file",
+        self,
+        path: str,
+        token: str,
+        *,
+        file_content: bytes,
+        filename: str,
+        field_name: str = "file",
         content_type: str = "text/csv",
-        trim: bool = True, **params: Any,
+        trim: bool = True,
+        **params: Any,
     ) -> Any:
         """Upload a file via multipart form data (for CSV import, etc.)."""
         client = _get_client()
@@ -217,12 +233,20 @@ class DraftnrunClient:
         return await _handle_response(response, trim=trim)
 
     async def delete(
-        self, path: str, token: str, json: dict | list | None = None,
-        trim: bool = True, **params: Any,
+        self,
+        path: str,
+        token: str,
+        json: dict | list | None = None,
+        trim: bool = True,
+        **params: Any,
     ) -> Any:
         client = _get_client()
         response = await client.request(
-            "DELETE", path, headers=_make_headers(token), json=json, params=params or None,
+            "DELETE",
+            path,
+            headers=_make_headers(token),
+            json=json,
+            params=params or None,
         )
         return await _handle_response(response, trim=trim)
 

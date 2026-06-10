@@ -181,7 +181,7 @@ def build_root_spans(rows: List[dict]) -> List[RootTraceSpan]:
     ]
 
 
-def get_span_trace_service(user_id: UUID, trace_id: UUID) -> TraceSpan:
+def get_span_trace_service(user_id: UUID, trace_id: str) -> TraceSpan:
     df_span = query_trace_by_trace_id(trace_id)
     span_trees = build_span_trees(df_span)
     if len(span_trees) == 0:

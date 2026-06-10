@@ -89,7 +89,7 @@ All domain content lives in `docs.py` (single source of truth).
 | API Keys | 6 | Project + org level keys |
 | Variables | 9 | Admin only — definitions, sets, secrets |
 | Knowledge | 9 | `create_source` (website/database), sources, documents, chunks |
-| QA | 20 | Datasets, entries, custom columns, CSV export/import, judges, evaluations |
+| QA | 20 | Datasets, entries, custom columns, CSV export/import, judges, evaluations — org-session-scoped (no `organization_id` parameter) |
 | Monitoring | 6 | Traces, charts, KPIs, credits, monthly token usage |
 | Crons | 9 | Create, pause/resume, manual trigger, execution history |
 | OAuth | 3 | List, check status, revoke |
@@ -130,13 +130,14 @@ Custom tools (validation, multi-step, client-side logic) are still defined as `@
 
 | Guard | Description |
 |---|---|
-| RBAC | Variables/secrets require admin. Deletions require developer+. `create_agent`, cron writes (create/update/delete/pause/resume), OAuth tools, `create_typeform_webhook`, and `update_document_chunks` require developer+. `trigger_cron` requires member role or above. `invite_org_member` checks admin/super_admin on the target org, not just the active org. |
+| RBAC | Variables/secrets and org API key create/revoke require admin. Org-scoped deletions (sources, documents, QA datasets/entries/judges, crons) require developer+. `create_agent`, `create_workflow`, cron writes, OAuth tools, git sync writes, and `update_document_chunks` require developer+. `trigger_cron` requires member role or above. `invite_org_member` checks admin on the target org, not just the active org. Project-scoped tools (graphs, alert emails, project API keys, `delete_project`) rely on the backend's per-project role checks — the MCP layer cannot know the project's org. Role tuples live in `tools/_roles.py`. |
+| Tool annotations | Every tool declares MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), derived from the HTTP method in `_factory.derive_annotations` and overridable per spec; hand-written tools use the presets in `tools/_annotations.py`. |
 | Component search | `search_components` rejects blank or whitespace-only queries. |
 | Release stage | Component catalog auto-filtered by org tier. Cannot be overridden by the AI. |
 | Agent name | `create_agent` rejects empty/whitespace names. |
-| Pagination | `list_runs` caps page_size at 100. Org-scoped with optional filters: `project_id` (single, mapped to `project_ids`), `status` (single, mapped to `statuses`), `trigger`, `date_from`, `date_to`. |
+| Pagination | `list_runs` caps page_size at 100. Org-scoped with optional filters: `project_id` (single, mapped to `project_ids`), `status`, `trigger`, `env` (comma-separated for multiple, mapped to `statuses`/`triggers`/`envs`), `date_from`, `date_to`. |
 | Monitoring | Duration clamped 1–90 days. `list_traces` also accepts `start_time`/`end_time` (ISO 8601) for date range filtering. `get_org_token_usage` reads stored trace spans by monthly period; pass `years`/`months` as lists or `"all"`, with optional per-model rows. |
-| Response size | Responses > 50KB are trimmed by default. `ToolSpec.trim=False` disables trimming per tool (e.g. `get_graph`, `list_components` for round-trip safety). |
+| Response size | Responses > 50KB are trimmed by default. `ToolSpec.trim=False` disables trimming per tool (e.g. `get_graph`, `list_components` for round-trip safety). `export_dataset_csv` caps its output at ~200K chars (`#TRUNCATED` marker line); `import_dataset_csv` rejects CSVs over ~1MB. `run` caps its `timeout` at 600s. |
 | Session diagnostics | `get_current_context` includes `session.session_id` and `session.storage_backend` ("redis" or "memory"). |
 | Agent tools | `add_tool_to_agent` rejects non-`function_callable`, duplicate, or integration-backed tools that it cannot wire safely. Use the display name from `search_components()`, not hard-coded names. The AI Agent's `skip_tools_with_missing_oauth` parameter (default `True`) silently drops any tool whose OAuth connection is missing at agent startup. Neverdrop-branded Google tools use the `google-mail-neverdrop` and `google-calendar-neverdrop` provider filters. |
 | Model validation | `configure_agent` validates the requested model against the agent's available options and rejects unknown or deprecated names with a clear error listing valid choices. |
@@ -196,7 +197,9 @@ npx @modelcontextprotocol/inspector http://localhost:8090/mcp
 
 The MCP server runs as a standalone Kubernetes pod (`ada-mcp`) alongside the API. The `build-and-deploy-k8s.yml` workflow builds the Docker image, pushes it to GHCR, and rolls out the deployment in the same pipeline as the other services. MCP rollout failure is non-blocking — it will not fail the overall deploy.
 
-- **Dockerfile**: `mcp_server/Dockerfile`
+- **Dockerfile**: `mcp_server/Dockerfile` — installs only the `mcp-server` dependency group (`uv sync --only-group mcp-server`), not the backend tree
+- **Secrets**: the pod reads the dedicated `ada-mcp-secrets` K8s secret (see `infra/k8s/*/secrets.yaml.example`) — create it on the cluster before deploying; it must NOT reuse the full backend `ada-secrets`
+- **Replicas**: keep `replicas: 1` — org-session state falls back to per-pod memory when Redis is down and there is no session affinity
 - **Image**: `ghcr.io/scopeo/draftnrun-mcp-server`
 - **K8s manifests**: `infra/k8s/base/mcp-*.yaml`
 - **Ingress**: `mcp-staging.draftnrun.com` / `mcp.draftnrun.com`

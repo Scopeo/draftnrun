@@ -115,6 +115,13 @@ hubspot = [
 load-testing = [
     { name = "locust" },
 ]
+mcp-server = [
+    { name = "fastmcp" },
+    { name = "httpx" },
+    { name = "pydantic-settings" },
+    { name = "redis" },
+    { name = "sentry-sdk" },
+]
 mistralai = [
     { name = "mistralai" },
 ]
@@ -226,7 +233,13 @@ google-drive = [
 ]
 hubspot = [{ name = "fuzzywuzzy", specifier = ">=0.18.0,<0.19" }]
 load-testing = [{ name = "locust", specifier = ">=2.32.2,<3" }]
-mcp-server = []
+mcp-server = [
+    { name = "fastmcp", specifier = ">=3.2.0,<4" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pydantic-settings", specifier = ">=2.6.1" },
+    { name = "redis", specifier = ">=5.2.1,<6" },
+    { name = "sentry-sdk", specifier = ">=2.54.0,<3" },
+]
 mistralai = [{ name = "mistralai", specifier = ">=1.2.2,<2" }]
 postgres = [{ name = "psycopg2-binary", specifier = "==2.9.9" }]
 tracing = [
