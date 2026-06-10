@@ -46,6 +46,20 @@ def _serialize_result(result) -> dict:
     }
 
 
+def _extract_injectable_text(execution_result: dict) -> str | None:
+    results = execution_result.get("results") or []
+    if not isinstance(results, list):
+        return None
+
+    main_results = [result for result in results if isinstance(result, dict) and result.get("is_main_result")]
+    for result in main_results + [result for result in results if isinstance(result, dict)]:
+        text = result.get("text")
+        if isinstance(text, str):
+            return text
+
+    return None
+
+
 PYTHON_CODE_RUNNER_TOOL_DESCRIPTION = ToolDescription(
     name="python_code_runner",
     description=(
@@ -382,6 +396,9 @@ class PythonCodeRunner(Component):
 
         images_paths = self._save_images_from_results(execution_result_dict, records)
         artifacts = {"execution_result": execution_result_dict}
+        injectable_text = _extract_injectable_text(execution_result_dict)
+        if injectable_text is not None:
+            artifacts["text"] = injectable_text
         if images_paths:
             artifacts["images"] = images_paths
             content += (

@@ -64,6 +64,12 @@ The concrete base class implementing `Runnable`. Key attributes:
 
 **`_run_without_io_trace(inputs: BaseModel, ctx: dict) -> BaseModel`** is the abstract method subclasses implement.
 
+### Python Code Runner Artifacts
+
+`PythonCodeRunner` preserves the full E2B execution payload at `artifacts.execution_result`. When the execution returns a
+text result, it also exposes that value as `artifacts.text` so downstream field expressions can inject it with
+`@{{<python_runner_instance_id>.artifacts::text}}` without relying on nested array traversal.
+
 ### Component Catalog Lifecycle
 
 When removing a component from the product, delete the runtime class, registry entry, seed data, existing DB catalog rows (with a migration), default tool description, and wrapper components that only exist to call it. Leaving only part of the catalog wiring in place can keep a dead component instantiable through backend seeds or MCP graph validation even after it disappears from the front-end.
