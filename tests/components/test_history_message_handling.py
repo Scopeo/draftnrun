@@ -62,7 +62,7 @@ def test_token_budget_drops_oldest_messages_first():
     assert sum(estimate_message_tokens(message) for message in truncated) <= 2_000
 
 
-def test_token_budget_drops_orphaned_tool_results():
+def test_token_budget_drops_tool_call_turns_as_a_unit():
     handler = HistoryMessageHandler(number_first_messages=1, number_last_messages=50, max_history_tokens=1_500)
     big_tool_output = "x" * 4_000
     messages = [
@@ -74,10 +74,29 @@ def test_token_budget_drops_orphaned_tool_results():
         make_message("user", "follow-up"),
     ]
     truncated = handler.get_truncated_messages_history(messages)
-    roles = [message.role for message in truncated]
-    if "tool" in roles:
-        assert truncated[roles.index("tool") - 1].tool_calls is not None
+    for index, message in enumerate(truncated):
+        if message.role == "tool":
+            assert truncated[index - 1].role in ("assistant", "tool")
+            assert any(prior.tool_calls for prior in truncated[:index])
     assert truncated[-1] is messages[-1]
+
+
+def test_token_budget_shrinks_last_turn_with_huge_parallel_tool_results():
+    # Production shape: one agent iteration with 4 parallel retriever calls,
+    # each returning more content than the whole budget allows
+    handler = HistoryMessageHandler(number_first_messages=1, number_last_messages=50, max_history_tokens=10_000)
+    messages = [
+        make_message("system", "prompt"),
+        make_message("user", "old question"),
+        make_message("assistant", "old answer"),
+        make_message("user", "new question"),
+        make_tool_call_message("call_1"),
+    ] + [make_message("tool", "x" * 50_000, tool_call_id=f"call_{i}") for i in range(4)]
+    truncated = handler.get_truncated_messages_history(messages)
+    roles = [message.role for message in truncated]
+    assert roles.count("tool") == 4
+    assert truncated[roles.index("tool") - 1].tool_calls is not None
+    assert sum(estimate_message_tokens(message) for message in truncated) <= 10_000
 
 
 def test_token_budget_shrinks_single_oversized_message():

@@ -31,6 +31,10 @@ def _estimate_total_tokens(messages: list[ChatMessage]) -> int:
     return sum(estimate_message_tokens(message) for message in messages)
 
 
+def _flatten(units: list[list[ChatMessage]]) -> list[ChatMessage]:
+    return [message for unit in units for message in unit]
+
+
 class HistoryMessageHandler:
     def __init__(
         self,
@@ -72,17 +76,25 @@ class HistoryMessageHandler:
             return messages
 
         first_part = list(messages[: self.number_first_messages])
-        tail = list(messages[self.number_first_messages :])
-        while len(tail) > 1 and _estimate_total_tokens(first_part + tail) > self.max_history_tokens:
-            tail.pop(0)
-            self._drop_orphaned_tool_results(tail)
-        return self._shrink_oversized_contents(first_part + tail)
+        tail_units = self._group_into_tool_call_units(messages[self.number_first_messages :])
+        while len(tail_units) > 1 and (
+            _estimate_total_tokens(first_part + _flatten(tail_units)) > self.max_history_tokens
+            or tail_units[0][0].role == "tool"
+        ):
+            tail_units.pop(0)
+        return self._shrink_oversized_contents(first_part + _flatten(tail_units))
 
     @staticmethod
-    def _drop_orphaned_tool_results(tail: list[ChatMessage]) -> None:
-        # A tool result without its preceding assistant tool_calls message is an invalid request
-        while len(tail) > 1 and tail[0].role == "tool":
-            tail.pop(0)
+    def _group_into_tool_call_units(messages: list[ChatMessage]) -> list[list[ChatMessage]]:
+        # A tool result without its preceding assistant tool_calls message is an invalid
+        # request, so an assistant message and its tool results are dropped as one unit
+        units: list[list[ChatMessage]] = []
+        for message in messages:
+            if message.role == "tool" and units:
+                units[-1].append(message)
+            else:
+                units.append([message])
+        return units
 
     def _shrink_oversized_contents(self, messages: list[ChatMessage]) -> list[ChatMessage]:
         excess_tokens = _estimate_total_tokens(messages) - self.max_history_tokens
