@@ -331,7 +331,11 @@ async def tasks_create(
     properties: TaskProperties,
     associations: Optional[list[Association]] = None,
 ) -> dict[str, Any]:
-    body: dict[str, Any] = {"properties": properties.model_dump(exclude_none=True)}
+    payload = properties.model_dump(exclude_none=True)
+    if not payload.get("hs_timestamp"):
+        payload["hs_timestamp"] = _current_hubspot_timestamp()
+
+    body: dict[str, Any] = {"properties": payload}
     if associations:
         body["associations"] = [a.model_dump() for a in associations]
     return await _client.request("post", "/crm/v3/objects/tasks", json=body)

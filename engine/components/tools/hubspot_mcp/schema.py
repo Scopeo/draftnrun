@@ -127,7 +127,13 @@ class TaskProperties(BaseModel):
 
     hs_task_subject: str
     hs_task_body: str
-    hs_timestamp: str = Field(description="ISO 8601 datetime (e.g. '2026-02-27T10:00:00Z'). Required by HubSpot.")
+    hs_timestamp: Optional[str] = Field(
+        default=None,
+        description=(
+            "ISO 8601 datetime (e.g. '2026-02-27T10:00:00Z'). "
+            "Auto-filled with the current UTC time when omitted by tasks_create."
+        ),
+    )
     hs_task_type: Literal["TODO", "EMAIL", "CALL"] = Field(
         default="TODO",
         description="Required by HubSpot despite schema marking it optional.",
