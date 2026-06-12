@@ -321,6 +321,41 @@ async def test_notes_upsert_for_contact_skips_empty_body():
     mock_client.request.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_tasks_create_auto_fills_missing_timestamp():
+    expected = {"id": "task-123"}
+    mock_client = AsyncMock()
+    mock_client.request.return_value = expected
+
+    with (
+        patch("engine.components.tools.hubspot_mcp.server._client", mock_client, create=True),
+        patch(
+            "engine.components.tools.hubspot_mcp.server._current_hubspot_timestamp",
+            return_value="2026-02-27T10:00:00Z",
+        ),
+    ):
+        result = await hubspot_server.tasks_create(
+            properties=hubspot_server.TaskProperties(
+                hs_task_subject="Follow up",
+                hs_task_body="Call the contact.",
+            ),
+        )
+
+    assert result == expected
+    mock_client.request.assert_called_once_with(
+        "post",
+        "/crm/v3/objects/tasks",
+        json={
+            "properties": {
+                "hs_task_subject": "Follow up",
+                "hs_task_body": "Call the contact.",
+                "hs_timestamp": "2026-02-27T10:00:00Z",
+                "hs_task_type": "TODO",
+            }
+        },
+    )
+
+
 def test_hubspot_default_tools_include_upsert_helpers():
     assert "crm_upsert_contact_by_email" in HUBSPOT_DEFAULT_TOOL_NAMES
     assert "notes_upsert_for_contact" in HUBSPOT_DEFAULT_TOOL_NAMES
