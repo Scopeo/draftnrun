@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Type
 
 import requests
+from jinja2 import TemplateError
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 from PIL import Image
@@ -35,6 +36,85 @@ FOR_END_RE = re.compile(r"^{%-?\s*endfor\s*-?%}$", flags=re.S)
 IF_START_RE = re.compile(r"^{%-?\s*if\s+(.+?)\s*-?%}$", flags=re.S)
 IF_END_RE = re.compile(r"^{%-?\s*endif\s*-?%}$", flags=re.S)
 VAR_TAG_RE = re.compile(r"^{{-?\s*(.+?)\s*-?}}$", flags=re.S)
+
+
+def _format_exception(exc: BaseException) -> str:
+    details = str(exc).strip()
+    docx_context = _format_docx_exception_context(exc)
+    if details:
+        base = f"{type(exc).__name__}: {details} (repr={exc!r})"
+    else:
+        base = f"{type(exc).__name__}: {exc!r}"
+    if docx_context:
+        return f"{base}; docx_context={docx_context}"
+    return base
+
+
+def _format_docx_exception_context(exc: BaseException) -> str | None:
+    context = getattr(exc, "docx_context", None)
+    if not context:
+        return None
+    lines = [line.strip() for line in list(context) if line and line.strip()]
+    if not lines:
+        return None
+    return " | ".join(lines[:7])
+
+
+class DocxTemplateRenderError(RuntimeError):
+    pass
+
+
+def _run_docx_render_step(step: str, func):
+    try:
+        return func()
+    except TemplateError as exc:
+        raise DocxTemplateRenderError(f"DOCX render failed while {step}: {_format_exception(exc)}") from exc
+    except Exception as exc:
+        raise DocxTemplateRenderError(f"DOCX render failed while {step}: {_format_exception(exc)}") from exc
+
+
+def _validate_docx_template_context(template: DocxTemplate, context: dict[str, Any]) -> None:
+    missing = _run_docx_render_step(
+        "validating template variables",
+        lambda: template.get_undeclared_template_variables(context=context),
+    )
+    if missing:
+        missing_vars = ", ".join(sorted(missing))
+        raise DocxTemplateRenderError(
+            f"DOCX template references variables missing from generated context: {missing_vars}"
+        )
+
+
+def _render_docx_template_with_diagnostics(template: DocxTemplate, context: dict[str, Any]) -> None:
+    _run_docx_render_step("initializing render state", template.render_init)
+    xml_src = _run_docx_render_step("rendering document body XML", lambda: template.build_xml(context))
+    tree = _run_docx_render_step("fixing rendered tables", lambda: template.fix_tables(xml_src))
+    _run_docx_render_step("fixing document property ids", lambda: template.fix_docpr_ids(tree))
+    _run_docx_render_step("mapping rendered document body", lambda: template.map_tree(tree))
+
+    headers = _run_docx_render_step(
+        "rendering headers",
+        lambda: list(template.build_headers_footers_xml(context, template.HEADER_URI)),
+    )
+    for rel_key, xml in headers:
+        _run_docx_render_step(
+            f"mapping rendered header {rel_key}",
+            lambda rel_key=rel_key, xml=xml: template.map_headers_footers_xml(rel_key, xml),
+        )
+
+    footers = _run_docx_render_step(
+        "rendering footers",
+        lambda: list(template.build_headers_footers_xml(context, template.FOOTER_URI)),
+    )
+    for rel_key, xml in footers:
+        _run_docx_render_step(
+            f"mapping rendered footer {rel_key}",
+            lambda rel_key=rel_key, xml=xml: template.map_headers_footers_xml(rel_key, xml),
+        )
+
+    _run_docx_render_step("rendering document properties", lambda: template.render_properties(context))
+    _run_docx_render_step("rendering footnotes", lambda: template.render_footnotes(context))
+    template.is_rendered = True
 
 
 def _read_docx_plaintext(docx_path: str | Path) -> str:
@@ -146,7 +226,7 @@ def _download_and_convert_image(img_path: str, output_dir: Path) -> Optional[str
                 return str(output_path)
 
     except Exception as e:
-        LOGGER.error(f"Error processing image {img_path}: {e}")
+        LOGGER.exception(f"Error processing image {img_path}: {_format_exception(e)}")
         return None
 
 
@@ -610,10 +690,13 @@ class DocxTemplateAgent(Component):
                         context[key] = InlineImage(template, processed_img_path, width=Mm(img_size))
                         LOGGER.info(f"Successfully added image {key} to template with size {img_size}mm")
                     except Exception as e:
-                        LOGGER.warning(f"Failed to load image {processed_img_path}: {e}, skipping...")
+                        LOGGER.warning(
+                            f"Failed to load image {processed_img_path}: {_format_exception(e)}, skipping..."
+                        )
                         continue
 
-            template.render(context)
+            _validate_docx_template_context(template, context)
+            _render_docx_template_with_diagnostics(template, context)
             template.save(str(output_path))
 
             if temp_template_file:
@@ -652,7 +735,7 @@ class DocxTemplateAgent(Component):
             )
 
         except Exception as e:
-            error_msg = f"Error processing DOCX template: {str(e)}"
+            error_msg = f"Error processing DOCX template: {_format_exception(e)}"
             LOGGER.exception(error_msg)
             if "temp_template_file" in locals() and temp_template_file:
                 try:
