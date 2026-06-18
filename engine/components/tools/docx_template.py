@@ -21,9 +21,11 @@ from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
 try:
+    from docx.image.image import Image as DocxImage
     from docx.shared import Mm
     from docxtpl import DocxTemplate, InlineImage
 except ImportError:
+    DocxImage = None
     DocxTemplate = None
     InlineImage = None
     Mm = None
@@ -228,6 +230,12 @@ def _download_and_convert_image(img_path: str, output_dir: Path) -> Optional[str
     except Exception as e:
         LOGGER.exception(f"Error processing image {img_path}: {_format_exception(e)}")
         return None
+
+
+def _create_inline_image_or_none(template: DocxTemplate, image_path: str, image_size_mm: int):
+    if DocxImage is not None:
+        DocxImage.from_file(image_path)
+    return InlineImage(template, image_path, width=Mm(image_size_mm))
 
 
 class TemplateAnalysis(BaseModel):
@@ -684,15 +692,17 @@ class DocxTemplateAgent(Component):
                     processed_img_path = _download_and_convert_image(img_path, output_dir)
                     if not processed_img_path:
                         LOGGER.warning(f"Failed to process image {img_path}, skipping...")
+                        context[key] = ""
                         continue
 
                     try:
-                        context[key] = InlineImage(template, processed_img_path, width=Mm(img_size))
+                        context[key] = _create_inline_image_or_none(template, processed_img_path, img_size)
                         LOGGER.info(f"Successfully added image {key} to template with size {img_size}mm")
                     except Exception as e:
                         LOGGER.warning(
                             f"Failed to load image {processed_img_path}: {_format_exception(e)}, skipping..."
                         )
+                        context[key] = ""
                         continue
 
             _validate_docx_template_context(template, context)

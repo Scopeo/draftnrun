@@ -82,7 +82,8 @@ discards the stale sandbox and creates a fresh one for the current context.
 diagnostic boundaries for body XML rendering, table fixing, document body mapping, headers, footers, document properties,
 and footnotes. Jinja `TemplateError` failures include docxtpl's nearby plain-text DOCX context when available. Exceptions
 are formatted with their type and `repr`, so libraries that raise blank exceptions, such as `AssertionError()`, still
-produce actionable run output.
+produce actionable run output. Image placeholders are validated with python-docx before they enter the render context;
+unrecognized image files are replaced with an empty value so lazy image parsing cannot fail later during body XML rendering.
 
 ### Component Catalog Lifecycle
 

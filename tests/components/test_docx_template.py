@@ -3,6 +3,7 @@ import zipfile
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from docx.image.exceptions import UnrecognizedImageError
 from jinja2 import TemplateSyntaxError
 from pydantic import create_model
 
@@ -351,6 +352,59 @@ async def test_run_without_io_trace_includes_docx_context_for_jinja_errors(
     result = await docx_agent._run_without_io_trace(inputs, {})
     assert "TemplateSyntaxError" in result.output
     assert "docx_context=Client: {{ name }} | {% if missing_block %}" in result.output
+
+
+@pytest.mark.asyncio
+@patch("engine.components.tools.docx_template._download_and_convert_image")
+@patch("engine.components.tools.docx_template._create_inline_image_or_none")
+@patch("engine.components.tools.docx_template.analyze_docx_template")
+@patch("engine.components.tools.docx_template.build_context_response_model")
+@patch("engine.components.tools.docx_template.DocxTemplate")
+@patch("engine.components.tools.docx_template.get_output_dir")
+@patch("engine.components.tools.docx_template.get_current_span")
+async def test_run_without_io_trace_skips_unrecognized_image_before_render(
+    mock_span,
+    mock_dir,
+    mock_docx,
+    mock_build,
+    mock_analyze,
+    mock_create_inline_image,
+    mock_download_image,
+    docx_agent,
+    mock_completion_service,
+    minimal_docx,
+    tmp_path,
+):
+    mock_span.return_value = MagicMock()
+    mock_dir.return_value = tmp_path / "output"
+    (tmp_path / "output").mkdir()
+    mock_analyze.return_value = TemplateAnalysis(variables={"logo_image"}, conditions=[], loops={})
+    ImageDataModel = create_model("LogoImageData", path=(str, ...), size=(int, ...))
+    ContextModel = create_model("ContextModel")
+    ImagesModel = create_model("ImagesModel", logo_image=(ImageDataModel, ...))
+    ResponseModel = create_model("ResponseModel", context=(ContextModel, ...), images=(ImagesModel, ...))
+    mock_build.return_value = ResponseModel
+    mock_completion_service.constrained_complete_with_pydantic_async = AsyncMock(
+        return_value=ResponseModel(
+            context=ContextModel(),
+            images=ImagesModel(logo_image=ImageDataModel(path="logo.png", size=25)),
+        )
+    )
+    mock_download_image.return_value = str(tmp_path / "output" / "logo.png")
+    mock_create_inline_image.side_effect = UnrecognizedImageError()
+    template = MagicMock()
+    template.get_undeclared_template_variables.return_value = set()
+    template.build_headers_footers_xml.return_value = []
+    mock_docx.return_value = template
+    inputs = DocxTemplateInputs(
+        template_input_path=str(minimal_docx),
+        template_information_brief="brief",
+        output_filename="out.docx",
+    )
+    result = await docx_agent._run_without_io_trace(inputs, {})
+    assert "Successfully" in result.output
+    template.build_xml.assert_called_once()
+    assert template.build_xml.call_args.args[0]["logo_image"] == ""
 
 
 @pytest.mark.asyncio
