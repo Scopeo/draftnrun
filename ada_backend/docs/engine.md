@@ -76,6 +76,14 @@ When a tracing context provides `shared_sandbox`, the runner reuses it only afte
 current event loop. If the health check fails, including closed-loop errors from a previously cached E2B client, the helper
 discards the stale sandbox and creates a fresh one for the current context.
 
+### DOCX Template Diagnostics
+
+`DocxTemplateAgent` validates undeclared template variables before rendering and then runs docxtpl's render pipeline with
+diagnostic boundaries for body XML rendering, table fixing, document body mapping, headers, footers, document properties,
+and footnotes. Jinja `TemplateError` failures include docxtpl's nearby plain-text DOCX context when available. Exceptions
+are formatted with their type and `repr`, so libraries that raise blank exceptions, such as `AssertionError()`, still
+produce actionable run output.
+
 ### Component Catalog Lifecycle
 
 When removing a component from the product, delete the runtime class, registry entry, seed data, existing DB catalog rows (with a migration), default tool description, and wrapper components that only exist to call it. Leaving only part of the catalog wiring in place can keep a dead component instantiable through backend seeds or MCP graph validation even after it disappears from the front-end.

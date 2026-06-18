@@ -3,6 +3,7 @@ import zipfile
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from jinja2 import TemplateSyntaxError
 from pydantic import create_model
 
 from engine.components.component import ComponentAttributes
@@ -211,7 +212,10 @@ async def test_run_without_io_trace_success(
     mock_completion_service.constrained_complete_with_pydantic_async = AsyncMock(
         return_value=ResponseModel(context=ContextModel(name="Test"), images=ImagesModel())
     )
-    mock_docx.return_value = MagicMock()
+    template = MagicMock()
+    template.get_undeclared_template_variables.return_value = set()
+    template.build_headers_footers_xml.return_value = []
+    mock_docx.return_value = template
     inputs = DocxTemplateInputs(
         template_input_path=str(minimal_docx),
         template_information_brief="brief",
@@ -219,6 +223,134 @@ async def test_run_without_io_trace_success(
     )
     result = await docx_agent._run_without_io_trace(inputs, {})
     assert "Successfully" in result.output
+
+
+@pytest.mark.asyncio
+@patch("engine.components.tools.docx_template.analyze_docx_template")
+@patch("engine.components.tools.docx_template.build_context_response_model")
+@patch("engine.components.tools.docx_template.DocxTemplate")
+@patch("engine.components.tools.docx_template.get_output_dir")
+@patch("engine.components.tools.docx_template.get_current_span")
+async def test_run_without_io_trace_body_render_error_includes_blank_exception_details(
+    mock_span,
+    mock_dir,
+    mock_docx,
+    mock_build,
+    mock_analyze,
+    docx_agent,
+    mock_completion_service,
+    minimal_docx,
+    tmp_path,
+):
+    mock_span.return_value = MagicMock()
+    mock_dir.return_value = tmp_path / "output"
+    (tmp_path / "output").mkdir()
+    mock_analyze.return_value = TemplateAnalysis(variables={"name"}, conditions=[], loops={})
+    ContextModel = create_model("ContextModel", name=(str, ...))
+    ImagesModel = create_model("ImagesModel")
+    ResponseModel = create_model("ResponseModel", context=(ContextModel, ...), images=(ImagesModel, ...))
+    mock_build.return_value = ResponseModel
+    mock_completion_service.constrained_complete_with_pydantic_async = AsyncMock(
+        return_value=ResponseModel(context=ContextModel(name="Test"), images=ImagesModel())
+    )
+    template = MagicMock()
+    template.get_undeclared_template_variables.return_value = set()
+    template.build_xml.side_effect = AssertionError()
+    mock_docx.return_value = template
+    inputs = DocxTemplateInputs(
+        template_input_path=str(minimal_docx),
+        template_information_brief="brief",
+        output_filename="out.docx",
+    )
+    result = await docx_agent._run_without_io_trace(inputs, {})
+    assert "DOCX render failed while rendering document body XML" in result.output
+    assert "AssertionError" in result.output
+    assert "AssertionError()" in result.output
+
+
+@pytest.mark.asyncio
+@patch("engine.components.tools.docx_template.analyze_docx_template")
+@patch("engine.components.tools.docx_template.build_context_response_model")
+@patch("engine.components.tools.docx_template.DocxTemplate")
+@patch("engine.components.tools.docx_template.get_output_dir")
+@patch("engine.components.tools.docx_template.get_current_span")
+async def test_run_without_io_trace_reports_missing_template_variables_before_render(
+    mock_span,
+    mock_dir,
+    mock_docx,
+    mock_build,
+    mock_analyze,
+    docx_agent,
+    mock_completion_service,
+    minimal_docx,
+    tmp_path,
+):
+    mock_span.return_value = MagicMock()
+    mock_dir.return_value = tmp_path / "output"
+    (tmp_path / "output").mkdir()
+    mock_analyze.return_value = TemplateAnalysis(variables={"name"}, conditions=[], loops={})
+    ContextModel = create_model("ContextModel", name=(str, ...))
+    ImagesModel = create_model("ImagesModel")
+    ResponseModel = create_model("ResponseModel", context=(ContextModel, ...), images=(ImagesModel, ...))
+    mock_build.return_value = ResponseModel
+    mock_completion_service.constrained_complete_with_pydantic_async = AsyncMock(
+        return_value=ResponseModel(context=ContextModel(name="Test"), images=ImagesModel())
+    )
+    template = MagicMock()
+    template.get_undeclared_template_variables.return_value = {"missing_name"}
+    mock_docx.return_value = template
+    inputs = DocxTemplateInputs(
+        template_input_path=str(minimal_docx),
+        template_information_brief="brief",
+        output_filename="out.docx",
+    )
+    result = await docx_agent._run_without_io_trace(inputs, {})
+    assert "variables missing from generated context: missing_name" in result.output
+    template.build_xml.assert_not_called()
+
+
+@pytest.mark.asyncio
+@patch("engine.components.tools.docx_template.analyze_docx_template")
+@patch("engine.components.tools.docx_template.build_context_response_model")
+@patch("engine.components.tools.docx_template.DocxTemplate")
+@patch("engine.components.tools.docx_template.get_output_dir")
+@patch("engine.components.tools.docx_template.get_current_span")
+async def test_run_without_io_trace_includes_docx_context_for_jinja_errors(
+    mock_span,
+    mock_dir,
+    mock_docx,
+    mock_build,
+    mock_analyze,
+    docx_agent,
+    mock_completion_service,
+    minimal_docx,
+    tmp_path,
+):
+    mock_span.return_value = MagicMock()
+    mock_dir.return_value = tmp_path / "output"
+    (tmp_path / "output").mkdir()
+    mock_analyze.return_value = TemplateAnalysis(variables={"name"}, conditions=[], loops={})
+    ContextModel = create_model("ContextModel", name=(str, ...))
+    ImagesModel = create_model("ImagesModel")
+    ResponseModel = create_model("ResponseModel", context=(ContextModel, ...), images=(ImagesModel, ...))
+    mock_build.return_value = ResponseModel
+    mock_completion_service.constrained_complete_with_pydantic_async = AsyncMock(
+        return_value=ResponseModel(context=ContextModel(name="Test"), images=ImagesModel())
+    )
+    exc = TemplateSyntaxError("unexpected end of template", 12)
+    exc.docx_context = ["", "Client: {{ name }}", "{% if missing_block %}"]
+    template = MagicMock()
+    template.get_undeclared_template_variables.return_value = set()
+    template.build_xml.side_effect = exc
+    mock_docx.return_value = template
+    inputs = DocxTemplateInputs(
+        template_input_path=str(minimal_docx),
+        template_information_brief="brief",
+        output_filename="out.docx",
+    )
+    result = await docx_agent._run_without_io_trace(inputs, {})
+    assert "TemplateSyntaxError" in result.output
+    assert "docx_context=Client: {{ name }} | {% if missing_block %}" in result.output
 
 
 @pytest.mark.asyncio
@@ -250,7 +382,7 @@ async def test_run_without_io_trace_base64(mock_trace_manager, mock_completion_s
             return_value=TemplateAnalysis(variables={"name"}, conditions=[], loops={}),
         ),
         patch("engine.components.tools.docx_template.build_context_response_model") as mock_build,
-        patch("engine.components.tools.docx_template.DocxTemplate", return_value=MagicMock()),
+        patch("engine.components.tools.docx_template.DocxTemplate") as mock_docx,
     ):
         ContextModel = create_model("ContextModel", name=(str, ...))
         ImagesModel = create_model("ImagesModel")
@@ -259,6 +391,10 @@ async def test_run_without_io_trace_base64(mock_trace_manager, mock_completion_s
         mock_completion_service.constrained_complete_with_pydantic_async = AsyncMock(
             return_value=ResponseModel(context=ContextModel(name="Test"), images=ImagesModel())
         )
+        template = MagicMock()
+        template.get_undeclared_template_variables.return_value = set()
+        template.build_headers_footers_xml.return_value = []
+        mock_docx.return_value = template
         inputs = DocxTemplateInputs(
             template_base64=template_base64,
             template_information_brief="brief",
