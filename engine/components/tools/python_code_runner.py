@@ -24,6 +24,8 @@ from engine.trace.trace_manager import TraceManager
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
+INLINE_IMAGE_RESULT_KEYS = ("png", "jpeg")
+INLINE_IMAGE_PLACEHOLDER = "<inline image omitted from output; see artifacts.execution_result>"
 
 
 def _serialize_result(result) -> dict:
@@ -58,6 +60,28 @@ def _extract_injectable_text(execution_result: dict) -> str | None:
             return text
 
     return None
+
+
+def _sanitize_execution_result_for_output(execution_result: dict) -> dict:
+    sanitized = dict(execution_result)
+    results = execution_result.get("results")
+    if not isinstance(results, list):
+        return sanitized
+
+    sanitized_results = []
+    for result in results:
+        if not isinstance(result, dict):
+            sanitized_results.append(result)
+            continue
+
+        sanitized_result = dict(result)
+        for key in INLINE_IMAGE_RESULT_KEYS:
+            if isinstance(sanitized_result.get(key), str):
+                sanitized_result[key] = INLINE_IMAGE_PLACEHOLDER
+        sanitized_results.append(sanitized_result)
+
+    sanitized["results"] = sanitized_results
+    return sanitized
 
 
 PYTHON_CODE_RUNNER_TOOL_DESCRIPTION = ToolDescription(
@@ -392,10 +416,9 @@ class PythonCodeRunner(Component):
             python_code=python_code,
             input_filepaths=input_filepaths,
         )
-        content = serialize_to_json(execution_result_dict)
-
         images_paths = self._save_images_from_results(execution_result_dict, records)
         artifacts = {"execution_result": execution_result_dict}
+        content = serialize_to_json(_sanitize_execution_result_for_output(execution_result_dict))
         injectable_text = _extract_injectable_text(execution_result_dict)
         if injectable_text is not None:
             artifacts["text"] = injectable_text
