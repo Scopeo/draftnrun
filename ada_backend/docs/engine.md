@@ -69,6 +69,8 @@ The concrete base class implementing `Runnable`. Key attributes:
 `PythonCodeRunner` preserves the full E2B execution payload at `artifacts.execution_result`. When the execution returns a
 text result, it also exposes that value as `artifacts.text` so downstream field expressions can inject it with
 `@{{<python_runner_instance_id>.artifacts::text}}` without relying on nested array traversal.
+The user-facing `output` serializes a trace-friendly view of that payload: inline `png`/`jpeg` rich-result data is replaced
+with a placeholder while the original base64 remains available in `artifacts.execution_result` and extracted image files.
 
 When a tracing context provides `shared_sandbox`, the runner reuses it only after a successful async health check on the
 current event loop. If the health check fails, including closed-loop errors from a previously cached E2B client, the helper

@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from engine.components.tools.python_code_runner import (
+    INLINE_IMAGE_PLACEHOLDER,
     PYTHON_CODE_RUNNER_TOOL_DESCRIPTION,
     PythonCodeRunner,
     PythonCodeRunnerToolInputs,
@@ -242,6 +243,51 @@ async def test_run_without_io_trace_exposes_text_artifact(mock_get_output_dir, p
 
     assert result.artifacts["execution_result"] == execution_result
     assert result.artifacts["text"] == "main result"
+
+
+@pytest.mark.asyncio
+async def test_run_without_io_trace_omits_inline_images_from_output(python_code_runner_tool):
+    png_payload = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+    jpeg_payload = "/9j/4AAQSkZJRgABAQAAAQABAAD"
+    execution_result = {
+        "results": [
+            {
+                "text": "<PIL.Image.Image image mode=RGBA size=1x1>",
+                "html": None,
+                "markdown": None,
+                "svg": None,
+                "png": png_payload,
+                "jpeg": jpeg_payload,
+                "pdf": None,
+                "latex": None,
+                "json": None,
+                "javascript": None,
+                "data": None,
+                "chart": None,
+                "is_main_result": True,
+                "extra": {},
+            },
+        ],
+        "stdout": [],
+        "stderr": [],
+        "error": None,
+        "execution_count": 1,
+    }
+    python_code_runner_tool.execute_python_code = AsyncMock(return_value=(execution_result, []))
+    python_code_runner_tool._save_images_from_results = Mock(return_value=["image_1.png"])
+
+    result = await python_code_runner_tool._run_without_io_trace(
+        PythonCodeRunnerToolInputs(python_code="display(img)"), {}
+    )
+    output_data = json.loads(result.output.split("\n\n[", 1)[0])
+
+    assert result.artifacts["execution_result"] == execution_result
+    assert result.artifacts["execution_result"]["results"][0]["png"] == png_payload
+    assert result.artifacts["execution_result"]["results"][0]["jpeg"] == jpeg_payload
+    assert output_data["results"][0]["png"] == INLINE_IMAGE_PLACEHOLDER
+    assert output_data["results"][0]["jpeg"] == INLINE_IMAGE_PLACEHOLDER
+    assert png_payload not in result.output
+    assert jpeg_payload not in result.output
 
 
 @pytest.mark.asyncio
