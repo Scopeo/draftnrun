@@ -18,6 +18,12 @@ from engine.qdrant_service import (
 )
 from tests.mocks.trace_manager import MockTraceManager
 
+CID_1 = "00000000-0000-4000-8000-000000000001"
+CID_2 = "00000000-0000-4000-8000-000000000002"
+CID_3 = "00000000-0000-4000-8000-000000000003"
+CID_4 = "00000000-0000-4000-8000-000000000004"
+CID_5 = "00000000-0000-4000-8000-000000000005"
+
 
 def _sync_batched(qdrant_service: QdrantService, rows: list[dict], collection_name: str) -> bool:
     rows_by_id = {row["chunk_id"]: row for row in rows}
@@ -51,14 +57,14 @@ def test_qdrant_service():
     )
     chunks = [
         {
-            "chunk_id": "1",
+            "chunk_id": CID_1,
             "content": "chunk1",
             "file_id": "file_id1",
             "url": "https//www.dummy1.com",
             "last_edited_ts": "2024-11-26 10:40:40",
         },
         {
-            "chunk_id": "2",
+            "chunk_id": CID_2,
             "content": "chunk2",
             "file_id": "file_id2",
             "url": "https//www.dummy2.com",
@@ -85,7 +91,7 @@ def test_qdrant_service():
     )
     assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 2
     assert qdrant_agentic_service.delete_chunks(
-        point_ids=["1"],
+        point_ids=[CID_1],
         id_field="chunk_id",
         collection_name=TEST_COLLECTION_NAME,
     )
@@ -95,7 +101,7 @@ def test_qdrant_service():
         collection_name=TEST_COLLECTION_NAME,
     )
     correct_chunk = SourceChunk(
-        name="2",
+        name=CID_2,
         content="chunk2",
         document_name="file_id2",
         url="https//www.dummy2.com",
@@ -105,14 +111,14 @@ def test_qdrant_service():
 
     new_rows_1 = [
         {
-            "chunk_id": "1",
+            "chunk_id": CID_1,
             "content": "chunk1",
             "file_id": "file_id1",
             "url": "https//www.dummy1.com",
             "last_edited_ts": "2025-01-2 10:40:40",
         },
         {
-            "chunk_id": "2",
+            "chunk_id": CID_2,
             "content": "chunk2",
             "url": "https//www.dummy2.com",
             "file_id": "file_id2",
@@ -131,14 +137,14 @@ def test_qdrant_service():
 
     new_rows_2 = [
         {
-            "chunk_id": "1",
+            "chunk_id": CID_1,
             "content": "chunk1",
             "file_id": "file_id1",
             "url": "https//www.dummy1.com",
             "last_edited_ts": "2025-01-2 10:40:40",
         },
         {
-            "chunk_id": "3",
+            "chunk_id": CID_3,
             "content": "chunk3",
             "file_id": "file_id3",
             "url": "https//www.dummy3.com",
@@ -221,7 +227,7 @@ def test_multiple_metadata_fields_index_creation():
     # Add a chunk so collection has data
     chunks = [
         {
-            "chunk_id": "1",
+            "chunk_id": CID_1,
             "content": "test content",
             "file_id": "file_1",
             "url": "https://test.com",
@@ -307,13 +313,13 @@ def test_custom_embedding_size_collection_creation():
 
     chunks = [
         {
-            "chunk_id": "1",
+            "chunk_id": CID_1,
             "content": "test content 1",
             "file_id": "file_1",
             "url": "https://test1.com",
         },
         {
-            "chunk_id": "2",
+            "chunk_id": CID_2,
             "content": "test content 2",
             "file_id": "file_2",
             "url": "https://test2.com",
@@ -395,7 +401,7 @@ def test_merge_qdrant_filters():
 
     chunks = [
         {
-            "chunk_id": "1",
+            "chunk_id": CID_1,
             "content": "chunk1",
             "file_id": "file_1",
             "url": "https://test1.com",
@@ -403,7 +409,7 @@ def test_merge_qdrant_filters():
             "field_2": None,
         },
         {
-            "chunk_id": "2",
+            "chunk_id": CID_2,
             "content": "chunk2",
             "file_id": "file_2",
             "url": "https://test2.com",
@@ -411,7 +417,7 @@ def test_merge_qdrant_filters():
             "field_2": None,
         },
         {
-            "chunk_id": "3",
+            "chunk_id": CID_3,
             "content": "chunk3",
             "file_id": "file_3",
             "url": "https://test3.com",
@@ -419,7 +425,7 @@ def test_merge_qdrant_filters():
             "field_2": "value_2",
         },
         {
-            "chunk_id": "4",
+            "chunk_id": CID_4,
             "content": "chunk4",
             "file_id": "file_4",
             "url": "https://test4.com",
@@ -427,7 +433,7 @@ def test_merge_qdrant_filters():
             "field_2": "value_2",
         },
         {
-            "chunk_id": "5",
+            "chunk_id": CID_5,
             "content": "chunk5",
             "file_id": "file_5",
             "url": "https://test5.com",
@@ -450,7 +456,7 @@ def test_merge_qdrant_filters():
         limit=10,
     )
     assert len(results_filter_1) == 3
-    assert set(chunk.name for chunk in results_filter_1) == {"1", "2", "5"}
+    assert set(chunk.name for chunk in results_filter_1) == {CID_1, CID_2, CID_5}
 
     results_filter_2 = qdrant_service.retrieve_similar_chunks(
         query_text="chunk",
@@ -459,7 +465,7 @@ def test_merge_qdrant_filters():
         limit=10,
     )
     assert len(results_filter_2) == 3
-    assert set(chunk.name for chunk in results_filter_2) == {"3", "4", "5"}
+    assert set(chunk.name for chunk in results_filter_2) == {CID_3, CID_4, CID_5}
 
     merged_filter = merge_qdrant_filters_with_and_conditions(filter_1, filter_2)
     results_merged = qdrant_service.retrieve_similar_chunks(
@@ -469,7 +475,7 @@ def test_merge_qdrant_filters():
         limit=10,
     )
     assert len(results_merged) == 1
-    assert results_merged[0].name == "5"
+    assert results_merged[0].name == CID_5
 
     qdrant_service.delete_collection(TEST_COLLECTION_NAME_MERGE)
 
@@ -505,13 +511,13 @@ def test_search_vectors():
 
     chunks = [
         {
-            "chunk_id": "1",
+            "chunk_id": CID_1,
             "content": "test content 1",
             "file_id": "file_1",
             "url": "https://test1.com",
         },
         {
-            "chunk_id": "2",
+            "chunk_id": CID_2,
             "content": "test content 2",
             "file_id": "file_2",
             "url": "https://test2.com",
@@ -520,10 +526,8 @@ def test_search_vectors():
 
     qdrant_service.add_chunks(list_chunks=chunks, collection_name=TEST_COLLECTION_NAME_SEARCH)
 
-    # Create a query vector (using embedding service)
     query_vector = qdrant_service._build_vectors("test content 1")[0]
 
-    # Search without filter
     results = qdrant_service.search_vectors(
         query_vector=query_vector,
         collection_name=TEST_COLLECTION_NAME_SEARCH,
@@ -532,10 +536,9 @@ def test_search_vectors():
 
     assert len(results) >= 1
     assert isinstance(results[0], tuple)
-    assert len(results[0]) == 3  # (id, score, payload)
+    assert len(results[0]) == 3
 
-    # Search with filter
-    filter_dict = {"must": [{"key": "chunk_id", "match": {"value": "1"}}]}
+    filter_dict = {"must": [{"key": "chunk_id", "match": {"value": CID_1}}]}
     filtered_results = qdrant_service.search_vectors(
         query_vector=query_vector,
         collection_name=TEST_COLLECTION_NAME_SEARCH,
@@ -544,7 +547,7 @@ def test_search_vectors():
     )
 
     assert len(filtered_results) >= 1
-    assert filtered_results[0][0] == qdrant_service.get_uuid("1")
+    assert filtered_results[0][0] == CID_1
 
     qdrant_service.delete_collection(TEST_COLLECTION_NAME_SEARCH)
 
@@ -580,13 +583,13 @@ def test_get_chunk_data_by_id():
 
     chunks = [
         {
-            "chunk_id": "1",
+            "chunk_id": CID_1,
             "content": "test content 1",
             "file_id": "file_1",
             "url": "https://test1.com",
         },
         {
-            "chunk_id": "2",
+            "chunk_id": CID_2,
             "content": "test content 2",
             "file_id": "file_2",
             "url": "https://test2.com",
@@ -595,27 +598,22 @@ def test_get_chunk_data_by_id():
 
     qdrant_service.add_chunks(list_chunks=chunks, collection_name=TEST_COLLECTION_NAME_GET)
 
-    # Get chunk data by IDs
-    chunk_1_uuid = qdrant_service.get_uuid("1")
-    chunk_2_uuid = qdrant_service.get_uuid("2")
-
     results = qdrant_service.get_chunk_data_by_id(
-        vector_ids=[chunk_1_uuid, chunk_2_uuid],
+        vector_ids=[CID_1, CID_2],
         collection_name=TEST_COLLECTION_NAME_GET,
     )
 
     assert len(results) == 2
-    assert any(result.get("payload", {}).get("chunk_id") == "1" for result in results)
-    assert any(result.get("payload", {}).get("chunk_id") == "2" for result in results)
+    assert any(result.get("payload", {}).get("chunk_id") == CID_1 for result in results)
+    assert any(result.get("payload", {}).get("chunk_id") == CID_2 for result in results)
 
-    # Test with single ID
     single_result = qdrant_service.get_chunk_data_by_id(
-        vector_ids=[chunk_1_uuid],
+        vector_ids=[CID_1],
         collection_name=TEST_COLLECTION_NAME_GET,
     )
 
     assert len(single_result) == 1
-    assert single_result[0].get("payload", {}).get("chunk_id") == "1"
+    assert single_result[0].get("payload", {}).get("chunk_id") == CID_1
 
     qdrant_service.delete_collection(TEST_COLLECTION_NAME_GET)
 
@@ -651,13 +649,13 @@ def test_get_points():
 
     chunks = [
         {
-            "chunk_id": "1",
+            "chunk_id": CID_1,
             "content": "test content 1",
             "file_id": "file_1",
             "url": "https://test1.com",
         },
         {
-            "chunk_id": "2",
+            "chunk_id": CID_2,
             "content": "test content 2",
             "file_id": "file_2",
             "url": "https://test2.com",
@@ -666,22 +664,20 @@ def test_get_points():
 
     qdrant_service.add_chunks(list_chunks=chunks, collection_name=TEST_COLLECTION_NAME_POINTS)
 
-    # Get all points
     all_points = qdrant_service.get_points(
         collection_name=TEST_COLLECTION_NAME_POINTS,
     )
 
     assert len(all_points) == 2
 
-    # Get points with filter
-    filter_dict = {"must": [{"key": "chunk_id", "match": {"value": "1"}}]}
+    filter_dict = {"must": [{"key": "chunk_id", "match": {"value": CID_1}}]}
     filtered_points = qdrant_service.get_points(
         collection_name=TEST_COLLECTION_NAME_POINTS,
         filter=filter_dict,
     )
 
     assert len(filtered_points) == 1
-    assert filtered_points[0].get("payload", {}).get("chunk_id") == "1"
+    assert filtered_points[0].get("payload", {}).get("chunk_id") == CID_1
 
     qdrant_service.delete_collection(TEST_COLLECTION_NAME_POINTS)
 
@@ -717,13 +713,13 @@ def test_delete_points():
 
     chunks = [
         {
-            "chunk_id": "1",
+            "chunk_id": CID_1,
             "content": "test content 1",
             "file_id": "file_1",
             "url": "https://test1.com",
         },
         {
-            "chunk_id": "2",
+            "chunk_id": CID_2,
             "content": "test content 2",
             "file_id": "file_2",
             "url": "https://test2.com",
@@ -785,9 +781,9 @@ def test_insert_points_in_collection():
 
     points = [
         {
-            "id": qdrant_service.get_uuid("1"),
+            "id": CID_1,
             "payload": {
-                "chunk_id": "1",
+                "chunk_id": CID_1,
                 "content": "test content 1",
                 "file_id": "file_1",
                 "url": "https://test1.com",
@@ -798,9 +794,9 @@ def test_insert_points_in_collection():
             },
         },
         {
-            "id": qdrant_service.get_uuid("2"),
+            "id": CID_2,
             "payload": {
-                "chunk_id": "2",
+                "chunk_id": CID_2,
                 "content": "test content 2",
                 "file_id": "file_2",
                 "url": "https://test2.com",
