@@ -298,6 +298,5 @@ Qdrant metadata indexes distinguish exact keyword filters from full-text filters
   use the corresponding range or value filter.
 
 Use `match.text` for text-indexed metadata. For example, a stored value `Jean-Baptiste` and a filter value
-`Jean Baptiste` tokenize to the same words and match through Qdrant full-text filtering. Existing database-ingested
-sources are migrated by Alembic revision `b8c9d0e1f2a3`; non-database sources use the runtime index creation path on
-future syncs.
+`Jean Baptiste` tokenize to the same words and match through Qdrant full-text filtering. Existing collections that need
+this behavior require a one-off Qdrant payload index update; future syncs use the runtime index creation path.
