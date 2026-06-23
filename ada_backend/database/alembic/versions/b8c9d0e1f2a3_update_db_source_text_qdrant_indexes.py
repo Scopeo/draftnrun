@@ -1,7 +1,7 @@
 """update_db_source_text_qdrant_indexes
 
 Revision ID: b8c9d0e1f2a3
-Revises: a3b4c5d6e7f9
+Revises: a4b5c6d7e8f9
 Create Date: 2026-05-07
 
 Recreate eligible database-source Qdrant metadata indexes as full-text indexes.
@@ -24,7 +24,7 @@ from engine.qdrant_service import (
 )
 
 revision: str = "b8c9d0e1f2a3"
-down_revision: Union[str, None] = "a3b4c5d6e7f9"
+down_revision: Union[str, None] = "a4b5c6d7e8f9"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
