@@ -83,3 +83,25 @@ def test_get_chunks_dataframe_from_docs(mock_file_document, mock_file_chunk):
     assert result_df["bounding_boxes"].iloc[0] == '[{"xmin": 1, "ymin": 2, "xmax": 3, "ymax": 4, "page": 1}]'
     assert result_df["url"].iloc[0] == "None"
     assert result_df["order"].iloc[0] == 0
+
+
+def test_file_document_url_uses_internal_metadata_keys():
+    source_document = FileDocument(
+        id="source-id",
+        last_edited_ts="2023-01-01T00:00:00Z",
+        type=FileDocumentType.PDF,
+        file_name="source.pdf",
+        folder_name="folder",
+        metadata={"_source_url": "https://example.com/source.pdf"},
+    )
+    supabase_document = FileDocument(
+        id="supabase-id",
+        last_edited_ts="2023-01-01T00:00:00Z",
+        type=FileDocumentType.PDF,
+        file_name="supabase.pdf",
+        folder_name="folder",
+        metadata={"_supabase_url": "org/source/supabase.pdf", "_source_url": "https://example.com/source.pdf"},
+    )
+
+    assert source_document.url == "https://example.com/source.pdf"
+    assert supabase_document.url == "org/source/supabase.pdf"

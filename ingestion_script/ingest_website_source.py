@@ -205,7 +205,7 @@ async def upload_website_source(
             folder_name=page_data.url,
             metadata={
                 "title": page_data.title,
-                "source_url": page_data.url,
+                "_source_url": page_data.url,
             },
         )
 

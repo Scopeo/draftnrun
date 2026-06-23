@@ -198,6 +198,16 @@ In ingestion flows, prefer reusing an existing `SQLLocalService` instance inside
 In ingestion workers, `ingestion_script.ingest_db_source.upload_db_source()` should create one source
 `SQLLocalService` per ingestion run and reuse it across the run before closing it in `finally`.
 
+## Internal Source Metadata
+
+Metadata keys used for internal retrieval, storage, or ranking state are underscore-prefixed and excluded from LLM
+context formatting. This includes `_source_url`, `_supabase_url`, `_retrieval_rank`, `_reranker_rank`, and
+`_reranked_score`. User-facing source links should continue to flow through the top-level `url` field on chunks and
+`SourceChunk.url`; the underscore-prefixed metadata keys are not part of the frontend source display contract.
+
+Ingestion stores source-specific metadata in the ingestion DB `metadata` JSONB column. Qdrant receives that metadata
+flattened into top-level payload fields, and retrieval maps non-standard payload fields back into `SourceChunk.metadata`.
+
 ## Tracing Context to Sentry Tags
 
 **File**: `engine/trace/span_context.py`
