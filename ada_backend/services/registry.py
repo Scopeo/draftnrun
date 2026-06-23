@@ -67,6 +67,7 @@ from engine.components.tools.docx_template import DocxTemplateAgent
 from engine.components.tools.google_calendar_mcp_tool import GoogleCalendarMCPTool
 from engine.components.tools.google_contacts_mcp_tool import GoogleContactsMCPTool
 from engine.components.tools.hubspot_mcp_tool import HubSpotMCPTool
+from engine.components.tools.hubspot_owner_tool import HubSpotOwnerTool
 from engine.components.tools.linkup_tool import LinkupSearchTool
 from engine.components.tools.notion_mcp_tool import NotionMCPTool
 from engine.components.tools.outlook_calendar_mcp_tool import OutlookCalendarMCPTool
@@ -424,6 +425,12 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["api_call_tool"],
         factory=AgentFactory(
             entity_class=APICallTool,
+        ),
+    )
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["hubspot_owner_tool"],
+        factory=AgentFactory(
+            entity_class=HubSpotOwnerTool,
         ),
     )
     registry.register(
