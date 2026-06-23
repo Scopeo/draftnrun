@@ -290,7 +290,8 @@ Qdrant metadata indexes distinguish exact keyword filters from full-text filters
 
 - Technical identifiers (`chunk_id`, `source_id`, `file_id`, `url`, `sync_id`) stay as `keyword` indexes and should be
   queried with `match.value`.
-- Chunk body fields (`content`) are not payload-indexed; retrieval already uses dense/sparse vectors for the body text.
+- Chunk body fields (`content`, `chunk`) are not payload-indexed; retrieval already uses dense/sparse vectors for the
+  body text.
 - Human text metadata from database or folder ingestion (`VARCHAR`/`TEXT` fields such as names, authors, titles, and
   descriptions) is indexed as Qdrant `text` with `word` tokenization, lowercasing, ASCII folding, and phrase matching
   enabled.
