@@ -104,7 +104,7 @@ def seed_outlook_components(session: Session):
         id=COMPONENT_VERSION_UUIDS["outlook_sender_v2"],
         component_id=COMPONENT_UUIDS["outlook_sender"],
         version_tag="0.0.2",
-        release_stage=db.ReleaseStage.INTERNAL,
+        release_stage=db.ReleaseStage.BETA,
         description="A component to send emails using Microsoft Outlook with named URL attachments.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["outlook_sender_v2_tool_description"],
     )

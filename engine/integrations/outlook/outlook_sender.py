@@ -7,6 +7,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field, SecretStr, field_validator
 
+from ada_backend.database.models import UIComponent, UIComponentProperties
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.integrations.outlook.errors import OutlookAPIError
@@ -69,9 +70,7 @@ OUTLOOK_SENDER_TOOL_DESCRIPTION = ToolDescription(
                 "minProperties": 2,
                 "maxProperties": 2,
             },
-            "description": (
-                "List of attachment objects. Each item must include filename and either url or path."
-            ),
+            "description": ("List of attachment objects. Each item must include filename and either url or path."),
         },
     },
     required_tool_properties=["mail_subject"],
@@ -93,6 +92,11 @@ class OutlookSenderInputs(BaseModel):
         description="The body of the email to be sent.",
         json_schema_extra={
             "is_tool_input": True,
+            "ui_component": UIComponent.TEXTAREA,
+            "ui_component_properties": UIComponentProperties(
+                label="Body",
+                description="The body of the email to be sent. Don't support HTML formatting, use HTML body instead.",
+            ).model_dump(exclude_unset=True, exclude_none=True),
             "display_order": 2,
             "parameter_group_id": OUTLOOK_GROUP_EMAIL_CONTENT_ID,
             "parameter_order_within_group": 2,
@@ -103,6 +107,11 @@ class OutlookSenderInputs(BaseModel):
         description="Optional HTML body of the email. When provided, used instead of mail_body.",
         json_schema_extra={
             "is_tool_input": True,
+            "ui_component": UIComponent.TEXTAREA,
+            "ui_component_properties": UIComponentProperties(
+                label="HTML Body",
+                description="Optional HTML body of the email. When provided, used instead of mail_body.",
+            ).model_dump(exclude_unset=True, exclude_none=True),
             "display_order": 3,
             "parameter_group_id": OUTLOOK_GROUP_EMAIL_CONTENT_ID,
             "parameter_order_within_group": 3,
