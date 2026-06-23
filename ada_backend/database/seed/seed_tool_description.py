@@ -20,6 +20,7 @@ from engine.components.sql.sql_tool import DEFAULT_SQL_TOOL_DESCRIPTION
 from engine.components.table_lookup import DEFAULT_TABLE_LOOKUP_TOOL_DESCRIPTION
 from engine.components.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION
 from engine.components.tools.docx_template import DOCX_TEMPLATE_TOOL_DESCRIPTION
+from engine.components.tools.hubspot_owner_tool import HUBSPOT_OWNER_TOOL_DESCRIPTION
 from engine.components.tools.linkup_tool import LINKUP_TOOL_DESCRIPTION
 from engine.components.tools.mcp.remote_mcp_tool import DEFAULT_MCP_TOOL_DESCRIPTION
 from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
@@ -68,6 +69,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_retriever_tool_description": UUID("b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e"),
     "hubspot_mcp_tool_description": UUID("1d6ce8b3-44ae-4c3d-a14b-2837a3a5717e"),
     "hubspot_neverdrop_mcp_tool_description": UUID("a1e7f624-6c98-4546-b769-3607819ebad2"),
+    "hubspot_owner_tool_description": UUID("c2965a14-1ed1-4d89-a7d8-8b2fa53c9219"),
     "google_calendar_mcp_tool_description": UUID("d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"),
     "google_calendar_neverdrop_mcp_tool_description": UUID("f6db621e-6036-4ee7-9505-f9d20b972057"),
     "google_contacts_neverdrop_mcp_tool_description": UUID("be12b440-a998-4786-82cc-5c5a4c3d3ad1"),
@@ -191,6 +193,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["hubspot_neverdrop_mcp_tool_description"],
         **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
     )
+    hubspot_owner_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["hubspot_owner_tool_description"],
+        **HUBSPOT_OWNER_TOOL_DESCRIPTION.model_dump(),
+    )
     google_calendar_mcp_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["google_calendar_mcp_tool_description"],
         **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
@@ -265,6 +271,7 @@ def seed_tool_description(session: Session):
             default_table_lookup_tool_description,
             hubspot_mcp_tool_description,
             hubspot_neverdrop_mcp_tool_description,
+            hubspot_owner_tool_description,
             google_calendar_mcp_tool_description,
             google_calendar_neverdrop_mcp_tool_description,
             google_contacts_neverdrop_mcp_tool_description,

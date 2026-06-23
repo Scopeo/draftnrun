@@ -35,6 +35,7 @@ from ada_backend.database.seed.seed_db_service import seed_db_service_components
 from ada_backend.database.seed.seed_docx_generation import seed_docx_generation_components
 from ada_backend.database.seed.seed_docx_template import seed_docx_template_components
 from ada_backend.database.seed.seed_filter import seed_filter_components
+from ada_backend.database.seed.seed_hubspot_owner_tool import seed_hubspot_owner_components
 from ada_backend.database.seed.seed_if_else import seed_if_else_components
 from ada_backend.database.seed.seed_linkup_tool import seed_linkup_tool_components, seed_linkup_tool_parameter_groups
 from ada_backend.database.seed.seed_llm_call import seed_llm_call_components, seed_llm_call_parameter_groups
@@ -86,6 +87,9 @@ def seed_db(session: Session):
         session.commit()
 
         seed_api_call_components(session)
+        session.commit()
+
+        seed_hubspot_owner_components(session)
         session.commit()
 
         seed_python_code_runner_components(session)
