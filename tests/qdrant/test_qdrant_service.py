@@ -6,7 +6,16 @@ import pytest
 
 from engine.components.types import SourceChunk
 from engine.llm_services.llm_service import EmbeddingService
-from engine.qdrant_service import BM25_MODEL, FieldSchema, QdrantCollectionSchema, QdrantService, SearchMode
+from engine.qdrant_service import (
+    BM25_MODEL,
+    FieldSchema,
+    QdrantCollectionSchema,
+    QdrantService,
+    SearchMode,
+    get_qdrant_field_schema_payload,
+    map_metadata_field_to_qdrant_field_schema,
+    should_create_payload_index,
+)
 from tests.mocks.trace_manager import MockTraceManager
 
 
@@ -237,8 +246,8 @@ def test_multiple_metadata_fields_index_creation():
 
     # Verify each field was called with the correct type
     field_type_map = {
-        "author": FieldSchema.KEYWORD,
-        "status": FieldSchema.KEYWORD,
+        "author": FieldSchema.TEXT,
+        "status": FieldSchema.TEXT,
         "priority": FieldSchema.INTEGER,
         "version": FieldSchema.FLOAT,
     }
@@ -324,6 +333,33 @@ def test_custom_embedding_size_collection_creation():
     qdrant_service.delete_collection(TEST_COLLECTION_NAME_CUSTOM)
 
 
+def test_metadata_field_schema_mapping_uses_text_only_for_non_identifier_strings():
+    assert map_metadata_field_to_qdrant_field_schema("author", "VARCHAR") == FieldSchema.TEXT
+    assert map_metadata_field_to_qdrant_field_schema("document_title", "TEXT") == FieldSchema.TEXT
+    assert map_metadata_field_to_qdrant_field_schema("source_id", "VARCHAR") == FieldSchema.KEYWORD
+    assert map_metadata_field_to_qdrant_field_schema("chunk_id", "VARCHAR") == FieldSchema.KEYWORD
+    assert map_metadata_field_to_qdrant_field_schema("published_at", "DATETIME") == FieldSchema.DATETIME
+    assert map_metadata_field_to_qdrant_field_schema("priority", "INTEGER") == FieldSchema.INTEGER
+
+
+def test_payload_index_creation_skips_content_fields():
+    assert should_create_payload_index("author") is True
+    assert should_create_payload_index("content") is False
+    assert should_create_payload_index("chunk") is False
+    assert should_create_payload_index("CHUNK") is False
+
+
+def test_text_index_payload_uses_full_text_configuration():
+    payload = get_qdrant_field_schema_payload(FieldSchema.TEXT)
+    assert payload == {
+        "type": "text",
+        "tokenizer": "word",
+        "lowercase": True,
+        "ascii_folding": True,
+        "phrase_matching": True,
+    }
+
+
 def test_merge_qdrant_filters():
     TEST_COLLECTION_NAME_MERGE = f"test_merge_filters_{uuid4()}"
 
@@ -341,8 +377,8 @@ def test_merge_qdrant_filters():
         url_id_field="url",
         metadata_fields_to_keep={"field_1", "field_2"},
         metadata_field_types={
-            "field_1": "VARCHAR",
-            "field_2": "VARCHAR",
+            "field_1": "VARIANT",
+            "field_2": "VARIANT",
         },
     )
 
@@ -908,6 +944,48 @@ def _make_qdrant_service_with_mock_http() -> tuple[QdrantService, AsyncMock]:
     mock_send = AsyncMock()
     service._send_request_async = mock_send
     return service, mock_send
+
+
+class TestCreateIndexIfNeeded:
+    @pytest.mark.asyncio
+    async def test_text_index_uses_full_text_payload_schema(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        mock_send.side_effect = [
+            {"result": {"payload_schema": {}}},
+            {"result": True},
+        ]
+
+        await service.create_index_if_needed_async("test_col", "author", FieldSchema.TEXT)
+
+        create_call = mock_send.call_args_list[1]
+        assert create_call.kwargs["method"] == "PUT"
+        assert create_call.kwargs["payload"] == {
+            "field_name": "author",
+            "field_schema": {
+                "type": "text",
+                "tokenizer": "word",
+                "lowercase": True,
+                "ascii_folding": True,
+                "phrase_matching": True,
+            },
+        }
+
+    @pytest.mark.asyncio
+    async def test_recreates_keyword_index_when_text_is_expected(self):
+        service, mock_send = _make_qdrant_service_with_mock_http()
+        mock_send.side_effect = [
+            {"result": {"payload_schema": {"author": {"data_type": "keyword"}}}},
+            {"result": True},
+            {"result": True},
+        ]
+
+        await service.create_index_if_needed_async("test_col", "author", FieldSchema.TEXT)
+
+        delete_call = mock_send.call_args_list[1]
+        create_call = mock_send.call_args_list[2]
+        assert delete_call.kwargs["method"] == "DELETE"
+        assert delete_call.kwargs["endpoint"] == "/collections/test_col/index/author"
+        assert create_call.kwargs["payload"]["field_schema"]["type"] == "text"
 
 
 class TestCreateCollectionHybrid:

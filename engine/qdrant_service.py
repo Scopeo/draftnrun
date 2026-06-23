@@ -25,10 +25,48 @@ BM25_MODEL = "Qdrant/bm25"
 
 class FieldSchema(Enum):
     KEYWORD = "keyword"
+    TEXT = "text"
     DATETIME = "datetime"
     INTEGER = "integer"
     FLOAT = "float"
     BOOLEAN = "bool"
+
+
+TEXT_INDEX_FIELD_SCHEMA: dict[str, Any] = {
+    "type": FieldSchema.TEXT.value,
+    "tokenizer": "word",
+    "lowercase": True,
+    "ascii_folding": True,
+    "phrase_matching": True,
+}
+
+_EXACT_KEYWORD_FIELD_NAMES = {
+    "chunk_id",
+    "source_id",
+    "file_id",
+    "url",
+    "sync_id",
+}
+
+_UNINDEXED_PAYLOAD_FIELD_NAMES = {
+    "chunk",
+    "content",
+}
+
+
+def should_create_payload_index(field_name: str) -> bool:
+    return field_name.lower() not in _UNINDEXED_PAYLOAD_FIELD_NAMES
+
+
+def is_exact_keyword_field(field_name: str) -> bool:
+    normalized_name = field_name.lower()
+    return normalized_name in _EXACT_KEYWORD_FIELD_NAMES
+
+
+def get_qdrant_field_schema_payload(field_schema_type: FieldSchema) -> str | dict[str, Any]:
+    if field_schema_type == FieldSchema.TEXT:
+        return TEXT_INDEX_FIELD_SCHEMA
+    return field_schema_type.value
 
 
 class SearchMode(str, Enum):
@@ -50,6 +88,15 @@ def map_internal_type_to_qdrant_field_schema(internal_type: str) -> FieldSchema:
         "ARRAY": FieldSchema.KEYWORD,
     }
     return type_mapping.get(internal_type, FieldSchema.KEYWORD)
+
+
+def map_metadata_field_to_qdrant_field_schema(field_name: str, internal_type: str) -> FieldSchema:
+    if is_exact_keyword_field(field_name):
+        return FieldSchema.KEYWORD
+    mapped_schema = map_internal_type_to_qdrant_field_schema(internal_type)
+    if mapped_schema == FieldSchema.KEYWORD and internal_type.upper() in {"VARCHAR", "TEXT"}:
+        return FieldSchema.TEXT
+    return mapped_schema
 
 
 def map_sql_type_to_qdrant_field_schema(sql_type: str) -> FieldSchema:
@@ -643,7 +690,7 @@ class QdrantService:
             )
 
             endpoint = f"/collections/{collection_name}/index"
-            payload = {"field_name": field_name, "field_schema": field_schema_type.value}
+            payload = {"field_name": field_name, "field_schema": get_qdrant_field_schema_payload(field_schema_type)}
             await self._send_request_async(method="PUT", endpoint=endpoint, payload=payload)
             return
 
@@ -667,7 +714,7 @@ class QdrantService:
         await self._send_request_async(method="DELETE", endpoint=delete_endpoint)
 
         create_endpoint = f"/collections/{collection_name}/index"
-        payload = {"field_name": field_name, "field_schema": field_schema_type.value}
+        payload = {"field_name": field_name, "field_schema": get_qdrant_field_schema_payload(field_schema_type)}
         await self._send_request_async(method="PUT", endpoint=create_endpoint, payload=payload)
 
     async def _create_indexes_from_schema(
@@ -682,10 +729,14 @@ class QdrantService:
         )
         if schema.metadata_fields_to_keep:
             for metadata_field in schema.metadata_fields_to_keep:
+                if not should_create_payload_index(metadata_field):
+                    LOGGER.info("Skipping payload index creation for non-filterable field '%s'.", metadata_field)
+                    continue
+
                 field_type = FieldSchema.KEYWORD  # Default type
                 if schema.metadata_field_types and metadata_field in schema.metadata_field_types:
                     internal_type = schema.metadata_field_types[metadata_field]
-                    field_type = map_internal_type_to_qdrant_field_schema(internal_type)
+                    field_type = map_metadata_field_to_qdrant_field_schema(metadata_field, internal_type)
 
                 await self.create_index_if_needed_async(
                     collection_name=collection_name,

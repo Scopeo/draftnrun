@@ -15,7 +15,12 @@ from data_ingestion.document.folder_management.s3_folder_management import S3Fol
 from data_ingestion.document.supabase_file_uploader import sync_files_to_supabase
 from data_ingestion.utils import DocumentReadingMode
 from engine.llm_services.llm_service import EmbeddingService, VisionService
-from engine.qdrant_service import FieldSchema, QdrantService, map_sql_type_to_qdrant_field_schema
+from engine.qdrant_service import (
+    FieldSchema,
+    QdrantService,
+    map_metadata_field_to_qdrant_field_schema,
+    should_create_payload_index,
+)
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import create_db_if_not_exists
 from engine.storage_service.local_service import SQLLocalService
@@ -92,7 +97,14 @@ async def _ensure_qdrant_indexes(
 
     if metadata_column_names and column_info:
         for metadata_col in metadata_column_names:
-            qdrant_field_schema = map_sql_type_to_qdrant_field_schema(column_info.get(metadata_col, "VARCHAR"))
+            if not should_create_payload_index(metadata_col):
+                LOGGER.info(f"Skipping Qdrant payload index for non-filterable metadata column '{metadata_col}'")
+                continue
+
+            qdrant_field_schema = map_metadata_field_to_qdrant_field_schema(
+                metadata_col,
+                column_info.get(metadata_col, "VARCHAR"),
+            )
             LOGGER.info(f"Creating index for metadata column '{metadata_col}' with qdrant type {qdrant_field_schema}")
             await qdrant_service.create_index_if_needed_async(
                 collection_name=collection_name,
