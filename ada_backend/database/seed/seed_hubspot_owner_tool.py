@@ -45,20 +45,6 @@ def seed_hubspot_owner_components(session: Session):
 
     hubspot_owner_parameter_definitions = [
         ComponentParameterDefinition(
-            id=UUID("cdde6f70-3904-45c5-ac39-f65bbf5db2e7"),
-            component_version_id=hubspot_owner_component_version.id,
-            name="method",
-            type=ParameterType.STRING,
-            nullable=False,
-            default="GET",
-            ui_component=UIComponent.SELECT,
-            ui_component_properties=UIComponentProperties(
-                label="HTTP Method",
-                options=[{"label": "GET", "value": "GET"}],
-            ).model_dump(exclude_unset=True, exclude_none=True),
-            is_advanced=True,
-        ),
-        ComponentParameterDefinition(
             id=UUID("0f0758f6-5802-4092-92e0-5e837b139d9a"),
             component_version_id=hubspot_owner_component_version.id,
             name="timeout",
