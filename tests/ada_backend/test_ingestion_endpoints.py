@@ -10,7 +10,7 @@ from ada_backend.main import app
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskQueue
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from ada_backend.services.agent_runner_service import get_organization_llm_providers
-from data_ingestion.boto3_client import file_exists_in_bucket, get_s3_boto3_client
+from data_ingestion.boto3_client import delete_file_from_bucket, file_exists_in_bucket, get_s3_boto3_client
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_context import set_trace_manager
@@ -139,7 +139,6 @@ def test_ingest_local_folder_source():
                 source_id=test_source_id,
                 source_name=test_source_name,
                 task_id=task_id,
-                save_supabase=False,
                 add_doc_description_to_chunks=False,
             )
         )
@@ -205,4 +204,5 @@ def test_ingest_local_folder_source():
     source_rows = [r for r in remaining_rows if str(r.get(SOURCE_ID_COLUMN_NAME)) == test_source_id]
     assert len(source_rows) == 0, f"Expected no chunks for source {test_source_id}, but found {len(source_rows)}"
 
-    assert not file_exists_in_bucket(s3_client=S3_CLIENT, bucket_name=settings.S3_BUCKET_NAME, key=sanitized_file_name)
+    assert file_exists_in_bucket(s3_client=S3_CLIENT, bucket_name=settings.S3_BUCKET_NAME, key=sanitized_file_name)
+    delete_file_from_bucket(s3_client=S3_CLIENT, bucket_name=settings.S3_BUCKET_NAME, key=sanitized_file_name)

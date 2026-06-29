@@ -61,6 +61,31 @@ class TestFolderManagerPresignedUrl:
 
 class TestS3FolderManagerPresignedUrl:
     @patch("data_ingestion.document.folder_management.s3_folder_management.get_s3_boto3_client")
+    def test_file_info_preserves_s3_path_metadata_and_url(self, mock_get_client):
+        mock_get_client.return_value = MagicMock()
+        manager = S3FolderManager(
+            folder_payload=[
+                {
+                    "path": "f1.pdf",
+                    "name": "f1.pdf",
+                    "s3_path": "org/f1.pdf",
+                    "last_edited_ts": "2025-01-01T00:00:00Z",
+                    "metadata": {"author": "User"},
+                }
+            ],
+            bucket_name="test-bucket",
+            s3_url_endpoint="",
+            s3_access_key_id="key",
+            s3_secret_access_key="secret",
+            s3_region_name="us-east-1",
+        )
+
+        document = manager.list_all_files_info()[0]
+
+        assert document.metadata == {"author": "User", "s3_path": "org/f1.pdf"}
+        assert document.url == "org/f1.pdf"
+
+    @patch("data_ingestion.document.folder_management.s3_folder_management.get_s3_boto3_client")
     def test_returns_none_when_custom_endpoint(self, mock_get_client):
         mock_get_client.return_value = MagicMock()
         manager = S3FolderManager(

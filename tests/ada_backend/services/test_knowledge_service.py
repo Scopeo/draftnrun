@@ -196,6 +196,39 @@ def _cleanup_test_environment(
         mock_qdrant_service.delete_collection(test_source.qdrant_collection_name)
 
 
+def test_resolve_document_url_presigns_s3_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    organization_id = uuid4()
+    s3_path = f"{organization_id}/test.pdf"
+    chunk = knowledge_service.KnowledgeChunk(
+        chunk_id="chunk-1",
+        order=0,
+        content="content",
+        last_edited_ts="2024-01-01T00:00:00",
+        document_id="test.pdf",
+        url=s3_path,
+        metadata={"s3_path": s3_path},
+    )
+    mock_presign = Mock(return_value=SimpleNamespace(url="https://s3.example.com/test.pdf"))
+    monkeypatch.setattr(knowledge_service, "generate_s3_download_presigned_url_service", mock_presign)
+
+    assert knowledge_service._resolve_document_url(organization_id, chunk) == "https://s3.example.com/test.pdf"
+    mock_presign.assert_called_once_with(organization_id=organization_id, key=s3_path)
+
+
+def test_resolve_document_url_keeps_source_url() -> None:
+    chunk = knowledge_service.KnowledgeChunk(
+        chunk_id="chunk-1",
+        order=0,
+        content="content",
+        last_edited_ts="2024-01-01T00:00:00",
+        document_id="test.pdf",
+        url="https://drive.google.com/file",
+        metadata={"source_url": "https://drive.google.com/file"},
+    )
+
+    assert knowledge_service._resolve_document_url(uuid4(), chunk) == "https://drive.google.com/file"
+
+
 def test_chunk_operations_integration(
     monkeypatch: pytest.MonkeyPatch,
     sql_local_service: SQLLocalService,

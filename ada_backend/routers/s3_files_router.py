@@ -11,9 +11,10 @@ from ada_backend.routers.auth_router import (
 )
 from ada_backend.schemas.auth_schema import AuthenticatedEntity, SupabaseUser
 from ada_backend.schemas.ingestion_task_schema import S3UploadedInformation
-from ada_backend.schemas.s3_file_schema import S3UploadURL, UploadFileRequest
+from ada_backend.schemas.s3_file_schema import S3DownloadURL, S3DownloadURLRequest, S3UploadURL, UploadFileRequest
 from ada_backend.services.s3_files_service import (
     delete_file_from_s3,
+    generate_s3_download_presigned_url_service,
     generate_s3_upload_presigned_urls_service,
     upload_file_to_s3,
 )
@@ -46,6 +47,36 @@ async def generate_s3_upload_presigned_urls(
             organization_id,
             len(upload_file_requests),
         )
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+
+
+@router.post(
+    "/organizations/{organization_id}/files/download-url",
+    summary="Get S3 Download Presigned URL",
+    response_model=S3DownloadURL,
+)
+async def generate_s3_download_presigned_url(
+    organization_id: UUID,
+    download_file_request: S3DownloadURLRequest,
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
+    ],
+) -> S3DownloadURL:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        return generate_s3_download_presigned_url_service(organization_id, download_file_request.key)
+    except ValueError as e:
+        LOGGER.warning(
+            "Invalid S3 download URL request for organization %s and key %s: %s",
+            organization_id,
+            download_file_request.key,
+            e,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.exception("Failed to generate S3 download URL for organization %s", organization_id)
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 

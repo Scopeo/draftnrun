@@ -221,7 +221,6 @@ SUPABASE_PROJECT_KEY=xxxxx
 SUPABASE_SERVICE_ROLE_SECRET_KEY=xxxx
 SUPABASE_USERNAME=xxx@xxx.com
 SUPABASE_PASSWORD=xxx
-SUPABASE_BUCKET_NAME=ada-bucket
 
 # Redis
 REDIS_HOST=xxxx
@@ -285,17 +284,6 @@ SUPABASE_SERVICE_ROLE_SECRET_KEY=*service_role key*
 Please check the Supabase documentation if you run the cloud version or the FrontEnd repository
 if you use the local version to know where to find those keys.
 
-#### Supabase bucket
-
-You also need to create a bucket in Supabase to store the documents. You can check instructions on
-the FrontEnd repository for the local version, or the Supabase documentation for the cloud version.
-We advise to create a bucket named `ada-backend` if you want to do minimal
-changes to the credentials.env.example file. Here is the variable to fill:
-
-```env
-SUPABASE_BUCKET_NAME=my_new_bucket
-```
-
 #### Supabase user credentials
 Finally you can create an user name and password on supabase and fill those variables (See again FrontEnd repistory instructions or Supabase cloud documentation):
 
@@ -314,7 +302,6 @@ SUPABASE_SERVICE_ROLE_SECRET_KEY=*service_role key*
 
 SUPABASE_USERNAME=xxx
 SUPABASE_PASSWORD=xxx
-SUPABASE_BUCKET_NAME=ada-backend
 ```
 
 ### Configuration of env variables for ingestion and webhook API keys

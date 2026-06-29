@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { logger } from '@/utils/logger'
 import { useNotifications } from '@/composables/useNotifications'
 import { supabase } from '@/services/auth'
+import { $api } from '@/utils/api'
 import {
   isCsvFile as isCsvFileType,
   isExcelFile as isExcelFileType,
@@ -134,48 +135,33 @@ export function usePlaygroundFiles() {
 
     downloadingFiles.value[url] = true
     try {
-      const cleanPath = url.replace(/-/g, '')
-      const { data, error } = await supabase.storage.from('ada-bucket').download(cleanPath)
-      if (error) throw error
-      if (!data) throw new Error('No data returned from download')
+      const organizationId = url.split('/')[0]
+      if (!organizationId) throw new Error('Invalid S3 file key')
+
+      const data = await $api<{ url: string }>(`/organizations/${organizationId}/files/download-url`, {
+        method: 'POST',
+        body: { key: url },
+      })
+
+      if (!data?.url) throw new Error('No download URL returned')
+
+      const a = document.createElement('a')
+
+      a.href = data.url
+      a.target = '_blank'
 
       if (isPdf) {
-        const blobUrl = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }))
-
-        window.open(blobUrl, '_blank')
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+        a.rel = 'noopener noreferrer'
       } else {
-        const blobUrl = URL.createObjectURL(data)
-        const a = document.createElement('a')
-
-        a.href = blobUrl
         a.download = fileName
-        document.body.appendChild(a)
-        a.click()
-        URL.revokeObjectURL(blobUrl)
-        document.body.removeChild(a)
       }
+
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
     } catch (error) {
       logger.error('Error handling source file', { error })
-      if (isPdf) {
-        try {
-          const cleanPath = url.replace(/-/g, '')
-          const { data: urlData } = await supabase.storage.from('ada-bucket').createSignedUrl(cleanPath, 3600)
-          if (urlData?.signedUrl) {
-            const win = window.open('', '_blank')
-            if (win) {
-              win.document.write(
-                `<iframe src="${urlData.signedUrl}" style="width:100%;height:100%;border:none" type="application/pdf"></iframe>`
-              )
-              win.document.title = fileName
-            } else {
-              window.open(urlData.signedUrl, '_blank')
-            }
-          }
-        } catch (fallbackError) {
-          logger.error('PDF fallback also failed', { error: fallbackError })
-        }
-      }
+      notify.error(`Failed to download source file: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       downloadingFiles.value[url] = false
     }
