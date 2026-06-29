@@ -21,6 +21,10 @@ from settings import settings
 LOGGER = logging.getLogger(__name__)
 
 
+class S3DownloadKeyValidationError(ValueError):
+    """Raised when a requested S3 key is invalid for the caller's organization."""
+
+
 @lru_cache()
 def get_s3_client_and_ensure_bucket(bucket_name: str) -> boto3.client:
     """
@@ -154,7 +158,7 @@ def generate_s3_download_presigned_url_service(
 ) -> S3DownloadURL:
     key_prefix = f"{organization_id}/"
     if not key.startswith(key_prefix):
-        raise ValueError("S3 key does not belong to this organization")
+        raise S3DownloadKeyValidationError("S3 key does not belong to this organization")
 
     s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
     return S3DownloadURL(

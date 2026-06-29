@@ -1,8 +1,8 @@
 import { ref } from 'vue'
+import { filesApi } from '@/api/files'
 import { logger } from '@/utils/logger'
 import { useNotifications } from '@/composables/useNotifications'
 import { supabase } from '@/services/auth'
-import { $api } from '@/utils/api'
 import {
   isCsvFile as isCsvFileType,
   isExcelFile as isExcelFileType,
@@ -138,10 +138,7 @@ export function usePlaygroundFiles() {
       const organizationId = url.split('/')[0]
       if (!organizationId) throw new Error('Invalid S3 file key')
 
-      const data = await $api<{ url: string }>(`/organizations/${organizationId}/files/download-url`, {
-        method: 'POST',
-        body: { key: url },
-      })
+      const data = await filesApi.getPresignedDownloadUrl(organizationId, url)
 
       if (!data?.url) throw new Error('No download URL returned')
 

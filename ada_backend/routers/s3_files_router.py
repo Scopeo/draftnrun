@@ -13,6 +13,7 @@ from ada_backend.schemas.auth_schema import AuthenticatedEntity, SupabaseUser
 from ada_backend.schemas.ingestion_task_schema import S3UploadedInformation
 from ada_backend.schemas.s3_file_schema import S3DownloadURL, S3DownloadURLRequest, S3UploadURL, UploadFileRequest
 from ada_backend.services.s3_files_service import (
+    S3DownloadKeyValidationError,
     delete_file_from_s3,
     generate_s3_download_presigned_url_service,
     generate_s3_upload_presigned_urls_service,
@@ -67,14 +68,14 @@ async def generate_s3_download_presigned_url(
 
     try:
         return generate_s3_download_presigned_url_service(organization_id, download_file_request.key)
-    except ValueError as e:
+    except S3DownloadKeyValidationError as e:
         LOGGER.warning(
             "Invalid S3 download URL request for organization %s and key %s: %s",
             organization_id,
             download_file_request.key,
             e,
         )
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(status_code=400, detail="Invalid S3 file key") from e
     except Exception as e:
         LOGGER.exception("Failed to generate S3 download URL for organization %s", organization_id)
         raise HTTPException(status_code=500, detail="Internal Server Error") from e

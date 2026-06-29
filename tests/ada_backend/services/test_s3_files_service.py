@@ -27,7 +27,7 @@ def test_generate_s3_download_presigned_url_requires_organization_prefix(monkeyp
 
 
 def test_generate_s3_download_presigned_url_rejects_other_organization_key() -> None:
-    with pytest.raises(ValueError, match="does not belong"):
+    with pytest.raises(s3_files_service.S3DownloadKeyValidationError, match="does not belong"):
         s3_files_service.generate_s3_download_presigned_url_service(
             organization_id=uuid4(),
             key=f"{uuid4()}/file.pdf",

@@ -28,4 +28,13 @@ export const filesApi = {
       body: requests,
     })
   },
+  getPresignedDownloadUrl: (organizationId: string, key: string) => {
+    if (!organizationId) throw new Error('No organization ID provided for download URL generation')
+    if (!key) throw new Error('No S3 key provided for download URL generation')
+
+    return $api<{ key: string; url: string }>(`/organizations/${organizationId}/files/download-url`, {
+      method: 'POST',
+      body: { key },
+    })
+  },
 }
