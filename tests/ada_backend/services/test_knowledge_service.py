@@ -209,7 +209,7 @@ def test_resolve_document_url_presigns_s3_path(monkeypatch: pytest.MonkeyPatch) 
         metadata={"s3_path": s3_path},
     )
     mock_presign = Mock(return_value=SimpleNamespace(url="https://s3.example.com/test.pdf"))
-    monkeypatch.setattr(knowledge_service, "generate_s3_download_presigned_url_service", mock_presign)
+    monkeypatch.setattr(knowledge_service, "generate_file_download_url_service", mock_presign)
 
     assert knowledge_service._resolve_document_url(organization_id, chunk) == "https://s3.example.com/test.pdf"
     mock_presign.assert_called_once_with(organization_id=organization_id, key=s3_path)

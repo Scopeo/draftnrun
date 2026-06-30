@@ -136,7 +136,7 @@ export function usePlaygroundFiles() {
     downloadingFiles.value[url] = true
     try {
       const organizationId = url.split('/')[0]
-      if (!organizationId) throw new Error('Invalid S3 file key')
+      if (!organizationId) throw new Error('Invalid file key')
 
       const data = await filesApi.getPresignedDownloadUrl(organizationId, url)
 

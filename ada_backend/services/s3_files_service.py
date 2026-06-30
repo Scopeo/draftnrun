@@ -7,7 +7,7 @@ import boto3
 from ada_backend.schemas.ingestion_task_schema import (
     S3UploadedInformation,
 )
-from ada_backend.schemas.s3_file_schema import S3DownloadURL, S3UploadURL, UploadFileRequest
+from ada_backend.schemas.s3_file_schema import FileDownloadURL, S3UploadURL, UploadFileRequest
 from data_ingestion.boto3_client import (
     create_bucket,
     delete_file_from_bucket,
@@ -21,8 +21,8 @@ from settings import settings
 LOGGER = logging.getLogger(__name__)
 
 
-class S3DownloadKeyValidationError(ValueError):
-    """Raised when a requested S3 key is invalid for the caller's organization."""
+class FileDownloadKeyValidationError(ValueError):
+    """Raised when a requested file key is invalid for the caller's organization."""
 
 
 def _sanitize_s3_key(key: str) -> str:
@@ -158,17 +158,17 @@ def generate_s3_upload_presigned_urls_service(
     return upload_urls
 
 
-def generate_s3_download_presigned_url_service(
+def generate_file_download_url_service(
     organization_id: UUID,
     key: str,
     bucket_name: str = settings.S3_BUCKET_NAME,
-) -> S3DownloadURL:
+) -> FileDownloadURL:
     key_prefix = f"{organization_id}/"
     if not key.startswith(key_prefix):
-        raise S3DownloadKeyValidationError("S3 key does not belong to this organization")
+        raise FileDownloadKeyValidationError("File key does not belong to this organization")
 
     s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
-    return S3DownloadURL(
+    return FileDownloadURL(
         key=key,
         url=generate_presigned_download_url(s3_client=s3_client, key=key, bucket_name=bucket_name),
     )

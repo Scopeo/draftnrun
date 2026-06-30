@@ -13,10 +13,10 @@ class S3UploadURL(BaseModel):
     content_type: str
 
 
-class S3DownloadURLRequest(BaseModel):
+class FileDownloadURLRequest(BaseModel):
     key: str
 
 
-class S3DownloadURL(BaseModel):
+class FileDownloadURL(BaseModel):
     key: str
     url: str

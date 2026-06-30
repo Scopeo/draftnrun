@@ -43,7 +43,7 @@ from ada_backend.services.knowledge.errors import (
     KnowledgeServiceQdrantServiceCreationError,
     KnowledgeSourceNotFoundError,
 )
-from ada_backend.services.s3_files_service import generate_s3_download_presigned_url_service
+from ada_backend.services.s3_files_service import generate_file_download_url_service
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.trace.trace_context import get_trace_manager
@@ -85,7 +85,7 @@ def _resolve_document_url(organization_id: UUID, chunk: KnowledgeChunk) -> str |
     s3_path = metadata.get("s3_path")
     if s3_path:
         try:
-            return generate_s3_download_presigned_url_service(organization_id=organization_id, key=s3_path).url
+            return generate_file_download_url_service(organization_id=organization_id, key=s3_path).url
         except ValueError:
             LOGGER.warning(
                 "Unable to presign S3 document URL for organization %s and key %s",
