@@ -25,6 +25,13 @@ class S3DownloadKeyValidationError(ValueError):
     """Raised when a requested S3 key is invalid for the caller's organization."""
 
 
+def _sanitize_s3_key(key: str) -> str:
+    prefix, separator, remainder = key.partition("/")
+    if not separator:
+        return sanitize_filename(key, remove_extension_dot=False)
+    return f"{prefix}/{sanitize_filename(remainder, remove_extension_dot=False)}"
+
+
 @lru_cache()
 def get_s3_client_and_ensure_bucket(bucket_name: str) -> boto3.client:
     """
@@ -45,7 +52,7 @@ def upload_file_to_s3(
     bucket_name: str = settings.S3_BUCKET_NAME,
 ) -> S3UploadedInformation:
     """Upload a file to an S3 bucket."""
-    sanitized_key = sanitize_filename(file_name, remove_extension_dot=False)
+    sanitized_key = _sanitize_s3_key(file_name)
     try:
         s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
         upload_file_to_bucket(
@@ -133,7 +140,7 @@ def generate_s3_upload_presigned_urls_service(
     upload_urls = []
     for upload_file_request in upload_file_requests:
         s3_filename = f"{organization_id}/{uuid4()}_{upload_file_request.filename}"
-        key = sanitize_filename(s3_filename, remove_extension_dot=False)
+        key = _sanitize_s3_key(s3_filename)
         presigned_url = generate_presigned_upload_url(
             s3_client=s3_client,
             key=key,
