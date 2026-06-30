@@ -3,8 +3,8 @@ from uuid import uuid4
 
 import pytest
 
-from ada_backend.services import s3_files_service
 from ada_backend.schemas.s3_file_schema import UploadFileRequest
+from ada_backend.services import s3_files_service
 
 
 def test_generate_s3_download_presigned_url_requires_organization_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
