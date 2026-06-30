@@ -242,8 +242,8 @@ defineExpose({
                     {{ (source.document_name || source.name || source.url || `Source ${idx + 1}`).replace(/^\//, '') }}
                   </a>
 
-                  <!-- For Supabase files -->
-                  <div v-else class="supabase-file">
+                  <!-- For source files stored by key -->
+                  <div v-else class="source-file">
                     <a href="#" class="source-link" @click.prevent="handleSourceClick(source)">
                       {{
                         (source.document_name || source.name || source.url || `Source ${idx + 1}`).replace(/^\//, '')
@@ -592,7 +592,7 @@ defineExpose({
   }
 }
 
-.supabase-file {
+.source-file {
   display: flex;
   align-items: center;
 }

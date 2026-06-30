@@ -43,6 +43,7 @@ from ada_backend.services.knowledge.errors import (
     KnowledgeServiceQdrantServiceCreationError,
     KnowledgeSourceNotFoundError,
 )
+from ada_backend.services.s3_files_service import generate_file_download_url_service
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.trace.trace_context import get_trace_manager
@@ -77,6 +78,21 @@ def _deserialize_json_field(value: Any) -> Any:
         except ValueError:
             return value
     return value
+
+
+def _resolve_document_url(organization_id: UUID, chunk: KnowledgeChunk) -> str | None:
+    metadata = chunk.metadata or {}
+    s3_path = metadata.get("s3_path")
+    if s3_path:
+        try:
+            return generate_file_download_url_service(organization_id=organization_id, key=s3_path).url
+        except ValueError:
+            LOGGER.warning(
+                "Unable to presign S3 document URL for organization %s and key %s",
+                organization_id,
+                s3_path,
+            )
+    return getattr(chunk, "url", None)
 
 
 def _get_source_for_organization(
@@ -250,7 +266,7 @@ def get_document_with_chunks_service(
     document_metadata = KnowledgeDocumentMetadata(
         document_id=first_chunk.document_id,
         document_title=getattr(first_chunk, "document_title", None),
-        url=getattr(first_chunk, "url", None),
+        url=_resolve_document_url(organization_id, first_chunk),
         last_edited_ts=first_chunk.last_edited_ts,
         metadata=first_chunk.metadata if first_chunk.metadata else None,
     )

@@ -226,6 +226,8 @@ also add it to `SENTRY_TAG_FIELDS` so the propagation remains centralized and en
 Folder-source ingestion can optionally force presigned URL usage for S3-backed files via
 `IS_CLOUD_S3` in environment settings:
 
+- Local file uploads are stored durably in S3. Ingested chunks persist the stable `s3_path`; callers should request
+  a fresh presigned download URL instead of storing expiring URLs.
 - `IS_CLOUD_S3 = False` (default): ingestion never requests presigned URLs and always reads file content directly.
   `S3FolderManager.get_file_presigned_url()` returns `None` in this mode and does not attempt URL generation.
   Use this for local/dev and custom `S3_ENDPOINT_URL` setups (for example MinIO/LocalStack).

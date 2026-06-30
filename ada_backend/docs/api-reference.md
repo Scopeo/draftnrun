@@ -253,6 +253,7 @@ OAuth provider keys are validated against `OAuthProvider`. Google-backed keys in
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | POST | `/organizations/{org_id}/files/upload-urls` | JWT\|ApiKey(Developer) | Get presigned URLs |
+| POST | `/organizations/{org_id}/files/download-url` | JWT(Member) | Get a presigned S3 download URL |
 | POST | `/files/{organization_id}/upload` | JWT(Developer) | Upload files |
 
 ## Credits (`credits_router.py`)

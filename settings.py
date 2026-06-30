@@ -116,8 +116,6 @@ class BaseConfig(BaseSettings):
     SUPABASE_USERNAME: Optional[str] = None
     SUPABASE_PASSWORD: Optional[str] = None
 
-    SUPABASE_BUCKET_NAME: Optional[str] = None
-
     TEST_USER_EMAIL: Optional[str] = None
     TEST_USER_PASSWORD: Optional[str] = None
     EXTERNAL_TEST_MISTRAL_OCR_IMAGE_URL: Optional[str] = None

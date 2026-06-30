@@ -12,7 +12,6 @@ from data_ingestion.document.document_chunking import document_chunking_mapping,
 from data_ingestion.document.folder_management.folder_management import FolderManager
 from data_ingestion.document.folder_management.google_drive_folder_management import GoogleDriveFolderManager
 from data_ingestion.document.folder_management.s3_folder_management import S3FolderManager
-from data_ingestion.document.supabase_file_uploader import sync_files_to_supabase
 from data_ingestion.utils import DocumentReadingMode
 from engine.llm_services.llm_service import EmbeddingService, VisionService
 from engine.qdrant_service import (
@@ -198,7 +197,6 @@ async def ingest_google_drive_source(
     organization_id: str,
     source_name: str,
     task_id: UUID,
-    save_supabase: bool = True,
     access_token: str = None,
     add_doc_description_to_chunks: bool = False,
     chunk_size: Optional[int] = 1024,
@@ -214,8 +212,7 @@ async def ingest_google_drive_source(
         f"Folder ID: '{folder_id}', Organization: '{organization_id}', Task: '{task_id}'"
     )
     LOGGER.info(
-        f"[INGESTION_CONFIG] Supabase save: {save_supabase}, "
-        f"Add descriptions: {add_doc_description_to_chunks}, Chunk size: {chunk_size}"
+        f"[INGESTION_CONFIG] Add descriptions: {add_doc_description_to_chunks}, Chunk size: {chunk_size}"
     )
 
     # TODO: see how we can change whole code to use id instead of path
@@ -228,7 +225,6 @@ async def ingest_google_drive_source(
         source_name=source_name,
         source_type=source_type,
         task_id=task_id,
-        save_supabase=save_supabase,
         add_doc_description_to_chunks=add_doc_description_to_chunks,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
@@ -245,7 +241,6 @@ async def ingest_local_folder_source(
     organization_id: str,
     source_name: str,
     task_id: UUID,
-    save_supabase: bool = True,
     add_doc_description_to_chunks: bool = False,
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
@@ -260,7 +255,7 @@ async def ingest_local_folder_source(
         f"Organization: '{organization_id}', Task: '{task_id}'"
     )
     LOGGER.info(
-        f"[INGESTION_CONFIG] Files count: {len(list_of_files_to_ingest)}, Supabase save: {save_supabase}, "
+        f"[INGESTION_CONFIG] Files count: {len(list_of_files_to_ingest)}, "
         f"Add descriptions: {add_doc_description_to_chunks}, Chunk size: {chunk_size}"
     )
 
@@ -272,7 +267,6 @@ async def ingest_local_folder_source(
         source_name=source_name,
         source_type=source_type,
         task_id=task_id,
-        save_supabase=save_supabase,
         add_doc_description_to_chunks=add_doc_description_to_chunks,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
@@ -282,7 +276,6 @@ async def ingest_local_folder_source(
         mistral_ocr_api_key=mistral_ocr_api_key,
         batch_size=batch_size,
     )
-    folder_manager.clean_bucket()
 
 
 async def _ingest_folder_source(
@@ -291,7 +284,6 @@ async def _ingest_folder_source(
     source_name: str,
     source_type: db.SourceType,
     task_id: UUID,
-    save_supabase: bool = True,
     add_doc_description_to_chunks: bool = False,
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
@@ -372,13 +364,6 @@ async def _ingest_folder_source(
 
         LOGGER.info("Starting ingestion process")
         files_info = folder_manager.list_all_files_info()
-        if save_supabase:
-            files_info = sync_files_to_supabase(
-                organization_id=organization_id,
-                source_name=source_name,
-                get_file_content_func=folder_manager.get_file_content,
-                list_of_documents=files_info,
-            )
         try:
             document_chunk_mapping = document_chunking_mapping(
                 vision_ingestion_service=vision_completion_service,

@@ -7,7 +7,7 @@ import boto3
 from ada_backend.schemas.ingestion_task_schema import (
     S3UploadedInformation,
 )
-from ada_backend.schemas.s3_file_schema import S3UploadURL, UploadFileRequest
+from ada_backend.schemas.s3_file_schema import FileDownloadURL, S3UploadURL, UploadFileRequest
 from data_ingestion.boto3_client import (
     create_bucket,
     delete_file_from_bucket,
@@ -19,6 +19,17 @@ from data_ingestion.utils import sanitize_filename
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
+
+
+class FileDownloadKeyValidationError(ValueError):
+    """Raised when a requested file key is invalid for the caller's organization."""
+
+
+def _sanitize_s3_key(key: str) -> str:
+    prefix, separator, remainder = key.partition("/")
+    if not separator:
+        return sanitize_filename(key, remove_extension_dot=False)
+    return f"{prefix}/{sanitize_filename(remainder, remove_extension_dot=False)}"
 
 
 @lru_cache()
@@ -41,7 +52,7 @@ def upload_file_to_s3(
     bucket_name: str = settings.S3_BUCKET_NAME,
 ) -> S3UploadedInformation:
     """Upload a file to an S3 bucket."""
-    sanitized_key = sanitize_filename(file_name, remove_extension_dot=False)
+    sanitized_key = _sanitize_s3_key(file_name)
     try:
         s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
         upload_file_to_bucket(
@@ -129,7 +140,7 @@ def generate_s3_upload_presigned_urls_service(
     upload_urls = []
     for upload_file_request in upload_file_requests:
         s3_filename = f"{organization_id}/{uuid4()}_{upload_file_request.filename}"
-        key = sanitize_filename(s3_filename, remove_extension_dot=False)
+        key = _sanitize_s3_key(s3_filename)
         presigned_url = generate_presigned_upload_url(
             s3_client=s3_client,
             key=key,
@@ -145,3 +156,19 @@ def generate_s3_upload_presigned_urls_service(
             )
         )
     return upload_urls
+
+
+def generate_file_download_url_service(
+    organization_id: UUID,
+    key: str,
+    bucket_name: str = settings.S3_BUCKET_NAME,
+) -> FileDownloadURL:
+    key_prefix = f"{organization_id}/"
+    if not key.startswith(key_prefix):
+        raise FileDownloadKeyValidationError("File key does not belong to this organization")
+
+    s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
+    return FileDownloadURL(
+        key=key,
+        url=generate_presigned_download_url(s3_client=s3_client, key=key, bucket_name=bucket_name),
+    )
