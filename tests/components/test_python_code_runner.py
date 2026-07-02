@@ -9,6 +9,7 @@ from engine.components.tools.python_code_runner import (
     PythonCodeRunner,
     PythonCodeRunnerToolInputs,
     PythonCodeRunnerToolOutputs,
+    SandboxFileRecord,
 )
 from engine.components.types import ComponentAttributes
 from tests.mocks.trace_manager import MockTraceManager
@@ -243,6 +244,42 @@ async def test_run_without_io_trace_exposes_text_artifact(mock_get_output_dir, p
 
     assert result.artifacts["execution_result"] == execution_result
     assert result.artifacts["text"] == "main result"
+
+
+@pytest.mark.asyncio
+async def test_run_without_io_trace_exposes_generated_files_artifact(python_code_runner_tool, tmp_path):
+    execution_result = {
+        "results": [],
+        "stdout": ["created report"],
+        "stderr": [],
+        "error": None,
+        "execution_count": 1,
+    }
+    records = [
+        SandboxFileRecord(
+            name="report.csv",
+            remote_path="report.csv",
+            local_path=tmp_path / "report.csv",
+        ),
+        SandboxFileRecord(
+            name="input/source.csv",
+            remote_path="input/source.csv",
+            local_path=tmp_path / "input/source.csv",
+            origin="input",
+        ),
+    ]
+    python_code_runner_tool.execute_python_code = AsyncMock(return_value=(execution_result, records))
+    python_code_runner_tool._save_images_from_results = Mock(return_value=[])
+
+    result = await python_code_runner_tool._run_without_io_trace(
+        PythonCodeRunnerToolInputs(python_code="open('report.csv', 'w').write('a,b')"),
+        {},
+    )
+
+    assert result.artifacts["files"] == ["report.csv"]
+    assert "report.csv" in result.output
+    assert "input/source.csv" not in result.output
+    assert "available for later Python Code Runner calls" in result.output
 
 
 @pytest.mark.asyncio
