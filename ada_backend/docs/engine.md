@@ -69,6 +69,10 @@ The concrete base class implementing `Runnable`. Key attributes:
 `PythonCodeRunner` preserves the full E2B execution payload at `artifacts.execution_result`. When the execution returns a
 text result, it also exposes that value as `artifacts.text` so downstream field expressions can inject it with
 `@{{<python_runner_instance_id>.artifacts::text}}` without relying on nested array traversal.
+New files created at the sandbox root with supported extensions are saved to the run temp folder and exposed as
+`artifacts.files`. The tool output also lists those filenames so an AI Agent can call Python Code Runner again with
+`input_filepaths` set to the generated filenames. Re-downloaded input files are persisted for later use but are not listed
+as generated files.
 The user-facing `output` serializes a trace-friendly view of that payload: inline `png`/`jpeg` rich-result data is replaced
 with a placeholder while the original base64 remains available in `artifacts.execution_result` and extracted image files.
 

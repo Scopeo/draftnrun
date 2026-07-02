@@ -119,6 +119,7 @@ class SandboxFileRecord:
     name: str
     remote_path: str
     local_path: Path
+    origin: str = "generated"
     fp_pixel: Optional[str] = None
 
 
@@ -323,6 +324,7 @@ class PythonCodeRunner(Component):
                     name=filename,
                     remote_path=filename,
                     local_path=local_path,
+                    origin="input",
                     fp_pixel=fp_pixel,
                 )
                 records.append(record)
@@ -417,11 +419,18 @@ class PythonCodeRunner(Component):
             input_filepaths=input_filepaths,
         )
         images_paths = self._save_images_from_results(execution_result_dict, records)
+        generated_file_paths = [record.name for record in records if record.origin == "generated"]
         artifacts = {"execution_result": execution_result_dict}
         content = serialize_to_json(_sanitize_execution_result_for_output(execution_result_dict))
         injectable_text = _extract_injectable_text(execution_result_dict)
         if injectable_text is not None:
             artifacts["text"] = injectable_text
+        if generated_file_paths:
+            artifacts["files"] = generated_file_paths
+            content += (
+                f"\n\n[{len(generated_file_paths)} file(s) generated and available "
+                f"for later Python Code Runner calls: {', '.join(generated_file_paths)}]"
+            )
         if images_paths:
             artifacts["images"] = images_paths
             content += (
