@@ -76,8 +76,10 @@ as generated files.
 When Python Code Runner runs as an AI Agent tool, the agent carries `artifacts.files` into the next iteration and adds an
 `Available generated files` instruction to the system prompt. This lets the model reuse generated filenames in later Python
 Code Runner tool calls through `input_filepaths`. If the model needs to read a generated PDF directly, it must call the
-internal `attach_generated_files_to_llm` tool with the exact filename; selected PDFs are then attached to the next AI Agent
-LLM message as file payloads when they are still present in the run temp folder.
+internal `attach_generated_files_to_llm` tool with the exact filename; selected PDFs are then attached only to the next AI
+Agent LLM message as one-shot file payloads, and `artifacts.attached_files` is cleared after that request is built. Missing,
+oversized, or unreadable PDFs are skipped per file so the remaining attachments can still be sent. If the retained message
+window has no user-role message to carry the file payloads, the agent adds a short fallback user message for that next LLM call.
 The user-facing `output` serializes a trace-friendly view of that payload: inline `png`/`jpeg` rich-result data is replaced
 with a placeholder while the original base64 remains available in `artifacts.execution_result` and extracted image files.
 

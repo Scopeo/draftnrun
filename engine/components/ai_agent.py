@@ -491,12 +491,14 @@ class AIAgent(Component):
                 role="system",
                 content=filled_system_prompt,
             )
+        attached_files = extract_attached_generated_files_from_artifacts(original_agent_input.artifacts)
+        original_agent_input.artifacts.pop("attached_files", None)
+
         agent_input = original_agent_input.model_copy(deep=True)
         history_messages_handled = self._memory_handling.get_truncated_messages_history(agent_input.messages)
         tool_choice = "auto" if self._current_iteration + 1 < self._max_iterations else "none"
         with self.trace_manager.start_span("Agentic reflexion") as span:
             llm_input_messages = [msg.model_dump() for msg in history_messages_handled]
-            attached_files = extract_attached_generated_files_from_artifacts(original_agent_input.artifacts)
             generated_pdf_parts = build_generated_pdf_message_parts(attached_files)
             append_file_parts_to_latest_user_message(llm_input_messages, generated_pdf_parts)
             trace_input_messages = mask_file_data_for_trace(llm_input_messages)

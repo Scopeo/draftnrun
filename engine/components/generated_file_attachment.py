@@ -71,15 +71,19 @@ def build_generated_pdf_message_parts(attached_files: list[str]) -> list[dict[st
             LOGGER.warning(f"Generated PDF not found in temp folder: {filename}")
             continue
 
-        file_size = file_path.stat().st_size
-        if file_size > MAX_GENERATED_PDF_BYTES:
-            LOGGER.warning(
-                f"Skipping generated PDF {filename}: size {file_size} exceeds {MAX_GENERATED_PDF_BYTES} bytes"
-            )
+        try:
+            file_size = file_path.stat().st_size
+            if file_size > MAX_GENERATED_PDF_BYTES:
+                LOGGER.warning(
+                    f"Skipping generated PDF {filename}: size {file_size} exceeds {MAX_GENERATED_PDF_BYTES} bytes"
+                )
+                continue
+
+            file_data = base64.b64encode(file_path.read_bytes()).decode("utf-8")
+        except OSError as e:
+            LOGGER.warning(f"Skipping generated PDF {filename}: could not read file: {str(e)}")
             continue
 
-        with open(file_path, "rb") as f:
-            file_data = base64.b64encode(f.read()).decode("utf-8")
         file_parts.append({
             "type": "file",
             "file": {
@@ -108,6 +112,14 @@ def append_file_parts_to_latest_user_message(
         else:
             message["content"] = [{"type": "text", "text": str(content)}, *file_parts]
         return
+
+    messages.append({
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "Attached generated file(s) requested by the previous tool call."},
+            *file_parts,
+        ],
+    })
 
 
 def mask_file_data_for_trace(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
