@@ -88,14 +88,10 @@ jobs:
       - name: Check for alembic migrations
         id: migration
         run: |
-          NULL_SHA="0000000000000000000000000000000000000000"
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "${NULL_SHA}" ]; then
-            DIFF_BASE="${{ github.event.before }}"
-          else
-            DIFF_BASE="HEAD~1"
-          fi
-          CHANGED=$(git diff "${DIFF_BASE}" HEAD --name-only -- \
-            'ada_backend/database/alembic/versions/*.py')
+          CHANGED=$(python scripts/detect_changed_migrations.py \
+            --event-name "${{ github.event_name }}" \
+            --before "${{ github.event.before }}" \
+            --fallback-base origin/main)
           if [ -n "$CHANGED" ]; then
             echo "has_migration=true" >> $GITHUB_OUTPUT
             echo "migration_files<<EOF" >> $GITHUB_OUTPUT
