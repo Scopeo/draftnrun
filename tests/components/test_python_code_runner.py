@@ -189,6 +189,7 @@ async def test_run_without_io_trace_success(
 
     assert isinstance(result, PythonCodeRunnerToolOutputs)
     assert "execution_result" in result.artifacts
+    assert result.artifacts["files"] == []
     execution_data = json.loads(result.output)
     assert execution_data["error"] is None
     assert execution_data["stdout"] == ["Hello, World!"]
@@ -243,6 +244,7 @@ async def test_run_without_io_trace_exposes_text_artifact(mock_get_output_dir, p
     result = await python_code_runner_tool._run_without_io_trace(PythonCodeRunnerToolInputs(python_code="2 + 2"), {})
 
     assert result.artifacts["execution_result"] == execution_result
+    assert result.artifacts["files"] == []
     assert result.artifacts["text"] == "main result"
 
 
@@ -342,5 +344,6 @@ async def test_run_without_io_trace_no_images_in_artifacts(
     result = await python_code_runner_tool._run_without_io_trace(inputs, {})
 
     assert isinstance(result, PythonCodeRunnerToolOutputs)
+    assert result.artifacts["files"] == []
     assert "images" not in result.artifacts
     assert "image(s) generated" not in result.output

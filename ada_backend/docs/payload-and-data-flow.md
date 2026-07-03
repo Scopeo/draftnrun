@@ -96,7 +96,7 @@ In `_gather_inputs()`:
 
 Components that create files should save them under the run output directory returned by `get_output_dir()` and expose
 their run-local filenames in output data. The Python Code Runner follows this pattern by exposing newly generated files
-as `artifacts.files`.
+as `artifacts.files`; this artifact key is always present and is an empty list when no supported files were generated.
 
 To pass those files into a downstream AI Agent as direct LLM file attachments, wire the Python Code Runner files artifact
 to the AI Agent's `input_filepaths` input:
