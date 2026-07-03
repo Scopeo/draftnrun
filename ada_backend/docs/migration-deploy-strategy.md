@@ -80,8 +80,9 @@ The `setup` job in `build-and-deploy-k8s.yml` first detects changed migration
 files with `scripts/detect_changed_migrations.py`, then runs the same
 classifier and passes `migration_strategy` to the `deploy` job. Push detection
 uses `github.event.before` only when that commit exists and is an ancestor of
-`HEAD`; force-pushed staging branches fall back to `origin/main...HEAD` so the
-workflow does not fail with `fatal: bad object` before classification.
+`HEAD`; missing, NULL, or force-pushed staging bases fall back to
+`origin/main...HEAD` so rewritten branch history is classified without failing
+with `fatal: bad object`.
 
 The deploy step branches:
 

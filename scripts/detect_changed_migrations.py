@@ -46,8 +46,13 @@ def detect_changed_migrations(
 ) -> MigrationDiff:
     normalized_before = before.strip() if before else ""
 
-    if event_name == "push" and normalized_before and normalized_before != NULL_SHA:
-        if _commit_exists(repo, normalized_before) and _is_ancestor(repo, normalized_before, head):
+    if event_name == "push":
+        if (
+            normalized_before
+            and normalized_before != NULL_SHA
+            and _commit_exists(repo, normalized_before)
+            and _is_ancestor(repo, normalized_before, head)
+        ):
             return MigrationDiff(
                 files=_changed_files(repo, [normalized_before, head]),
                 diff_base=normalized_before,
