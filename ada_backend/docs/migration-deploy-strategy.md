@@ -76,8 +76,14 @@ migration files and:
 
 ## CD behaviour
 
-The `setup` job in `build-and-deploy-k8s.yml` runs the same classifier and
-passes `migration_strategy` to the `deploy` job. The deploy step branches:
+The `setup` job in `build-and-deploy-k8s.yml` first detects changed migration
+files with `scripts/detect_changed_migrations.py`, then runs the same
+classifier and passes `migration_strategy` to the `deploy` job. Push detection
+uses `github.event.before` only when that commit exists and is an ancestor of
+`HEAD`; force-pushed staging branches fall back to `origin/main...HEAD` so the
+workflow does not fail with `fatal: bad object` before classification.
+
+The deploy step branches:
 
 - **migrate-first**: run `db-migrate` and `db-seed` pods (using the new image)
   *before* updating deployment images, then roll out all deployments.

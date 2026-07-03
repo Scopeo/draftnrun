@@ -92,6 +92,8 @@ Org-scoped, independently versioned prompts (`prompt_definitions`, `prompt_versi
 
 Alembic migrations are auto-classified by `scripts/classify_migration.py` (AST-based) to determine CD deploy order: `migrate-first` (additive), `code-first` (destructive), or `breaking` (rename / mixed / scale-to-zero). Migrations using `op.execute()` or `op.get_bind()` must set `deploy_strategy` in the file. See `ada_backend/docs/migration-deploy-strategy.md`.
 
+Staging migration detection must be force-push-safe: validate `github.event.before` before diffing and use `scripts/detect_changed_migrations.py` rather than calling `git diff` on the push base directly.
+
 Migration-private backup tables used for downgrade safety should be prefixed with `_alembic_`; Alembic autogenerate ignores those tables. Downgrades that restore from backup tables should raise explicitly when the expected backup is missing.
 
 ### Documentation
