@@ -70,9 +70,9 @@ The concrete base class implementing `Runnable`. Key attributes:
 text result, it also exposes that value as `artifacts.text` so downstream field expressions can inject it with
 `@{{<python_runner_instance_id>.artifacts::text}}` without relying on nested array traversal.
 New files created at the sandbox root with supported extensions are saved to the run temp folder and exposed as
-`artifacts.files`. The tool output also lists those filenames so an AI Agent can call Python Code Runner again with
-`input_filepaths` set to the generated filenames. Re-downloaded input files are persisted for later use but are not listed
-as generated files.
+`artifacts.files`. This key is always present and contains an empty list when no supported files were generated. The tool
+output also lists generated filenames so an AI Agent can call Python Code Runner again with `input_filepaths` set to those
+filenames. Re-downloaded input files are persisted for later use but are not listed as generated files.
 When Python Code Runner runs as an AI Agent tool, the agent carries `artifacts.files` into the next iteration and adds an
 `Available generated files` instruction to the system prompt. This lets the model reuse generated filenames in later Python
 Code Runner tool calls through `input_filepaths`. If the model needs to read a generated PDF directly, it must call the
