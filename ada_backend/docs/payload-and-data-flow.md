@@ -92,6 +92,26 @@ In `_gather_inputs()`:
 | `engine/field_expressions/traversal.py` | Walk, select, map, get_pure_ref |
 | `engine/graph_runner/field_expression_management.py` | Runtime evaluation against task results |
 
+## Generated File Flow
+
+Components that create files should save them under the run output directory returned by `get_output_dir()` and expose
+their run-local filenames in output data. The Python Code Runner follows this pattern by exposing newly generated files
+as `artifacts.files`.
+
+To pass those files into a downstream AI Agent as direct LLM file attachments, wire the Python Code Runner files artifact
+to the AI Agent's `input_filepaths` input:
+
+```text
+@{{python_runner.artifacts::files}} -> ai_agent.input_filepaths
+```
+
+At runtime the AI Agent resolves each filename relative to the run output directory, rejects missing or path-traversing
+entries, encodes the file as a data URI, and appends it to the latest user message as an OpenAI-style `file` content
+part. The file payload preserves the normalized run-relative path as `filename`, so files in different subdirectories keep
+their context even when their basenames match. This requires the selected model to advertise the `file` capability. The
+older filename-only context path remains available for tools that explicitly ask for run-local filenames, such as later
+Python Code Runner calls.
+
 ## Coercion Matrix
 
 **File**: `engine/coercion_matrix.py`

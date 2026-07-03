@@ -309,6 +309,7 @@ def create_factory_registry() -> FactoryRegistry:
             entity_class=AIAgent,
             parameter_processors=[
                 completion_service_processor,
+                llm_capability_resolver_processor,
             ],
         ),
     )
