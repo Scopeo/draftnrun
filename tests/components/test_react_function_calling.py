@@ -1,10 +1,13 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall, Function
 
 from engine.components.ai_agent import DEFAULT_FALLBACK_REACT_ANSWER, SYSTEM_PROMPT_DEFAULT, AIAgent
+from engine.components.generated_file_attachment import build_generated_pdf_message_parts
 from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
@@ -86,6 +89,184 @@ def test_run_no_tool_calls(agent_calls_mock, get_span_mock, react_agent, agent_i
 
     assert output.last_message.content == "Test response"
     assert output.is_final
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+def test_run_includes_generated_files_from_artifacts_in_system_prompt(
+    agent_calls_mock, get_span_mock, react_agent, mock_llm_service
+):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+    agent_input = AgentPayload(
+        messages=[ChatMessage(role="user", content="Use the generated report")],
+        artifacts={"files": ["report.csv"]},
+    )
+
+    output = react_agent.run_sync(agent_input)
+
+    assert output.last_message.content == "Test response"
+    llm_messages = mock_llm_service.function_call_async.call_args.kwargs["messages"]
+    assert "Available generated files:\n- report.csv" in llm_messages[0]["content"]
+    assert "input_filepaths" in llm_messages[0]["content"]
+    assert "attach_generated_files_to_llm" in llm_messages[0]["content"]
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.components.generated_file_attachment.get_output_dir")
+def test_run_attaches_generated_pdf_once_after_explicit_tool_call(
+    mock_get_output_dir, agent_calls_mock, get_span_mock, react_agent, mock_agent, mock_llm_service, tmp_path
+):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+    mock_get_output_dir.return_value = tmp_path
+    (tmp_path / "report.pdf").write_bytes(b"%PDF-1.4\nmock pdf")
+    mock_tool_call = ChatCompletionMessageToolCall(
+        id="attach-1",
+        function=Function(
+            name="attach_generated_files_to_llm",
+            arguments=json.dumps({"filenames": ["report.pdf"]}),
+        ),
+        type="function",
+    )
+    next_tool_call = ChatCompletionMessageToolCall(
+        id="tool-1",
+        function=Function(
+            name="test_tool",
+            arguments=json.dumps({"test_property": "Test value"}),
+        ),
+        type="function",
+    )
+
+    first_message = SimpleNamespace(
+        role="assistant",
+        content=None,
+        tool_calls=[mock_tool_call],
+        model_dump=lambda: {"role": "assistant", "content": None, "tool_calls": [mock_tool_call]},
+    )
+    second_message = SimpleNamespace(
+        role="assistant",
+        content=None,
+        tool_calls=[next_tool_call],
+        model_dump=lambda: {"role": "assistant", "content": None, "tool_calls": [next_tool_call]},
+    )
+    third_message = SimpleNamespace(
+        role="assistant",
+        content="I read the generated PDF",
+        tool_calls=[],
+        model_dump=lambda: {"role": "assistant", "content": "I read the generated PDF", "tool_calls": []},
+    )
+    mock_llm_service.function_call_async = AsyncMock(
+        side_effect=[
+            SimpleNamespace(choices=[SimpleNamespace(message=first_message)]),
+            SimpleNamespace(choices=[SimpleNamespace(message=second_message)]),
+            SimpleNamespace(choices=[SimpleNamespace(message=third_message)]),
+        ]
+    )
+    mock_agent.run.return_value = AgentPayload(
+        messages=[ChatMessage(role="assistant", content="Tool response")],
+        is_final=False,
+    )
+    agent_input = AgentPayload(
+        messages=[ChatMessage(role="user", content="Read the generated PDF")],
+        artifacts={"files": ["report.pdf"]},
+    )
+
+    output = react_agent.run_sync(agent_input)
+
+    assert output.last_message.content == "I read the generated PDF"
+    first_llm_messages = mock_llm_service.function_call_async.call_args_list[0].kwargs["messages"]
+    assert isinstance(first_llm_messages[-1]["content"], str)
+    second_llm_messages = mock_llm_service.function_call_async.call_args_list[1].kwargs["messages"]
+    user_content = next(message["content"] for message in reversed(second_llm_messages) if message["role"] == "user")
+    assert user_content[0] == {"type": "text", "text": "Read the generated PDF"}
+    assert user_content[1]["type"] == "file"
+    assert user_content[1]["file"]["filename"] == "report.pdf"
+    assert user_content[1]["file"]["file_data"].startswith("data:application/pdf;base64,")
+    third_llm_messages = mock_llm_service.function_call_async.call_args_list[2].kwargs["messages"]
+    third_user_content = next(
+        message["content"] for message in reversed(third_llm_messages) if message["role"] == "user"
+    )
+    assert third_user_content == "Read the generated PDF"
+
+
+@patch("engine.components.generated_file_attachment.get_output_dir")
+def test_build_generated_pdf_message_parts_skips_unreadable_pdf(mock_get_output_dir, monkeypatch, tmp_path):
+    mock_get_output_dir.return_value = tmp_path
+    (tmp_path / "unreadable.pdf").write_bytes(b"%PDF-1.4\nbad pdf")
+    (tmp_path / "report.pdf").write_bytes(b"%PDF-1.4\ngood pdf")
+    original_read_bytes = Path.read_bytes
+
+    def read_bytes_or_raise(path):
+        if path.name == "unreadable.pdf":
+            raise OSError("permission denied")
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", read_bytes_or_raise)
+
+    file_parts = build_generated_pdf_message_parts(["unreadable.pdf", "report.pdf"])
+
+    assert len(file_parts) == 1
+    assert file_parts[0]["file"]["filename"] == "report.pdf"
+    assert file_parts[0]["file"]["file_data"].startswith("data:application/pdf;base64,")
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.components.generated_file_attachment.get_output_dir")
+def test_run_attaches_generated_pdf_with_no_user_message(
+    mock_get_output_dir, agent_calls_mock, get_span_mock, react_agent, mock_llm_service, tmp_path
+):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+    mock_get_output_dir.return_value = tmp_path
+    (tmp_path / "report.pdf").write_bytes(b"%PDF-1.4\nmock pdf")
+    mock_tool_call = ChatCompletionMessageToolCall(
+        id="attach-1",
+        function=Function(
+            name="attach_generated_files_to_llm",
+            arguments=json.dumps({"filenames": ["report.pdf"]}),
+        ),
+        type="function",
+    )
+
+    first_message = SimpleNamespace(
+        role="assistant",
+        content=None,
+        tool_calls=[mock_tool_call],
+        model_dump=lambda: {"role": "assistant", "content": None, "tool_calls": [mock_tool_call]},
+    )
+    second_message = SimpleNamespace(
+        role="assistant",
+        content="I read the generated PDF",
+        tool_calls=[],
+        model_dump=lambda: {"role": "assistant", "content": "I read the generated PDF", "tool_calls": []},
+    )
+    mock_llm_service.function_call_async = AsyncMock(
+        side_effect=[
+            SimpleNamespace(choices=[SimpleNamespace(message=first_message)]),
+            SimpleNamespace(choices=[SimpleNamespace(message=second_message)]),
+        ]
+    )
+    agent_input = AgentPayload(messages=[], artifacts={"files": ["report.pdf"]})
+
+    output = react_agent.run_sync(agent_input)
+
+    assert output.last_message.content == "I read the generated PDF"
+    second_llm_messages = mock_llm_service.function_call_async.call_args_list[1].kwargs["messages"]
+    assert second_llm_messages[-1]["role"] == "user"
+    user_content = second_llm_messages[-1]["content"]
+    assert user_content[0] == {
+        "type": "text",
+        "text": "Attached generated file(s) requested by the previous tool call.",
+    }
+    assert user_content[1]["type"] == "file"
+    assert user_content[1]["file"]["filename"] == "report.pdf"
+    assert user_content[1]["file"]["file_data"].startswith("data:application/pdf;base64,")
 
 
 @patch("engine.prometheus_metric.get_tracing_span")
