@@ -11,6 +11,16 @@ from pydantic import BaseModel, Field
 
 from ada_backend.database.models import UIComponent, UIComponentProperties
 from engine.components.component import Component
+from engine.components.generated_file_attachment import (
+    ATTACH_GENERATED_FILES_TOOL_DESCRIPTION,
+    ATTACH_GENERATED_FILES_TOOL_NAME,
+    append_file_parts_to_latest_user_message,
+    attach_generated_files_tool_output,
+    build_generated_pdf_message_parts,
+    extract_attached_generated_files_from_artifacts,
+    extract_generated_files_from_artifacts,
+    mask_file_data_for_trace,
+)
 from engine.components.history_message_handling import HistoryMessageHandler
 from engine.components.rag.formatter import Formatter
 from engine.components.rag.retriever import RETRIEVER_CITATION_INSTRUCTION, RETRIEVER_TOOL_DESCRIPTION
@@ -293,9 +303,12 @@ class AIAgent(Component):
     def _check_for_retriever_tool(self) -> bool:
         return RETRIEVER_TOOL_DESCRIPTION.name in self._tool_registry
 
-    def _get_tool_descriptions_for_llm(self) -> list[ToolDescription]:
+    def _get_tool_descriptions_for_llm(self, include_generated_file_tool: bool = False) -> list[ToolDescription]:
         """Return tool descriptions for LLM function calling."""
-        return [desc for _, desc, _ in self._tool_registry.values()]
+        tool_descriptions = [desc for _, desc, _ in self._tool_registry.values()]
+        if include_generated_file_tool:
+            tool_descriptions.append(ATTACH_GENERATED_FILES_TOOL_DESCRIPTION)
+        return tool_descriptions
 
     @staticmethod
     def _extract_file_metadata(ctx: Optional[dict]) -> list[dict[str, str]]:
@@ -326,6 +339,12 @@ class AIAgent(Component):
         LOGGER.info(
             f"Tool call: {tool_function_name} (id={tool_call_id}) with argument keys={list(tool_arguments.keys())}"
         )
+
+        if tool_function_name == ATTACH_GENERATED_FILES_TOOL_NAME:
+            return tool_call_id, attach_generated_files_tool_output(
+                original_agent_inputs,
+                tool_arguments.get("filenames"),
+            )
 
         tool_entry = self._tool_registry.get(tool_function_name)
         if tool_entry is None:
@@ -427,6 +446,18 @@ class AIAgent(Component):
             )
             system_prompt_content += files_instruction
 
+        generated_files = extract_generated_files_from_artifacts(original_agent_input.artifacts)
+        if generated_files:
+            generated_file_list = "\n".join([f"- {filename}" for filename in generated_files])
+            generated_files_instruction = (
+                "\n\nAvailable generated files:\n"
+                f"{generated_file_list}\n\n"
+                "You can reference these files by filename in Python Code Runner calls using input_filepaths. "
+                "For generated PDF files that you need to read directly, call "
+                f"{ATTACH_GENERATED_FILES_TOOL_NAME} with the exact filenames first."
+            )
+            system_prompt_content += generated_files_instruction
+
         inputs_dict = inputs_dict or {}
         if kwargs:
             inputs_dict = {**inputs_dict, **kwargs}
@@ -465,7 +496,10 @@ class AIAgent(Component):
         tool_choice = "auto" if self._current_iteration + 1 < self._max_iterations else "none"
         with self.trace_manager.start_span("Agentic reflexion") as span:
             llm_input_messages = [msg.model_dump() for msg in history_messages_handled]
-            trace_input_messages = [dict(message) for message in llm_input_messages]
+            attached_files = extract_attached_generated_files_from_artifacts(original_agent_input.artifacts)
+            generated_pdf_parts = build_generated_pdf_message_parts(attached_files)
+            append_file_parts_to_latest_user_message(llm_input_messages, generated_pdf_parts)
+            trace_input_messages = mask_file_data_for_trace(llm_input_messages)
             for message in trace_input_messages:
                 if message.get("role") == "system":
                     message["content"] = masked_system_prompt
@@ -483,7 +517,7 @@ class AIAgent(Component):
             })
             chat_response = await self._completion_service.function_call_async(
                 messages=llm_input_messages,
-                tools=self._get_tool_descriptions_for_llm(),
+                tools=self._get_tool_descriptions_for_llm(include_generated_file_tool=bool(generated_files)),
                 tool_choice=tool_choice,
                 structured_output_tool=output_tool_description,
             )

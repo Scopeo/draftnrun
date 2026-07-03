@@ -73,6 +73,11 @@ New files created at the sandbox root with supported extensions are saved to the
 `artifacts.files`. The tool output also lists those filenames so an AI Agent can call Python Code Runner again with
 `input_filepaths` set to the generated filenames. Re-downloaded input files are persisted for later use but are not listed
 as generated files.
+When Python Code Runner runs as an AI Agent tool, the agent carries `artifacts.files` into the next iteration and adds an
+`Available generated files` instruction to the system prompt. This lets the model reuse generated filenames in later Python
+Code Runner tool calls through `input_filepaths`. If the model needs to read a generated PDF directly, it must call the
+internal `attach_generated_files_to_llm` tool with the exact filename; selected PDFs are then attached to the next AI Agent
+LLM message as file payloads when they are still present in the run temp folder.
 The user-facing `output` serializes a trace-friendly view of that payload: inline `png`/`jpeg` rich-result data is replaced
 with a placeholder while the original base64 remains available in `artifacts.execution_result` and extracted image files.
 
