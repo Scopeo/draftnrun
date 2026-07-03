@@ -1,3 +1,5 @@
+import asyncio
+import base64
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -6,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall, Function
 
-from engine.components.ai_agent import DEFAULT_FALLBACK_REACT_ANSWER, SYSTEM_PROMPT_DEFAULT, AIAgent
+from engine.components.ai_agent import DEFAULT_FALLBACK_REACT_ANSWER, SYSTEM_PROMPT_DEFAULT, AIAgent, AIAgentInputs
 from engine.components.generated_file_attachment import build_generated_pdf_message_parts
-from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, NodeData, ToolDescription
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 
@@ -372,6 +374,218 @@ def test_initial_prompt_insertion(agent_calls_mock, get_span_mock, react_agent, 
     called_messages = mock_llm_service.function_call_async.call_args.kwargs["messages"]
     assert called_messages[0]["role"] == "system"
     assert called_messages[0]["content"] == SYSTEM_PROMPT_DEFAULT
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.components.ai_agent.get_output_dir")
+def test_input_filepaths_attach_run_files_to_llm_message(
+    mock_get_output_dir,
+    agent_calls_mock,
+    get_span_mock,
+    mock_trace_manager,
+    mock_tool_description,
+    mock_llm_service,
+    tmp_path,
+):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+    mock_get_output_dir.return_value = tmp_path
+    mock_llm_service._provider = "openai"
+    mock_llm_service._model_name = "gpt-5-mini"
+
+    report_path = tmp_path / "report.pdf"
+    report_bytes = b"%PDF generated report"
+    report_path.write_bytes(report_bytes)
+
+    react_agent = AIAgent(
+        completion_service=mock_llm_service,
+        component_attributes=ComponentAttributes(component_instance_name="Test React Agent With File"),
+        trace_manager=mock_trace_manager,
+        tool_description=mock_tool_description,
+        capability_resolver=lambda capabilities: {"openai:gpt-5-mini"} if capabilities == ["file"] else set(),
+    )
+
+    output = react_agent.run_sync(
+        AgentPayload(messages=[ChatMessage(role="user", content="Analyze the generated report")]),
+        input_filepaths=["report.pdf"],
+    )
+
+    assert output.last_message.content == "Test response"
+    called_messages = mock_llm_service.function_call_async.call_args.kwargs["messages"]
+    user_content = called_messages[1]["content"]
+    assert user_content[0] == {"type": "text", "text": "Analyze the generated report"}
+    assert user_content[1]["type"] == "file"
+    assert user_content[1]["file"]["filename"] == "report.pdf"
+    assert user_content[1]["file"]["file_data"] == (
+        f"data:application/pdf;base64,{base64.b64encode(report_bytes).decode('utf-8')}"
+    )
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.components.ai_agent.get_output_dir")
+def test_input_filepaths_accepts_graph_style_list_input(
+    mock_get_output_dir,
+    agent_calls_mock,
+    get_span_mock,
+    mock_trace_manager,
+    mock_tool_description,
+    mock_llm_service,
+    tmp_path,
+):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+    mock_get_output_dir.return_value = tmp_path
+    mock_llm_service._provider = "openai"
+    mock_llm_service._model_name = "gpt-5-mini"
+
+    (tmp_path / "report.txt").write_text("generated text", encoding="utf-8")
+    react_agent = AIAgent(
+        completion_service=mock_llm_service,
+        component_attributes=ComponentAttributes(component_instance_name="Test React Agent Graph File"),
+        trace_manager=mock_trace_manager,
+        tool_description=mock_tool_description,
+        capability_resolver=lambda capabilities: {"openai:gpt-5-mini"} if capabilities == ["file"] else set(),
+    )
+    input_node_data = NodeData(
+        data={
+            "messages": [{"role": "user", "content": "Summarize this file"}],
+            "input_filepaths": ["report.txt"],
+        },
+        ctx={},
+    )
+
+    result = asyncio.run(react_agent.run(input_node_data))
+
+    assert result.data["output"] == "Test response"
+    called_messages = mock_llm_service.function_call_async.call_args.kwargs["messages"]
+    file_parts = [
+        item for item in called_messages[1]["content"] if isinstance(item, dict) and item.get("type") == "file"
+    ]
+    assert file_parts[0]["file"]["filename"] == "report.txt"
+    assert file_parts[0]["file"]["file_data"].startswith("data:text/plain;base64,")
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.components.ai_agent.get_output_dir")
+def test_input_filepaths_preserves_relative_paths_for_same_basename_files(
+    mock_get_output_dir,
+    agent_calls_mock,
+    get_span_mock,
+    mock_trace_manager,
+    mock_tool_description,
+    mock_llm_service,
+    tmp_path,
+):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+    mock_get_output_dir.return_value = tmp_path
+    mock_llm_service._provider = "openai"
+    mock_llm_service._model_name = "gpt-5-mini"
+    (tmp_path / "customer-a").mkdir()
+    (tmp_path / "customer-b").mkdir()
+    (tmp_path / "customer-a" / "report.txt").write_text("A report", encoding="utf-8")
+    (tmp_path / "customer-b" / "report.txt").write_text("B report", encoding="utf-8")
+    react_agent = AIAgent(
+        completion_service=mock_llm_service,
+        component_attributes=ComponentAttributes(component_instance_name="Test React Agent Relative Files"),
+        trace_manager=mock_trace_manager,
+        tool_description=mock_tool_description,
+        capability_resolver=lambda capabilities: {"openai:gpt-5-mini"} if capabilities == ["file"] else set(),
+    )
+
+    react_agent.run_sync(
+        AgentPayload(messages=[ChatMessage(role="user", content="Compare")]),
+        input_filepaths=["customer-a/report.txt", "customer-b/report.txt"],
+    )
+
+    called_messages = mock_llm_service.function_call_async.call_args.kwargs["messages"]
+    file_parts = [
+        item for item in called_messages[1]["content"] if isinstance(item, dict) and item.get("type") == "file"
+    ]
+    assert [part["file"]["filename"] for part in file_parts] == [
+        "customer-a/report.txt",
+        "customer-b/report.txt",
+    ]
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.components.ai_agent.get_output_dir")
+def test_input_filepaths_rejects_invalid_run_file_paths(
+    mock_get_output_dir,
+    agent_calls_mock,
+    get_span_mock,
+    mock_trace_manager,
+    mock_tool_description,
+    mock_llm_service,
+    tmp_path,
+):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+    mock_get_output_dir.return_value = tmp_path
+    mock_llm_service._provider = "openai"
+    mock_llm_service._model_name = "gpt-5-mini"
+    react_agent = AIAgent(
+        completion_service=mock_llm_service,
+        component_attributes=ComponentAttributes(component_instance_name="Test React Agent Invalid File"),
+        trace_manager=mock_trace_manager,
+        tool_description=mock_tool_description,
+        capability_resolver=lambda capabilities: {"openai:gpt-5-mini"} if capabilities == ["file"] else set(),
+    )
+
+    with pytest.raises(ValueError, match="Input file not found"):
+        react_agent.run_sync(
+            AgentPayload(messages=[ChatMessage(role="user", content="Analyze")]),
+            input_filepaths=["missing.pdf"],
+        )
+
+    with pytest.raises(ValueError, match="escapes the run output directory"):
+        react_agent.run_sync(
+            AgentPayload(messages=[ChatMessage(role="user", content="Analyze")]),
+            input_filepaths=["../secret.pdf"],
+        )
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+def test_input_filepaths_requires_file_capable_model(
+    agent_calls_mock,
+    get_span_mock,
+    mock_trace_manager,
+    mock_tool_description,
+    mock_llm_service,
+):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+    mock_llm_service._provider = "openai"
+    mock_llm_service._model_name = "gpt-5-mini"
+    react_agent = AIAgent(
+        completion_service=mock_llm_service,
+        component_attributes=ComponentAttributes(component_instance_name="Test React Agent Unsupported File"),
+        trace_manager=mock_trace_manager,
+        tool_description=mock_tool_description,
+        capability_resolver=lambda capabilities: set(),
+    )
+
+    with pytest.raises(ValueError, match="File content is not supported"):
+        react_agent.run_sync(
+            AgentPayload(messages=[ChatMessage(role="user", content="Analyze")]),
+            input_filepaths=["report.pdf"],
+        )
+
+
+def test_ai_agent_inputs_exposes_input_filepaths_port():
+    input_filepaths_field = AIAgentInputs.model_fields["input_filepaths"]
+    assert input_filepaths_field.default is None
+    assert not input_filepaths_field.is_required()
 
 
 @patch("engine.prometheus_metric.get_tracing_span")

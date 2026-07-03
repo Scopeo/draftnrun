@@ -32,6 +32,11 @@ SHA-256 hashed (salted with `BACKEND_SECRET_KEY`), prefix `taylor_`, scoped to p
 
 DAG of ComponentInstances connected via FieldExpressions (JSON AST). See `ada_backend/docs/engine.md`.
 
+Generated run-local files are passed by filename, not by copying bytes through graph state. Python Code Runner saves
+supported generated files under `get_output_dir()` and exposes `artifacts.files`; wire that list to
+`AIAgent.input_filepaths` when the next AI Agent should attach those files directly to the LLM request. The AI Agent
+must resolve filenames relative to the run output directory and require a file-capable model.
+
 ### Environments
 
 `draft` / `production` bound to specific GraphRunner versions via `ProjectEnvironmentBinding`. Each `Run` records its `graph_runner_id` (set when the worker transitions the run to `RUNNING`).
