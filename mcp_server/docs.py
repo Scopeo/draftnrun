@@ -117,6 +117,9 @@ and supports optional filters: `project_id`, `status` (mapped to `statuses`), `t
 - `get_org_charts`, `get_org_kpis`, and `list_traces` clamp `duration` to 1–90 days. \
 `list_traces` also accepts `start_time`/`end_time` (ISO 8601) for precise date range \
 filtering; when provided, `duration` is ignored
+- `get_org_token_usage` reads monthly input/output tokens from stored trace spans; it does \
+not call providers or infer tokens from prompts. Use `years`/`months` lists or `"all"`; \
+model breakdowns depend on stored `model_id`
 - Batch deletions: `delete_datasets`, `delete_entries`, `delete_judges` accept lists of IDs
 - Graph updates send the full graph structure — always `get_graph` first, modify, then `update_graph`
 - Secrets values are write-only; `list_secrets` returns masked values
@@ -1740,6 +1743,9 @@ when provided, `duration` is ignored
 - `get_org_charts(duration_days)` → usage charts (1–90 days)
 - `get_org_kpis(duration_days)` → key metrics
 - `get_credit_usage` → credit consumption
+- `get_org_token_usage(years?, months?, by_model=true)` → input/output token usage by \
+monthly period from stored trace spans. `years` and `months` accept lists or `"all"`; \
+per-model rows are included when stored `model_id` is available
 """
 
 DOMAINS: dict[str, str] = {

@@ -90,7 +90,7 @@ All domain content lives in `docs.py` (single source of truth).
 | Variables | 9 | Admin only — definitions, sets, secrets |
 | Knowledge | 9 | `create_source` (website/database), sources, documents, chunks |
 | QA | 20 | Datasets, entries, custom columns, CSV export/import, judges, evaluations |
-| Monitoring | 5 | Traces, charts, KPIs, credits |
+| Monitoring | 6 | Traces, charts, KPIs, credits, monthly token usage |
 | Crons | 9 | Create, pause/resume, manual trigger, execution history |
 | OAuth | 3 | List, check status, revoke |
 | Alert Emails | 3 | `list_alert_emails`, `create_alert_email`, `delete_alert_email` — per-project run failure recipients (developer+) |
@@ -135,7 +135,7 @@ Custom tools (validation, multi-step, client-side logic) are still defined as `@
 | Release stage | Component catalog auto-filtered by org tier. Cannot be overridden by the AI. |
 | Agent name | `create_agent` rejects empty/whitespace names. |
 | Pagination | `list_runs` caps page_size at 100. Org-scoped with optional filters: `project_id` (single, mapped to `project_ids`), `status` (single, mapped to `statuses`), `trigger`, `date_from`, `date_to`. |
-| Monitoring | Duration clamped 1–90 days. `list_traces` also accepts `start_time`/`end_time` (ISO 8601) for date range filtering. |
+| Monitoring | Duration clamped 1–90 days. `list_traces` also accepts `start_time`/`end_time` (ISO 8601) for date range filtering. `get_org_token_usage` reads stored trace spans by monthly period; pass `years`/`months` as lists or `"all"`, with optional per-model rows. |
 | Response size | Responses > 50KB are trimmed by default. `ToolSpec.trim=False` disables trimming per tool (e.g. `get_graph`, `list_components` for round-trip safety). |
 | Session diagnostics | `get_current_context` includes `session.session_id` and `session.storage_backend` ("redis" or "memory"). |
 | Agent tools | `add_tool_to_agent` rejects non-`function_callable`, duplicate, or integration-backed tools that it cannot wire safely. Use the display name from `search_components()`, not hard-coded names. The AI Agent's `skip_tools_with_missing_oauth` parameter (default `True`) silently drops any tool whose OAuth connection is missing at agent startup. Neverdrop-branded Google tools use the `google-mail-neverdrop` and `google-calendar-neverdrop` provider filters. |

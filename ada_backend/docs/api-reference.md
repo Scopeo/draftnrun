@@ -173,6 +173,7 @@ Run input data is persisted in the `run_inputs` table (keyed by `retry_group_id`
 |---|---|---|---|
 | GET | `/monitor/org/{organization_id}/charts` | JWT(Member) | Org charts |
 | GET | `/monitor/org/{organization_id}/kpis` | JWT(Member) | Org KPIs |
+| GET | `/monitor/org/{organization_id}/token-usage` | JWT(Member) | Monthly org input/output token usage from stored trace spans. Query params: repeated `years`, repeated `months`, or `all`; `by_model` |
 | GET | `/projects/{project_id}/traces` | JWT(Member) | List traces. Filters: `duration` (days lookback), `start_time`/`end_time` (ISO 8601 date range), `search`, `environment`, `call_type`, `graph_runner_id`. Requires `duration` or at least one of `start_time`/`end_time`. **Precedence:** if `start_time` or `end_time` is provided, `duration` is ignored (explicit bounds override the lookback window). |
 | GET | `/traces/{trace_id}/tree` | JWT | Trace span tree |
 
