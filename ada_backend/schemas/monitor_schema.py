@@ -1,4 +1,5 @@
 from typing import List, Optional, Union
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -36,3 +37,34 @@ class OccurenceQuestion(BaseModel):
 
 class OccurenceQuestionsList(BaseModel):
     questions: list[OccurenceQuestion]
+
+
+class OrgTokenUsageByModel(BaseModel):
+    model_id: Optional[UUID] = None
+    provider: Optional[str] = None
+    model_name: Optional[str] = None
+    display_name: Optional[str] = None
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+
+
+class OrgTokenUsageTotals(BaseModel):
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+
+
+class OrgTokenUsagePeriod(BaseModel):
+    year: int
+    month: int
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    by_model: list[OrgTokenUsageByModel]
+
+
+class OrgTokenUsageResponse(BaseModel):
+    organization_id: UUID
+    periods: list[OrgTokenUsagePeriod]
+    totals: OrgTokenUsageTotals

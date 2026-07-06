@@ -37,6 +37,31 @@ PROXY_SPECS: list[ToolSpec] = [
         path="/organizations/{org_id}/credit-usage",
         scope="org",
     ),
+    ToolSpec(
+        name="get_org_token_usage",
+        description=(
+            "Get input/output token usage for the active organization by month from stored trace spans, "
+            "filtered by year/month lists or 'all', optionally broken down by model."
+        ),
+        method="get",
+        path="/monitor/org/{org_id}/token-usage",
+        scope="org",
+        query_params=(
+            Param(
+                "years",
+                Optional[list[int] | str],
+                default=None,
+                description="UTC years to include as a list, or 'all'. Defaults to current year.",
+            ),
+            Param(
+                "months",
+                Optional[list[int] | str],
+                default=None,
+                description="UTC months (1-12) to include as a list, or 'all'. Defaults to current month.",
+            ),
+            Param("by_model", bool, default=True, description="Include per-model token usage rows."),
+        ),
+    ),
 ]
 
 

@@ -22,6 +22,9 @@ Cost varies by parameter value. FK to `component_parameter_definitions.id` + `pa
 
 - **`Usage`** (`credits.usages`): Monthly aggregate per `(project_id, year, month)` with `credits_used`. Unique on project+year+month.
 - **`SpanUsage`** (`credits.span_usages`): Per-span credit breakdown. FK to `traces.spans.span_id`. Fields: `credits_input_token`, `credits_output_token`, `credits_per_call`, `credits_per` (JSONB).
+- Monthly org token usage is queried by period from persisted `traces.spans.llm_token_count_prompt` and
+  `traces.spans.llm_token_count_completion`, joined through `projects.organization_id`. This is separate from
+  `credits.usages`, which stores only credit totals and does not preserve token or model breakdowns.
 
 ## Organization Limits
 
@@ -33,6 +36,7 @@ Cost varies by parameter value. FK to `component_parameter_definitions.id` + `pa
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `GET /organizations/{org_id}/credit-usage` | JWT(Member) | Credit usage chart |
+| `GET /monitor/org/{org_id}/token-usage` | JWT(Member) | Monthly input/output token usage from stored trace spans, filtered by `years`/`months` lists or `all` |
 | `GET /organizations-limits-and-usage` | JWT(SuperAdmin) | All org limits + usage |
 | `POST /organizations/{org_id}/organization-limits` | SuperAdmin\|AdminKey | Create org limit |
 | `PATCH /organizations/{org_id}/organization-limits` | JWT(SuperAdmin) | Update org limit |

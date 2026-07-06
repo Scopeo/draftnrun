@@ -4,16 +4,126 @@ from typing import List, Optional
 from uuid import UUID
 
 import pandas as pd
+from sqlalchemy import text
 
 from ada_backend.database.models import CallType
 from ada_backend.mixpanel_analytics import track_monitoring_loaded
-from ada_backend.schemas.monitor_schema import KPI, CostKPI, KPISResponse, TraceKPIS
+from ada_backend.schemas.monitor_schema import (
+    KPI,
+    CostKPI,
+    KPISResponse,
+    OrgTokenUsageByModel,
+    OrgTokenUsagePeriod,
+    OrgTokenUsageResponse,
+    OrgTokenUsageTotals,
+    TraceKPIS,
+)
 from ada_backend.services.metrics.utils import QUERY_COSTS_BASIS, SQL_COST_KPIS_ROUNDED_TAIL
 from engine.trace.sql_exporter import get_session_trace
 
 LOGGER = logging.getLogger(__name__)
 
 SIGNIFICANT_FIGURES_CREDIT_FORMAT = 2
+
+
+def get_org_token_usage(
+    organization_id: UUID,
+    years: list[int] | None,
+    months: list[int] | None,
+    by_model: bool = True,
+) -> OrgTokenUsageResponse:
+    filters = ["p.organization_id = :organization_id"]
+    params: dict[str, object] = {"organization_id": organization_id}
+    if years is not None:
+        filters.append("EXTRACT(YEAR FROM s.start_time AT TIME ZONE 'UTC')::int = ANY(:years)")
+        params["years"] = years
+    if months is not None:
+        filters.append("EXTRACT(MONTH FROM s.start_time AT TIME ZONE 'UTC')::int = ANY(:months)")
+        params["months"] = months
+
+    query = text(
+        f"""
+        SELECT
+            EXTRACT(YEAR FROM s.start_time AT TIME ZONE 'UTC')::int AS year,
+            EXTRACT(MONTH FROM s.start_time AT TIME ZONE 'UTC')::int AS month,
+            s.model_id,
+            lm.provider,
+            lm.model_name,
+            lm.display_name,
+            COALESCE(SUM(COALESCE(s.llm_token_count_prompt, 0)), 0)::bigint AS input_tokens,
+            COALESCE(SUM(COALESCE(s.llm_token_count_completion, 0)), 0)::bigint AS output_tokens
+        FROM traces.spans s
+        JOIN projects p ON s.project_id = p.id::text
+        LEFT JOIN llm_models lm ON s.model_id = lm.id
+        WHERE {" AND ".join(filters)}
+          AND (s.llm_token_count_prompt IS NOT NULL OR s.llm_token_count_completion IS NOT NULL)
+        GROUP BY year, month, s.model_id, lm.provider, lm.model_name, lm.display_name
+        ORDER BY
+            year DESC,
+            month DESC,
+            COALESCE(SUM(COALESCE(s.llm_token_count_prompt, 0)), 0) +
+            COALESCE(SUM(COALESCE(s.llm_token_count_completion, 0)), 0) DESC
+        """
+    )
+    session = get_session_trace()
+    try:
+        rows = session.execute(query, params).fetchall()
+    finally:
+        session.close()
+
+    periods_by_key: dict[tuple[int, int], OrgTokenUsagePeriod] = {}
+    total_input_tokens = 0
+    total_output_tokens = 0
+    for row in rows:
+        row_year = int(row.year)
+        row_month = int(row.month)
+        row_input_tokens = int(row.input_tokens or 0)
+        row_output_tokens = int(row.output_tokens or 0)
+        total_input_tokens += row_input_tokens
+        total_output_tokens += row_output_tokens
+        period_key = (row_year, row_month)
+        period = periods_by_key.get(period_key)
+        if period is None:
+            period = OrgTokenUsagePeriod(
+                year=row_year,
+                month=row_month,
+                input_tokens=0,
+                output_tokens=0,
+                total_tokens=0,
+                by_model=[],
+            )
+            periods_by_key[period_key] = period
+
+        period.input_tokens += row_input_tokens
+        period.output_tokens += row_output_tokens
+        period.total_tokens += row_input_tokens + row_output_tokens
+        if by_model:
+            period.by_model.append(
+                OrgTokenUsageByModel(
+                    model_id=row.model_id,
+                    provider=row.provider,
+                    model_name=row.model_name,
+                    display_name=row.display_name,
+                    input_tokens=row_input_tokens,
+                    output_tokens=row_output_tokens,
+                    total_tokens=row_input_tokens + row_output_tokens,
+                )
+            )
+
+    periods = sorted(
+        periods_by_key.values(),
+        key=lambda period: (period.year, period.month),
+        reverse=True,
+    )
+    return OrgTokenUsageResponse(
+        organization_id=organization_id,
+        periods=periods,
+        totals=OrgTokenUsageTotals(
+            input_tokens=total_input_tokens,
+            output_tokens=total_output_tokens,
+            total_tokens=total_input_tokens + total_output_tokens,
+        ),
+    )
 
 
 def _run_trace_kpis_query(
