@@ -39,7 +39,7 @@ const {
     value_a: '',
     operator: '',
     value_b: '',
-    logical_operator: 'AND',
+    next_logic: 'AND',
   }),
   onChange: conditions => emit('update:modelValue', conditions),
 })
@@ -165,7 +165,7 @@ const logicalOperatorItems = [
             <!-- Logical Operator (if not last condition) -->
             <div v-if="index < localConditions.length - 1" style="min-width: 150px">
               <VSelect
-                :model-value="condition.logical_operator || 'AND'"
+                :model-value="condition.next_logic || 'AND'"
                 :items="logicalOperatorItems"
                 label="Then"
                 variant="outlined"
@@ -175,7 +175,7 @@ const logicalOperatorItems = [
                 :disabled="readonly"
                 hide-details="auto"
                 density="compact"
-                @update:model-value="(value: 'AND' | 'OR') => updateCondition(index, 'logical_operator', value)"
+                @update:model-value="(value: 'AND' | 'OR') => updateCondition(index, 'next_logic', value)"
               />
             </div>
             <VSpacer v-else />
