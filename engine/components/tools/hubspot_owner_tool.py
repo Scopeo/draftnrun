@@ -1,6 +1,7 @@
 import json
 from typing import Any, Optional, Type
 
+import requests
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field
 
@@ -50,9 +51,23 @@ class HubSpotOwnerInputs(BaseModel):
             ).model_dump(exclude_unset=True, exclude_none=True),
         },
     )
+    additional_properties: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Additional properties to include in the HubSpot owner API response.",
+        json_schema_extra={
+            "ui_component": UIComponent.JSON_TEXTAREA,
+            "drives_output_schema": True,
+            "ui_component_properties": UIComponentProperties(
+                label="Additional Properties",
+                placeholder='{"key": "value"}',
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        },
+    )
 
 
 class HubSpotOwnerOutputs(BaseModel):
+    model_config = {"extra": "allow"}
+
     output: str = Field(description="The raw owner response formatted as JSON.")
     status_code: int = Field(description="The status code of the HubSpot owner API response.")
     success: bool = Field(description="Whether the HubSpot owner lookup succeeded.")
@@ -103,6 +118,54 @@ class HubSpotOwnerTool(APICallTool):
             timeout=timeout,
         )
 
+    def _get_additional_properties(
+        self, api_data: dict[str, Any], additional_properties: dict[str, Any], headers: dict[str, str]
+    ) -> dict[str, Any]:
+        property_names = list(additional_properties)
+        default_values = dict.fromkeys(property_names)
+        owner_email = api_data.get("email")
+
+        if not owner_email:
+            api_data.update(default_values)
+            return api_data
+
+        try:
+            response = requests.request(
+                method="POST",
+                url="https://api.hubapi.com/crm/v3/objects/contacts/search",
+                headers=headers,
+                timeout=15,
+                json={
+                    "filterGroups": [
+                        {
+                            "filters": [
+                                {
+                                    "propertyName": "email",
+                                    "operator": "EQ",
+                                    "value": owner_email,
+                                }
+                            ]
+                        }
+                    ],
+                    "properties": property_names,
+                    "limit": 1,
+                },
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except requests.RequestException as exc:
+            raise ValueError(f"HubSpot request failed: {exc}") from exc
+        contacts = payload.get("results", [])
+        if not contacts:
+            api_data.update(default_values)
+            return api_data
+
+        contact_properties = contacts[0].get("properties", {})
+
+        api_data.update({property_name: contact_properties.get(property_name) for property_name in property_names})
+
+        return api_data
+
     async def _run_without_io_trace(
         self,
         inputs: HubSpotOwnerInputs,
@@ -117,6 +180,8 @@ class HubSpotOwnerTool(APICallTool):
         )
         if api_response.get("success", False):
             data: dict[str, Any] = api_response.get("data", {})
+            if inputs.additional_properties:
+                data = self._get_additional_properties(data, inputs.additional_properties, headers)
             output = json.dumps(data, indent=2)
         else:
             data = {}
