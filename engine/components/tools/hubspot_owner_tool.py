@@ -1,7 +1,7 @@
 import json
 from typing import Any, Optional, Type
 
-import requests
+import httpx
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field
 
@@ -12,6 +12,7 @@ from engine.components.utils import load_str_to_json
 from engine.trace.trace_manager import TraceManager
 
 HUBSPOT_OWNER_ENDPOINT = "https://api.hubapi.com/crm/v3/owners/{owner_id}"
+HUBSPOT_CONTACTS_SEARCH_ENDPOINT = "https://api.hubapi.com/crm/v3/objects/contacts/search"
 
 HUBSPOT_OWNER_TOOL_DESCRIPTION = ToolDescription(
     name="hubspot_owner",
@@ -118,7 +119,7 @@ class HubSpotOwnerTool(APICallTool):
             timeout=timeout,
         )
 
-    def _get_additional_properties(
+    async def _get_additional_properties(
         self, api_data: dict[str, Any], additional_properties: dict[str, Any], headers: dict[str, str]
     ) -> dict[str, Any]:
         property_names = list(additional_properties)
@@ -130,30 +131,31 @@ class HubSpotOwnerTool(APICallTool):
             return api_data
 
         try:
-            response = requests.request(
-                method="POST",
-                url="https://api.hubapi.com/crm/v3/objects/contacts/search",
-                headers=headers,
-                timeout=15,
-                json={
-                    "filterGroups": [
-                        {
-                            "filters": [
-                                {
-                                    "propertyName": "email",
-                                    "operator": "EQ",
-                                    "value": owner_email,
-                                }
-                            ]
-                        }
-                    ],
-                    "properties": property_names,
-                    "limit": 1,
-                },
-            )
-            response.raise_for_status()
-            payload = response.json()
-        except requests.RequestException as exc:
+            async with httpx.AsyncClient() as client:
+                response = await client.request(
+                    method="POST",
+                    url=HUBSPOT_CONTACTS_SEARCH_ENDPOINT,
+                    headers=headers,
+                    timeout=self.timeout,
+                    json={
+                        "filterGroups": [
+                            {
+                                "filters": [
+                                    {
+                                        "propertyName": "email",
+                                        "operator": "EQ",
+                                        "value": owner_email,
+                                    }
+                                ]
+                            }
+                        ],
+                        "properties": property_names,
+                        "limit": 1,
+                    },
+                )
+                response.raise_for_status()
+                payload = response.json()
+        except (httpx.HTTPError, json.JSONDecodeError) as exc:
             raise ValueError(f"HubSpot request failed: {exc}") from exc
         contacts = payload.get("results", [])
         if not contacts:
@@ -181,7 +183,7 @@ class HubSpotOwnerTool(APICallTool):
         if api_response.get("success", False):
             data: dict[str, Any] = api_response.get("data", {})
             if inputs.additional_properties:
-                data = self._get_additional_properties(data, inputs.additional_properties, headers)
+                data = await self._get_additional_properties(data, inputs.additional_properties, headers)
             output = json.dumps(data, indent=2)
         else:
             data = {}
