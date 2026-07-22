@@ -153,6 +153,10 @@ Key fields: `name`, `port_type` (INPUT/OUTPUT), `is_canonical`, `parameter_type`
 Uses joined-table polymorphism:
 - **`InputPortInstance`**: adds `field_expression_id` FK — links a configured value (FieldExpression) to an input port
 - **`OutputPortInstance`**: materializes dynamic output ports (e.g. from `drives_output_schema`)
+  and response-shaped components. Generic API Call creates additive dynamic output ports for safe top-level JSON response
+  keys in two cases: an explicit workflow-studio “Test GET endpoint” action for literal GET configurations, and queued
+  run-time `node.completed` events when the response is first known. The explicit test action rejects non-GET methods and
+  non-literal endpoint/headers/parameters values.
 
 ### Layer 3: FieldExpression (wiring and transforms)
 

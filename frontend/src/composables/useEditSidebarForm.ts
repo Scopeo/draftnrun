@@ -26,7 +26,9 @@ export function useEditSidebarForm(
   currentComponentId: ComputedRef<string | null>,
   isReadOnlyMode: ComputedRef<boolean>,
   drawer: ComputedRef<boolean>,
-  componentId: ComputedRef<string | null>
+  componentId: ComputedRef<string | null>,
+  apiCallTestContext?: ComputedRef<{ projectId: string; graphRunnerId: string } | null>,
+  onApiCallOutputPortsTested?: () => void
 ) {
   const { notify } = useNotifications()
   const { selectedOrgId } = useSelectedOrg()
@@ -38,6 +40,7 @@ export function useEditSidebarForm(
   const jsonValidationState = ref<Record<string, 'valid' | 'invalid' | null>>({})
   const currentEditingComponentId = ref<string | null>(null)
   const sources = ref<Source[]>([])
+  const testingApiCallOutputPorts = ref(false)
 
   const isToolDescriptionEditable = computed(() => componentData.value?.canEditToolDescription === true)
 
@@ -221,6 +224,42 @@ export function useEditSidebarForm(
     }
   }
 
+  function buildParametersForApiCallOutputPortTest() {
+    return Object.entries(formData.value.parameters).map(([name, value]) => {
+      const paramDef = visibleParameters.value.find(p => p.name === name)
+      return {
+        name,
+        value,
+        kind: paramDef?.kind ?? 'parameter',
+        type: paramDef?.type ?? typeof value,
+      }
+    })
+  }
+
+  async function testApiCallOutputPorts(componentInstanceId: string, parameters: any[]) {
+    if (!apiCallTestContext?.value) return
+    testingApiCallOutputPorts.value = true
+    try {
+      const response = await scopeoApi.studio.testApiCallOutputPorts(
+        apiCallTestContext.value.projectId,
+        apiCallTestContext.value.graphRunnerId,
+        componentInstanceId,
+        parameters
+      )
+
+      const names = response.output_port_names ?? []
+
+      if (names.length > 0) notify.success(`Discovered output ports: ${names.join(', ')}`)
+      else notify.info('Endpoint tested successfully, but no top-level JSON fields were discovered.')
+      onApiCallOutputPortsTested?.()
+    } catch (error) {
+      logger.error('Error testing API Call output ports', { error })
+      notify.error((error as Error)?.message || 'Failed to test API endpoint')
+    } finally {
+      testingApiCallOutputPorts.value = false
+    }
+  }
+
   function validateExistingJsonFields() {
     if (formData.value.parameters.output_format) {
       const value = formData.value.parameters.output_format
@@ -354,5 +393,8 @@ export function useEditSidebarForm(
     handlePortConfigurationsUpdate,
     sources,
     isToolDescriptionEditable,
+    testingApiCallOutputPorts,
+    buildParametersForApiCallOutputPortTest,
+    testApiCallOutputPorts,
   }
 }
