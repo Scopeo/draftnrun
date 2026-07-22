@@ -23,6 +23,23 @@ def create_output_port_instance(
     return output_port
 
 
+def get_or_create_output_port_instance(
+    session: Session,
+    component_instance_id: UUID,
+    name: str,
+    port_definition_id: Optional[UUID] = None,
+) -> db.OutputPortInstance:
+    existing = get_output_port_instance_by_name(session, component_instance_id=component_instance_id, name=name)
+    if existing:
+        return existing
+    return create_output_port_instance(
+        session=session,
+        component_instance_id=component_instance_id,
+        name=name,
+        port_definition_id=port_definition_id,
+    )
+
+
 def get_output_port_instances_for_component_instance(
     session: Session,
     component_instance_id: UUID,

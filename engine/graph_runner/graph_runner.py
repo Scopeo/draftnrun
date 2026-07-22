@@ -163,7 +163,13 @@ class GraphRunner:
             LOGGER.debug(f"Node '{node_id}' completed execution with result: {result_packet}")
             if self.event_callback:
                 try:
-                    await self.event_callback({"type": "node.completed", "node_id": node_id})
+                    event = {"type": "node.completed", "node_id": node_id}
+                    auto_output_port_names_getter = getattr(runnable, "get_auto_output_port_names", None)
+                    if callable(auto_output_port_names_getter):
+                        auto_output_port_names = auto_output_port_names_getter(result_packet.data)
+                        if auto_output_port_names:
+                            event["auto_output_port_names"] = auto_output_port_names
+                    await self.event_callback(event)
                 except Exception:
                     LOGGER.debug(f"event_callback error on node.completed for '{node_id}'", exc_info=True)
 
@@ -217,10 +223,7 @@ class GraphRunner:
         if self.graph.has_edge(src, dst):
             return
         already_reachable = (
-            src != dst
-            and src in self.graph
-            and dst in self.graph
-            and nx.has_path(self.graph, src, dst)
+            src != dst and src in self.graph and dst in self.graph and nx.has_path(self.graph, src, dst)
         )
         if not already_reachable:
             self.graph.add_edge(src, dst)
