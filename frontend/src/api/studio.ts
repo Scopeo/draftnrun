@@ -47,4 +47,15 @@ export const studioApi = {
 
     return response?.suggestions ?? []
   },
+
+  testApiCallOutputPorts: (
+    projectId: string,
+    graphRunnerId: string,
+    componentInstanceId: string,
+    parameters: any[]
+  ): Promise<{ output_port_names: string[] }> =>
+    $api(`/v2/projects/${projectId}/graph/${graphRunnerId}/components/${componentInstanceId}/api-call/test-output-ports`, {
+      method: 'POST',
+      body: { parameters },
+    }),
 }

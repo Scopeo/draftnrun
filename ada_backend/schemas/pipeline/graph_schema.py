@@ -156,6 +156,14 @@ class ComponentV2Response(BaseModel):
     last_edited_user_id: Optional[UUID] = None
 
 
+class ApiCallOutputPortTestRequest(BaseModel):
+    parameters: list[PipelineParameterV2Schema] = Field(default_factory=list)
+
+
+class ApiCallOutputPortTestResponse(BaseModel):
+    output_port_names: list[str] = Field(default_factory=list)
+
+
 class GraphTopologyNodeSchema(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

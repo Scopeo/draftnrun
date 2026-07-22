@@ -22,7 +22,7 @@ LOGGER = logging.getLogger(__name__)
 API_CALL_RESERVED_OUTPUT_PORT_NAMES = frozenset({"output", "status_code", "data", "success"})
 
 
-def _extract_response_root_outputs(data: dict[str, Any]) -> dict[str, Any]:
+def extract_api_call_response_root_outputs(data: dict[str, Any]) -> dict[str, Any]:
     return {
         key: value
         for key, value in data.items()
@@ -118,7 +118,7 @@ class APICallTool(Component):
     def get_auto_output_port_names(cls, output_data: dict[str, Any]) -> list[str]:
         if cls is not APICallTool:
             return []
-        return sorted(_extract_response_root_outputs(output_data).keys())
+        return sorted(extract_api_call_response_root_outputs(output_data).keys())
 
     def __init__(
         self,
@@ -238,7 +238,7 @@ class APICallTool(Component):
         if api_response.get("success", False):
             content = json.dumps(api_response["data"], indent=2)
             data = api_response.get("data", {})
-            root_outputs = _extract_response_root_outputs(data) if isinstance(data, dict) else {}
+            root_outputs = extract_api_call_response_root_outputs(data) if isinstance(data, dict) else {}
         else:
             error_details = {
                 "error": api_response.get("error", "Unknown error"),

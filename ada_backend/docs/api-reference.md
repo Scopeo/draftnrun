@@ -58,6 +58,7 @@ Complete endpoint reference for the Draft'n Run backend.
 | GET | `/v2/projects/{project_id}/graph/{graph_runner_id}` | JWT(Member) | Get top-level v2 graph info (`graph_map` only; nodes include `instance_id`, `label`) |
 | POST | `/v2/projects/{project_id}/graph/{graph_runner_id}/components` | JWT(Developer) | Create a new component instance + node in graph |
 | PUT | `/v2/projects/{project_id}/graph/{graph_runner_id}/components/{instance_id}` | JWT(Developer) | Update a single component instance (params, ports, integration) |
+| POST | `/v2/projects/{project_id}/graph/{graph_runner_id}/components/{instance_id}/api-call/test-output-ports` | JWT(Developer) | Test a generic API Call GET endpoint once and persist discovered top-level JSON response fields as dynamic output ports |
 | DELETE | `/v2/projects/{project_id}/graph/{graph_runner_id}/components/{instance_id}` | JWT(Developer) | Delete component instance + node + cascade edges/relationships |
 | PUT | `/v2/projects/{project_id}/graph/{graph_runner_id}/map` | JWT(Developer) | Update graph topology: edges, relationships, node metadata |
 

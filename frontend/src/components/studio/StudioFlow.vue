@@ -372,6 +372,7 @@ const { breadcrumbs, handleBreadcrumbClick, goToOverviewAndClearHistory, resetVi
       @add-tools="handleAddTools"
       @remove-tool="handleRemoveTool"
       @prompt-migrated="graph.loadGraphData(projectId)"
+      @api-call-output-ports-tested="graph.loadGraphData(projectId)"
     />
 
     <ComponentSelectionCarousel

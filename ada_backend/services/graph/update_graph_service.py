@@ -380,9 +380,11 @@ async def update_graph_service(
                 expr = create_field_expression(session, expression_json)
                 update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
         else:
-            port_def_id = get_input_port_definition_id(
-                session, instance_to_cv[target_id], field_name
-            ) if target_id in instance_to_cv else None
+            port_def_id = (
+                get_input_port_definition_id(session, instance_to_cv[target_id], field_name)
+                if target_id in instance_to_cv
+                else None
+            )
             expr = create_field_expression(session, expression_json)
             input_port_instance = create_input_port_instance(
                 session=session,
@@ -423,9 +425,11 @@ async def update_graph_service(
                                 session, existing_port_id, prompt_version_id=port_instance.prompt_version_id
                             )
                     else:
-                        port_def_id = get_input_port_definition_id(
-                            session, instance.component_version_id, field_name
-                        ) if instance.component_version_id else None
+                        port_def_id = (
+                            get_input_port_definition_id(session, instance.component_version_id, field_name)
+                            if instance.component_version_id
+                            else None
+                        )
                         expr = create_field_expression(session, port_instance.field_expression.expression_json)
                         create_input_port_instance(
                             session=session,
@@ -494,9 +498,11 @@ async def update_graph_service(
                 if prompt_version_id is not None:
                     update_input_port_instance(session, existing_port_id, prompt_version_id=prompt_version_id)
             else:
-                port_def_id = get_input_port_definition_id(
-                    session, instance.component_version_id, field_name
-                ) if instance.component_version_id else None
+                port_def_id = (
+                    get_input_port_definition_id(session, instance.component_version_id, field_name)
+                    if instance.component_version_id
+                    else None
+                )
                 expr = create_field_expression(session, expression_json)
                 create_input_port_instance(
                     session=session,
