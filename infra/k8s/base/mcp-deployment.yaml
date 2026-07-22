@@ -5,6 +5,9 @@ metadata:
   labels:
     app: ada-mcp
 spec:
+  # Keep replicas at 1: org-session state falls back to per-pod memory when
+  # Redis is unreachable, and there is no session affinity on the Service.
+  # Scaling up requires sticky sessions or removing the memory fallback first.
   replicas: 1
   strategy:
     type: RollingUpdate
@@ -38,8 +41,10 @@ spec:
           ports:
             - containerPort: 8090
           envFrom:
+            # Dedicated secret: the MCP pod must not receive the full backend
+            # credential set (DB URL, Fernet key, third-party API keys).
             - secretRef:
-                name: ada-secrets
+                name: ada-mcp-secrets
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false

@@ -4,14 +4,16 @@ Exposes the same operations as the front-end studio:
 edit draft, save a version snapshot, publish to production, view history.
 """
 
+import json
 import logging
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 from fastmcp import FastMCP
 from pydantic import Field
 
 from mcp_server.client import ToolError, api
+from mcp_server.tools._annotations import DESTRUCTIVE_WRITE, IDEMPOTENT_WRITE, READ_ONLY
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
 from mcp_server.tools.context_tools import _get_auth
 
@@ -19,9 +21,7 @@ logger = logging.getLogger(__name__)
 
 _P_PROJECT = Param("project_id", UUID, description="The project ID (from list_projects or get_project_overview).")
 _P_RUNNER = Param("graph_runner_id", UUID, description="The graph runner version ID (from get_project_overview).")
-_P_INSTANCE = Param(
-    "instance_id", UUID, description="The component instance ID (from get_graph or get_graph_v2)."
-)
+_P_INSTANCE = Param("instance_id", UUID, description="The component instance ID (from get_graph or get_graph_v2).")
 _GRAPH_BASE = "/projects/{project_id}/graph/{graph_runner_id}"
 _GRAPH_BASE_V2 = "/v2/projects/{project_id}/graph/{graph_runner_id}"
 
@@ -57,7 +57,7 @@ PROXY_SPECS: list[ToolSpec] = [
     ToolSpec(
         name="save_graph_version",
         description=(
-            "Save the current graph state as a named version snapshot.\n\n"
+            "Save the current graph state as a version snapshot (auto-numbered tag).\n\n"
             "Creates an immutable tagged copy of the current draft that can be "
             "referenced later via get_graph_history. The current draft runner stays "
             "editable and keeps the same instance IDs."
@@ -83,7 +83,7 @@ PROXY_SPECS: list[ToolSpec] = [
         path_params=(
             _P_PROJECT,
             _P_RUNNER,
-            Param("env", str, description="Target environment: 'production' or 'draft'."),
+            Param("env", Literal["production", "draft"], description="Target environment."),
         ),
     ),
     ToolSpec(
@@ -144,8 +144,8 @@ PROXY_SPECS: list[ToolSpec] = [
         name="delete_component_v2",
         description=(
             "Delete a component instance from a graph (v2).\n\n"
-            "Removes the component, its node, and cascades deletion of edges "
-            "and relationships referencing it."
+            "Destructive. Removes the component, its node, and cascades deletion of "
+            "edges and relationships referencing it. Confirm user intent first."
         ),
         method="delete",
         path=f"{_GRAPH_BASE_V2}/components/{{instance_id}}",
@@ -229,7 +229,8 @@ def _warn_unknown_graph_keys(graph_data: dict) -> list[str]:
         suggestion = _LIKELY_TYPOS.get(key)
         if suggestion:
             warnings.append(
-                f"Unknown graph key '{key}' — did you mean '{suggestion}'? The key was ignored by the backend."
+                f"Unknown graph key '{key}' — did you mean '{suggestion}'? "
+                "The backend will likely ignore or reject it."
             )
         else:
             warnings.append(
@@ -294,12 +295,13 @@ def _convert_field_expressions_to_unified_params(instances: list[dict]) -> None:
             existing_param = next((p for p in params if p["name"] == field_name), None)
             if existing_param and existing_param.get("kind") == "input":
                 existing_param["field_expression"] = {"expression_json": expression_json}
-            elif field_name not in input_param_names:
+            elif existing_param is None and field_name not in input_param_names:
                 params.append({
                     "name": field_name,
                     "kind": "input",
                     "field_expression": {"expression_json": expression_json},
                 })
+                input_param_names.add(field_name)
 
 
 _OAUTH_KEYWORDS = ("access_token", "oauth", "integration", "credentials")
@@ -337,7 +339,7 @@ def _enrich_graph_update_error(message: str) -> str:
 def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, PROXY_SPECS)
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTRUCTIVE_WRITE)
     async def publish_to_production(
         project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
         graph_runner_id: Annotated[
@@ -346,6 +348,7 @@ def register(mcp: FastMCP) -> None:
     ) -> dict:
         """Publish the current draft to production (full deploy).
 
+        Affects live behavior — confirm user intent before calling.
         Tags the current draft with an auto-incremented version, promotes it to the
         live production environment, and creates a brand-new draft runner for continued
         editing.
@@ -360,7 +363,7 @@ def register(mcp: FastMCP) -> None:
         jwt, _ = _get_auth()
         return await api.post(f"/projects/{project_id}/graph/{graph_runner_id}/deploy", jwt)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_draft_graph(
         project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
     ) -> dict:
@@ -398,7 +401,7 @@ def register(mcp: FastMCP) -> None:
             "graph": graph,
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTRUCTIVE_WRITE)
     async def update_graph(
         project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
         graph_runner_id: Annotated[
@@ -468,7 +471,7 @@ def register(mcp: FastMCP) -> None:
                 result = {"_mcp_response": result, "_mcp_warnings": warnings}
         return result
 
-    @mcp.tool()
+    @mcp.tool(annotations=IDEMPOTENT_WRITE)
     async def update_component_parameters(
         project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
         graph_runner_id: Annotated[
@@ -552,15 +555,18 @@ def register(mcp: FastMCP) -> None:
                 non_literal_conflicts.append((field_name, existing_type))
                 continue
             if new_value is not None:
-                expr = {"type": "literal", "value": str(new_value)}
+                # The engine's LiteralNode holds a string; non-string values must be
+                # serialized as JSON (not Python repr) so JSON-typed inputs parse them.
+                expression_text = new_value if isinstance(new_value, str) else json.dumps(new_value)
+                expr = {"type": "literal", "value": expression_text}
                 if existing_fe:
                     existing_fe["expression_json"] = expr
-                    existing_fe["expression_text"] = str(new_value)
+                    existing_fe["expression_text"] = expression_text
                 else:
                     field_expr_list.append({
                         "field_name": field_name,
                         "expression_json": expr,
-                        "expression_text": str(new_value),
+                        "expression_text": expression_text,
                     })
             elif existing_fe:
                 field_expr_list.remove(existing_fe)
@@ -581,10 +587,7 @@ def register(mcp: FastMCP) -> None:
             "parameters": existing_params,
         }
 
-        v2_path = (
-            f"/v2/projects/{project_id}/graph/{graph_runner_id}"
-            f"/components/{component_instance_id}"
-        )
+        v2_path = f"/v2/projects/{project_id}/graph/{graph_runner_id}/components/{component_instance_id}"
         try:
             await api.put(v2_path, jwt, json=component_data)
         except ToolError as exc:

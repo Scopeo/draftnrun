@@ -3,17 +3,18 @@ from unittest.mock import AsyncMock
 import pytest
 
 from mcp_server.tools import _factory, api_keys
+from mcp_server.tools._roles import ADMIN_ROLES
 from tests.mcp_server.conftest import FAKE_KEY_ID, FAKE_PROJECT_ID
 
 
 @pytest.mark.asyncio
-async def test_revoke_org_api_key_sends_delete_body(monkeypatch, fake_mcp):
+async def test_revoke_org_api_key_requires_admin_and_sends_delete_body(monkeypatch, fake_mcp):
     mcp = fake_mcp
     delete_mock = AsyncMock(return_value={"status": "ok"})
-    require_org_context_mock = AsyncMock(return_value={"org_id": "org-123"})
+    require_role_mock = AsyncMock(return_value={"org_id": "org-123"})
 
     monkeypatch.setattr(_factory, "_get_auth", lambda: ("jwt-token", "user-123"))
-    monkeypatch.setattr(_factory, "require_org_context", require_org_context_mock)
+    monkeypatch.setattr(_factory, "require_role", require_role_mock)
     monkeypatch.setattr(_factory.api, "delete", delete_mock)
 
     api_keys.register(mcp)
@@ -21,7 +22,7 @@ async def test_revoke_org_api_key_sends_delete_body(monkeypatch, fake_mcp):
     result = await mcp.tools["revoke_org_api_key"](FAKE_KEY_ID)
 
     assert result == {"status": "ok"}
-    require_org_context_mock.assert_awaited_once_with("user-123")
+    require_role_mock.assert_awaited_once_with("user-123", *ADMIN_ROLES)
     delete_mock.assert_awaited_once_with(
         "/auth/org-api-key",
         "jwt-token",
@@ -53,13 +54,13 @@ async def test_create_project_api_key_sends_correct_body(monkeypatch, fake_mcp):
 
 
 @pytest.mark.asyncio
-async def test_create_org_api_key_sends_correct_body(monkeypatch, fake_mcp):
+async def test_create_org_api_key_requires_admin_and_sends_correct_body(monkeypatch, fake_mcp):
     mcp = fake_mcp
     post_mock = AsyncMock(return_value={"api_key": "sk-org"})
-    require_org_context_mock = AsyncMock(return_value={"org_id": "org-123"})
+    require_role_mock = AsyncMock(return_value={"org_id": "org-123"})
 
     monkeypatch.setattr(_factory, "_get_auth", lambda: ("jwt-token", "user-123"))
-    monkeypatch.setattr(_factory, "require_org_context", require_org_context_mock)
+    monkeypatch.setattr(_factory, "require_role", require_role_mock)
     monkeypatch.setattr(_factory.api, "post", post_mock)
 
     api_keys.register(mcp)
@@ -67,7 +68,7 @@ async def test_create_org_api_key_sends_correct_body(monkeypatch, fake_mcp):
     result = await mcp.tools["create_org_api_key"]("my-key")
 
     assert result == {"api_key": "sk-org"}
-    require_org_context_mock.assert_awaited_once_with("user-123")
+    require_role_mock.assert_awaited_once_with("user-123", *ADMIN_ROLES)
     post_mock.assert_awaited_once_with(
         "/auth/org-api-key",
         "jwt-token",

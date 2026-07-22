@@ -8,8 +8,10 @@ from pydantic import Field
 
 from mcp_server.client import api
 from mcp_server.context import require_org_context, require_role
+from mcp_server.tools._annotations import IDEMPOTENT_WRITE, NON_DESTRUCTIVE_WRITE, READ_ONLY
 from mcp_server.tools._defaults import generate_entity_defaults
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
+from mcp_server.tools._roles import DEVELOPER_ROLES
 from mcp_server.tools.context_tools import _get_auth
 
 PROXY_SPECS: list[ToolSpec] = [
@@ -60,7 +62,7 @@ PROXY_SPECS: list[ToolSpec] = [
 def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, PROXY_SPECS)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def list_projects(
         project_type: Annotated[
             Literal["WORKFLOW", "AGENT"],
@@ -73,7 +75,10 @@ def register(mcp: FastMCP) -> None:
             ),
         ] = False,
     ) -> list[dict]:
-        """List all projects in the active organization.
+        """List projects of one type in the active organization.
+
+        Defaults to WORKFLOW projects — call again with project_type="AGENT"
+        to see agent projects.
 
         ⚠️ When ``include_templates`` is True, the response includes global
         template projects from **other organizations** (e.g. the platform
@@ -89,7 +94,7 @@ def register(mcp: FastMCP) -> None:
             include_templates=str(include_templates).lower(),
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=NON_DESTRUCTIVE_WRITE)
     async def create_workflow(
         name: Annotated[str, Field(description="Project name.")],
         description: Annotated[str, Field(description="Optional description.")] = "",
@@ -111,7 +116,7 @@ def register(mcp: FastMCP) -> None:
             raise ValueError("name must not be empty")
 
         jwt, user_id = _get_auth()
-        org = await require_role(user_id, "developer", "admin", "super_admin")
+        org = await require_role(user_id, *DEVELOPER_ROLES)
         defaults = generate_entity_defaults()
         return await api.post(
             f"/projects/{org['org_id']}",
@@ -125,7 +130,7 @@ def register(mcp: FastMCP) -> None:
             },
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=IDEMPOTENT_WRITE)
     async def update_project(
         project_id: Annotated[
             UUID,
@@ -150,7 +155,7 @@ def register(mcp: FastMCP) -> None:
             raise ValueError("At least one field must be provided")
         return await api.patch(f"/projects/{project_id}", jwt, json=body)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_project_overview(
         project_id: Annotated[
             UUID,

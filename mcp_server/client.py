@@ -9,10 +9,30 @@ import logging
 from typing import Any
 
 import httpx
+from fastmcp.exceptions import ToolError as FastMCPToolError
 
 from mcp_server.settings import settings
 
 logger = logging.getLogger(__name__)
+
+
+class ToolError(FastMCPToolError):
+    """Backend/tool error whose message must reach the MCP client.
+
+    Subclasses FastMCP's ToolError so the actionable messages survive even if
+    ``mask_error_details`` is ever enabled on the server. ``status_code``
+    carries the backend HTTP status so callers can tell transient 5xx errors
+    apart from non-transient 4xx ones (e.g. in polling loops).
+    """
+
+    def __init__(self, message: str, *, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+    @property
+    def is_transient(self) -> bool:
+        return self.status_code is None or self.status_code >= 500 or self.status_code == 429
+
 
 _client: httpx.AsyncClient | None = None
 
@@ -41,24 +61,32 @@ def _trim_response(data: Any) -> Any:
     if isinstance(data, list):
         meta["_total_items"] = len(data)
         meta["_included_items"] = 0
+        envelope_size = len(json.dumps({**meta, "partial_data": []}, default=str))
+        budget = max_size - envelope_size
+        used = 0
         subset: list = []
         for item in data:
-            tentative = {**meta, "partial_data": subset + [item], "_included_items": len(subset) + 1}
-            if len(json.dumps(tentative, default=str)) > max_size:
+            item_size = len(json.dumps(item, default=str)) + 2  # ", " separator
+            if used + item_size > budget:
                 break
             subset.append(item)
+            used += item_size
         if subset:
             meta["partial_data"] = subset
             meta["_included_items"] = len(subset)
         return meta
 
     if isinstance(data, dict):
+        envelope_size = len(json.dumps({**meta, "partial_data": {}}, default=str))
+        budget = max_size - envelope_size
+        used = 0
         subset_dict: dict = {}
         for key, value in data.items():
-            tentative = {**meta, "partial_data": {**subset_dict, key: value}}
-            if len(json.dumps(tentative, default=str)) > max_size:
+            entry_size = len(json.dumps({key: value}, default=str))
+            if used + entry_size > budget:
                 break
             subset_dict[key] = value
+            used += entry_size
         if subset_dict:
             meta["partial_data"] = subset_dict
         return meta
@@ -100,7 +128,8 @@ async def _handle_response(response: httpx.Response, *, trim: bool = True) -> An
         raise ToolError(
             f"Authentication failed{request_context}. Your session may have expired — reconnect to refresh. "
             "Next step: check your MCP client's server status, then call get_current_context() "
-            "to verify your session."
+            "to verify your session.",
+            status_code=401,
         )
 
     if response.status_code == 403:
@@ -111,39 +140,40 @@ async def _handle_response(response: httpx.Response, *, trim: bool = True) -> An
             "then see docs://getting-started for the role hierarchy."
         )
         if detail:
-            raise ToolError(f"{base} {detail}{hint}")
-        raise ToolError(f"{base} You may lack the required role for this operation.{hint}")
+            raise ToolError(f"{base} {detail}{hint}", status_code=403)
+        raise ToolError(f"{base} You may lack the required role for this operation.{hint}", status_code=403)
 
     if response.status_code == 404:
         detail = _extract_error_detail(response)
         raise ToolError(
             f"Resource not found{request_context}.{f' {detail}' if detail else ''} "
             "Next step: verify the ID came from a list_*/get_* call in this session — "
-            "never reuse IDs across projects or orgs."
+            "never reuse IDs across projects or orgs.",
+            status_code=404,
         )
 
     if response.status_code == 429:
         retry_after = response.headers.get("Retry-After", "unknown")
-        raise ToolError(f"Rate limited by backend{request_context}. Retry after {retry_after}s.")
+        raise ToolError(f"Rate limited by backend{request_context}. Retry after {retry_after}s.", status_code=429)
 
     if response.status_code == 500:
         detail = _extract_error_detail(response)
         raise ToolError(
             f"The backend hit an unexpected error{request_context}. "
             "This is not caused by your input — retry the call. "
-            f"If it persists, the issue is server-side.{f' Detail: {detail}' if detail else ''}"
+            f"If it persists, the issue is server-side.{f' Detail: {detail}' if detail else ''}",
+            status_code=500,
         )
 
     if response.status_code == 502:
         raise ToolError(
-            f"The backend is temporarily unreachable (gateway error){request_context}. "
-            "Retry in a few seconds."
+            f"The backend is temporarily unreachable (gateway error){request_context}. Retry in a few seconds.",
+            status_code=502,
         )
 
     if response.status_code == 503:
         raise ToolError(
-            f"The backend is temporarily unavailable{request_context}. "
-            "Retry in a few seconds."
+            f"The backend is temporarily unavailable{request_context}. Retry in a few seconds.", status_code=503
         )
 
     if response.status_code >= 400:
@@ -157,7 +187,9 @@ async def _handle_response(response: httpx.Response, *, trim: bool = True) -> An
             detail = detail.strip()
         if not detail:
             detail = f"No error detail returned by the server (HTTP {response.status_code})"
-        raise ToolError(f"Backend error {response.status_code}{request_context}: {detail}")
+        raise ToolError(
+            f"Backend error {response.status_code}{request_context}: {detail}", status_code=response.status_code
+        )
 
     try:
         data = response.json()
@@ -165,10 +197,6 @@ async def _handle_response(response: httpx.Response, *, trim: bool = True) -> An
         logger.warning("Backend returned a non-JSON success response: %s", exc)
         data = response.text
     return _trim_response(data) if trim else data
-
-
-class ToolError(Exception):
-    pass
 
 
 class DraftnrunClient:
@@ -191,10 +219,16 @@ class DraftnrunClient:
         return await _handle_response(response, trim=trim)
 
     async def post_file(
-        self, path: str, token: str, *,
-        file_content: bytes, filename: str, field_name: str = "file",
+        self,
+        path: str,
+        token: str,
+        *,
+        file_content: bytes,
+        filename: str,
+        field_name: str = "file",
         content_type: str = "text/csv",
-        trim: bool = True, **params: Any,
+        trim: bool = True,
+        **params: Any,
     ) -> Any:
         """Upload a file via multipart form data (for CSV import, etc.)."""
         client = _get_client()
@@ -217,12 +251,20 @@ class DraftnrunClient:
         return await _handle_response(response, trim=trim)
 
     async def delete(
-        self, path: str, token: str, json: dict | list | None = None,
-        trim: bool = True, **params: Any,
+        self,
+        path: str,
+        token: str,
+        json: dict | list | None = None,
+        trim: bool = True,
+        **params: Any,
     ) -> Any:
         client = _get_client()
         response = await client.request(
-            "DELETE", path, headers=_make_headers(token), json=json, params=params or None,
+            "DELETE",
+            path,
+            headers=_make_headers(token),
+            json=json,
+            params=params or None,
         )
         return await _handle_response(response, trim=trim)
 

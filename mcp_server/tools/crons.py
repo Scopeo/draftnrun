@@ -5,6 +5,7 @@ from uuid import UUID
 from fastmcp import FastMCP
 
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
+from mcp_server.tools._roles import DEVELOPER_ROLES
 
 _BASE = "/organizations/{org_id}/crons"
 _ITEM = f"{_BASE}/{{cron_id}}"
@@ -41,7 +42,7 @@ SPECS: list[ToolSpec] = [
         method="post",
         path=_BASE,
         scope="role",
-        roles=("developer", "admin", "super_admin"),
+        roles=DEVELOPER_ROLES,
         body_param=Param(
             "cron_data",
             dict,
@@ -59,10 +60,11 @@ SPECS: list[ToolSpec] = [
         method="patch",
         path=_ITEM,
         scope="role",
-        roles=("developer", "admin", "super_admin"),
+        roles=DEVELOPER_ROLES,
         path_params=(_CRON_ID,),
         body_param=Param(
-            "cron_data", dict,
+            "cron_data",
+            dict,
             description="Updated cron fields. Use `payload`, not `input_data`, at the top level.",
         ),
     ),
@@ -72,7 +74,7 @@ SPECS: list[ToolSpec] = [
         method="delete",
         path=_ITEM,
         scope="role",
-        roles=("developer", "admin", "super_admin"),
+        roles=DEVELOPER_ROLES,
         path_params=(_CRON_ID,),
     ),
     ToolSpec(
@@ -81,7 +83,7 @@ SPECS: list[ToolSpec] = [
         method="post",
         path=f"{_ITEM}/pause",
         scope="role",
-        roles=("developer", "admin", "super_admin"),
+        roles=DEVELOPER_ROLES,
         path_params=(_CRON_ID,),
     ),
     ToolSpec(
@@ -90,7 +92,7 @@ SPECS: list[ToolSpec] = [
         method="post",
         path=f"{_ITEM}/resume",
         scope="role",
-        roles=("developer", "admin", "super_admin"),
+        roles=DEVELOPER_ROLES,
         path_params=(_CRON_ID,),
     ),
     ToolSpec(
@@ -112,6 +114,7 @@ SPECS: list[ToolSpec] = [
         path=f"{_ITEM}/trigger",
         scope="org",
         path_params=(_CRON_ID,),
+        annotations={"openWorldHint": True},
     ),
 ]
 

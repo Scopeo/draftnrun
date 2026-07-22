@@ -254,8 +254,10 @@ def _safe_jsonb_first_element(raw_content: str | None) -> dict:
         return {}
 
 
-def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
+def query_trace_by_trace_id(trace_id: str, project_id: UUID) -> pd.DataFrame:
     # TODO: add credits per unit
+    # Scoped to the authorized project so spans from another tenant that would
+    # share a trace_id are never returned.
     query = (
         "WITH span_credits AS ("
         "  SELECT "
@@ -264,7 +266,7 @@ def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
         "        COALESCE(su.credits_per_call, 0))::numeric, 0) as credits "
         "  FROM credits.span_usages su "
         "  JOIN traces.spans s ON s.span_id = su.span_id "
-        f"  WHERE s.trace_rowid = '{trace_id}' "
+        "  WHERE s.trace_rowid = %(trace_id)s AND s.project_id = %(project_id)s "
         "  GROUP BY su.span_id "
         ") "
         "SELECT s.*, m.input_content, m.output_content, "
@@ -275,15 +277,25 @@ def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
         "FROM traces.spans s "
         "LEFT JOIN traces.span_messages m ON m.span_id = s.span_id "
         "LEFT JOIN span_credits sc ON sc.span_id = s.span_id "
-        f"WHERE s.trace_rowid = '{trace_id}' "
+        "WHERE s.trace_rowid = %(trace_id)s AND s.project_id = %(project_id)s "
         "ORDER BY s.start_time ASC;"
     )
     session = get_session_trace()
-    df = pd.read_sql_query(query, session.bind)
+    df = pd.read_sql_query(query, session.bind, params={"trace_id": str(trace_id), "project_id": str(project_id)})
     session.close()
     df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
     df = df.replace({np.nan: None})
     return df
+
+
+def query_trace_project_id(trace_id: str) -> Optional[UUID]:
+    """Return the project ID a trace belongs to, or None if the trace has no spans."""
+    with get_session_trace() as session:
+        row = session.execute(
+            text("SELECT project_id FROM traces.spans WHERE trace_rowid = :trace_id LIMIT 1"),
+            {"trace_id": str(trace_id)},
+        ).first()
+    return UUID(str(row[0])) if row and row[0] is not None else None
 
 
 def calculate_calls_per_day(df: pd.DataFrame, all_dates_df: pd.DataFrame) -> pd.DataFrame:
@@ -334,8 +346,7 @@ def count_conversations_per_day(df: pd.DataFrame, all_dates_df: pd.DataFrame) ->
             lambda x: x.get("conversation_id")
         )
         conversation_id_usage_with_id = (
-            df_with_conversation_id
-            .groupby("date")["conversation_id"]
+            df_with_conversation_id.groupby("date")["conversation_id"]
             .nunique()
             .reset_index(name="unique_conversation_ids")
         )
@@ -345,8 +356,7 @@ def count_conversations_per_day(df: pd.DataFrame, all_dates_df: pd.DataFrame) ->
 
         if not df_without_conversation_id.empty:
             conversation_id_usage_without_id = (
-                df_without_conversation_id
-                .groupby("date")["trace_rowid"]
+                df_without_conversation_id.groupby("date")["trace_rowid"]
                 .nunique()
                 .reset_index(name="unique_conversation_ids")
             )

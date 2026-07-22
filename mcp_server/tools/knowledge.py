@@ -15,7 +15,9 @@ from pydantic import Field
 
 from mcp_server.client import api
 from mcp_server.context import require_role
+from mcp_server.tools._annotations import DESTRUCTIVE_WRITE, NON_DESTRUCTIVE_WRITE
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
+from mcp_server.tools._roles import DEVELOPER_ROLES
 from mcp_server.tools.context_tools import _get_auth
 
 _WEBSITE_REQUIRED = ("url",)
@@ -48,7 +50,12 @@ PROXY_SPECS: list[ToolSpec] = [
         path="/sources/{org_id}/{source_id}",
         scope="org",
         path_params=(_SOURCE_ID,),
-        body_param=Param("source_data", dict, description="Ignored by backend. Kept for API compatibility."),
+        body_param=Param(
+            "source_data",
+            dict,
+            default=None,
+            description="Deprecated, ignored by the backend — omit this parameter.",
+        ),
     ),
     ToolSpec(
         name="delete_source",
@@ -59,7 +66,7 @@ PROXY_SPECS: list[ToolSpec] = [
         method="delete",
         path="/sources/{org_id}/{source_id}",
         scope="role",
-        roles=("developer", "admin", "super_admin"),
+        roles=DEVELOPER_ROLES,
         path_params=(_SOURCE_ID,),
     ),
     ToolSpec(
@@ -107,7 +114,7 @@ PROXY_SPECS: list[ToolSpec] = [
         method="delete",
         path="/knowledge/organizations/{org_id}/sources/{source_id}/documents/{document_id}",
         scope="role",
-        roles=("developer", "admin", "super_admin"),
+        roles=DEVELOPER_ROLES,
         path_params=(_SOURCE_ID, _DOC_ID),
     ),
 ]
@@ -164,7 +171,7 @@ _CONFIG_VALIDATORS = {
 def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, PROXY_SPECS)
 
-    @mcp.tool()
+    @mcp.tool(annotations=NON_DESTRUCTIVE_WRITE)
     async def create_source(
         source_type: Annotated[
             Literal["website", "database"],
@@ -203,7 +210,7 @@ def register(mcp: FastMCP) -> None:
                 name = f"Database: {config['source_table_name']}"
 
         jwt, user_id = _get_auth()
-        org = await require_role(user_id, "developer", "admin", "super_admin")
+        org = await require_role(user_id, *DEVELOPER_ROLES)
 
         payload = {
             "source_name": name,
@@ -220,30 +227,24 @@ def register(mcp: FastMCP) -> None:
             "source_type": source_type,
             "source_name": name,
             "message": (
-                "Ingestion task created. The source will appear in list_sources "
-                "once ingestion starts processing."
+                "Ingestion task created. The source will appear in list_sources once ingestion starts processing."
             ),
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTRUCTIVE_WRITE)
     async def update_document_chunks(
         source_id: Annotated[UUID, Field(description="The source ID (from list_sources).")],
         document_id: Annotated[UUID, Field(description="The document ID (from list_documents).")],
         chunks: Annotated[
             list[dict],
             Field(
-                description=(
-                    "List of chunk objects. Each chunk: content (str, required), "
-                    "metadata (dict, optional)."
-                ),
+                description=("List of chunk objects. Each chunk: content (str, required), metadata (dict, optional)."),
             ),
         ],
         confirm_full_replacement: Annotated[
             bool,
             Field(
-                description=(
-                    "Explicit acknowledgement that this is a risky full replacement operation."
-                ),
+                description=("Explicit acknowledgement that this is a risky full replacement operation."),
             ),
         ] = False,
     ) -> dict:
@@ -261,7 +262,7 @@ def register(mcp: FastMCP) -> None:
                 "Retry only if the user explicitly wants a full replacement and pass confirm_full_replacement=True."
             )
         jwt, user_id = _get_auth()
-        org = await require_role(user_id, "developer", "admin", "super_admin")
+        org = await require_role(user_id, *DEVELOPER_ROLES)
         return await api.put(
             f"/knowledge/organizations/{org['org_id']}/sources/{source_id}/documents/{document_id}",
             jwt,

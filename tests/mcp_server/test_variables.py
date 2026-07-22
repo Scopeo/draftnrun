@@ -5,9 +5,15 @@ import pytest
 from mcp_server.tools import variables
 
 ALL_TOOL_NAMES = [
-    "list_variable_definitions", "upsert_variable_definition", "delete_variable_definition",
-    "list_variable_sets", "upsert_variable_set", "delete_variable_set",
-    "list_secrets", "upsert_secret", "delete_secret",
+    "list_variable_definitions",
+    "upsert_variable_definition",
+    "delete_variable_definition",
+    "list_variable_sets",
+    "upsert_variable_set",
+    "delete_variable_set",
+    "list_secrets",
+    "upsert_secret",
+    "delete_secret",
 ]
 
 
