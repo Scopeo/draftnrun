@@ -19,6 +19,17 @@ from shared.log_redaction import redact_sensitive
 
 LOGGER = logging.getLogger(__name__)
 
+API_CALL_RESERVED_OUTPUT_PORT_NAMES = frozenset({"output", "status_code", "data", "success"})
+
+
+def _extract_response_root_outputs(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in data.items()
+        if isinstance(key, str) and key and not key.startswith("_") and key not in API_CALL_RESERVED_OUTPUT_PORT_NAMES
+    }
+
+
 API_CALL_TOOL_DESCRIPTION = ToolDescription(
     name="api_call",
     description=("A generic API tool that can make HTTP requests to any API endpoint."),
@@ -84,6 +95,8 @@ class APICallToolOutputs(BaseModel):
     data: dict[str, Any] = Field(description="The data of the API response.")
     success: bool = Field(description="Whether the API call was successful.")
 
+    model_config = {"extra": "allow"}
+
 
 class APICallTool(Component):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
@@ -100,6 +113,12 @@ class APICallTool(Component):
     @classmethod
     def get_canonical_ports(cls) -> dict[str, str | None]:
         return {"input": "endpoint", "output": "output"}
+
+    @classmethod
+    def get_auto_output_port_names(cls, output_data: dict[str, Any]) -> list[str]:
+        if cls is not APICallTool:
+            return []
+        return sorted(_extract_response_root_outputs(output_data).keys())
 
     def __init__(
         self,
@@ -219,6 +238,7 @@ class APICallTool(Component):
         if api_response.get("success", False):
             content = json.dumps(api_response["data"], indent=2)
             data = api_response.get("data", {})
+            root_outputs = _extract_response_root_outputs(data) if isinstance(data, dict) else {}
         else:
             error_details = {
                 "error": api_response.get("error", "Unknown error"),
@@ -234,10 +254,12 @@ class APICallTool(Component):
                 data = {"raw": response_body}
             else:
                 data = {}
+            root_outputs = {}
 
         return APICallToolOutputs(
             output=content,
             status_code=api_response["status_code"],
             data=data,
             success=api_response["success"],
+            **root_outputs,
         )

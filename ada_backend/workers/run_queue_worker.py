@@ -10,6 +10,7 @@ from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories import run_repository
 from ada_backend.repositories.cron_repository import update_cron_run
 from ada_backend.repositories.graph_runner_repository import get_graph_runner_for_env
+from ada_backend.repositories.output_port_instance_repository import get_or_create_output_port_instance
 from ada_backend.repositories.run_input_repository import save_run_input
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent
 from ada_backend.services.run_service import _upload_result_to_s3, update_run_status
@@ -45,6 +46,30 @@ class RunQueueWorker(BaseQueueWorker):
             current = run.status if isinstance(run.status, RunStatus) else RunStatus(str(run.status))
             if current == RunStatus.RUNNING:
                 run_repository.update_run_status(session, run_id=run_id, status=RunStatus.PENDING)
+
+    @staticmethod
+    def _persist_auto_output_port_instances(evt: dict) -> None:
+        if evt.get("type") != "node.completed":
+            return
+        port_names = evt.get("auto_output_port_names")
+        if not isinstance(port_names, list) or not port_names:
+            return
+
+        try:
+            component_instance_id = UUID(evt["node_id"])
+        except (KeyError, TypeError, ValueError):
+            LOGGER.warning("Cannot persist auto output ports from malformed node event: %s", evt)
+            return
+
+        with get_db_session() as session:
+            for port_name in port_names:
+                if not isinstance(port_name, str) or not port_name:
+                    continue
+                get_or_create_output_port_instance(
+                    session=session,
+                    component_instance_id=component_instance_id,
+                    name=port_name,
+                )
 
     @staticmethod
     def _finalize_cron_run(cron_run_id: UUID | None, succeeded: bool, error_msg: str | None) -> None:
@@ -142,6 +167,7 @@ class RunQueueWorker(BaseQueueWorker):
                     )
 
                 async def event_callback(evt: dict):
+                    self._persist_auto_output_port_instances(evt)
                     publish_run_event(run_id, evt)
 
                 async def execute_agent():

@@ -108,6 +108,11 @@ HubSpot MCP `notes_upsert_for_contact` and `tasks_create` accept `properties.hs_
 
 The `HubSpot Owner` component is a narrow API-tool-style integration that calls HubSpot's owner endpoint with a configured headers JSON value and an injectable `owner_id`. It exposes the returned owner fields at the output root (`id`, `email`, `firstName`, `lastName`, etc.) so downstream field expressions can reference them directly without going through a nested `data` object.
 
+The generic `API Call` tool keeps the full response payload under `data` and automatically exposes top-level JSON response
+object keys at the output root, excluding reserved metadata keys (`output`, `status_code`, `data`, `success`) and private
+underscore-prefixed keys. During queued runs, those detected keys are persisted as dynamic `OutputPortInstance` rows so
+later graph edits can wire downstream field expressions directly to the discovered API response fields.
+
 Unified Mail Sender versions must keep their seed-time Gmail provider and registry OAuth binding in sync. For example, `mail_sender_v2` exposes a Gmail Neverdrop connection in the catalog, so its `gmail_oauth_connection_id` registry binding resolves with `OAuthProvider.GMAIL_NEVERDROP`; older unified Mail Sender versions that expose regular Gmail continue resolving with `OAuthProvider.GMAIL`. The standalone Gmail Neverdrop catalog entry remains send-only, but unified `mail_sender_v2` exposes `save_as_draft` for Gmail or Outlook sends and defaults it to `true`.
 
 Mail sender components (`Gmail Sender`, `Gmail Neverdrop`, `Outlook Sender`, and unified `Mail Sender`) accept `email_attachments` as legacy string path/URL entries or provider-safe object entries shaped like `{"url": "...", "filename": "..."}` or `{"path": "...", "filename": "..."}`. String attachments are normalized to object attachments before runtime. Object attachments download from `url` or read from `path` and attach using the provided `filename`, which lets workflows control the displayed file name in Gmail MIME messages and Microsoft Graph payloads. Attachment URL downloads validate each URL and redirect target before streaming, rejecting non-HTTP(S) schemes and private/reserved network addresses. HTTPS downloads connect to the validated resolved IP while preserving the original hostname for SNI and certificate verification.
