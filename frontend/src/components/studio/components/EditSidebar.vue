@@ -140,6 +140,10 @@ const isApiCallComponent = computed(
   () => componentDefinition.value?.name === 'API Call' || componentData.value?.component_name === 'API Call'
 )
 
+const isApiCallGetComponent = computed(
+  () => isApiCallComponent.value && String(form.formData.value.parameters.method || '').toUpperCase() === 'GET'
+)
+
 const EXCLUSIVE_OAUTH_GROUP_COMPONENTS = new Set(['EXCLUSIVE_OAUTH_CONNECTION', 'EXCLUSIVEOAUTHCONNECTION'])
 
 const isExclusiveOAuthGroup = (group: any): boolean =>
@@ -203,7 +207,7 @@ const isExclusiveOAuthGroup = (group: any): boolean =>
                   class="mb-6"
                 />
 
-                <VAlert v-if="isApiCallComponent && componentData?.id" type="info" variant="tonal" class="mb-4">
+                <VAlert v-if="isApiCallGetComponent && componentData?.id" type="info" variant="tonal" class="mb-4">
                   <div class="d-flex flex-column ga-3">
                     <div class="text-body-2">
                       Test the configured GET endpoint once to discover response fields that can be injected downstream.
