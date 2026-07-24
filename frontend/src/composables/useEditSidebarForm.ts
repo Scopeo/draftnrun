@@ -41,6 +41,8 @@ export function useEditSidebarForm(
   const currentEditingComponentId = ref<string | null>(null)
   const sources = ref<Source[]>([])
   const testingApiCallOutputPorts = ref(false)
+  const apiCallTestValuesText = ref('')
+  const apiCallVariableSetIds = ref<string[]>([])
 
   const isToolDescriptionEditable = computed(() => componentData.value?.canEditToolDescription === true)
 
@@ -236,21 +238,52 @@ export function useEditSidebarForm(
     })
   }
 
+  const apiCallTestValuesError = computed(() => {
+    const raw = apiCallTestValuesText.value.trim()
+    if (!raw) return null
+    try {
+      const parsed = JSON.parse(raw)
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? null : 'Test values must be a JSON object'
+    } catch {
+      return 'Invalid JSON object'
+    }
+  })
+
+  function parseApiCallTestValues(): Record<string, unknown> | null {
+    const raw = apiCallTestValuesText.value.trim()
+    if (!raw) return {}
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
+    } catch {
+      // handled below
+    }
+    notify.error('API Call test values must be a valid JSON object')
+    return null
+  }
+
   async function testApiCallOutputPorts(componentInstanceId: string, parameters: any[]) {
     if (!apiCallTestContext?.value) return
+    const testValues = parseApiCallTestValues()
+    if (testValues === null) return
     testingApiCallOutputPorts.value = true
     try {
       const response = await scopeoApi.studio.testApiCallOutputPorts(
         apiCallTestContext.value.projectId,
         apiCallTestContext.value.graphRunnerId,
         componentInstanceId,
-        parameters
+        parameters,
+        testValues,
+        apiCallVariableSetIds.value
       )
 
       const names = response.output_port_names ?? []
 
       if (names.length > 0) notify.success(`Discovered output ports: ${names.join(', ')}`)
-      else notify.info('No top-level JSON fields were discovered. Verify the endpoint and response format if this is unexpected.')
+      else
+        notify.info(
+          'No top-level JSON fields were discovered. Verify the endpoint and response format if this is unexpected.'
+        )
       onApiCallOutputPortsTested?.()
     } catch (error) {
       logger.error('Error testing API Call output ports', { error })
@@ -373,6 +406,8 @@ export function useEditSidebarForm(
     isOpen => {
       if (!isOpen) {
         formData.value = { ...EMPTY_FORM_DATA, parameters: {}, toolDescription: { name: '', description: '' } }
+        apiCallTestValuesText.value = ''
+        apiCallVariableSetIds.value = []
         currentEditingComponentId.value = null
       }
     }
@@ -394,6 +429,9 @@ export function useEditSidebarForm(
     sources,
     isToolDescriptionEditable,
     testingApiCallOutputPorts,
+    apiCallTestValuesText,
+    apiCallTestValuesError,
+    apiCallVariableSetIds,
     buildParametersForApiCallOutputPortTest,
     testApiCallOutputPorts,
   }

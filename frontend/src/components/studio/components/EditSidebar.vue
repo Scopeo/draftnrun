@@ -8,13 +8,14 @@ import EditSidebarGmail from './EditSidebarGmail.vue'
 import EditSidebarOptionalTools from './EditSidebarOptionalTools.vue'
 import EditSidebarConfigContent from './EditSidebarConfigContent.vue'
 import ProjectSelectionDialog from './ProjectSelectionDialog.vue'
+import { normalizeUiComponent } from './edit-sidebar/types'
 import { useEditSidebarForm } from '@/composables/useEditSidebarForm'
 import { useEditSidebarPorts } from '@/composables/useEditSidebarPorts'
 import { useEditSidebarSubmit } from '@/composables/useEditSidebarSubmit'
 import { useEditSidebarOAuth } from '@/composables/useEditSidebarOAuth'
 import { useEditSidebarComponentConfig } from '@/composables/useEditSidebarComponentConfig'
 import { getComponentDefinitionFromCache } from '@/composables/queries/useComponentDefinitionsQuery'
-import { normalizeUiComponent } from './edit-sidebar/types'
+import { useSetIdsQuery } from '@/composables/queries/useVariableSetsQuery'
 import { logger } from '@/utils/logger'
 
 interface Props {
@@ -80,6 +81,16 @@ const apiCallTestContext = computed(() => {
     graphRunnerId: props.promptContext.graphRunnerId,
   }
 })
+
+const apiCallTestOrgId = computed(() => props.promptContext?.orgId)
+const apiCallTestProjectId = computed(() => props.promptContext?.projectId)
+
+const { data: apiCallSetIdsData, isLoading: isApiCallSetIdsLoading } = useSetIdsQuery(
+  apiCallTestOrgId,
+  apiCallTestProjectId
+)
+
+const apiCallAvailableSetIds = computed(() => apiCallSetIdsData.value?.set_ids ?? [])
 
 // --- Composables ---
 const form = useEditSidebarForm(
@@ -217,6 +228,34 @@ const isExclusiveOAuthGroup = (group: any): boolean =>
                     <div class="text-body-2">
                       Test the configured GET endpoint once to discover response fields that can be injected downstream.
                     </div>
+                    <VSelect
+                      v-if="apiCallAvailableSetIds.length > 0"
+                      v-model="form.apiCallVariableSetIds.value"
+                      :items="apiCallAvailableSetIds"
+                      label="Variable sets for this test"
+                      density="compact"
+                      variant="outlined"
+                      multiple
+                      chips
+                      closable-chips
+                      clearable
+                      :loading="isApiCallSetIdsLoading"
+                      :disabled="isReadOnlyMode || form.testingApiCallOutputPorts.value"
+                      hide-details="auto"
+                    />
+                    <VTextarea
+                      v-model="form.apiCallTestValuesText.value"
+                      label="Runtime test values (JSON)"
+                      placeholder='{"component_id.output": "value", "start": {"messages": "Hello"}}'
+                      density="compact"
+                      variant="outlined"
+                      rows="3"
+                      auto-grow
+                      :error="!!form.apiCallTestValuesError.value"
+                      :error-messages="form.apiCallTestValuesError.value || undefined"
+                      :disabled="isReadOnlyMode || form.testingApiCallOutputPorts.value"
+                      hide-details="auto"
+                    />
                     <div>
                       <VBtn
                         size="small"
@@ -224,7 +263,9 @@ const isExclusiveOAuthGroup = (group: any): boolean =>
                         variant="tonal"
                         prepend-icon="tabler-test-pipe"
                         :loading="form.testingApiCallOutputPorts.value"
-                        :disabled="isReadOnlyMode || form.testingApiCallOutputPorts.value"
+                        :disabled="
+                          isReadOnlyMode || form.testingApiCallOutputPorts.value || !!form.apiCallTestValuesError.value
+                        "
                         @click="
                           form.testApiCallOutputPorts(componentData.id, form.buildParametersForApiCallOutputPortTest())
                         "
