@@ -192,7 +192,9 @@ def _build_validated_probe_request(
     if not parsed.hostname:
         raise ValueError("API Call probe URL must include a hostname")
     ip = _resolve_probe_ip(parsed.hostname, parsed.port)
-    host = parsed.hostname if parsed.port is None else f"{parsed.hostname}:{parsed.port}"
+    host = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
+    if parsed.port is not None:
+        host = f"{host}:{parsed.port}"
     request_host = f"[{ip}]" if isinstance(ip, ipaddress.IPv6Address) else str(ip)
     port = f":{parsed.port}" if parsed.port is not None else ""
     path = parsed.path or "/"
