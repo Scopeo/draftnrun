@@ -52,10 +52,12 @@ export const studioApi = {
     projectId: string,
     graphRunnerId: string,
     componentInstanceId: string,
-    parameters: any[]
+    parameters: any[],
+    testValues: Record<string, unknown> = {},
+    variableSetIds: string[] = []
   ): Promise<{ output_port_names: string[] }> =>
     $api(`/v2/projects/${projectId}/graph/${graphRunnerId}/components/${componentInstanceId}/api-call/test-output-ports`, {
       method: 'POST',
-      body: { parameters },
+      body: { parameters, test_values: testValues, variable_set_ids: variableSetIds },
     }),
 }

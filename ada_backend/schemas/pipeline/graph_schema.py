@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
@@ -158,6 +158,8 @@ class ComponentV2Response(BaseModel):
 
 class ApiCallOutputPortTestRequest(BaseModel):
     parameters: list[PipelineParameterV2Schema] = Field(default_factory=list)
+    test_values: dict[str, Any] = Field(default_factory=dict)
+    variable_set_ids: list[str] = Field(default_factory=list)
 
 
 class ApiCallOutputPortTestResponse(BaseModel):

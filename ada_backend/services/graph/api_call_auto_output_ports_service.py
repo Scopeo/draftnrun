@@ -6,16 +6,28 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 import httpx
+from pydantic import SecretStr
 from sqlalchemy.orm import Session
 
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 from ada_backend.repositories.component_repository import get_component_basic_parameters, get_component_instance_by_id
 from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
+from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
 from ada_backend.repositories.output_port_instance_repository import get_or_create_output_port_instance
+from ada_backend.repositories.project_repository import get_project
 from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterV2Schema
 from ada_backend.schemas.pipeline.port_instance_schema import InputPortInstanceSchema
+from ada_backend.services.variable_resolution_service import resolve_variables
+from ada_backend.utils.secret_resolver import replace_secret_placeholders
 from engine.components.tools.api_call_tool import extract_api_call_response_root_outputs
+from engine.components.types import NodeData
 from engine.components.utils import load_str_to_json
+from engine.field_expressions.ast import RefNode
+from engine.field_expressions.errors import FieldExpressionError
+from engine.field_expressions.serializer import from_json as expression_from_json
+from engine.graph_runner.field_expression_management import evaluate_expression
+from engine.graph_runner.types import Task, TaskState
+from engine.secret_utils import unwrap_secret
 
 _MISSING = object()
 _API_CALL_INPUT_NAMES = {"endpoint", "headers", "fixed_parameters"}
@@ -27,7 +39,72 @@ _DISALLOWED_PROBE_NETWORKS = (
 )
 
 
-def _literal_from_field_expression(field_expression: Any) -> Any:
+def _test_value_for_ref(ref: RefNode, test_values: dict[str, Any]) -> Any:
+    nested_value = test_values.get(ref.instance)
+    if isinstance(nested_value, dict) and ref.port in nested_value:
+        value = nested_value[ref.port]
+        if ref.key and isinstance(value, dict) and ref.key in value:
+            return value[ref.key]
+        if ref.key:
+            raise FieldExpressionError(f"Test value for '{ref.instance}.{ref.port}' does not contain key '{ref.key}'")
+        return value
+
+    candidates = []
+    if ref.key:
+        candidates.extend([
+            f"{ref.instance}.{ref.port}::{ref.key}",
+            f"{ref.instance}.{ref.port}.{ref.key}",
+        ])
+    candidates.append(f"{ref.instance}.{ref.port}")
+
+    for candidate in candidates:
+        if candidate in test_values:
+            value = test_values[candidate]
+            if ref.key and candidate == f"{ref.instance}.{ref.port}" and isinstance(value, dict) and ref.key in value:
+                return value[ref.key]
+            return value
+
+    raise FieldExpressionError(f"Test value required for '{ref.instance}.{ref.port}'")
+
+
+def _build_test_tasks(test_values: dict[str, Any]) -> dict[str, Task]:
+    tasks: dict[str, Task] = {}
+    for key, value in test_values.items():
+        if isinstance(value, dict):
+            tasks[str(key)] = Task(
+                pending_deps=0,
+                state=TaskState.COMPLETED,
+                result=NodeData(data=value),
+            )
+            continue
+        if not isinstance(key, str) or "." not in key:
+            continue
+        instance, port = key.split(".", 1)
+        if not instance or not port:
+            continue
+        ref_key = None
+        if "::" in port:
+            port, ref_key = port.split("::", 1)
+        task = tasks.setdefault(
+            instance,
+            Task(pending_deps=0, state=TaskState.COMPLETED, result=NodeData(data={})),
+        )
+        if task.result:
+            if ref_key:
+                existing = task.result.data.setdefault(port, {})
+                if isinstance(existing, dict):
+                    existing[ref_key] = value
+            else:
+                task.result.data[port] = value
+    return tasks
+
+
+def _value_from_field_expression(
+    field_expression: Any,
+    variables: dict[str, Any] | None = None,
+    test_values: dict[str, Any] | None = None,
+    field_name: str = "value",
+) -> Any:
     if field_expression is None:
         return _MISSING
     if hasattr(field_expression, "expression_json"):
@@ -36,19 +113,42 @@ def _literal_from_field_expression(field_expression: Any) -> Any:
         expression_json = field_expression.get("expression_json", field_expression)
     else:
         return _MISSING
-    if not isinstance(expression_json, dict) or expression_json.get("type") != "literal":
+    if not isinstance(expression_json, dict):
         return _MISSING
-    return expression_json.get("value")
+    if expression_json.get("type") == "literal":
+        return expression_json.get("value")
+    try:
+        expression = expression_from_json(expression_json)
+        return evaluate_expression(
+            expression,
+            field_name,
+            _build_test_tasks(test_values or {}),
+            variables=variables,
+        )
+    except FieldExpressionError:
+        if isinstance(expression, RefNode):
+            return _test_value_for_ref(expression, test_values or {})
+        return _MISSING
+    except ValueError:
+        return _MISSING
 
 
-def _literal_from_parameter(param: Any) -> Any:
+def _value_from_parameter(
+    param: Any,
+    variables: dict[str, Any] | None = None,
+    test_values: dict[str, Any] | None = None,
+) -> Any:
     if getattr(param, "value", None) is not None:
         return param.value
-    return _literal_from_field_expression(getattr(param, "field_expression", None))
+    return _value_from_field_expression(getattr(param, "field_expression", None), variables, test_values, param.name)
 
 
-def _literal_from_input_port(port: InputPortInstanceSchema) -> Any:
-    return _literal_from_field_expression(port.field_expression)
+def _value_from_input_port(
+    port: InputPortInstanceSchema,
+    variables: dict[str, Any] | None = None,
+    test_values: dict[str, Any] | None = None,
+) -> Any:
+    return _value_from_field_expression(port.field_expression, variables, test_values, port.name)
 
 
 def _coerce_json_object(value: Any) -> dict[str, Any] | None:
@@ -65,6 +165,16 @@ def _coerce_json_object(value: Any) -> dict[str, Any] | None:
     return None
 
 
+def _unwrap_probe_secrets(value: Any) -> Any:
+    if isinstance(value, SecretStr):
+        return unwrap_secret(value)
+    if isinstance(value, dict):
+        return {key: _unwrap_probe_secrets(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_unwrap_probe_secrets(item) for item in value]
+    return value
+
+
 def _normalize_api_call_config_values(values: dict[str, Any]) -> dict[str, Any]:
     return {
         "method": str(values.get("method") or "GET").upper(),
@@ -79,6 +189,8 @@ def _normalize_api_call_config_values(values: dict[str, Any]) -> dict[str, Any]:
 def _collect_api_call_save_values(
     parameters: list[Any] | None,
     input_port_instances: list[InputPortInstanceSchema] | None,
+    variables: dict[str, Any] | None = None,
+    test_values: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], set[str]]:
     values: dict[str, Any] = {}
     unresolved: set[str] = set()
@@ -93,7 +205,7 @@ def _collect_api_call_save_values(
             continue
         if name not in _API_CALL_INPUT_NAMES:
             continue
-        value = _literal_from_parameter(param)
+        value = _value_from_parameter(param, variables, test_values)
         if value is _MISSING:
             unresolved.add(name)
         else:
@@ -102,7 +214,7 @@ def _collect_api_call_save_values(
     for port in input_port_instances or []:
         if port.name not in _API_CALL_INPUT_NAMES:
             continue
-        value = _literal_from_input_port(port)
+        value = _value_from_input_port(port, variables, test_values)
         if value is _MISSING:
             unresolved.add(port.name)
         else:
@@ -111,7 +223,12 @@ def _collect_api_call_save_values(
     return values, unresolved
 
 
-def _collect_saved_api_call_values(session: Session, component_instance_id: UUID) -> tuple[dict[str, Any], set[str]]:
+def _collect_saved_api_call_values(
+    session: Session,
+    component_instance_id: UUID,
+    variables: dict[str, Any] | None = None,
+    test_values: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], set[str]]:
     basic_parameters = [
         PipelineParameterV2Schema(
             name=param.parameter_definition.name,
@@ -125,19 +242,25 @@ def _collect_saved_api_call_values(session: Session, component_instance_id: UUID
         component_instance_id,
         eager_load_field_expression=True,
     )
-    return _collect_api_call_save_values(basic_parameters, input_port_instances)
+    return _collect_api_call_save_values(basic_parameters, input_port_instances, variables, test_values)
 
 
 def _ensure_probe_uses_saved_configuration(
     request_parameters: list[Any] | None,
     saved_values: dict[str, Any],
+    variables: dict[str, Any] | None = None,
+    test_values: dict[str, Any] | None = None,
 ) -> None:
     if not request_parameters:
         return
 
-    request_values, request_unresolved = _collect_api_call_save_values(request_parameters, None)
+    request_values, request_unresolved = _collect_api_call_save_values(
+        request_parameters, None, variables, test_values
+    )
     if request_unresolved:
-        raise ValueError(f"API Call test requires literal values for: {', '.join(sorted(request_unresolved))}")
+        raise ValueError(
+            f"API Call test requires resolved or test values for: {', '.join(sorted(request_unresolved))}"
+        )
 
     request_config = _normalize_api_call_config_values(request_values)
     saved_config = _normalize_api_call_config_values(saved_values)
@@ -240,8 +363,11 @@ def _detect_get_response_output_port_names(
 
 def test_and_persist_api_call_get_auto_output_ports(
     session: Session,
+    project_id: UUID,
     component_instance_id: UUID,
     parameters: list[Any] | None = None,
+    test_values: dict[str, Any] | None = None,
+    variable_set_ids: list[str] | None = None,
 ) -> list[str]:
     component_instance = get_component_instance_by_id(session, component_instance_id)
     if not component_instance:
@@ -249,10 +375,23 @@ def test_and_persist_api_call_get_auto_output_ports(
     if component_instance.component_version_id != COMPONENT_VERSION_UUIDS["api_call_tool"]:
         raise ValueError("Output-port testing is only available for the generic API Call component")
 
-    values, unresolved = _collect_saved_api_call_values(session, component_instance_id)
+    project = get_project(session, project_id=project_id)
+    if not project:
+        raise ValueError(f"Project {project_id} not found")
+    org_secrets = get_organization_secrets_from_project_id(session, project_id)
+    key_to_secret = {secret.key: secret.secret for secret in org_secrets}
+    resolved_variables = resolve_variables(
+        session,
+        project.organization_id,
+        variable_set_ids or [],
+        project_id=project_id,
+    )
+    variables = {**(test_values or {}), **resolved_variables}
+
+    values, unresolved = _collect_saved_api_call_values(session, component_instance_id, variables, test_values)
     if unresolved:
-        raise ValueError(f"API Call test requires literal values for: {', '.join(sorted(unresolved))}")
-    _ensure_probe_uses_saved_configuration(parameters, values)
+        raise ValueError(f"API Call test requires resolved or test values for: {', '.join(sorted(unresolved))}")
+    _ensure_probe_uses_saved_configuration(parameters, values, variables, test_values)
 
     method = str(values.get("method") or "GET").upper()
     if method != "GET":
@@ -268,6 +407,9 @@ def test_and_persist_api_call_get_auto_output_ports(
         raise ValueError("API Call headers must be a JSON object")
     if fixed_parameters is None:
         raise ValueError("API Call fixed parameters must be a JSON object")
+    headers = _unwrap_probe_secrets(replace_secret_placeholders(headers, key_to_secret))
+    fixed_parameters = _unwrap_probe_secrets(replace_secret_placeholders(fixed_parameters, key_to_secret))
+    endpoint = str(_unwrap_probe_secrets(replace_secret_placeholders(endpoint, key_to_secret)))
 
     port_names = _detect_get_response_output_port_names(
         endpoint=endpoint,

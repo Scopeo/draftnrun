@@ -160,11 +160,13 @@ Uses joined-table polymorphism:
 - **`InputPortInstance`**: adds `field_expression_id` FK — links a configured value (FieldExpression) to an input port
 - **`OutputPortInstance`**: materializes dynamic output ports (e.g. from `drives_output_schema`)
   and response-shaped components. Generic API Call creates additive dynamic output ports for safe top-level JSON response
-  keys only in two cases: an explicit workflow-studio “Test GET endpoint” action for saved literal GET configurations, and
-  queued run-time `node.completed` events when the response is first known. Normal component saves do not probe external
-  endpoints. The explicit test action rejects non-GET methods, unsaved configuration mismatches, and endpoint probe failures
-  instead of normalizing them to a successful empty port list. The explicit probe also blocks non-HTTP(S), credentialed, and
-  private/link-local/reserved/metadata-style destinations before sending the request.
+  keys only in two cases: an explicit workflow-studio “Test GET endpoint” action for saved GET configurations, and queued
+  run-time `node.completed` events when the response is first known. Normal component saves do not probe external endpoints.
+  The explicit test action can evaluate saved literals, resolved project variables/secrets, and caller-provided
+  `test_values` for runtime-only references before probing. It rejects non-GET methods, unsaved configuration mismatches,
+  unresolved inputs without test values, and endpoint probe failures instead of normalizing them to a successful empty port
+  list. The explicit probe also blocks non-HTTP(S), credentialed, and private/link-local/reserved/metadata-style
+  destinations before sending the request.
 
 ### Layer 3: FieldExpression (wiring and transforms)
 

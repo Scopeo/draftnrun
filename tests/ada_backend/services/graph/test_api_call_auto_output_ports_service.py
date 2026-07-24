@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from pydantic import SecretStr
 
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterV2Schema
@@ -18,6 +19,7 @@ from ada_backend.services.graph.api_call_auto_output_ports_service import (
 
 def test_test_and_persist_api_call_get_auto_output_ports_requires_generic_api_call_component():
     session = MagicMock()
+    project_id = uuid4()
     instance_id = uuid4()
     db_instance = MagicMock()
     db_instance.component_version_id = uuid4()
@@ -27,7 +29,7 @@ def test_test_and_persist_api_call_get_auto_output_ports_requires_generic_api_ca
         return_value=db_instance,
     ):
         try:
-            call_test_and_persist_api_call_get_auto_output_ports(session, instance_id, [])
+            call_test_and_persist_api_call_get_auto_output_ports(session, project_id, instance_id, [])
         except ValueError as e:
             assert "generic API Call" in str(e)
         else:
@@ -36,9 +38,12 @@ def test_test_and_persist_api_call_get_auto_output_ports_requires_generic_api_ca
 
 def test_test_and_persist_api_call_get_auto_output_ports_persists_manual_probe_result():
     session = MagicMock()
+    project_id = uuid4()
+    organization_id = uuid4()
     instance_id = uuid4()
     db_instance = MagicMock()
     db_instance.component_version_id = COMPONENT_VERSION_UUIDS["api_call_tool"]
+    project = MagicMock(organization_id=organization_id)
     parameters = [
         PipelineParameterV2Schema(name="method", value="GET"),
         PipelineParameterV2Schema(name="endpoint", kind=ParameterKind.INPUT, value="https://api.example.com/users"),
@@ -51,6 +56,12 @@ def test_test_and_persist_api_call_get_auto_output_ports_persists_manual_probe_r
         ),
         patch(
             "ada_backend.services.graph.api_call_auto_output_ports_service.get_component_basic_parameters",
+            return_value=[],
+        ),
+        patch("ada_backend.services.graph.api_call_auto_output_ports_service.get_project", return_value=project),
+        patch("ada_backend.services.graph.api_call_auto_output_ports_service.resolve_variables", return_value={}),
+        patch(
+            "ada_backend.services.graph.api_call_auto_output_ports_service.get_organization_secrets_from_project_id",
             return_value=[],
         ),
         patch(
@@ -72,7 +83,7 @@ def test_test_and_persist_api_call_get_auto_output_ports_persists_manual_probe_r
             "ada_backend.services.graph.api_call_auto_output_ports_service.get_or_create_output_port_instance"
         ) as mock_get_or_create,
     ):
-        result = call_test_and_persist_api_call_get_auto_output_ports(session, instance_id, parameters)
+        result = call_test_and_persist_api_call_get_auto_output_ports(session, project_id, instance_id, parameters)
 
     assert result == ["email", "id"]
     assert [call.kwargs["name"] for call in mock_get_or_create.call_args_list] == ["email", "id"]
@@ -80,9 +91,12 @@ def test_test_and_persist_api_call_get_auto_output_ports_persists_manual_probe_r
 
 def test_test_and_persist_api_call_get_auto_output_ports_rejects_unsaved_probe_config():
     session = MagicMock()
+    project_id = uuid4()
+    organization_id = uuid4()
     instance_id = uuid4()
     db_instance = MagicMock()
     db_instance.component_version_id = COMPONENT_VERSION_UUIDS["api_call_tool"]
+    project = MagicMock(organization_id=organization_id)
     parameters = [
         PipelineParameterV2Schema(name="method", value="GET"),
         PipelineParameterV2Schema(name="endpoint", kind=ParameterKind.INPUT, value="https://api.example.com/draft"),
@@ -95,6 +109,12 @@ def test_test_and_persist_api_call_get_auto_output_ports_rejects_unsaved_probe_c
         ),
         patch(
             "ada_backend.services.graph.api_call_auto_output_ports_service.get_component_basic_parameters",
+            return_value=[],
+        ),
+        patch("ada_backend.services.graph.api_call_auto_output_ports_service.get_project", return_value=project),
+        patch("ada_backend.services.graph.api_call_auto_output_ports_service.resolve_variables", return_value={}),
+        patch(
+            "ada_backend.services.graph.api_call_auto_output_ports_service.get_organization_secrets_from_project_id",
             return_value=[],
         ),
         patch(
@@ -116,7 +136,7 @@ def test_test_and_persist_api_call_get_auto_output_ports_rejects_unsaved_probe_c
         ) as mock_get_or_create,
     ):
         try:
-            call_test_and_persist_api_call_get_auto_output_ports(session, instance_id, parameters)
+            call_test_and_persist_api_call_get_auto_output_ports(session, project_id, instance_id, parameters)
         except ValueError as e:
             assert "Save the API Call configuration" in str(e)
         else:
@@ -128,9 +148,12 @@ def test_test_and_persist_api_call_get_auto_output_ports_rejects_unsaved_probe_c
 
 def test_test_and_persist_api_call_get_auto_output_ports_raises_on_manual_probe_failure():
     session = MagicMock()
+    project_id = uuid4()
+    organization_id = uuid4()
     instance_id = uuid4()
     db_instance = MagicMock()
     db_instance.component_version_id = COMPONENT_VERSION_UUIDS["api_call_tool"]
+    project = MagicMock(organization_id=organization_id)
     parameters = [
         PipelineParameterV2Schema(name="method", value="GET"),
         PipelineParameterV2Schema(name="endpoint", kind=ParameterKind.INPUT, value="https://api.example.com/users"),
@@ -143,6 +166,12 @@ def test_test_and_persist_api_call_get_auto_output_ports_raises_on_manual_probe_
         ),
         patch(
             "ada_backend.services.graph.api_call_auto_output_ports_service.get_component_basic_parameters",
+            return_value=[],
+        ),
+        patch("ada_backend.services.graph.api_call_auto_output_ports_service.get_project", return_value=project),
+        patch("ada_backend.services.graph.api_call_auto_output_ports_service.resolve_variables", return_value={}),
+        patch(
+            "ada_backend.services.graph.api_call_auto_output_ports_service.get_organization_secrets_from_project_id",
             return_value=[],
         ),
         patch(
@@ -171,13 +200,133 @@ def test_test_and_persist_api_call_get_auto_output_ports_raises_on_manual_probe_
         client.send.return_value = response
 
         try:
-            call_test_and_persist_api_call_get_auto_output_ports(session, instance_id, parameters)
+            call_test_and_persist_api_call_get_auto_output_ports(session, project_id, instance_id, parameters)
         except ValueError as e:
             assert "endpoint probe failed" in str(e)
         else:
             raise AssertionError("Expected ValueError")
 
     mock_get_or_create.assert_not_called()
+
+
+def test_test_and_persist_api_call_get_auto_output_ports_resolves_secret_variables_for_probe():
+    session = MagicMock()
+    project_id = uuid4()
+    organization_id = uuid4()
+    instance_id = uuid4()
+    db_instance = MagicMock()
+    db_instance.component_version_id = COMPONENT_VERSION_UUIDS["api_call_tool"]
+    project = MagicMock(organization_id=organization_id)
+
+    with (
+        patch(
+            "ada_backend.services.graph.api_call_auto_output_ports_service.get_component_instance_by_id",
+            return_value=db_instance,
+        ),
+        patch(
+            "ada_backend.services.graph.api_call_auto_output_ports_service.get_component_basic_parameters",
+            return_value=[],
+        ),
+        patch("ada_backend.services.graph.api_call_auto_output_ports_service.get_project", return_value=project),
+        patch(
+            "ada_backend.services.graph.api_call_auto_output_ports_service.resolve_variables",
+            return_value={"api_headers": {"Authorization": SecretStr("Bearer secret-token")}},
+        ) as mock_resolve_variables,
+        patch(
+            "ada_backend.services.graph.api_call_auto_output_ports_service.get_organization_secrets_from_project_id",
+            return_value=[],
+        ),
+        patch(
+            "ada_backend.services.graph.api_call_auto_output_ports_service.get_input_port_instances_for_component_instance",
+            return_value=[
+                InputPortInstanceSchema(
+                    name="endpoint",
+                    field_expression=FieldExpressionSchema(
+                        expression_json={"type": "literal", "value": "https://api.example.com/users"}
+                    ),
+                ),
+                InputPortInstanceSchema(
+                    name="headers",
+                    field_expression=FieldExpressionSchema(expression_json={"type": "var", "name": "api_headers"}),
+                ),
+            ],
+        ),
+        patch(
+            "ada_backend.services.graph.api_call_auto_output_ports_service._detect_get_response_output_port_names",
+            return_value=["id"],
+        ) as mock_detect,
+        patch("ada_backend.services.graph.api_call_auto_output_ports_service.get_or_create_output_port_instance"),
+    ):
+        result = call_test_and_persist_api_call_get_auto_output_ports(
+            session,
+            project_id,
+            instance_id,
+            variable_set_ids=["production"],
+        )
+
+    assert result == ["id"]
+    mock_resolve_variables.assert_called_once_with(session, organization_id, ["production"], project_id=project_id)
+    assert mock_detect.call_args.kwargs["headers"] == {"Authorization": "Bearer secret-token"}
+
+
+def test_test_and_persist_api_call_get_auto_output_ports_uses_test_values_for_refs():
+    session = MagicMock()
+    project_id = uuid4()
+    organization_id = uuid4()
+    instance_id = uuid4()
+    upstream_id = uuid4()
+    db_instance = MagicMock()
+    db_instance.component_version_id = COMPONENT_VERSION_UUIDS["api_call_tool"]
+    project = MagicMock(organization_id=organization_id)
+
+    with (
+        patch(
+            "ada_backend.services.graph.api_call_auto_output_ports_service.get_component_instance_by_id",
+            return_value=db_instance,
+        ),
+        patch(
+            "ada_backend.services.graph.api_call_auto_output_ports_service.get_component_basic_parameters",
+            return_value=[],
+        ),
+        patch("ada_backend.services.graph.api_call_auto_output_ports_service.get_project", return_value=project),
+        patch("ada_backend.services.graph.api_call_auto_output_ports_service.resolve_variables", return_value={}),
+        patch(
+            "ada_backend.services.graph.api_call_auto_output_ports_service.get_organization_secrets_from_project_id",
+            return_value=[],
+        ),
+        patch(
+            "ada_backend.services.graph.api_call_auto_output_ports_service.get_input_port_instances_for_component_instance",
+            return_value=[
+                InputPortInstanceSchema(
+                    name="endpoint",
+                    field_expression=FieldExpressionSchema(
+                        expression_json={"type": "ref", "instance": str(upstream_id), "port": "url"}
+                    ),
+                ),
+                InputPortInstanceSchema(
+                    name="fixed_parameters",
+                    field_expression=FieldExpressionSchema(
+                        expression_json={"type": "literal", "value": '{"account_id": "acct_123"}'}
+                    ),
+                ),
+            ],
+        ),
+        patch(
+            "ada_backend.services.graph.api_call_auto_output_ports_service._detect_get_response_output_port_names",
+            return_value=["email"],
+        ) as mock_detect,
+        patch("ada_backend.services.graph.api_call_auto_output_ports_service.get_or_create_output_port_instance"),
+    ):
+        result = call_test_and_persist_api_call_get_auto_output_ports(
+            session,
+            project_id,
+            instance_id,
+            test_values={f"{upstream_id}.url": "https://api.example.com/users/{account_id}"},
+        )
+
+    assert result == ["email"]
+    assert mock_detect.call_args.kwargs["endpoint"] == "https://api.example.com/users/{account_id}"
+    assert mock_detect.call_args.kwargs["fixed_parameters"] == {"account_id": "acct_123"}
 
 
 @pytest.mark.parametrize(

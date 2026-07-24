@@ -173,8 +173,11 @@ def test_api_call_output_ports_v2(
             raise ValueError(f"Component instance {instance_id} does not belong to graph {graph_runner_id}")
         output_port_names = test_and_persist_api_call_get_auto_output_ports(
             session=session,
+            project_id=project_id,
             component_instance_id=instance_id,
             parameters=payload.parameters,
+            test_values=payload.test_values,
+            variable_set_ids=payload.variable_set_ids,
         )
     except ValueError as e:
         LOGGER.warning("Invalid API Call output-port test request for instance %s: %s", instance_id, e)
