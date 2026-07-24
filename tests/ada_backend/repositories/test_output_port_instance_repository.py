@@ -9,6 +9,9 @@ output ports is involved:
 """
 
 import uuid
+from unittest.mock import MagicMock, patch
+
+from sqlalchemy.exc import IntegrityError
 
 from ada_backend.database import models as db
 from ada_backend.database.setup_db import get_db_session
@@ -116,3 +119,29 @@ def test_delete_output_port_instances_does_not_affect_input_port_instances():
         )
         assert remaining_input is not None
         assert remaining_input.name == "output_format"
+
+
+def test_get_or_create_output_port_instance_recovers_from_concurrent_insert():
+    session = MagicMock()
+    component_instance_id = uuid.uuid4()
+    existing = db.OutputPortInstance(component_instance_id=component_instance_id, name="account_id")
+    integrity_error = IntegrityError("insert", {}, Exception("duplicate key"))
+
+    with (
+        patch(
+            "ada_backend.repositories.output_port_instance_repository.get_output_port_instance_by_name",
+            side_effect=[None, existing],
+        ),
+        patch(
+            "ada_backend.repositories.output_port_instance_repository.create_output_port_instance",
+            side_effect=integrity_error,
+        ),
+    ):
+        result = output_port_instance_repository.get_or_create_output_port_instance(
+            session=session,
+            component_instance_id=component_instance_id,
+            name="account_id",
+        )
+
+    assert result is existing
+    session.rollback.assert_called_once_with()

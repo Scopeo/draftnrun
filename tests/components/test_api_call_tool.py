@@ -12,6 +12,7 @@ from engine.components.tools.api_call_tool import (
     APICallToolInputs,
     APICallToolOutputs,
 )
+from engine.components.tools.hubspot_owner_tool import HubSpotOwnerTool
 from engine.components.types import ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 
@@ -127,9 +128,7 @@ def test_make_api_call_with_only_fixed_params(mock_client_class, api_tool, mock_
     mock_client.request.return_value = mock_response
     mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    result = asyncio.run(
-        api_tool.make_api_call(headers=HEADERS, fixed_parameters=FIXED_PARAMS, endpoint=ENDPOINT)
-    )
+    result = asyncio.run(api_tool.make_api_call(headers=HEADERS, fixed_parameters=FIXED_PARAMS, endpoint=ENDPOINT))
 
     expected_params = {"api_version": "v2", "format": "json", "language": "en"}
 
@@ -290,6 +289,62 @@ def test_run_without_io_trace_with_dynamic_params(api_tool):
             query="test",
             page=1,
         )
+
+
+def test_run_without_io_trace_exposes_response_keys_as_root_outputs(api_tool):
+    inputs = APICallToolInputs(
+        endpoint=ENDPOINT,
+        headers=HEADERS,
+        fixed_parameters=FIXED_PARAMS,
+    )
+
+    with patch.object(api_tool, "make_api_call", new_callable=AsyncMock) as mock_make_api_call:
+        mock_make_api_call.return_value = {
+            "status_code": 200,
+            "data": {
+                "id": "contact-123",
+                "email": "ada@example.com",
+                "nested": {"company": "Draftnrun"},
+                "success": "payload value must not override metadata",
+                "_private": "hidden",
+            },
+            "headers": {"Content-Type": "application/json"},
+            "success": True,
+        }
+
+        result = asyncio.run(api_tool._run_without_io_trace(inputs))
+
+        assert isinstance(result, APICallToolOutputs)
+        assert result.success is True
+        assert result.data["success"] == "payload value must not override metadata"
+        assert result.model_extra == {
+            "id": "contact-123",
+            "email": "ada@example.com",
+            "nested": {"company": "Draftnrun"},
+        }
+
+
+def test_get_auto_output_port_names_detects_safe_response_keys(api_tool):
+    output_data = {
+        "output": "formatted",
+        "status_code": 200,
+        "data": {},
+        "success": True,
+        "id": "contact-123",
+        "email": "ada@example.com",
+        "_private": "hidden",
+    }
+
+    assert api_tool.get_auto_output_port_names(output_data) == ["email", "id"]
+
+
+def test_get_auto_output_port_names_does_not_apply_to_api_call_subclasses(mock_trace_manager):
+    tool = HubSpotOwnerTool(
+        trace_manager=mock_trace_manager,
+        component_attributes=ComponentAttributes(component_instance_name="hubspot_owner"),
+    )
+
+    assert tool.get_auto_output_port_names({"id": "owner-123", "email": "owner@example.com"}) == []
 
 
 def test_run_without_io_trace_error(api_tool):
