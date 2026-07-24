@@ -163,7 +163,8 @@ Uses joined-table polymorphism:
   keys only in two cases: an explicit workflow-studio “Test GET endpoint” action for saved GET configurations, and queued
   run-time `node.completed` events when the response is first known. Normal component saves do not probe external endpoints.
   The explicit test action can evaluate saved literals, resolved project variables/secrets, and caller-provided
-  `test_values` for runtime-only references before probing. It rejects non-GET methods, unsaved configuration mismatches,
+  `test_values` for runtime-only references before probing; `SecretStr` values are unwrapped for the endpoint, headers,
+  and fixed parameters only at this outbound request boundary. It rejects non-GET methods, unsaved configuration mismatches,
   unresolved inputs without test values, and endpoint probe failures instead of normalizing them to a successful empty port
   list. The explicit probe also blocks non-HTTP(S), credentialed, and private/link-local/reserved/metadata-style
   destinations before sending the request.

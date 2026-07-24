@@ -397,7 +397,7 @@ def test_and_persist_api_call_get_auto_output_ports(
     if method != "GET":
         raise ValueError("API Call output-port test is only available for GET requests")
 
-    endpoint = values.get("endpoint")
+    endpoint = _unwrap_probe_secrets(replace_secret_placeholders(values.get("endpoint"), key_to_secret))
     if not isinstance(endpoint, str) or not endpoint.strip():
         raise ValueError("API Call output-port test requires an endpoint")
 
@@ -409,7 +409,6 @@ def test_and_persist_api_call_get_auto_output_ports(
         raise ValueError("API Call fixed parameters must be a JSON object")
     headers = _unwrap_probe_secrets(replace_secret_placeholders(headers, key_to_secret))
     fixed_parameters = _unwrap_probe_secrets(replace_secret_placeholders(fixed_parameters, key_to_secret))
-    endpoint = str(_unwrap_probe_secrets(replace_secret_placeholders(endpoint, key_to_secret)))
 
     port_names = _detect_get_response_output_port_names(
         endpoint=endpoint,
