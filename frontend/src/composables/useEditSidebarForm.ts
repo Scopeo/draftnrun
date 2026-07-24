@@ -250,7 +250,7 @@ export function useEditSidebarForm(
       const names = response.output_port_names ?? []
 
       if (names.length > 0) notify.success(`Discovered output ports: ${names.join(', ')}`)
-      else notify.info('Endpoint tested successfully, but no top-level JSON fields were discovered.')
+      else notify.info('No top-level JSON fields were discovered. Verify the endpoint and response format if this is unexpected.')
       onApiCallOutputPortsTested?.()
     } catch (error) {
       logger.error('Error testing API Call output ports', { error })
