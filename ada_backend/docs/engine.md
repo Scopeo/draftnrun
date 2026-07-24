@@ -113,7 +113,9 @@ object keys at the output root, excluding reserved metadata keys (`output`, `sta
 underscore-prefixed keys. During queued runs, those detected keys are persisted as dynamic `OutputPortInstance` rows so
 later graph edits can wire downstream field expressions directly to the discovered API response fields. The workflow studio
 can also trigger an explicit saved-GET probe that persists the same additive dynamic output ports, records graph modification
-history, and publishes a graph update event.
+history, and publishes a graph update event. That probe validates the URL before connecting: only HTTP(S) URLs without
+credentials are accepted, hostnames are resolved before the request, private/link-local/reserved/metadata-style addresses are
+blocked, and the request connects to the validated resolved IP while preserving the original HTTPS hostname for SNI.
 
 Unified Mail Sender versions must keep their seed-time Gmail provider and registry OAuth binding in sync. For example, `mail_sender_v2` exposes a Gmail Neverdrop connection in the catalog, so its `gmail_oauth_connection_id` registry binding resolves with `OAuthProvider.GMAIL_NEVERDROP`; older unified Mail Sender versions that expose regular Gmail continue resolving with `OAuthProvider.GMAIL`. The standalone Gmail Neverdrop catalog entry remains send-only, but unified `mail_sender_v2` exposes `save_as_draft` for Gmail or Outlook sends and defaults it to `true`.
 
@@ -159,7 +161,8 @@ Uses joined-table polymorphism:
   keys only in two cases: an explicit workflow-studio “Test GET endpoint” action for saved literal GET configurations, and
   queued run-time `node.completed` events when the response is first known. Normal component saves do not probe external
   endpoints. The explicit test action rejects non-GET methods, unsaved configuration mismatches, and endpoint probe failures
-  instead of normalizing them to a successful empty port list.
+  instead of normalizing them to a successful empty port list. The explicit probe also blocks non-HTTP(S), credentialed, and
+  private/link-local/reserved/metadata-style destinations before sending the request.
 
 ### Layer 3: FieldExpression (wiring and transforms)
 

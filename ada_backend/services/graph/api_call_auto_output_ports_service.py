@@ -1,5 +1,8 @@
+import ipaddress
+import socket
 import string
 from typing import Any
+from urllib.parse import urlparse
 from uuid import UUID
 
 import httpx
@@ -17,6 +20,11 @@ from engine.components.utils import load_str_to_json
 _MISSING = object()
 _API_CALL_INPUT_NAMES = {"endpoint", "headers", "fixed_parameters"}
 _SAVE_TIME_DETECTION_TIMEOUT_SECONDS = 5.0
+_DISALLOWED_PROBE_NETWORKS = (
+    ipaddress.ip_network("100.64.0.0/10"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("fe80::/10"),
+)
 
 
 def _literal_from_field_expression(field_expression: Any) -> Any:
@@ -137,6 +145,68 @@ def _ensure_probe_uses_saved_configuration(
         raise ValueError("Save the API Call configuration before testing output ports")
 
 
+def _validate_probe_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError(f"Unsupported API Call probe URL scheme: {parsed.scheme}")
+    if parsed.username or parsed.password:
+        raise ValueError("API Call probe URLs must not contain credentials")
+    if not parsed.hostname:
+        raise ValueError("API Call probe URL must include a hostname")
+
+
+def _is_disallowed_probe_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+        or any(ip in network for network in _DISALLOWED_PROBE_NETWORKS)
+    )
+
+
+def _resolve_probe_ip(hostname: str, port: int | None = None) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
+    try:
+        addr_infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as error:
+        raise ValueError(f"Could not resolve API Call probe URL hostname: {hostname}") from error
+    if not addr_infos:
+        raise ValueError(f"Could not resolve API Call probe URL hostname: {hostname}")
+    for addr_info in addr_infos:
+        ip = ipaddress.ip_address(addr_info[4][0])
+        if not _is_disallowed_probe_ip(ip):
+            return ip
+    raise ValueError(f"API Call probe URL resolves to a disallowed address: {addr_infos[0][4][0]}")
+
+
+def _build_validated_probe_request(
+    client: httpx.Client,
+    url: str,
+    headers: dict[str, Any],
+    params: dict[str, Any] | None = None,
+) -> httpx.Request:
+    _validate_probe_url(url)
+    parsed = urlparse(url)
+    if not parsed.hostname:
+        raise ValueError("API Call probe URL must include a hostname")
+    ip = _resolve_probe_ip(parsed.hostname, parsed.port)
+    host = parsed.hostname if parsed.port is None else f"{parsed.hostname}:{parsed.port}"
+    request_host = f"[{ip}]" if isinstance(ip, ipaddress.IPv6Address) else str(ip)
+    port = f":{parsed.port}" if parsed.port is not None else ""
+    path = parsed.path or "/"
+    query = f"?{parsed.query}" if parsed.query else ""
+    request_headers = {str(key): str(value) for key, value in headers.items()}
+    request_headers["Host"] = host
+    request = client.build_request(
+        "GET", f"{parsed.scheme}://{request_host}{port}{path}{query}", headers=request_headers, params=params
+    )
+    if parsed.scheme == "https":
+        request.extensions["sni_hostname"] = parsed.hostname
+    return request
+
+
 def _detect_get_response_output_port_names(
     endpoint: str,
     headers: dict[str, Any],
@@ -154,7 +224,7 @@ def _detect_get_response_output_port_names(
         if filtered_parameters:
             request_kwargs["params"] = filtered_parameters
         with httpx.Client(timeout=_SAVE_TIME_DETECTION_TIMEOUT_SECONDS) as client:
-            response = client.get(**request_kwargs)
+            response = client.send(_build_validated_probe_request(client, **request_kwargs))
             response.raise_for_status()
             response_data = response.json()
     except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
