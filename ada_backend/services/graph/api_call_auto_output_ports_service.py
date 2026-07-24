@@ -70,7 +70,7 @@ def _test_value_for_ref(ref: RefNode, test_values: dict[str, Any]) -> Any:
 def _build_test_tasks(test_values: dict[str, Any]) -> dict[str, Task]:
     tasks: dict[str, Task] = {}
     for key, value in test_values.items():
-        if isinstance(value, dict):
+        if isinstance(value, dict) and (not isinstance(key, str) or "." not in key):
             tasks[str(key)] = Task(
                 pending_deps=0,
                 state=TaskState.COMPLETED,
