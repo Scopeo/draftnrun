@@ -180,9 +180,19 @@ class TestAutoOutputPortPersistence:
     def test_persistence_failure_does_not_escape(self):
         evt = {"type": "node.completed", "node_id": str(uuid4()), "auto_output_port_names": ["email"]}
 
-        with patch(
-            "ada_backend.workers.run_queue_worker.get_or_create_output_port_instance",
-            side_effect=TimeoutError("db timeout"),
+        @contextmanager
+        def fake_db_session():
+            yield MagicMock()
+
+        with (
+            patch(
+                "ada_backend.workers.run_queue_worker.get_db_session",
+                side_effect=fake_db_session,
+            ),
+            patch(
+                "ada_backend.workers.run_queue_worker.get_or_create_output_port_instance",
+                side_effect=TimeoutError("db timeout"),
+            ),
         ):
             RunQueueWorker._persist_auto_output_port_instances(evt)
 
