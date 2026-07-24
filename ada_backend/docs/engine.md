@@ -111,7 +111,9 @@ The `HubSpot Owner` component is a narrow API-tool-style integration that calls 
 The generic `API Call` tool keeps the full response payload under `data` and automatically exposes top-level JSON response
 object keys at the output root, excluding reserved metadata keys (`output`, `status_code`, `data`, `success`) and private
 underscore-prefixed keys. During queued runs, those detected keys are persisted as dynamic `OutputPortInstance` rows so
-later graph edits can wire downstream field expressions directly to the discovered API response fields.
+later graph edits can wire downstream field expressions directly to the discovered API response fields. The workflow studio
+can also trigger an explicit saved-GET probe that persists the same additive dynamic output ports, records graph modification
+history, and publishes a graph update event.
 
 Unified Mail Sender versions must keep their seed-time Gmail provider and registry OAuth binding in sync. For example, `mail_sender_v2` exposes a Gmail Neverdrop connection in the catalog, so its `gmail_oauth_connection_id` registry binding resolves with `OAuthProvider.GMAIL_NEVERDROP`; older unified Mail Sender versions that expose regular Gmail continue resolving with `OAuthProvider.GMAIL`. The standalone Gmail Neverdrop catalog entry remains send-only, but unified `mail_sender_v2` exposes `save_as_draft` for Gmail or Outlook sends and defaults it to `true`.
 
@@ -154,9 +156,10 @@ Uses joined-table polymorphism:
 - **`InputPortInstance`**: adds `field_expression_id` FK — links a configured value (FieldExpression) to an input port
 - **`OutputPortInstance`**: materializes dynamic output ports (e.g. from `drives_output_schema`)
   and response-shaped components. Generic API Call creates additive dynamic output ports for safe top-level JSON response
-  keys in two cases: an explicit workflow-studio “Test GET endpoint” action for literal GET configurations, and queued
-  run-time `node.completed` events when the response is first known. The explicit test action rejects non-GET methods and
-  non-literal endpoint/headers/parameters values.
+  keys only in two cases: an explicit workflow-studio “Test GET endpoint” action for saved literal GET configurations, and
+  queued run-time `node.completed` events when the response is first known. Normal component saves do not probe external
+  endpoints. The explicit test action rejects non-GET methods, unsaved configuration mismatches, and endpoint probe failures
+  instead of normalizing them to a successful empty port list.
 
 ### Layer 3: FieldExpression (wiring and transforms)
 

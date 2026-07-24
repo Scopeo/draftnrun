@@ -176,6 +176,59 @@ class TestProcessPayloadPersistsInput:
             assert kwargs["retry_group_id"] == run_id
 
 
+class TestAutoOutputPortPersistence:
+    def test_persistence_failure_does_not_escape(self):
+        evt = {"type": "node.completed", "node_id": str(uuid4()), "auto_output_port_names": ["email"]}
+
+        with patch(
+            "ada_backend.workers.run_queue_worker.get_or_create_output_port_instance",
+            side_effect=TimeoutError("db timeout"),
+        ):
+            RunQueueWorker._persist_auto_output_port_instances(evt)
+
+    def test_node_completed_event_is_published_when_auto_port_persistence_fails(self, worker, loop):
+        run_id = uuid4()
+        project_id = uuid4()
+        evt = {"type": "node.completed", "node_id": str(uuid4()), "auto_output_port_names": ["email"]}
+
+        payload = {
+            "run_id": str(run_id),
+            "project_id": str(project_id),
+            "env": "production",
+            "input_data": {"text": "hello"},
+            "trigger": "api",
+        }
+
+        async def fake_agent(**kwargs):
+            await kwargs["event_callback"](evt)
+            result = MagicMock()
+            result.trace_id = "trace-123"
+            return result
+
+        @contextmanager
+        def fake_db_session():
+            yield MagicMock()
+
+        with (
+            patch.object(worker, "_ensure_trace_manager"),
+            patch("ada_backend.workers.run_queue_worker.get_db_session", side_effect=fake_db_session),
+            patch("ada_backend.workers.run_queue_worker.run_repository") as mock_run_repo,
+            patch("ada_backend.workers.run_queue_worker.update_run_status"),
+            patch("ada_backend.workers.run_queue_worker.publish_run_event") as mock_publish,
+            patch("ada_backend.workers.run_queue_worker.save_run_input"),
+            patch("ada_backend.workers.run_queue_worker._upload_result_to_s3", return_value="s3-key"),
+            patch("ada_backend.workers.run_queue_worker.run_env_agent", side_effect=fake_agent),
+            patch(
+                "ada_backend.workers.run_queue_worker.get_or_create_output_port_instance",
+                side_effect=TimeoutError("db timeout"),
+            ),
+        ):
+            mock_run_repo.get_run.return_value = _make_pending_run(run_id)
+            worker.process_payload(payload, loop)
+
+        mock_publish.assert_any_call(run_id, evt)
+
+
 class TestProcessPayloadTracing:
     def test_sets_run_id_inside_fresh_isolation_scope(self, worker, loop):
         run_id = uuid4()

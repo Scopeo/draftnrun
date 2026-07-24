@@ -25,6 +25,9 @@ from ada_backend.services.graph.api_call_auto_output_ports_service import (
 )
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.graph_v2_mapper_service import graph_get_to_graph_v2_response
+from ada_backend.services.graph.graph_validation_utils import validate_graph_runner_belongs_to_project
+from ada_backend.services.graph.update_graph_service import validate_graph_is_draft
+from ada_backend.utils.redis_client import notify_graph_changed
 
 router = APIRouter(prefix="/v2/projects/{project_id}/graph", tags=["Graph"])
 LOGGER = logging.getLogger(__name__)
@@ -164,6 +167,8 @@ def test_api_call_output_ports_v2(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
+        validate_graph_runner_belongs_to_project(session, graph_runner_id, project_id)
+        validate_graph_is_draft(session, graph_runner_id)
         if instance_id not in {node.id for node in get_component_nodes(session, graph_runner_id)}:
             raise ValueError(f"Component instance {instance_id} does not belong to graph {graph_runner_id}")
         output_port_names = test_and_persist_api_call_get_auto_output_ports(
@@ -174,5 +179,6 @@ def test_api_call_output_ports_v2(
     except ValueError as e:
         LOGGER.warning("Invalid API Call output-port test request for instance %s: %s", instance_id, e)
         raise HTTPException(status_code=400, detail=str(e)) from e
-    graph_mutation_helpers.publish_graph_update_event(project_id, graph_runner_id, user.id, "component.updated")
+    graph_mutation_helpers.record_modification_history(session, graph_runner_id, user_id=user.id)
+    notify_graph_changed(project_id, graph_runner_id, "component.updated")
     return ApiCallOutputPortTestResponse(output_port_names=output_port_names)

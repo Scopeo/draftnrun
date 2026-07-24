@@ -61,15 +61,23 @@ class RunQueueWorker(BaseQueueWorker):
             LOGGER.warning("Cannot persist auto output ports from malformed node event: %s", evt)
             return
 
-        with get_db_session() as session:
-            for port_name in port_names:
-                if not isinstance(port_name, str) or not port_name:
-                    continue
-                get_or_create_output_port_instance(
-                    session=session,
-                    component_instance_id=component_instance_id,
-                    name=port_name,
-                )
+        try:
+            with get_db_session() as session:
+                for port_name in port_names:
+                    if not isinstance(port_name, str) or not port_name:
+                        continue
+                    get_or_create_output_port_instance(
+                        session=session,
+                        component_instance_id=component_instance_id,
+                        name=port_name,
+                    )
+        except Exception as e:
+            LOGGER.error(
+                "Failed to persist auto output ports for component instance %s: %s",
+                component_instance_id,
+                e,
+                exc_info=True,
+            )
 
     @staticmethod
     def _finalize_cron_run(cron_run_id: UUID | None, succeeded: bool, error_msg: str | None) -> None:

@@ -1,4 +1,3 @@
-import logging
 import string
 from typing import Any
 from uuid import UUID
@@ -7,14 +6,13 @@ import httpx
 from sqlalchemy.orm import Session
 
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
-from ada_backend.repositories.component_repository import get_component_instance_by_id
+from ada_backend.repositories.component_repository import get_component_basic_parameters, get_component_instance_by_id
+from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
 from ada_backend.repositories.output_port_instance_repository import get_or_create_output_port_instance
-from ada_backend.schemas.parameter_schema import ParameterKind
+from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterV2Schema
 from ada_backend.schemas.pipeline.port_instance_schema import InputPortInstanceSchema
 from engine.components.tools.api_call_tool import extract_api_call_response_root_outputs
 from engine.components.utils import load_str_to_json
-
-LOGGER = logging.getLogger(__name__)
 
 _MISSING = object()
 _API_CALL_INPUT_NAMES = {"endpoint", "headers", "fixed_parameters"}
@@ -59,6 +57,17 @@ def _coerce_json_object(value: Any) -> dict[str, Any] | None:
     return None
 
 
+def _normalize_api_call_config_values(values: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "method": str(values.get("method") or "GET").upper(),
+        "endpoint": values.get("endpoint").strip()
+        if isinstance(values.get("endpoint"), str)
+        else values.get("endpoint"),
+        "headers": _coerce_json_object(values.get("headers")),
+        "fixed_parameters": _coerce_json_object(values.get("fixed_parameters")),
+    }
+
+
 def _collect_api_call_save_values(
     parameters: list[Any] | None,
     input_port_instances: list[InputPortInstanceSchema] | None,
@@ -94,6 +103,40 @@ def _collect_api_call_save_values(
     return values, unresolved
 
 
+def _collect_saved_api_call_values(session: Session, component_instance_id: UUID) -> tuple[dict[str, Any], set[str]]:
+    basic_parameters = [
+        PipelineParameterV2Schema(
+            name=param.parameter_definition.name,
+            value=param.get_value(),
+            kind=ParameterKind.PARAMETER,
+        )
+        for param in get_component_basic_parameters(session, component_instance_id)
+    ]
+    input_port_instances = get_input_port_instances_for_component_instance(
+        session,
+        component_instance_id,
+        eager_load_field_expression=True,
+    )
+    return _collect_api_call_save_values(basic_parameters, input_port_instances)
+
+
+def _ensure_probe_uses_saved_configuration(
+    request_parameters: list[Any] | None,
+    saved_values: dict[str, Any],
+) -> None:
+    if not request_parameters:
+        return
+
+    request_values, request_unresolved = _collect_api_call_save_values(request_parameters, None)
+    if request_unresolved:
+        raise ValueError(f"API Call test requires literal values for: {', '.join(sorted(request_unresolved))}")
+
+    request_config = _normalize_api_call_config_values(request_values)
+    saved_config = _normalize_api_call_config_values(saved_values)
+    if request_config != saved_config:
+        raise ValueError("Save the API Call configuration before testing output ports")
+
+
 def _detect_get_response_output_port_names(
     endpoint: str,
     headers: dict[str, Any],
@@ -115,58 +158,11 @@ def _detect_get_response_output_port_names(
             response.raise_for_status()
             response_data = response.json()
     except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
-        LOGGER.info("Skipping API Call GET output-port auto-detection: %s", e)
-        return []
+        raise ValueError(f"API Call endpoint probe failed: {e}") from e
 
     if not isinstance(response_data, dict):
         return []
     return sorted(extract_api_call_response_root_outputs(response_data).keys())
-
-
-def persist_api_call_get_auto_output_ports(
-    session: Session,
-    component_version_id: UUID,
-    component_instance_id: UUID,
-    parameters: list[Any] | None = None,
-    input_port_instances: list[InputPortInstanceSchema] | None = None,
-) -> list[str]:
-    if component_version_id != COMPONENT_VERSION_UUIDS["api_call_tool"]:
-        return []
-
-    values, unresolved = _collect_api_call_save_values(parameters, input_port_instances)
-    if unresolved:
-        LOGGER.info(
-            "Skipping API Call GET output-port auto-detection for %s due to unresolved inputs: %s",
-            component_instance_id,
-            sorted(unresolved),
-        )
-        return []
-
-    method = str(values.get("method") or "GET").upper()
-    if method != "GET":
-        return []
-
-    endpoint = values.get("endpoint")
-    if not isinstance(endpoint, str) or not endpoint.strip():
-        return []
-
-    headers = _coerce_json_object(values.get("headers"))
-    fixed_parameters = _coerce_json_object(values.get("fixed_parameters"))
-    if headers is None or fixed_parameters is None:
-        return []
-
-    port_names = _detect_get_response_output_port_names(
-        endpoint=endpoint,
-        headers=headers,
-        fixed_parameters=fixed_parameters,
-    )
-    for port_name in port_names:
-        get_or_create_output_port_instance(
-            session=session,
-            component_instance_id=component_instance_id,
-            name=port_name,
-        )
-    return port_names
 
 
 def test_and_persist_api_call_get_auto_output_ports(
@@ -180,9 +176,10 @@ def test_and_persist_api_call_get_auto_output_ports(
     if component_instance.component_version_id != COMPONENT_VERSION_UUIDS["api_call_tool"]:
         raise ValueError("Output-port testing is only available for the generic API Call component")
 
-    values, unresolved = _collect_api_call_save_values(parameters, None)
+    values, unresolved = _collect_saved_api_call_values(session, component_instance_id)
     if unresolved:
         raise ValueError(f"API Call test requires literal values for: {', '.join(sorted(unresolved))}")
+    _ensure_probe_uses_saved_configuration(parameters, values)
 
     method = str(values.get("method") or "GET").upper()
     if method != "GET":
