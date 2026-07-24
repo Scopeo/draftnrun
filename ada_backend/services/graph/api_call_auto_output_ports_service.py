@@ -215,9 +215,10 @@ def _detect_get_response_output_port_names(
     fixed_parameters: dict[str, Any],
 ) -> list[str]:
     try:
-        formatted_endpoint = endpoint.strip().format(**fixed_parameters)
         formatter = string.Formatter()
-        used_keys = {field_name for _, field_name, _, _ in formatter.parse(formatted_endpoint) if field_name}
+        stripped_endpoint = endpoint.strip()
+        used_keys = {field_name for _, field_name, _, _ in formatter.parse(stripped_endpoint) if field_name}
+        formatted_endpoint = stripped_endpoint.format(**fixed_parameters)
         filtered_parameters = {key: value for key, value in fixed_parameters.items() if key not in used_keys}
         request_kwargs: dict[str, Any] = {
             "url": formatted_endpoint,

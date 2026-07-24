@@ -110,7 +110,9 @@ The `HubSpot Owner` component is a narrow API-tool-style integration that calls 
 
 The generic `API Call` tool keeps the full response payload under `data` and automatically exposes top-level JSON response
 object keys at the output root, excluding reserved metadata keys (`output`, `status_code`, `data`, `success`) and private
-underscore-prefixed keys. During queued runs, those detected keys are persisted as dynamic `OutputPortInstance` rows so
+underscore-prefixed keys. The explicit “Test GET endpoint” probe formats `{placeholder}` path segments from
+`fixed_parameters` and only sends unused fixed parameters as query parameters, so path placeholders are not duplicated in
+the query string. During queued runs, those detected keys are persisted as dynamic `OutputPortInstance` rows so
 later graph edits can wire downstream field expressions directly to the discovered API response fields. The workflow studio
 can also trigger an explicit saved-GET probe that persists the same additive dynamic output ports, records graph modification
 history, and publishes a graph update event. That probe validates the URL before connecting: only HTTP(S) URLs without
