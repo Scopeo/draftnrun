@@ -115,9 +115,11 @@ underscore-prefixed keys. The explicit “Test GET endpoint” probe formats `{p
 the query string. During queued runs, those detected keys are persisted as dynamic `OutputPortInstance` rows so
 later graph edits can wire downstream field expressions directly to the discovered API response fields. The workflow studio
 can also trigger an explicit saved-GET probe that persists the same additive dynamic output ports, records graph modification
-history, and publishes a graph update event. That probe validates the URL before connecting: only HTTP(S) URLs without
-credentials are accepted, hostnames are resolved before the request, private/link-local/reserved/metadata-style addresses are
-blocked, and the request connects to the validated resolved IP while preserving the original HTTPS hostname for SNI.
+history, and publishes a graph update event. When saved endpoint, header, or fixed-parameter expressions reference
+runtime-only values, the workflow studio displays one test input per detected `@{{...}}` expression and sends those as
+`test_values`. That probe validates the URL before connecting: only HTTP(S) URLs without credentials are accepted,
+hostnames are resolved before the request, private/link-local/reserved/metadata-style addresses are blocked, and the request
+connects to the validated resolved IP while preserving the original HTTPS hostname for SNI.
 
 Unified Mail Sender versions must keep their seed-time Gmail provider and registry OAuth binding in sync. For example, `mail_sender_v2` exposes a Gmail Neverdrop connection in the catalog, so its `gmail_oauth_connection_id` registry binding resolves with `OAuthProvider.GMAIL_NEVERDROP`; older unified Mail Sender versions that expose regular Gmail continue resolving with `OAuthProvider.GMAIL`. The standalone Gmail Neverdrop catalog entry remains send-only, but unified `mail_sender_v2` exposes `save_as_draft` for Gmail or Outlook sends and defaults it to `true`.
 

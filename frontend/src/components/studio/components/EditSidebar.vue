@@ -243,19 +243,23 @@ const isExclusiveOAuthGroup = (group: any): boolean =>
                       :disabled="isReadOnlyMode || form.testingApiCallOutputPorts.value"
                       hide-details="auto"
                     />
-                    <VTextarea
-                      v-model="form.apiCallTestValuesText.value"
-                      label="Runtime test values (JSON)"
-                      placeholder='{"component_id.output": "value", "start": {"messages": "Hello"}}'
-                      density="compact"
-                      variant="outlined"
-                      rows="3"
-                      auto-grow
-                      :error="!!form.apiCallTestValuesError.value"
-                      :error-messages="form.apiCallTestValuesError.value || undefined"
-                      :disabled="isReadOnlyMode || form.testingApiCallOutputPorts.value"
-                      hide-details="auto"
-                    />
+                    <div v-if="form.apiCallDetectedTestValues.value.length > 0" class="d-flex flex-column ga-2">
+                      <div class="text-caption text-medium-emphasis">
+                        Provide values for runtime expressions used by the saved endpoint configuration. Values can be
+                        plain text or JSON.
+                      </div>
+                      <VTextField
+                        v-for="item in form.apiCallDetectedTestValues.value"
+                        :key="item.key"
+                        v-model="form.apiCallTestValueInputs.value[item.key]"
+                        :label="`Test value for @{{${item.label}}}`"
+                        placeholder='Example: "hello", 123, {"id":"abc"}'
+                        density="compact"
+                        variant="outlined"
+                        :disabled="isReadOnlyMode || form.testingApiCallOutputPorts.value"
+                        hide-details="auto"
+                      />
+                    </div>
                     <div>
                       <VBtn
                         size="small"
@@ -263,9 +267,7 @@ const isExclusiveOAuthGroup = (group: any): boolean =>
                         variant="tonal"
                         prepend-icon="tabler-test-pipe"
                         :loading="form.testingApiCallOutputPorts.value"
-                        :disabled="
-                          isReadOnlyMode || form.testingApiCallOutputPorts.value || !!form.apiCallTestValuesError.value
-                        "
+                        :disabled="isReadOnlyMode || form.testingApiCallOutputPorts.value"
                         @click="
                           form.testApiCallOutputPorts(componentData.id, form.buildParametersForApiCallOutputPortTest())
                         "
