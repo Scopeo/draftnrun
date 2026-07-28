@@ -24,6 +24,7 @@ from engine.components.types import NodeData
 from engine.components.utils import load_str_to_json
 from engine.field_expressions.ast import RefNode
 from engine.field_expressions.errors import FieldExpressionError
+from engine.field_expressions.parser import parse_expression
 from engine.field_expressions.serializer import from_json as expression_from_json
 from engine.graph_runner.field_expression_management import evaluate_expression
 from engine.graph_runner.types import Task, TaskState
@@ -137,10 +138,32 @@ def _value_from_parameter(
     param: Any,
     variables: dict[str, Any] | None = None,
     test_values: dict[str, Any] | None = None,
+    evaluate_text_expressions: bool = False,
 ) -> Any:
     if getattr(param, "value", None) is not None:
+        if evaluate_text_expressions and getattr(param, "name", None) in _API_CALL_INPUT_NAMES:
+            return _value_from_text_expression(param.value, variables, test_values, param.name)
         return param.value
     return _value_from_field_expression(getattr(param, "field_expression", None), variables, test_values, param.name)
+
+
+def _value_from_text_expression(
+    value: Any,
+    variables: dict[str, Any] | None = None,
+    test_values: dict[str, Any] | None = None,
+    field_name: str = "value",
+) -> Any:
+    if not isinstance(value, str) or "@{{" not in value:
+        return value
+    try:
+        return evaluate_expression(
+            parse_expression(value),
+            field_name,
+            _build_test_tasks(test_values or {}),
+            variables=variables,
+        )
+    except (FieldExpressionError, ValueError):
+        return _MISSING
 
 
 def _value_from_input_port(
@@ -191,6 +214,7 @@ def _collect_api_call_save_values(
     input_port_instances: list[InputPortInstanceSchema] | None,
     variables: dict[str, Any] | None = None,
     test_values: dict[str, Any] | None = None,
+    evaluate_parameter_text_expressions: bool = False,
 ) -> tuple[dict[str, Any], set[str]]:
     values: dict[str, Any] = {}
     unresolved: set[str] = set()
@@ -205,7 +229,7 @@ def _collect_api_call_save_values(
             continue
         if name not in _API_CALL_INPUT_NAMES:
             continue
-        value = _value_from_parameter(param, variables, test_values)
+        value = _value_from_parameter(param, variables, test_values, evaluate_parameter_text_expressions)
         if value is _MISSING:
             unresolved.add(name)
         else:
@@ -255,7 +279,11 @@ def _ensure_probe_uses_saved_configuration(
         return
 
     request_values, request_unresolved = _collect_api_call_save_values(
-        request_parameters, None, variables, test_values
+        request_parameters,
+        None,
+        variables,
+        test_values,
+        evaluate_parameter_text_expressions=True,
     )
     if request_unresolved:
         raise ValueError(

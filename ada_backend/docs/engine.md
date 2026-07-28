@@ -117,7 +117,9 @@ later graph edits can wire downstream field expressions directly to the discover
 can also trigger an explicit saved-GET probe that persists the same additive dynamic output ports, records graph modification
 history, and publishes a graph update event. When saved endpoint, header, or fixed-parameter expressions reference
 runtime-only values, the workflow studio displays one test input per detected `@{{...}}` expression and sends those as
-`test_values`. That probe validates the URL before connecting: only HTTP(S) URLs without credentials are accepted,
+`test_values`; the backend evaluates the request-side text expressions with those values before comparing them to the saved
+configuration, so unchanged saved expressions are not mistaken for unsaved draft edits. That probe validates the URL before
+connecting: only HTTP(S) URLs without credentials are accepted,
 hostnames are resolved before the request, private/link-local/reserved/metadata-style addresses are blocked, and the request
 connects to the validated resolved IP while preserving the original HTTPS hostname for SNI.
 
@@ -164,9 +166,9 @@ Uses joined-table polymorphism:
   and response-shaped components. Generic API Call creates additive dynamic output ports for safe top-level JSON response
   keys only in two cases: an explicit workflow-studio “Test GET endpoint” action for saved GET configurations, and queued
   run-time `node.completed` events when the response is first known. Normal component saves do not probe external endpoints.
-  The explicit test action can evaluate saved literals, resolved project variables/secrets, and caller-provided
-  `test_values` for runtime-only references before probing; `SecretStr` values are unwrapped for the endpoint, headers,
-  and fixed parameters only at this outbound request boundary. It rejects non-GET methods, unsaved configuration mismatches,
+  The explicit test action can evaluate saved literals, resolved project variables/secrets, request-side text expressions,
+  and caller-provided `test_values` for runtime-only references before probing; `SecretStr` values are unwrapped for the
+  endpoint, headers, and fixed parameters only at this outbound request boundary. It rejects non-GET methods, unsaved configuration mismatches,
   unresolved inputs without test values, and endpoint probe failures instead of normalizing them to a successful empty port
   list. The explicit probe also blocks non-HTTP(S), credentialed, and private/link-local/reserved/metadata-style
   destinations before sending the request.
