@@ -99,7 +99,11 @@ def test_api_call_output_ports_records_history_and_notifies_after_success():
             project_id=project_id,
             graph_runner_id=graph_runner_id,
             instance_id=instance_id,
-            payload=ApiCallOutputPortTestRequest(parameters=[]),
+            payload=ApiCallOutputPortTestRequest(
+                parameters=[],
+                test_values={"start.output": {"account_id": "acct_123"}},
+                variable_set_ids=["production"],
+            ),
             user=_make_fake_user(),
             session=session,
         )
@@ -107,7 +111,14 @@ def test_api_call_output_ports_records_history_and_notifies_after_success():
     assert response.output_port_names == ["account_id", "status"]
     mock_validate_binding.assert_called_once_with(session, graph_runner_id, project_id)
     mock_validate_draft.assert_called_once_with(session, graph_runner_id)
-    mock_test_and_persist.assert_called_once_with(session=session, component_instance_id=instance_id, parameters=[])
+    mock_test_and_persist.assert_called_once_with(
+        session=session,
+        project_id=project_id,
+        component_instance_id=instance_id,
+        parameters=[],
+        test_values={"start.output": {"account_id": "acct_123"}},
+        variable_set_ids=["production"],
+    )
     mock_record.assert_called_once()
     assert mock_record.call_args.args == (session, graph_runner_id)
     assert mock_record.call_args.kwargs["user_id"]

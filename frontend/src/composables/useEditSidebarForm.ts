@@ -41,7 +41,7 @@ export function useEditSidebarForm(
   const currentEditingComponentId = ref<string | null>(null)
   const sources = ref<Source[]>([])
   const testingApiCallOutputPorts = ref(false)
-  const apiCallTestValuesText = ref('')
+  const apiCallTestValueInputs = ref<Record<string, string>>({})
   const apiCallVariableSetIds = ref<string[]>([])
 
   const isToolDescriptionEditable = computed(() => componentData.value?.canEditToolDescription === true)
@@ -238,34 +238,45 @@ export function useEditSidebarForm(
     })
   }
 
-  const apiCallTestValuesError = computed(() => {
-    const raw = apiCallTestValuesText.value.trim()
-    if (!raw) return null
-    try {
-      const parsed = JSON.parse(raw)
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? null : 'Test values must be a JSON object'
-    } catch {
-      return 'Invalid JSON object'
+  const apiCallDetectedTestValues = computed(() => {
+    const keys = new Set<string>()
+    const parameterNames = ['endpoint', 'headers', 'fixed_parameters']
+    const expressionRegex = /@\{\{([^}]+)\}\}/g
+
+    for (const parameterName of parameterNames) {
+      const value = formData.value.parameters[parameterName]
+      const text = typeof value === 'string' ? value : JSON.stringify(value ?? '')
+      for (const match of text.matchAll(expressionRegex)) {
+        const key = match[1]?.trim()
+        if (key) keys.add(key)
+      }
     }
+
+    return Array.from(keys).sort().map(key => ({ key, label: key }))
   })
 
-  function parseApiCallTestValues(): Record<string, unknown> | null {
-    const raw = apiCallTestValuesText.value.trim()
-    if (!raw) return {}
+  function parseApiCallTestValueInput(rawValue: string): unknown {
+    const trimmed = rawValue.trim()
+    if (!trimmed) return undefined
     try {
-      const parsed = JSON.parse(raw)
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
+      return JSON.parse(trimmed)
     } catch {
-      // handled below
+      return rawValue
     }
-    notify.error('API Call test values must be a valid JSON object')
-    return null
+  }
+
+  function buildApiCallTestValues(): Record<string, unknown> {
+    const values: Record<string, unknown> = {}
+    for (const item of apiCallDetectedTestValues.value) {
+      const value = parseApiCallTestValueInput(apiCallTestValueInputs.value[item.key] ?? '')
+      if (value !== undefined) values[item.key] = value
+    }
+    return values
   }
 
   async function testApiCallOutputPorts(componentInstanceId: string, parameters: any[]) {
     if (!apiCallTestContext?.value) return
-    const testValues = parseApiCallTestValues()
-    if (testValues === null) return
+    const testValues = buildApiCallTestValues()
     testingApiCallOutputPorts.value = true
     try {
       const response = await scopeoApi.studio.testApiCallOutputPorts(
@@ -406,7 +417,7 @@ export function useEditSidebarForm(
     isOpen => {
       if (!isOpen) {
         formData.value = { ...EMPTY_FORM_DATA, parameters: {}, toolDescription: { name: '', description: '' } }
-        apiCallTestValuesText.value = ''
+        apiCallTestValueInputs.value = {}
         apiCallVariableSetIds.value = []
         currentEditingComponentId.value = null
       }
@@ -429,8 +440,8 @@ export function useEditSidebarForm(
     sources,
     isToolDescriptionEditable,
     testingApiCallOutputPorts,
-    apiCallTestValuesText,
-    apiCallTestValuesError,
+    apiCallDetectedTestValues,
+    apiCallTestValueInputs,
     apiCallVariableSetIds,
     buildParametersForApiCallOutputPortTest,
     testApiCallOutputPorts,
