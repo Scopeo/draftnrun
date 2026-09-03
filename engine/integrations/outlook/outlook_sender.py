@@ -166,6 +166,13 @@ class OutlookSenderInputs(BaseModel):
             return [v]
         return v
 
+    @field_validator("cc", mode="before")
+    @classmethod
+    def validate_cc(cls, v):
+        if isinstance(v, str):
+            return [email.strip() for email in v.split(",") if email.strip()]
+        return v
+
     @field_validator("email_attachments", mode="before")
     @classmethod
     def validate_email_attachments(cls, v):
