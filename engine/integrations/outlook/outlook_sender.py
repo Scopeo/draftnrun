@@ -128,7 +128,7 @@ class OutlookSenderInputs(BaseModel):
             "parameter_order_within_group": 1,
         },
     )
-    cc: Optional[list[str]] = Field(
+    cc: Optional[str | list[str]] = Field(
         default=None,
         description="List of CC email addresses to send the email to.",
         json_schema_extra={
