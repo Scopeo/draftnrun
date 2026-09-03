@@ -8,6 +8,38 @@ from engine.integrations.utils import EmailAttachment
 
 
 class TestOutlookSenderInputsValidation:
+    def test_comma_separated_cc_string_is_split(self):
+        inputs = OutlookSenderInputs(
+            mail_subject="test",
+            cc="alice@example.com, bob@example.com, carol@example.com",
+        )
+
+        assert inputs.cc == ["alice@example.com", "bob@example.com", "carol@example.com"]
+
+    def test_cc_string_ignores_empty_emails(self):
+        inputs = OutlookSenderInputs(
+            mail_subject="test",
+            cc="alice@example.com,",
+        )
+
+        assert inputs.cc == ["alice@example.com"]
+
+    def test_cc_string_without_comma_becomes_single_item_list(self):
+        inputs = OutlookSenderInputs(
+            mail_subject="test",
+            cc="alice@example.com",
+        )
+
+        assert inputs.cc == ["alice@example.com"]
+
+    def test_cc_list_is_unchanged(self):
+        inputs = OutlookSenderInputs(
+            mail_subject="test",
+            cc=["alice@example.com", "bob@example.com"],
+        )
+
+        assert inputs.cc == ["alice@example.com", "bob@example.com"]
+
     def test_string_attachment_is_accepted(self):
         inputs = OutlookSenderInputs(
             mail_subject="test",
