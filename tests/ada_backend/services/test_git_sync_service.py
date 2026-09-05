@@ -16,6 +16,7 @@ from ada_backend.services.git_sync_service import (
     GitSyncError,
     GraphJsonNotFound,
     InstallationOwnershipError,
+    _detect_new_project_folders,
     disconnect_sync,
     ensure_installation_owned,
     handle_github_push,
@@ -1341,3 +1342,372 @@ class TestGitHubInstallState:
             mock_settings.BACKEND_SECRET_KEY = "test-secret-key"
             with pytest.raises(ValueError, match="expired"):
                 verify_install_state(state, org_id, user_id)
+
+
+class TestDetectNewProjectFolders:
+    def test_detects_new_graph_json(self):
+        changed = {"draftnrun/projects/new-agent/graph.json"}
+        existing: set[str] = set()
+        result = _detect_new_project_folders(changed, existing)
+        assert result == {"draftnrun/projects/new-agent"}
+
+    def test_ignores_non_graph_json_files(self):
+        changed = {
+            "draftnrun/projects/new-agent/start.json",
+            "draftnrun/projects/new-agent/llm.json",
+        }
+        result = _detect_new_project_folders(changed, set())
+        assert result == set()
+
+    def test_ignores_already_tracked_folders(self):
+        changed = {"draftnrun/projects/existing/graph.json"}
+        existing = {"draftnrun/projects/existing"}
+        result = _detect_new_project_folders(changed, existing)
+        assert result == set()
+
+    def test_ignores_unrelated_paths(self):
+        changed = {
+            "README.md",
+            "src/main.py",
+            "draftnrun/prompts/system.md",
+        }
+        result = _detect_new_project_folders(changed, set())
+        assert result == set()
+
+    def test_multiple_new_folders(self):
+        changed = {
+            "draftnrun/projects/agent-a/graph.json",
+            "draftnrun/projects/agent-b/graph.json",
+            "draftnrun/projects/agent-b/start.json",
+        }
+        result = _detect_new_project_folders(changed, set())
+        assert result == {"draftnrun/projects/agent-a", "draftnrun/projects/agent-b"}
+
+    def test_ignores_file_directly_under_projects_dir(self):
+        changed = {"draftnrun/projects/graph.json"}
+        result = _detect_new_project_folders(changed, set())
+        assert result == set()
+
+    def test_mixed_new_and_existing(self):
+        changed = {
+            "draftnrun/projects/old/graph.json",
+            "draftnrun/projects/new/graph.json",
+        }
+        existing = {"draftnrun/projects/old"}
+        result = _detect_new_project_folders(changed, existing)
+        assert result == {"draftnrun/projects/new"}
+
+
+class TestAutoDiscoveryOnPush:
+    def _make_config(self, org_id, folder, **kwargs):
+        defaults = dict(
+            id=uuid4(),
+            organization_id=org_id,
+            project_id=uuid4(),
+            github_owner="owner",
+            github_repo_name="repo",
+            github_repo="owner/repo",
+            graph_folder=folder,
+            branch="main",
+            github_installation_id=42,
+            created_by_user_id=uuid4(),
+        )
+        defaults.update(kwargs)
+        return SimpleNamespace(**defaults)
+
+    def test_auto_creates_project_for_new_folder(self):
+        session = MagicMock()
+        org_id = uuid4()
+        install_row = SimpleNamespace(organization_id=org_id)
+        new_project = SimpleNamespace(id=uuid4(), name="new-agent", organization_id=org_id)
+        new_config = self._make_config(org_id, "draftnrun/projects/new-agent")
+
+        with (
+            patch(
+                "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
+                return_value=[],
+            ),
+            patch(
+                f"{PATCH_INSTALL_REPO}.get_by_installation_id",
+                return_value=install_row,
+            ),
+            patch(
+                "ada_backend.services.git_sync_service.create_project_with_graph_runner",
+                return_value=(new_project, uuid4()),
+            ) as create_mock,
+            patch(
+                "ada_backend.services.git_sync_service.git_sync_repository.create_git_sync_config",
+                return_value=new_config,
+            ) as config_mock,
+            patch(
+                "ada_backend.services.git_sync_service.push_git_sync_task",
+                return_value=True,
+            ) as push_mock,
+        ):
+            queued, failed = handle_github_push(
+                session,
+                "owner",
+                "repo",
+                "main",
+                changed_files={"draftnrun/projects/new-agent/graph.json"},
+                commit_sha="abc123",
+                github_installation_id=42,
+            )
+
+        assert queued == 1
+        assert failed == 0
+        create_mock.assert_called_once()
+        assert create_mock.call_args.kwargs["tags"] == ["github"]
+        assert create_mock.call_args.kwargs["project_name"] == "new-agent"
+        config_mock.assert_called_once()
+        assert config_mock.call_args.kwargs["graph_folder"] == "draftnrun/projects/new-agent"
+        push_mock.assert_called_once_with(new_config.id, "abc123")
+
+    def test_skips_existing_tracked_folder(self):
+        session = MagicMock()
+        org_id = uuid4()
+        existing = self._make_config(org_id, "draftnrun/projects/existing")
+
+        with (
+            patch(
+                "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
+                return_value=[existing],
+            ),
+            patch(
+                "ada_backend.services.git_sync_service.push_git_sync_task",
+                return_value=True,
+            ),
+            patch(
+                "ada_backend.services.git_sync_service.create_project_with_graph_runner",
+            ) as create_mock,
+        ):
+            queued, failed = handle_github_push(
+                session,
+                "owner",
+                "repo",
+                "main",
+                changed_files={
+                    "draftnrun/projects/existing/graph.json",
+                },
+                commit_sha="abc123",
+                github_installation_id=42,
+            )
+
+        assert queued == 1
+        assert failed == 0
+        create_mock.assert_not_called()
+
+    def test_no_auto_create_without_graph_json(self):
+        session = MagicMock()
+
+        with (
+            patch(
+                "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
+                return_value=[],
+            ),
+            patch(
+                "ada_backend.services.git_sync_service.create_project_with_graph_runner",
+            ) as create_mock,
+        ):
+            queued, failed = handle_github_push(
+                session,
+                "owner",
+                "repo",
+                "main",
+                changed_files={"draftnrun/projects/new-agent/start.json"},
+                commit_sha="abc123",
+                github_installation_id=42,
+            )
+
+        assert queued == 0
+        assert failed == 0
+        create_mock.assert_not_called()
+
+    def test_skips_when_no_installation_id(self):
+        session = MagicMock()
+
+        with (
+            patch(
+                "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
+                return_value=[],
+            ),
+            patch(
+                "ada_backend.services.git_sync_service.create_project_with_graph_runner",
+            ) as create_mock,
+        ):
+            queued, failed = handle_github_push(
+                session,
+                "owner",
+                "repo",
+                "main",
+                changed_files={"draftnrun/projects/new-agent/graph.json"},
+                commit_sha="abc123",
+                github_installation_id=None,
+            )
+
+        assert queued == 0
+        assert failed == 0
+        create_mock.assert_not_called()
+
+    def test_skips_when_installation_not_registered(self):
+        session = MagicMock()
+
+        with (
+            patch(
+                "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
+                return_value=[],
+            ),
+            patch(
+                f"{PATCH_INSTALL_REPO}.get_by_installation_id",
+                return_value=None,
+            ),
+            patch(
+                "ada_backend.services.git_sync_service.create_project_with_graph_runner",
+            ) as create_mock,
+        ):
+            queued, failed = handle_github_push(
+                session,
+                "owner",
+                "repo",
+                "main",
+                changed_files={"draftnrun/projects/new-agent/graph.json"},
+                commit_sha="abc123",
+                github_installation_id=42,
+            )
+
+        assert queued == 0
+        assert failed == 0
+        create_mock.assert_not_called()
+
+    def test_inherits_created_by_from_existing_config(self):
+        session = MagicMock()
+        org_id = uuid4()
+        user_id = uuid4()
+        existing = self._make_config(org_id, "draftnrun/projects/old", created_by_user_id=user_id)
+        install_row = SimpleNamespace(organization_id=org_id)
+        new_project = SimpleNamespace(id=uuid4(), name="new-agent", organization_id=org_id)
+        new_config = self._make_config(org_id, "draftnrun/projects/new-agent")
+
+        with (
+            patch(
+                "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
+                return_value=[existing],
+            ),
+            patch(
+                f"{PATCH_INSTALL_REPO}.get_by_installation_id",
+                return_value=install_row,
+            ),
+            patch(
+                "ada_backend.services.git_sync_service.create_project_with_graph_runner",
+                return_value=(new_project, uuid4()),
+            ),
+            patch(
+                "ada_backend.services.git_sync_service.git_sync_repository.create_git_sync_config",
+                return_value=new_config,
+            ) as config_mock,
+            patch("ada_backend.services.git_sync_service.push_git_sync_task", return_value=True),
+        ):
+            handle_github_push(
+                session,
+                "owner",
+                "repo",
+                "main",
+                changed_files={"draftnrun/projects/new-agent/graph.json"},
+                commit_sha="abc123",
+                github_installation_id=42,
+            )
+
+        assert config_mock.call_args.kwargs["created_by_user_id"] == user_id
+
+    def test_integrity_error_on_config_skips_gracefully(self):
+        session = MagicMock()
+        org_id = uuid4()
+        install_row = SimpleNamespace(organization_id=org_id)
+        new_project = SimpleNamespace(id=uuid4(), name="new-agent", organization_id=org_id)
+
+        with (
+            patch(
+                "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
+                return_value=[],
+            ),
+            patch(
+                f"{PATCH_INSTALL_REPO}.get_by_installation_id",
+                return_value=install_row,
+            ),
+            patch(
+                "ada_backend.services.git_sync_service.create_project_with_graph_runner",
+                return_value=(new_project, uuid4()),
+            ),
+            patch(
+                "ada_backend.services.git_sync_service.git_sync_repository.create_git_sync_config",
+                side_effect=IntegrityError("INSERT", {}, Exception("unique constraint")),
+            ),
+            patch("ada_backend.services.git_sync_service.push_git_sync_task") as push_mock,
+        ):
+            queued, failed = handle_github_push(
+                session,
+                "owner",
+                "repo",
+                "main",
+                changed_files={"draftnrun/projects/new-agent/graph.json"},
+                commit_sha="abc123",
+                github_installation_id=42,
+            )
+
+        assert queued == 0
+        assert failed == 0
+        push_mock.assert_not_called()
+        session.rollback.assert_called_once()
+
+    def test_multiple_new_folders_in_single_push(self):
+        session = MagicMock()
+        org_id = uuid4()
+        install_row = SimpleNamespace(organization_id=org_id)
+
+        project_a = SimpleNamespace(id=uuid4(), name="agent-a", organization_id=org_id)
+        project_b = SimpleNamespace(id=uuid4(), name="agent-b", organization_id=org_id)
+        config_a = self._make_config(org_id, "draftnrun/projects/agent-a")
+        config_b = self._make_config(org_id, "draftnrun/projects/agent-b")
+
+        with (
+            patch(
+                "ada_backend.services.git_sync_service.git_sync_repository.get_configs_by_repo_and_branch",
+                return_value=[],
+            ),
+            patch(
+                f"{PATCH_INSTALL_REPO}.get_by_installation_id",
+                return_value=install_row,
+            ),
+            patch(
+                "ada_backend.services.git_sync_service.create_project_with_graph_runner",
+                side_effect=[(project_a, uuid4()), (project_b, uuid4())],
+            ) as create_mock,
+            patch(
+                "ada_backend.services.git_sync_service.git_sync_repository.create_git_sync_config",
+                side_effect=[config_a, config_b],
+            ) as config_mock,
+            patch(
+                "ada_backend.services.git_sync_service.push_git_sync_task",
+                return_value=True,
+            ) as push_mock,
+        ):
+            queued, failed = handle_github_push(
+                session,
+                "owner",
+                "repo",
+                "main",
+                changed_files={
+                    "draftnrun/projects/agent-a/graph.json",
+                    "draftnrun/projects/agent-b/graph.json",
+                },
+                commit_sha="abc123",
+                github_installation_id=42,
+            )
+
+        assert queued == 2
+        assert failed == 0
+        assert create_mock.call_count == 2
+        assert config_mock.call_count == 2
+        assert push_mock.call_count == 2
+        push_mock.assert_any_call(config_a.id, "abc123")
+        push_mock.assert_any_call(config_b.id, "abc123")

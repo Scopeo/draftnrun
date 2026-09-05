@@ -58,6 +58,8 @@ GitHub repo (push to main)
   → Backend looks up matching GitSyncConfig by (owner, repo_name, branch)
   → For prompt changes (draftnrun/prompts/**/*.md): enqueue prompt sync job (first)
   → For project changes (draftnrun/projects/*/...): enqueue graph sync job (second)
+  → Auto-discovery: detect new project folders (graph.json added but no config yet)
+    → Create project + GitSyncConfig + enqueue initial sync
   → Webhook returns immediately (non-blocking)
   → Git sync queue worker picks up each job (FIFO):
     Prompt sync (runs first):
@@ -142,7 +144,8 @@ This happens automatically on each webhook — no user interaction needed.
 3. Looks up matching `git_sync_configs` by `(github_owner, github_repo_name, branch)`
 4. For each matching config where any file in the tracked folder changed, enqueues a graph sync job. Enqueue is idempotent per `(config_id, commit_sha)` via a Redis `SET NX` dedup key (TTL 1 hour)
 5. If changed files include paths under `draftnrun/prompts/**/*.md`, enqueues a prompt sync job with the list of changed prompt paths
-6. The `GitSyncQueueWorker` (daemon thread in the API process) picks up each job:
+6. **Auto-discovery**: scans `changed_files` for `draftnrun/projects/<name>/graph.json` paths that have no matching `GitSyncConfig`. For each new folder, creates a project (tagged `"github"`, type `WORKFLOW`), a `GitSyncConfig` row, and enqueues an initial graph sync. Requires a registered `GitHubAppInstallation` to resolve the `organization_id`. The `created_by_user_id` is inherited from an existing config in the same repo when available, otherwise `NULL`
+7. The `GitSyncQueueWorker` (daemon thread in the API process) picks up each job:
 
    **Graph sync** (existing behavior):
    - Loads the config from DB
