@@ -144,7 +144,10 @@ serve(async req => {
         console.warn('VITE_SCOPEO_API_URL not set, skipping credit limit initialization')
       } else {
         console.log(`Setting initial credit limit of ${defaultCreditLimit} for organization ${newOrg.id}`)
-        
+
+        const creditAbort = new AbortController()
+        const creditTimeout = setTimeout(() => creditAbort.abort(), 8_000)
+
         const response = await fetch(`${backendUrl}/organizations/${newOrg.id}/organization-limits`, {
           method: 'POST',
           headers: {
@@ -153,8 +156,9 @@ serve(async req => {
           },
           body: JSON.stringify({
             limit: defaultCreditLimit
-          })
-        })
+          }),
+          signal: creditAbort.signal,
+        }).finally(() => clearTimeout(creditTimeout))
 
         if (!response.ok) {
           const errorText = await response.text()
