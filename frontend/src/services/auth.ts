@@ -459,7 +459,6 @@ export async function completeUserSetup(user: any, session: any) {
   }
 }
 
-// Handle Google auth callback and organization setup
 export async function handleGoogleAuthCallback() {
   try {
     const {
@@ -470,36 +469,32 @@ export async function handleGoogleAuthCallback() {
     if (error) throw error
     if (!session?.user) throw new Error('No session found')
 
-    // Clear explicit logout flag on successful Google auth
     clearExplicitLogout()
 
     const user = session.user
+    const orgStore = useOrgStore()
 
     logger.info('Google auth callback for user', { data: user.email })
 
-    // Check if this is a new user (created_at is recent)
     const userCreatedAt = new Date(user.created_at || '')
-    const now = new Date()
-    const isNewUser = now.getTime() - userCreatedAt.getTime() < 5 * 60 * 1000 // 5 minutes
+    const isNewUser = Date.now() - userCreatedAt.getTime() < 5 * 60 * 1000
 
     if (isNewUser) {
       logger.info('New Google user detected, setting up organization...')
-
-      // Call complete-user-setup to create organization
       const setupResult = await completeUserSetup(user, session)
 
-      if (setupResult.success) {
+      if (setupResult.success && setupResult.organization?.id) {
         logger.info('Organization created for Google user', { data: setupResult.organization })
-
-        // Auto-select the created organization
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('selectedOrgId', setupResult.organization.id)
-          localStorage.setItem('selectedOrgRole', 'admin')
-        }
+        orgStore.setSelectedOrg(setupResult.organization.id, 'admin')
       }
     }
 
-    // Create user data object
+    // Safety net: the SIGNED_IN handler's fetch races with completeUserSetup,
+    // and the `alreadySetup: true` response carries no org payload.
+    if (!orgStore.selectedOrgId) {
+      await orgStore.fetchOrganizations(user.id)
+    }
+
     const userData = {
       id: user.id,
       fullName: user.user_metadata.full_name || user.user_metadata.name || user.email?.split('@')[0],
@@ -509,7 +504,6 @@ export async function handleGoogleAuthCallback() {
       super_admin: user.user_metadata.super_admin || false,
     }
 
-    // Create ability rules
     const ability = defineAbilityFor(userData)
 
     return {
