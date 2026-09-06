@@ -138,3 +138,51 @@ async def test_redis_recovery_after_retry_interval(monkeypatch):
 
     await context.set_active_org("user-1", "org-1", "Test Org", "admin", "public")
     assert not context._using_memory
+
+
+@pytest.mark.asyncio
+async def test_require_org_context_raises_without_selected_org(monkeypatch):
+    async def no_org(user_id):
+        return None
+
+    monkeypatch.setattr(context, "get_active_org", no_org)
+
+    with pytest.raises(ValueError, match="No organization selected"):
+        await context.require_org_context("user-123")
+
+
+@pytest.mark.asyncio
+async def test_require_role_allows_matching_role(monkeypatch):
+    async def org_with_role(user_id):
+        return {"org_id": "org-123", "role": "developer"}
+
+    monkeypatch.setattr(context, "get_active_org", org_with_role)
+
+    org = await context.require_role("user-123", "developer", "admin")
+
+    assert org["org_id"] == "org-123"
+
+
+@pytest.mark.asyncio
+async def test_require_role_rejects_insufficient_role(monkeypatch):
+    async def org_with_role(user_id):
+        return {"org_id": "org-123", "role": "member"}
+
+    monkeypatch.setattr(context, "get_active_org", org_with_role)
+
+    with pytest.raises(ValueError, match="your role is 'member'"):
+        await context.require_role("user-123", "developer", "admin")
+
+
+@pytest.mark.asyncio
+async def test_require_role_accepts_both_super_admin_spellings(monkeypatch):
+    from mcp_server.tools._roles import ADMIN_ROLES
+
+    for spelling in ("super_admin", "super-admin"):
+
+        async def org_with_role(user_id, _spelling=spelling):
+            return {"org_id": "org-123", "role": _spelling}
+
+        monkeypatch.setattr(context, "get_active_org", org_with_role)
+        org = await context.require_role("user-123", *ADMIN_ROLES)
+        assert org["role"] == spelling

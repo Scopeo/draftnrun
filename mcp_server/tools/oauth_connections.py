@@ -10,6 +10,7 @@ from uuid import UUID
 from fastmcp import FastMCP
 
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
+from mcp_server.tools._roles import DEVELOPER_ROLES
 
 _BASE = "/organizations/{org_id}/oauth-connections"
 
@@ -20,7 +21,7 @@ SPECS: list[ToolSpec] = [
         method="get",
         path=_BASE,
         scope="role",
-        roles=("developer", "admin", "super_admin"),
+        roles=DEVELOPER_ROLES,
         query_params=(
             Param(
                 "provider_config_key",
@@ -37,7 +38,7 @@ SPECS: list[ToolSpec] = [
         method="get",
         path=f"{_BASE}/status",
         scope="role",
-        roles=("developer", "admin", "super_admin"),
+        roles=DEVELOPER_ROLES,
         query_params=(
             Param("provider_config_key", str, description="Provider key (e.g. 'google-mail', 'slack')."),
             Param(
@@ -54,7 +55,7 @@ SPECS: list[ToolSpec] = [
         method="delete",
         path=f"{_BASE}/{{connection_id}}",
         scope="role",
-        roles=("developer", "admin", "super_admin"),
+        roles=DEVELOPER_ROLES,
         path_params=(Param("connection_id", UUID, description="The connection ID (from list_oauth_connections)."),),
         query_params=(Param("provider_config_key", str, description="Provider key (e.g. 'google-mail', 'slack')."),),
     ),

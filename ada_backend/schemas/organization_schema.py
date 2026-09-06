@@ -8,6 +8,10 @@ class OrganizationSecretResponse(BaseModel):
     secret_key: str
 
 
+class OrganizationSecretUpsertRequest(BaseModel):
+    value: str
+
+
 class OrganizationGetSecretKeysResponse(BaseModel):
     organization_id: UUID
     secret_keys: list[str]

@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from mcp_server.tools import knowledge
+from mcp_server.tools._roles import DEVELOPER_ROLES
 from tests.mcp_server.conftest import FAKE_DOC_ID, FAKE_SOURCE_ID
 
 
@@ -37,7 +38,7 @@ async def test_update_document_chunks_calls_backend_when_explicitly_confirmed(mo
     )
 
     assert result == {"status": "ok"}
-    require_role_mock.assert_awaited_once_with("user-123", "developer", "admin", "super_admin")
+    require_role_mock.assert_awaited_once_with("user-123", *DEVELOPER_ROLES)
     put_mock.assert_awaited_once_with(
         f"/knowledge/organizations/org-123/sources/{FAKE_SOURCE_ID}/documents/{FAKE_DOC_ID}",
         "jwt-token",
@@ -62,4 +63,4 @@ async def test_update_document_chunks_requires_developer_role(monkeypatch, fake_
             confirm_full_replacement=True,
         )
 
-    require_role_mock.assert_awaited_once_with("user-123", "developer", "admin", "super_admin")
+    require_role_mock.assert_awaited_once_with("user-123", *DEVELOPER_ROLES)

@@ -6,8 +6,7 @@ All tools in this module require admin or super_admin role.
 from fastmcp import FastMCP
 
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
-
-ADMIN_ROLES = ("admin", "super_admin")
+from mcp_server.tools._roles import ADMIN_ROLES
 
 _VAR_NAME = Param("name", str, description="Variable name (unique within org).")
 _SET_ID = Param("set_id", str, description="Variable set ID (from list_variable_sets).")
@@ -33,7 +32,8 @@ SPECS: list[ToolSpec] = [
         roles=ADMIN_ROLES,
         path_params=(_VAR_NAME,),
         body_param=Param(
-            "definition", dict,
+            "definition",
+            dict,
             description="Variable definition (type, default_value, description, etc.).",
         ),
     ),
@@ -78,25 +78,24 @@ SPECS: list[ToolSpec] = [
     # --- Secrets ---
     ToolSpec(
         name="list_secrets",
-        description="List all secrets in the active organization (values are masked). Requires admin role.",
+        description=(
+            "List secret key names in the active organization. "
+            "Returns {organization_id, secret_keys} — values are never returned. Requires admin role."
+        ),
         method="get",
         path="/org/{org_id}/secrets",
         scope="role",
         roles=ADMIN_ROLES,
-        return_annotation=list,
     ),
     ToolSpec(
         name="upsert_secret",
-        description="Create or update a secret. Requires admin role.",
+        description="Create or update a secret (sent in the request body, stored encrypted). Requires admin role.",
         method="put",
         path="/org/{org_id}/secrets/{key}",
         scope="role",
         roles=ADMIN_ROLES,
         path_params=(_SECRET_KEY,),
-        body_fields=(
-            Param("value", str, description="Secret value (stored encrypted)."),
-            Param("description", str, default="", description="Optional description."),
-        ),
+        body_fields=(Param("value", str, description="Secret value (stored encrypted)."),),
     ),
     ToolSpec(
         name="delete_secret",

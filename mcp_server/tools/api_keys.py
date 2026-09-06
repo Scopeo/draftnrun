@@ -5,6 +5,7 @@ from uuid import UUID
 from fastmcp import FastMCP
 
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
+from mcp_server.tools._roles import ADMIN_ROLES
 
 _PROJECT_ID = Param("project_id", UUID, description="The project ID (from list_projects or get_project_overview).")
 _KEY_ID = Param(
@@ -26,14 +27,21 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="create_project_api_key",
-        description="Create a new API key scoped to a project. The key is shown only once.",
+        description=(
+            "Create a new API key scoped to a project. The key is shown only once — "
+            "treat the returned value as a secret and never echo it back. "
+            "The backend requires developer role or above in the project's organization."
+        ),
         method="post",
         path="/auth/api-key",
         body_fields=(_PROJECT_ID, _KEY_NAME),
     ),
     ToolSpec(
         name="revoke_project_api_key",
-        description="Destructive. Revoke a specific API key for a project.",
+        description=(
+            "Destructive. Revoke a specific API key for a project. "
+            "The backend requires admin role in the project's organization."
+        ),
         method="delete",
         path="/auth/api-key",
         query_params=(_PROJECT_ID,),
@@ -51,19 +59,25 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="create_org_api_key",
-        description="Create a new API key scoped to the active organization. The key is shown only once.",
+        description=(
+            "Create a new API key scoped to the active organization. The key is shown "
+            "only once — treat the returned value as a secret and never echo it back. "
+            "Requires admin role."
+        ),
         method="post",
         path="/auth/org-api-key",
-        scope="org",
+        scope="role",
+        roles=ADMIN_ROLES,
         body_fields=(_KEY_NAME,),
         body_org_key="org_id",
     ),
     ToolSpec(
         name="revoke_org_api_key",
-        description="Destructive. Revoke an API key for the active organization.",
+        description="Destructive. Revoke an API key for the active organization. Requires admin role.",
         method="delete",
         path="/auth/org-api-key",
-        scope="org",
+        scope="role",
+        roles=ADMIN_ROLES,
         org_query_key="organization_id",
         body_fields=(_KEY_ID,),
     ),

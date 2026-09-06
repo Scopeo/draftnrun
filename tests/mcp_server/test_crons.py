@@ -8,10 +8,12 @@ from mcp_server.tools import _factory, crons
 class FakeMCP:
     def __init__(self):
         self.tools = {}
+        self.tool_annotations = {}
 
-    def tool(self):
+    def tool(self, annotations=None):
         def decorator(func):
             self.tools[func.__name__] = func
+            self.tool_annotations[func.__name__] = annotations
             return func
 
         return decorator
@@ -40,9 +42,7 @@ async def test_cron_tools_interpolate_cron_ids(monkeypatch):
 
     encoded = "cron%2Fwith%20spaces%3F%23"
     get_mock.assert_awaited_once_with(f"/organizations/org-123/crons/{encoded}", "jwt-token", trim=True)
-    post_mock.assert_has_awaits(
-        [
-            call(f"/organizations/org-123/crons/{encoded}/pause", "jwt-token", trim=True),
-            call(f"/organizations/org-123/crons/{encoded}/trigger", "jwt-token", trim=True),
-        ]
-    )
+    post_mock.assert_has_awaits([
+        call(f"/organizations/org-123/crons/{encoded}/pause", "jwt-token", trim=True),
+        call(f"/organizations/org-123/crons/{encoded}/trigger", "jwt-token", trim=True),
+    ])

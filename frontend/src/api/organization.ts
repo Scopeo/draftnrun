@@ -14,10 +14,8 @@ export const organizationSecretsApi = {
   addOrUpdate: (organizationId: string, secretKey: string, data: { value: string }) =>
     $api(`/org/${organizationId}/secrets/${secretKey}`, {
       method: 'PUT',
-      query: {
-        organization_id: organizationId,
-        secret: data.value,
-      },
+      query: { organization_id: organizationId },
+      body: { value: data.value },
     }),
 
   delete: (organizationId: string, secretKey: string) =>

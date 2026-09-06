@@ -12,6 +12,7 @@ from pydantic import Field
 
 from mcp_server.client import api
 from mcp_server.context import require_org_context
+from mcp_server.tools._annotations import READ_ONLY
 from mcp_server.tools.context_tools import _get_auth
 
 logger = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ def _extract_ports(comp: dict) -> dict:
 
 
 def register(mcp: FastMCP) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def list_components() -> dict:
         """List all available component types from the catalog.
 
@@ -60,7 +61,7 @@ def register(mcp: FastMCP) -> None:
         release_stage = org.get("release_stage") or "public"
         return await api.get(f"/components/{org['org_id']}", jwt, trim=False, release_stage=release_stage)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def search_components(
         query: Annotated[str, Field(description="Search term to match against component name or description.")],
         category: Annotated[
@@ -87,7 +88,10 @@ def register(mcp: FastMCP) -> None:
         org = await require_org_context(user_id)
         release_stage = org.get("release_stage") or "public"
         catalog = await api.get(
-            f"/components/{org['org_id']}", jwt, trim=False, release_stage=release_stage,
+            f"/components/{org['org_id']}",
+            jwt,
+            trim=False,
+            release_stage=release_stage,
         )
 
         components = catalog if isinstance(catalog, list) else catalog.get("components", [])

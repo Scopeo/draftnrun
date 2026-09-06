@@ -6,11 +6,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir uv
+RUN pip install --no-cache-dir uv==0.7.12
 
 COPY pyproject.toml uv.lock README.md ./
 
-RUN uv sync --frozen --no-dev --group mcp-server --no-install-project
+# Only the mcp-server dependency group — the MCP server must not pull the
+# full backend dependency tree into its image.
+RUN uv sync --frozen --no-dev --only-group mcp-server --no-install-project
 
 # --- Runtime stage ---
 FROM python:3.11-slim
@@ -22,7 +24,6 @@ RUN groupadd --gid 1000 appuser && useradd --uid 1000 --gid appuser --create-hom
 COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 
 COPY --chown=appuser:appuser mcp_server/ ./mcp_server/
-COPY --chown=appuser:appuser settings.py logger.py logging-config.yaml ./
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"

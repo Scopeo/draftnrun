@@ -19,6 +19,8 @@ from mcp_server.auth.supabase_client import (
     list_user_organizations,
 )
 from mcp_server.context import get_active_org, set_active_org
+from mcp_server.tools._annotations import IDEMPOTENT_WRITE, NON_DESTRUCTIVE_WRITE, READ_ONLY
+from mcp_server.tools._roles import ADMIN_ROLES, MEMBER_ROLES
 
 
 def _get_auth() -> tuple[str, str]:
@@ -45,28 +47,23 @@ async def _require_target_org_role(jwt: str, user_id: str, org_id: str, *allowed
         raise ValueError(f"Organization {org_id} not found in your memberships.")
     if match["role"] not in allowed_roles:
         context = f"{action} in organization {org_id}" if action else f"This operation on organization {org_id}"
-        raise ValueError(
-            f"{context} requires one of {allowed_roles} role, "
-            f"but your role there is '{match['role']}'."
-        )
+        raise ValueError(f"{context} requires one of {allowed_roles} role, but your role there is '{match['role']}'.")
     return match
 
 
 def register(mcp: FastMCP) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def list_my_organizations() -> list[dict]:
         """List all organizations you belong to, with your role in each."""
         jwt, user_id = _get_auth()
         return await list_user_organizations(jwt, user_id)
 
-    @mcp.tool()
+    @mcp.tool(annotations=IDEMPOTENT_WRITE)
     async def select_organization(
         organization_id: Annotated[
             UUID,
             Field(
-                description=(
-                    "The organization ID (from list_my_organizations). Never invent this value."
-                ),
+                description=("The organization ID (from list_my_organizations). Never invent this value."),
             ),
         ],
     ) -> dict:
@@ -90,7 +87,7 @@ def register(mcp: FastMCP) -> None:
             "release_stage": release_stage,
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_current_context() -> dict:
         """Show your current session: active organization, user info, and session diagnostics."""
         token_obj = get_access_token()
@@ -111,7 +108,7 @@ def register(mcp: FastMCP) -> None:
             },
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def list_org_members(
         organization_id: Annotated[UUID, Field(description="The organization ID (from list_my_organizations).")],
     ) -> list[dict]:
@@ -119,12 +116,15 @@ def register(mcp: FastMCP) -> None:
         jwt, user_id = _get_auth()
         org_id_str = str(organization_id)
         await _require_target_org_role(
-            jwt, user_id, org_id_str, "member", "developer", "admin", "super_admin",
+            jwt,
+            user_id,
+            org_id_str,
+            *MEMBER_ROLES,
             action="Listing members",
         )
         return await get_org_members(jwt, org_id_str)
 
-    @mcp.tool()
+    @mcp.tool(annotations=NON_DESTRUCTIVE_WRITE)
     async def invite_org_member(
         organization_id: Annotated[UUID, Field(description="Target organization ID (from list_my_organizations).")],
         email: Annotated[str, Field(description="Email address of the person to invite.")],
@@ -137,6 +137,10 @@ def register(mcp: FastMCP) -> None:
         jwt, user_id = _get_auth()
         org_id_str = str(organization_id)
         await _require_target_org_role(
-            jwt, user_id, org_id_str, "admin", "super_admin", action="Inviting members",
+            jwt,
+            user_id,
+            org_id_str,
+            *ADMIN_ROLES,
+            action="Inviting members",
         )
         return await invite_member(jwt, org_id_str, email, role)

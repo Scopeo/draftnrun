@@ -5,6 +5,7 @@ from uuid import UUID
 from fastmcp import FastMCP
 
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
+from mcp_server.tools._roles import DEVELOPER_ROLES
 
 _GITHUB_OWNER = Param("github_owner", str, description="GitHub repository owner (user or organization name).")
 _GITHUB_REPO_NAME = Param("github_repo_name", str, description="GitHub repository name.")
@@ -38,7 +39,7 @@ SPECS: list[ToolSpec] = [
         method="post",
         path="/organizations/{org_id}/git-sync",
         scope="role",
-        roles=("developer", "admin", "super_admin"),
+        roles=DEVELOPER_ROLES,
         body_fields=(_GITHUB_OWNER, _GITHUB_REPO_NAME, _BRANCH, _GITHUB_INSTALLATION_ID, _PROJECT_TYPE),
     ),
     ToolSpec(
@@ -66,7 +67,7 @@ SPECS: list[ToolSpec] = [
         method="delete",
         path="/organizations/{org_id}/git-sync/{config_id}",
         scope="role",
-        roles=("developer", "admin", "super_admin"),
+        roles=DEVELOPER_ROLES,
         path_params=(_CONFIG_ID,),
     ),
 ]

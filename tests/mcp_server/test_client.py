@@ -119,3 +119,77 @@ async def test_handle_generic_4xx_with_whitespace_only_detail():
 
     with pytest.raises(ToolError, match="No error detail returned"):
         await _handle_response(response)
+
+
+# --- _trim_response (the 50KB guardrail) ---
+
+from mcp_server.client import _trim_response  # noqa: E402
+from mcp_server.settings import settings  # noqa: E402
+
+
+@pytest.fixture
+def small_max_size(monkeypatch):
+    monkeypatch.setattr(settings, "MCP_RESPONSE_MAX_SIZE", 400)
+
+
+def test_trim_passes_small_responses_through(small_max_size):
+    data = {"a": 1}
+    assert _trim_response(data) is data
+
+
+def test_trim_list_keeps_prefix_and_reports_counts(small_max_size):
+    data = [{"i": i, "pad": "x" * 50} for i in range(20)]
+
+    result = _trim_response(data)
+
+    assert result["_truncated"] is True
+    assert result["_total_items"] == 20
+    assert 0 < result["_included_items"] < 20
+    assert result["partial_data"] == data[: result["_included_items"]]
+    assert len(json.dumps(result, default=str)) <= settings.MCP_RESPONSE_MAX_SIZE + 100
+
+
+def test_trim_list_first_item_too_big_returns_meta_only(small_max_size):
+    data = [{"huge": "x" * 1000}, {"small": 1}]
+
+    result = _trim_response(data)
+
+    assert result["_truncated"] is True
+    assert result["_included_items"] == 0
+    assert "partial_data" not in result
+
+
+def test_trim_dict_keeps_prefix_of_keys(small_max_size):
+    data = {f"key_{i}": "v" * 50 for i in range(20)}
+
+    result = _trim_response(data)
+
+    assert result["_truncated"] is True
+    keys = list(result["partial_data"].keys())
+    assert 0 < len(keys) < 20
+    assert keys == [f"key_{i}" for i in range(len(keys))]
+
+
+def test_trim_oversized_scalar_returns_meta(small_max_size):
+    result = _trim_response("y" * 1000)
+
+    assert result["_truncated"] is True
+    assert "partial_data" not in result
+
+
+def test_tool_error_is_fastmcp_tool_error():
+    from fastmcp.exceptions import ToolError as FastMCPToolError
+
+    assert issubclass(ToolError, FastMCPToolError)
+
+
+@pytest.mark.asyncio
+async def test_tool_errors_carry_status_code_and_transience():
+    for status, transient in [(401, False), (403, False), (404, False), (429, True), (500, True), (503, True)]:
+        response = httpx.Response(status, text="")
+        with pytest.raises(ToolError) as exc_info:
+            await _handle_response(response)
+        assert exc_info.value.status_code == status
+        assert exc_info.value.is_transient is transient
+
+    assert ToolError("no status").is_transient is True

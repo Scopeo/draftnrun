@@ -9,6 +9,7 @@ from pydantic import Field
 
 from mcp_server.client import api
 from mcp_server.context import require_org_context
+from mcp_server.tools._annotations import READ_ONLY
 from mcp_server.tools._factory import Param, ToolSpec, register_proxy_tools
 from mcp_server.tools.context_tools import _get_auth
 
@@ -78,7 +79,7 @@ def _normalize_duration(duration: int) -> int:
 def register(mcp: FastMCP) -> None:
     register_proxy_tools(mcp, PROXY_SPECS)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def list_traces(
         project_id: Annotated[UUID, Field(description="The project ID (from list_projects or get_project_overview).")],
         duration: Annotated[
@@ -119,7 +120,7 @@ def register(mcp: FastMCP) -> None:
         jwt, _ = _get_auth()
         return await api.get(f"/projects/{project_id}/traces", jwt, **params)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_org_charts(
         duration: Annotated[
             int,
@@ -132,7 +133,7 @@ def register(mcp: FastMCP) -> None:
         org = await require_org_context(user_id)
         return await api.get(f"/monitor/org/{org['org_id']}/charts", jwt, duration=duration)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_org_kpis(
         duration: Annotated[
             int,

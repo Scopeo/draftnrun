@@ -84,3 +84,55 @@ async def test_retry_run_posts_body(fake_mcp, monkeypatch):
 
     assert post_mock.call_args.args[0] == f"/projects/{FAKE_PROJECT_ID}/runs/{FAKE_RUN_ID}/retry"
     assert post_mock.call_args.kwargs["json"] == {"env": "draft"}
+
+
+@pytest.mark.asyncio
+async def test_run_polling_raises_on_non_transient_error(fake_mcp, monkeypatch):
+    """A 404 while polling means the run/project ID is wrong — surface it, don't retry."""
+    from mcp_server.client import ToolError
+
+    post_mock = AsyncMock(return_value={"run_id": str(FAKE_RUN_ID)})
+    get_mock = AsyncMock(side_effect=ToolError("Resource not found", status_code=404))
+    sleep_mock = AsyncMock()
+
+    monkeypatch.setattr(runs, "_get_auth", lambda: ("jwt", "uid-1"))
+    monkeypatch.setattr(runs, "api", type("API", (), {"post": post_mock, "get": get_mock})())
+    monkeypatch.setattr(runs.asyncio, "sleep", sleep_mock)
+
+    runs.register(fake_mcp)
+
+    with pytest.raises(ToolError, match="not found"):
+        await fake_mcp.tools["run"](
+            FAKE_PROJECT_ID, FAKE_RUNNER_ID, {"messages": [{"role": "user", "content": "hi"}]}, timeout=10
+        )
+
+    assert get_mock.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_run_polling_retries_transient_backend_errors(fake_mcp, monkeypatch):
+    """A 503 while polling is transient — keep polling until the run completes."""
+    from mcp_server.client import ToolError
+
+    post_mock = AsyncMock(return_value={"run_id": str(FAKE_RUN_ID)})
+    get_mock = AsyncMock(
+        side_effect=[
+            ToolError("Backend temporarily unavailable", status_code=503),
+            {"status": "completed"},
+            {"result": "done"},
+        ]
+    )
+    sleep_mock = AsyncMock()
+
+    monkeypatch.setattr(runs, "_get_auth", lambda: ("jwt", "uid-1"))
+    monkeypatch.setattr(runs, "api", type("API", (), {"post": post_mock, "get": get_mock})())
+    monkeypatch.setattr(runs.asyncio, "sleep", sleep_mock)
+
+    runs.register(fake_mcp)
+
+    result = await fake_mcp.tools["run"](
+        FAKE_PROJECT_ID, FAKE_RUNNER_ID, {"messages": [{"role": "user", "content": "hi"}]}, timeout=30
+    )
+
+    assert result == {"result": "done"}
+    assert get_mock.await_count == 3

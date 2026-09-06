@@ -100,7 +100,15 @@ tracing = [
     "openinference-semantic-conventions>=0.1.9,<0.2",
 ]
 api = ["gunicorn>=22.0.0,<23"]
-mcp-server = []
+# Self-contained dependency set for the standalone MCP server image
+# (installed with `uv sync --only-group mcp-server` in mcp_server/Dockerfile).
+mcp-server = [
+    "fastmcp>=3.2.0,<4",
+    "httpx>=0.28.1",
+    "redis>=5.2.1,<6",
+    "sentry-sdk>=2.54.0,<3",
+    "pydantic-settings>=2.6.1",
+]
 docx = ["pypandoc==1.14"]
 google_drive = [
     "google-api-python-client==2.119.0",
