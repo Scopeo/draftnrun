@@ -171,6 +171,11 @@ Used by: Router (selective routing), If/Else (true/else routing).
 
 If/Else uses fixed edge orders: `0` for the true branch and `1` for the false/else branch. The false route is controlled by the `enable_false_path` component parameter, which defaults to `false`. When disabled, a false condition selects no branch and all successors are halted; when enabled, a false condition selects the `order=1` branch.
 
+## IfElse Conditions
+
+IfElse condition connectors use `next_logic` at runtime (`"AND"`, `"OR"`, or omitted for the final condition).
+Frontend condition builders must serialize this key as `next_logic` before saving component inputs.
+
 ## Variable Resolution
 
 **File**: `ada_backend/services/variable_resolution_service.py`

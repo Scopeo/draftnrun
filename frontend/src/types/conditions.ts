@@ -32,7 +32,7 @@ export interface Condition {
   value_a: string
   operator: string
   value_b?: string
-  logical_operator?: 'AND' | 'OR'
+  next_logic?: 'AND' | 'OR'
 }
 
 export const AVAILABLE_OPERATORS: OperatorDefinition[] = [
